@@ -1,0 +1,837 @@
+# Inner Circling
+
+An Internal Family Systems inner circle, run as a multi-part simulation
+across parts you describe. Circles are driven by a local Python 
+"coordinator" calling an AI LLM API directly.
+
+Licensed under Apache-2.0 — see `LICENSE` and `NOTICE`.
+
+---
+
+## What this is
+
+Parts hold a conversation with each other and with **Self**, who is you.
+A circle is one local process: each part is a stateless API call to an
+AI LLM which replies. The coordinator holds the single canonical transcript 
+of each circle and evolves each part's view using it.
+
+There is no agent runtime, no inter-agent messaging, and no file written
+by anything but the coordinator process itself.
+
+Over time the record accumulates: transcripts, a per-part distillate that
+feeds the next circle's prompts, and a graph of **issues** where every
+piece of evidence is a verbatim quote checked against the transcript it
+came from. `docs/what-this-is.md` is the long account.
+
+## What this is not
+
+**This is a method someone built for himself and shared.** Read the
+following as the plain-language half of §7 and §8 of the licence, which
+disclaim warranty and liability.
+
+- NOT therapy, and not a substitute for it
+- NOT a clinical or diagnostic instrument
+- NOT supervised by anyone
+- NOT reviewed, validated, or trialed
+- NOT a product — no support, no warranty, no promises
+
+The parts are language models given a written identity. They will sound
+coherent, warm, and certain. **They model your own parts, produced by
+interpretation, and they can be wrong** Nothing a part says is you or even
+an observation about you; it is an AI statement generated. You may or
+may not find it useful.
+
+Free of charge, offered as-is, by one person who is not a clinician.
+
+## Safety
+
+**This install contains no crisis resources and no safety net.** The
+registers under `self/` arrive empty by design, so nothing here will
+notice distress, escalate, or put a phone number in front of you. Earlier
+versions of this file implied otherwise; they were wrong.
+
+If you are in crisis, or approaching one, stop and use a human service:
+your local emergency number, or a directory such as `findahelpline.com`.
+An AI circle is not the place for it.
+
+Some further judgement, offered rather than enforced:
+
+- Treat your parts gently. Parts speak about hope and trauma because that 
+  is what they mirror. A circle can reach things that deserve care.
+- Do not run a circle to settle a decision. The room converges. That 
+  tendency is measured in docs/what-this-is.md and is a known risk.
+- Take what surfaces a trusted and capable person, ideally.
+
+## Privacy — what stays, and what leaves
+
+**Your name never leaves the machine, including to the LLM.** You
+are asked your name strictly to personalize the feel in circles.
+
+**The records are yours and they stay on your disk.** Every transcript,
+every part record, every issue node is a plain file in this directory.
+Nothing uploads them. **Nothing is published to GitHub or anywhere else**
+— and that is enforced, not merely intended: `coordinator/gitrepo.py`
+classifies every destination before it will commit, refuses anything that
+is not a disk attached to this machine, never adds one on its own, and
+fails closed on anything it cannot classify. See "git is not GitHub"
+under Configure for what the distinction is.
+
+**One thing does leave: the model calls.** To run a live circle the
+coordinator sends, to Anthropic:
+
+- each part's assembled system prompt:
+  -- the rulebook
+  -- your issue graph as it is projected for that circle,
+  -- that part's own distilled identity
+- the circle transcript:
+  -- every statement, including everything you have typed as Self
+  -- your name is never sent
+
+That is the whole mechanism — the cloud has no memory of a part, so its
+context has to be sent on every turn. What you say in a circle goes to
+the model provider. Their retention and training policies govern what
+happens to it there; read them, and decide before you type.
+
+`--dry-run` sends nothing at all and needs no key.
+
+Two more things worth knowing:
+
+- files are not encrypted. They are plain text on disk. Anyone 
+    with your account, your machine, or your backups can read them. 
+    Turn on full-disk encryption if that matters.
+- .env holds your API key. It is gitignored, never printed, never 
+    committed, and never in a distributed bundle. See more below.
+
+## What arrives, and what does not
+
+**The mechanism ships. Nobody's inner life does.**
+
+SHIPS
+  - coordinator/                  the running system
+  - memory/                       the issue graph's code
+  - ui/                           the two-pane interface
+  - docs/                         how it works
+  - coordinator/process_core.md   the rulebook every part reads
+  - parts/soul/, parts/child/     two seed parts
+
+ARRIVES EMPTY, WITH A README
+  - circles/                      transcripts land here
+  - issues/                       the issue graph
+  - self/                         Self's registers
+  - work/prompts/                 captured prompts
+  - work/logs/                    close reports
+
+NEVER SHIPS
+  - any transcript, any part, any issue, any remember, any proposal 
+
+Most of these carry a `README.md` saying what gets written there, by
+what, and what not to hand-edit. **Empty is correct**: a system
+that has not held a circle has no transcripts, and one that has held none
+is not broken.
+
+## Requirements
+
+- Python                 3.10 or newer. Developed on 3.10; the `tomli`
+                         backport is in requirements.txt for it.
+- git                    OPTIONAL. Everything runs without it; what it
+                         adds is a version history on your own disk, and
+                         with it the ability to undo. NOT GitHub — no
+                         account, no upload, no internet. See "git is not
+                         GitHub" under Configure.
+- an Anthropic API key   for live circles. Dry runs need none.
+- a terminal             one that understands ANSI escapes. Windows
+                         Terminal, or any modern terminal on macOS or
+                         Linux. NOT a shell requirement — see below.
+
+**Windows is the tested platform.** Every example below uses Windows
+paths; on macOS and Linux the interpreter is `.venv/bin/python` and the
+rest of each line is the same.
+
+**No particular shell is required.** Nothing here invokes PowerShell,
+`cmd`, `bash` or any shell for its own work — the commands are plain
+`python <script>` and run identically from whichever prompt you use. The
+one place a shell appears is git's own hooks, and git supplies that
+itself.
+
+What the two-pane interface *does* need is a real terminal, because it
+reads keys one at a time and paints the screen directly. It carries a
+backend for each platform:
+
+- Windows       msvcrt, plus a call that turns on ANSI escape handling
+                for the older conhost console. Windows Terminal already
+                has it on.
+- macOS/Linux   termios + select, xterm escape sequences for the arrow
+                and paging keys.
+
+**The POSIX backend is real but lightly travelled**: 
+it exists so the interface can be smoke-tested off Windows, and
+it is not a fully exercised target. Expect the arrow/paging keys to be
+the place a less common terminal emulator disagrees. Everything beneath
+the interface — the coordinator, the registers, the gates — is plain
+Python with no platform-specific code at all, and every path it builds is
+built with `pathlib`, never spelled with a separator.
+
+**One thing genuinely works only on Windows, and it is better to know
+than to discover.** If you keep a git history and want to mirror it to a
+second disk, the check that decides whether a destination is a disk on
+this machine is implemented with a Windows API. Off Windows it can answer
+only "unknown", and it fails closed — so it refuses every destination,
+including a perfectly local one:
+
+/Volumes/Backup/Inner-Circling.git returns volume is UNKNOWN as only 
+FIXED and REMOVABLE are on this machine.
+
+That refusal is the safe direction and it costs you only the mirror: with
+**no** destination configured, which is how a fresh install arrives,
+commits work normally on any platform. Copy the directory to your backup
+disk instead, or use your system's own backup — the whole record is plain
+files in one folder, which is what makes that enough.
+
+## Install
+
+### 1 · The files
+
+**There is no package to install, and that is deliberate.** This is not a
+library you import — it is a working directory that becomes your own
+record. The code reads and writes `parts/`, `self/`, `issues/`,
+`circles/` and `work/` *beside itself*: every path is derived from where
+the modules sit on disk. Installed into a Python packages directory, your
+transcripts and your parts' identities would be written there too, among
+the libraries, where nothing expects to find them and an upgrade would
+step on them.
+
+So you take a copy of the directory and keep it. Either way works:
+
+- with git         
+```
+  git clone https://github.com/Inner-Circler/Inner-Circling.git
+  cd Inner-Circling
+```
+
+- without git      
+```
+  on the repository page, Code -> Download ZIP,
+  then unzip it somewhere you will keep
+```
+
+**Downloading from GitHub is not the same as putting anything on
+GitHub.** It is how you get the files, once. Nothing in this system ever
+sends your record back — see "git is not GitHub" under Configure, and
+"Privacy" above.
+
+**Put it where it belongs before you start.** This directory grows into
+the record itself, so choose a location you back up and would not clear
+out — not `Downloads`, not a temporary folder. Moving it later is fine;
+nothing stores an absolute path.
+
+### 2 · Python itself
+
+Get it from **python.org/downloads**, or from your system's own package
+manager. Version 3.10 or newer.
+
+**pip comes with it.** Every installer from python.org bundles pip, and
+the commands below use it — there is nothing separate to fetch. On Linux
+some distributions split it out; if `python3 -m pip` says the module is
+missing, install your distribution's `python3-pip` package.
+
+While installing on **Windows**, check this one box:
+
+```
+[x] Add python.exe to PATH
+```
+
+Tick it. Without it, `python` is not a command your terminal knows, and
+every line below fails at the first word. If you have already installed
+without it, re-run the installer and choose *Modify*.
+
+On **macOS**, the `python3` that ships with the system is not meant for
+this; install a current one from python.org or with `brew install
+python`. On **Linux**, your package manager's `python3` is fine.
+
+Check what you have:
+
+On Windows:
+```
+python --version
+```
+On macOS / Linux:
+```
+python3 --version
+```
+
+Confirm 3.10 or newer.
+
+### 3 · A virtual environment, in this directory
+
+**Everything this project needs goes into `.venv`, and nothing goes
+anywhere else.** A virtual environment is a private copy of Python's
+package area belonging to this folder alone — installing here cannot
+disturb another project or your system Python, and deleting `.venv`
+undoes the install completely.
+
+On Windows:
+```
+python -m venv .venv      # be patient; silently takes 30 secs
+.venv\Scripts\python -m pip install -r requirements.txt
+```
+
+On macOS / Linux:
+```
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+```
+
+Four packages arrive, all named in `requirements.txt`: the Anthropic
+client, `python-dotenv`, and `tomli` / `tomli-w` to read and write the
+TOML the registers are kept in — `tomli` only on Python 3.10, which has
+no `tomllib` of its own. Nothing else is fetched, then or later: **a
+circle makes no network call except to the model provider.**
+
+Every command in this file begins `.venv\Scripts\python` for exactly this
+reason: it names the interpreter that has those packages. Plain `python`
+is a different interpreter and will not find them.
+
+## Configure
+
+### Where to get an API key
+
+Circles run on Claude, and the model calls are made by this program on
+your machine, directly to Anthropic. You need your own key.
+
+1. go to console.anthropic.com and create an account. This is the
+   DEVELOPER console, a different thing from a claude.ai subscription,
+   and a claude.ai plan does not include API access
+2. add credit under Billing. Usage is pay-as-you-go, billed per circle.
+   See "What a circle costs" below
+3. API keys -> Create Key. Copy it when it is shown; it is shown ONCE
+   and cannot be read again
+
+**Treat it as a password.** Anyone who has it can spend your credit.
+Keep it out of screenshots and out of anything you share.
+
+### Put it in `.env`
+
+Create a file named exactly `.env` at the top of this directory. In
+that file, put your key and preferred first name (NEVER shared):
+
+```
+ANTHROPIC_API_KEY=sk-ant-...
+IFS_USER_NAME=<the name shown at your prompt>
+```
+
+No quotes, no spaces around the `=`. `.env` is listed in `.gitignore`,
+so it is never committed, never printed, and never included in anything
+you pass on.
+
+*On Windows, some editors silently append `.txt`. If a run says the key
+is missing, turn on file extensions in Explorer and check the file is
+`.env` and not `.env.txt`.*
+
+A shell variable of the same name **wins over the file** — `.env` is not
+read for a value the environment already has. That is worth knowing if
+you ever rotate a key and nothing seems to change.
+
+`IFS_USER_NAME` sets the name the console greets you by. **It does not
+change the record** — the transcript writes `[Self]:` for everything you
+say, always. It is the *fallback*: once the first-run dialog records a
+preferred name against the Soul, that answer wins and editing `.env`
+changes nothing. `coordinator/docs/identity.md` gives the full resolution
+order and the Windows-specific reason this variable exists at all;
+`docs/configuration.md` lists every other value this project reads from
+its environment.
+
+### git is not GitHub, and GitHub is not needed or used here
+
+Worth saying plainly, because the two words travel together and only one
+of them is involved.
+
+- git    a program that runs ON YOUR MACHINE and keeps a history of
+         a folder. It saves versions locally. It uploads nothing, and
+         it needs no account, no sign-up, and no internet connection.
+- GitHub a WEBSITE that hosts copies of git histories for other people
+         to see. A separate company, a separate decision, and no part
+         of this.
+
+**Nothing here uploads your record anywhere, and it cannot be made to by
+accident.** `coordinator/gitrepo.py` classifies any destination before it
+will commit, and refuses everything that is not a disk attached to this
+machine — `https://`, `http://`, `ssh://`, `git://`, `user@host:path`,
+`\\server\share`, a mapped network drive, and anything it cannot
+classify at all. It fails closed: unrecognised means refused. It also
+never adds a destination on its own.
+
+So if you use git here, you get **version history on your own disk** and
+nothing else. There is no account to make and no site to visit.
+
+### git is optional, and worth having
+
+**Everything runs without it.** Circles open, close, dream and synthesise
+in a directory that was never `git init`ed; the record is written the
+same either way, and phase 2 records that a circle was processed in
+`work/logs/dream_<OT>.json` instead of a git tag.
+
+What you give up by skipping it is **undo**. Writes here are atomic — a
+multi-file write either lands whole or not at all — but only a history
+makes a write *reversible after the fact*. A dreaming pass that puts
+something wrong into a part's identity is one command away from being
+undone if you kept a history, and is not undoable if you did not.
+
+If you want it, set an identity first — if git does not already have one:
+
+```
+git config user.name  "Your Name"
+git config user.email "you@example.com"
+```
+
+Then bootstrap the repository — idempotent, adds only what is missing,
+never rewrites history, and never adds a destination to upload to:
+
+```
+.venv\Scripts\python coordinator\circle_audit.py --git-setup
+```
+
+It will tell you it is not installing the pre-commit battery. That is
+correct: those checks run the project's own probe suites, which are not
+part of this bundle. Run the gates below by hand instead.
+
+Check what will be used, changing nothing:
+
+```
+.venv\Scripts\python coordinator\identity.py
+.venv\Scripts\python coordinator\gitrepo.py --identity
+```
+
+## Verify
+
+**Use these commands to confirm your install is healthy.** 
+
+```
+  .venv\Scripts\python ui\circling.py --help
+  .venv\Scripts\python ui\circling.py --selftest  # expect all PASS 
+```
+
+Optional free dry run — no network, no key needed
+
+```
+  .venv\Scripts\python ui\circling.py --circle
+```
+
+**Dry run is the default** — you have to ask for `--live` by name.
+`--live` may sit anywhere on the command line; anything else after
+`--circle` is forwarded to the coordinator unchanged.
+
+## Run
+
+**The two-pane interface is the way in.** 
+  
+This is how you start a real live circle:
+
+```
+  .venv\Scripts\python ui\circling.py --live --circle
+```
+
+**The user interface has two panes*
+
+- The upper 'circle' pane is where you speak and listen in circle dialog.
+- The lower 'command' pane is where you administer circle records.
+- Type TAB to switch the active pane.
+- Type 'help' in either pane to see what can be done there.
+
+**Your first live run asks you some questions.** 
+
+A fresh installation ships the Soul and the Child with universal 
+identities and no particulars. A short dialog opens in the command pane. 
+It asks a few questions per part, and then one about something thing that 
+feels troubling. Answering is optional; empty skips it, and it states what 
+it will record and where before it asks. **Skipping is not declining** — a
+round you leave entirely empty writes nothing and the dialog returns at
+your next live open. Once answered it stops asking; this command re-runs
+it whenever you want:
+
+```
+/part-context-update      # re-enter personal answers (at cmd>) 
+```
+
+**Every live run begins with two questions.** 
+
+Do you have specific issues you would like to focus on today?
+('?' to review, blank for no, 'all', or a comma separated list) _
+
+As you circle, you have the option of tracking "issues": things that
+trigger you, cause distress, and indicate places where loving care 
+might be helpful.  You can return to those issues in the future by
+selecting them here.  The easy answer here is nothing, a bare 'enter'.
+
+And the second question:
+
+CIRCLE topic (blank = open): _
+
+Enter a few words about what is on your mind:
+
+"Alcoholism sucks"
+
+Then you are at the circle prompt. Type to speak as Self:
+
+"I'd like to talk about drinking. I don't handle it well when people 
+are drinking, even just moderate casual drinking."
+
+
+**Your circle has started**
+
+In a few moments you will hear back (an actual reply):
+
+"[Child]: Something in me goes quiet and watchful when you say that. 
+Not thinking-quiet — the kind where I'm just... waiting to see what 
+happens next. Like when the air in a room changes and you don't know 
+why yet, you just know to be still.  I don't have a reason for you. 
+I don't have the story that explains it. I just know that "people 
+drinking" and "unpredictable" got wired together somewhere very early, 
+before I had words for it. It's not about whether this glass, this 
+person, this room is actually safe. It's older than that.  I don't 
+need you to fix this right now. I just wanted to say it's real, it's 
+mine, and it doesn't need to make sense to be true."
+
+So... just talk.  Explore feelings about drinking with your Child!
+
+You should be aware that your Child knows nothing about you beyond
+what you have told it.  It knows a lot about people, and as you
+say more about yourself it learns about you, memorizing what you
+tell it and mirroring your parts.
+
+The "Soul" part is a placeholder for 'who I was born as, and the 
+world I was born into'. Unless you ask questions about that, or
+address "Soul: ..." directly, it is unlikely to speak.
+
+Each part gets two turns to say something before you speak again;
+then they will wait for you. You can always type `/pass` or `/round` 
+to give the parts another two responses.
+
+**About remembering**
+
+A lot of remembering happens automatically.  On occasion there
+may be things you want to recall in future circles. You can
+enter, in the circle pane, an annotation like this:
+
+```
+[remember: <text>]
+```
+
+To prevent misfires, such as if you were to say "I remember 
+when ..." in the circle, the syntax must be exactly as shown. 
+
+The system will record that and hand it back to you in future
+circles. You can manage such memories -- type `help remember`
+at the cmd> prompt.
+
+**About proposals**
+
+When circling reveals something important - like another issue
+or even a new part, this is how you register such things for
+dedicated attention:
+
+```
+[proposed: <command>]
+```
+
+The command is any of those you can see by typing "help propose"
+in the command pane - the same command works there or here in
+the circle pane when written in this way.  Proposals are "staged";
+at the end of the circle you are asked if you approve of any
+proposals. You can approve (the proposal affects the system, 
+adding a part or an issue, etc.), deny (the proposal is forgotten), 
+or skip (you'll be asked again at the next circle close). 
+
+Parts are told about any new parts or issues, and they will
+begin to accumulate related memories.
+
+As with remember, the syntax is strict.
+
+**Closing the circle**
+ 
+`/close` ends it properly, `/abort` ends it without a record.
+
+When you close a circle, the system looks at records and learns
+more about you. It may take some time to finish... just let it run.
+
+See `coordinator/README.md` for more information.
+
+## What a circle costs
+
+Parts run on Claude Sonnet. The coordinator prints a token and 
+cost meter at the end of every circle, computed from the rates in
+`coordinator/llm_client.py` — **read that file rather than trusting a
+number written here**, since published rates change and this line 
+will go stale.
+
+Measured on the original seven-part installation, and recorded in
+`coordinator/README.md`:
+
+```
+a three-part test round   about $0.30
+a full circle, 15 rounds  about $1.30
+```
+
+A fresh install starts with two parts, so expect less. The largest lever
+is prompt caching: the shared blocks of every part's prompt are cached
+for an hour, and the meter reports the hit rate alongside what the same
+circle would have cost without it.
+
+## Closing a circle is not free, and not instant
+
+`/close` does more than write the transcript:
+
+```
+1  each part is asked for its summary of the circle, and those are written
+2  the close report is verified, and the whole circle is committed to git
+3  THEN dreaming runs for every part, and one circle-wide synthesis after it
+```
+
+Step 3 makes model calls of its own **after** the transcript is already
+committed, so a close takes noticeably longer than the writing alone and
+adds to the circle's cost. That is the loop that turns circles into a
+part's memory; without it a part's identity never moves.
+
+If it fails it writes a report under `work/logs/`, prints the command to
+re-run it, and exits non-zero. Staging is all-or-nothing, so a failed run
+wrote nothing and the re-run is clean.
+
+## Parts ... and the ones you will add
+
+**A circle starts at two.** `parts/soul/` and `parts/child/` arrive with
+an identity and no history — the substrate and the root of wonder,
+structural in the IFS model rather than particular to any one person.
+
+**Nothing is missing.** Every other part is yours to discover and name,
+and a system that has not met them yet is not incomplete — it is at the
+beginning. Parts arrive as they surface, which is how they arrived in the
+circle this came from.
+
+`/part-add` at the cmd> prompt opens the dialog that creates one: a
+Tag, a description, and the files a part needs to be spoken to.
+`coordinator/process_core.md` §New parts is the rule it follows. **A part
+is never created without Self's explicit agreement**, and that rule is in
+the rulebook every part reads.
+
+Note that the shipped documents under `docs/` describe the original
+seven-part installation — `docs/overview.md`'s table of parts is that
+person's roster, not a set you are expected to reproduce.
+
+## Where to read next
+
+```
+docs/what-this-is.md          written for outside readers, including
+                              what can go wrong
+docs/overview.md              the parts, and what each is for
+coordinator/README.md         how to run a circle, step by step
+coordinator/process_core.md   the rulebook every part is given
+coordinator/process.md        the operations rulebook — closing,
+                              auditing, recovery
+issues/issue_model.md         what an issue is, and what is not one
+```
+
+## Status, support, and contributing
+
+```
+status         working software, one installation's worth of use behind
+               it. Interfaces change without notice.
+support        none. There is no issue tracker, no mailing list, and no
+               undertaking to answer.
+contributing   not set up for it.
+bug reports    welcome in principle, unread in practice. Fork it.
+```
+
+Apache-2.0 gives you the right to use, modify and redistribute this,
+including for your own purposes and under your own name, subject to the
+licence's terms. Nothing above narrows that; it describes what is *not*
+offered alongside it.
+
+## A note on the code
+
+Module docstrings quote decisions and record what went wrong and why.
+That is deliberate and load-bearing: nearly every guard in this system
+exists because a specific thing failed quietly, and the docstring is
+where that reason lives. If a comment seems to be arguing with itself, it
+is usually recording a decision that was made twice.
+
+Man pages for many of the modules are under `coordinator/docs/`. Read
+the man page before the module; it is where a module's *why* lives.
+
+## Technical things that can bite
+
+**`.gitattributes` sets `* -text` and must survive.** Line-ending
+conversion would break every sha256 and byte-identical check here.
+
+**That setting cuts both ways.** `* -text` stops git normalising on the
+way through — which also means nothing removes a carriage return that a
+writer put there. On one occasion this project's own repair scripts
+converted three files wholesale, and every other check passed:
+`pathlib.Path.write_text(..., encoding="utf-8")` translates `\n` to
+`\r\n` on Windows unless `newline=""` is passed. If you write to these
+files from your own code, pass it.
+
+**A transcript being written is indistinguishable from a finished one.**
+Statements are appended as they arrive, which is what makes a crash
+survivable and what makes a mid-circle read a silent partial. Ask the
+tree, not the file:
+
+```
+.venv\Scripts\python coordinator\circle_state.py
+    exit 0  safe to read
+    exit 1  a circle may be open
+```
+
+**Nothing here phones home.** No telemetry, no analytics, no update
+check, no crash reporting.
+
+## Editing files by hand
+
+In general, let the app do it. Some files, such as the circle transcript,
+record of what happened, and editing those violates history — and invalidates 
+the checks that made the history worth anything. **A record you may edit is a
+record that proves nothing.**
+
+```
+YOURS — the system expects you to update this; the API key is required.
+  .env                          your key and your name
+
+YOURS — the system is pretty tolerant if you update these
+  self/self.md                  more about you
+  self/best_practices.toml      how the circle behaves, and how you move
+  parts/<name>/long_term.md     a part's identity
+  parts/<name>/part.toml        a part's tag and speaking rules
+  coordinator/process_core.md   the rulebook
+
+WITH CARE — machine-written, but hand-editable
+  issues/issue_model.md         what an issue is
+  issues/*.toml                 the issue graph
+  self/*.toml                   the registers
+    Each has one owning module that reads and writes it. Keep the shape,
+    edit between circles, and run the gate named below afterwards.
+
+NEVER — the historical record, and what is derived from it
+  circles/*.md                  transcripts
+  parts/*/short_term_<OT>.md    each part's record of a circle
+  parts/*/mid_term.md           the distillate
+  work/logs/*.json              close reports
+  work/prompts/**               captured prompts
+```
+
+Why those three are *never*, specifically:
+
+```
+a transcript is what was said
+    every evidence quote in the issue graph is verified byte-for-byte
+    against it, and the close report holds a sha256 of each part's record
+    of the circle. Editing one turns a verified graph into a failing one.
+    If the room got something wrong, say so in the next circle — that is
+    what the next circle is for.
+
+a short_term is hashed at close
+    an edit shows up as DRIFT the next time the audit runs, and it cannot
+    tell your edit from a lost write.
+
+a mid_term is a cache, and more
+    it is derived from a part's sources, and staleness is a hash over
+    THOSE, not over the file itself. So a hand-edit is either silently
+    overwritten the next time a source moves, or silently kept while
+    nothing supports it. Edit the source instead:
+      .venv\Scripts\python coordinator\mid_term.py --refresh <part>
+    and if you truly want to hold one by hand:
+      .venv\Scripts\python coordinator\mid_term.py --lock <part>
+```
+
+Three rules that apply to every hand-edit, including the sanctioned ones:
+
+```
+NEVER while a circle is open
+    the coordinator is writing. Ask first:
+      .venv\Scripts\python coordinator\circle_state.py
+
+Use a plain-text editor, formatting OFF
+    a markdown-aware editor may "normalise" a file on save — escaping [
+    and _, merging emphasis across lines. That has silently corrupted a
+    part's history in this project before, while still looking correct to
+    a reader. Windows Notepad's formatting mode is one of these; turn it
+    off under View -> Formatting.
+
+Keep the line endings as you found them
+    LF. A carriage return introduced by an editor is not removed by
+    anything here, and it changes every hash the file appears in.
+
+Then run the gate below for whatever you touched.
+```
+
+```
+anything at all
+  .venv\Scripts\python coordinator\check_integrity.py
+      watch for   INTEGRITY PASS
+      a failure prints INTEGRITY FAIL and, per file, the defect and the
+      remedy, then exits non-zero. There is no --force.
+
+parts/ or self/
+  .venv\Scripts\python coordinator\circle_audit.py --selfcheck
+      watch for   0 FAIL · 0 WARN · N OK
+      a WARN is not a pass. Read it.
+
+issues/
+  .venv\Scripts\python memory\issue_gate.py
+      watch for   GATE PASS — every invariant satisfied
+      and the "quote(s) verified verbatim" count. It should not fall.
+
+self/best_practices.toml
+  .venv\Scripts\python coordinator\check_best_practices.py
+      watch for   PASS — tally, ids, addressees and routing all hold
+
+a part's identity sources
+  .venv\Scripts\python coordinator\mid_term.py
+      watch for   that part's row turning stale, then
+        .venv\Scripts\python coordinator\mid_term.py --refresh <part>
+      This one exits 0 either way. Read the word, not the exit code.
+```
+
+**A silent pass is the one to distrust.** Every gate here prints what it
+checked and how much of it. A count that *drops* after your edit means
+something stopped being seen — which looks exactly like less being
+wrong.
+
+## Keeping the record honest
+
+The gates above are not decoration; each exists to watch for any fail. 
+Two check automatically:
+
+```
+check_integrity.py runs at every circle open
+    a corrupt file stops the circle before any model call is made, and
+    before anything is written
+
+the close verifier runs at every /close
+    it writes work/logs/close_<OT>.json — a size and a sha256 for each
+    part that spoke
+```
+
+One is worth running now and then, whether or not you edited anything:
+
+```
+.venv\Scripts\python coordinator\circle_audit.py
+    the periodic audit: the same checks, plus a reconcile of each close
+    report against what is on disk, plus the repair that backfills a
+    part's record of a circle from the transcript when the write was lost
+```
+
+**That last repair is why the audit exists at all.** A part that spoke but
+lost its record of the circle is *invisible*, not noisy — the loop reads
+an absent file as a part that stayed silent, which is a legal outcome. So
+nothing fails; that part's identity simply does not move. Run the audit
+before you conclude a part has gone quiet.
+
+## Licence
+
+Copyright 2026 The Inner Circling Project.
+
+Licensed under the Apache License, Version 2.0. You may not use this file
+except in compliance with the licence. See `LICENSE` for the full text
+and `NOTICE` for attribution.
+
+**Distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF
+ANY KIND**, either express or implied. See §7 and §8 of the licence, and
+the disclaimer near the top of this file.

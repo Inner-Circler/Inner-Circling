@@ -1,0 +1,20 @@
+register = "self_remember"
+next_id = 1
+
+# Empty delegate for packaging/exceptions.toml's self/ entry -- see
+# packaging/scaffold/self/README.md. The live self/remember.toml is Self's OWN
+# reflexive record -- private, unvetted, and personal to the operator. This
+# delegate ships the register and none of it.
+#
+# `register` IS "self_remember", NOT "remember". The table is `remember`; the
+# register name is not. coordinator/remember.py serves a part's own private
+# remember as well, and the two must not collide in self_schema.py.
+#
+# Must stay valid, loadable TOML: remember.py mints ids from doc["next_id"],
+# defaulting to 1 when absent, so an empty register at next_id = 1 is what a
+# fresh install would build for itself anyway.
+remember = []
+
+[doc]
+preamble = """
+SELF's own reflexive record (docs/BNF.md, SELF). Private, unvetted, accumulate-never-prune."""

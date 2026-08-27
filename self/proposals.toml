@@ -1,0 +1,3 @@
+register = "proposals"
+next_id = 1
+proposal = []

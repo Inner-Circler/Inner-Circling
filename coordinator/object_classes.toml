@@ -1,0 +1,129 @@
+# object_classes.toml — the content behind `/help object_classes` and
+# `/help <class>`. R160, 2026-08-13: populated depth-first — `issue`
+# went first, complete (B40 steps 1-3); `relationship` begins here
+# (step 4), still `issue`'s own turn's session. See
+# docs/HELP_DESIGN.md §3-§4 for the full inventory this is drawn from,
+# and NEXT.md B40 for the build sequence.
+#
+# Was empty on purpose from 2026-08-10 to 2026-08-13 (RULED then:
+# "object-class verb-table remains forthcoming work that will be
+# undertaken depth-first"). This is that work, started.
+#
+# A CLASS IS A NAME AND A DESCRIPTION — NOTHING ELSE, since 2026-08-21.
+# The `[[class.verb]]` rows each class carried from B40 were a SECOND
+# spelling of the verbs in coordinator/command_surface.py's COMMANDS, and
+# they drifted: eight days after R261 made the verb `/issue-status` they
+# still read `issue status nNNNN [= <value>]`. A class's verbs are now
+# DERIVED from COMMANDS by head prefix (help_system._class_of_head —
+# `/issue-relationship-*` is issue-relationship, every other `/issue-*` is
+# issue), and the two productions every class shares, `list` and `read #`,
+# are constants in help_system.py (LEVEL_ROWS). One spelling of a verb,
+# read everywhere it is shown.
+#
+# The class NAMES are ruled: `issue` and `issue-relationship` (R218;
+# re-confirmed 2026-08-21 — "keep ruled names"). The descriptions say
+# "issue", never "node" — the operator, 2026-08-21: *"do not surface 'node'.
+# Replace it with the class of node being referenced."*
+
+[[class]]
+name = "issue"
+description = '''
+An issue — id nNNNN, human key: label. `list`/`read` are re-derived live
+from issues/*.toml on every call, never cached. No `add` — R001,
+evidence-gated, not a field-fill. No `delete` — lifecycle is a status
+transition (see /issue-status), not deletion.
+'''
+
+[[class]]
+name = "issue-relationship"
+description = '''
+A relationship between two issues, nested inside its source issue with
+no id of its own; the closest thing is <src> <type> <tgt>, human key:
+type. `list`/`read` flatten every live issue's issue-relationships,
+re-derived live on every call, never cached. No `delete` — an
+issue-relationship is retired (see /issue-relationship-status), not
+removed.
+'''
+
+# ---------------------------------------------------------------- 2026-08-24
+# THE CLASS TABLE BECAME THE HELP HIERARCHY, ruled by the operator after a
+# prototype (work/tools/help_sample.py): "OK, that is what I had in mind,
+# well done. Integrate". Level 0 lists ROOTS, not verbs; `/help <class>`
+# renders that class's whole SUBTREE.
+#
+# PARENTHOOD IS DERIVED FROM THE NAMES, not declared: a class whose name is
+# prefixed by another class name is that class's child, longest match
+# winning. So `issue-evidence` and `issue-relationship` sit under `issue`,
+# and `part-context` under `part`, with nothing to keep in sync.
+#
+# DECLARING BEATS SPLITTING, which is the whole reason this table gains rows
+# rather than help_system gaining a str.split("-"). A split reads
+# `better-option-list` as class "better", and would read `issue-relationship`
+# as `issue` if _class_of_head were not already doing longest-prefix against
+# THIS file. The two names below that predate today (issue,
+# issue-relationship) are RULED — R218, re-confirmed 2026-08-21 "keep ruled
+# names" — and are unchanged.
+
+[[class]]
+name = "issue-evidence"
+description = '''
+What a circle actually said, attached to an issue as evidence. A quote and
+its speaker come from the transcript, never typed fresh, and every one is
+re-verified against that transcript on each run of the gate.
+'''
+
+[[class]]
+name = "part"
+description = '''
+The roster — who is in the circle. A part is a directory under parts/ with
+its own identity; `part.toml`'s presence is what makes it one.
+'''
+
+[[class]]
+name = "part-context"
+description = '''
+What a part knows about you — the answers to that part's own context
+questions, recorded in its `part.toml` and rendered into its prompt.
+'''
+
+[[class]]
+name = "practice"
+description = '''
+How the CIRCLE behaves — the practices you have ruled in, projected into
+every part's shared prompt block.
+'''
+
+[[class]]
+name = "better-option"
+description = '''
+How SELF moves — the same register as practice, addressed to you rather
+than to the room.
+'''
+
+[[class]]
+name = "topic"
+description = '''
+Synthesis material carried between circles — open topics the next circle's
+shared block will carry.
+'''
+
+[[class]]
+name = "propose"
+description = '''
+What the parts have proposed and you have not yet ruled on. Staged, never
+applied until you rule.
+'''
+
+[[class]]
+name = "remember"
+description = '''
+Your own private record. A verb by spelling and a noun by use — `remember
+<text>` writes one, and the register is yours alone; a part's own is
+private to it and never reachable from here.
+'''
+
+[[class]]
+name = "prompt"
+description = '''
+What a part is actually sent — the assembled system prompt, block by block.
+'''

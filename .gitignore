@@ -1,0 +1,78 @@
+# Secrets — never commit
+.env
+.env.*
+
+# Python virtual environment
+.venv/
+
+# Python caches
+__pycache__/
+*.pyc
+
+# temp workspaces
+#
+# The sandbox is scratch, WITH TWO EXCEPTIONS. Ruled 2026-08-03: the minimal
+# case is a sandbox-only test bed whose entire output is (a) the emitted prompt
+# and (b) the transcript. Those are the evidence for the part-context evolution
+# design discussions, and evidence that only exists on disk cannot be diffed
+# circle against circle, and dies to a `git clean`.
+#
+# `work/sandbox/*` rather than `work/sandbox/`, deliberately: git
+# cannot re-include anything beneath an EXCLUDED DIRECTORY, so a `!` line under
+# the directory form would silently do nothing. Excluding the children instead
+# leaves the directory itself readable, and the two negations below then apply.
+# Moved from coordinator/sandbox/, R176, 2026-08-15 — coordinator/ is product
+# domain and this is transcript-derived content.
+# A MEMO, NOT A RECORD. work/token_counts.json holds sha256 -> token count
+# for prompt prefixes the model service has already counted (R260,
+# 2026-08-20). It makes no claim about this project — losing it costs one
+# re-count and nothing else — and it would otherwise churn in every diff
+# whenever a practice, a briefing or a distillate moved.
+work/token_counts.json
+work/sandbox/*
+!work/sandbox/prompts/
+!work/sandbox/circles/
+work/nightly/
+
+# Tool working databases — rewritten constantly, ~11MB each time
+.fileintel/
+
+# Run logs — derived, one per run
+work/logs/nightly*.log
+
+# TWO MEMOS, NOT RECORDS — 2026-08-26. Both are written by a live circle,
+# both were tracked by nothing, and so both sat dirty in the working tree
+# forever after: enough, in the lab, to deadlock a `pull-main`, which
+# refuses a dirty tree. Ignored rather than committed because each is
+# superseded by something that IS the record, and neither loses anything
+# by staying untracked — they are read off local disk, never out of git:
+#   closing_<OT>.json  the START-OF-CLOSE marker. mark_close_started():
+#                      "IT IS NEVER DELETED. A close report supersedes it",
+#                      and close_<OT>.json beside it is committed.
+#   dream_<OT>.json    phase 2's run marker. The `dream/<OT>` git tag is
+#                      the evidence a circle was processed; the file is
+#                      already_processed()'s second reader, kept for the
+#                      tree where git cannot answer at all (R349), and
+#                      still on disk there whether git tracks it or not.
+# The registers a circle writes — self/working_sets.toml, self/proposals.toml
+# — are the opposite case and are STAGED by the close now, not ignored.
+#
+# `dream_[0-9]*` AND NOT `dream_*`: dream_error_<OT>.json is a FAILURE REPORT,
+# a real diagnostic naming what refused and how to re-run, and it stays
+# visible on purpose. inter_circle.py globs the run marker the same way, for
+# the same reason.
+work/logs/closing_*.json
+work/logs/dream_[0-9]*.json
+
+# Temp workspaces — staging, caches, locks, snapshots
+work/issue_trial/
+
+# Claude Code CLI's own scheduler lock — rewritten by the harness itself,
+# not project content
+.claude/scheduled_tasks.lock
+
+# Temp workspaces — staging, caches, locks, snapshots
+work/circle_audit/
+
+# Run logs — derived, one per run
+work/logs/circle_audit*.log

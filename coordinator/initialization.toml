@@ -1,0 +1,91 @@
+# initialization.toml — the first-run dialogs' POLICY text: what every
+# installation says the same way. docs/Initialization.md §3.1. Read by
+# coordinator/initialization.py at call time (the help_system.py pattern), so
+# a wording change here is live at the next dialog.
+#
+# What is NOT here: the Soul's and Child's purposes, questions, caps and
+# render sentences — those are facts about ONE part each and live in
+# parts/<p>/part.toml [context] (R331). The part dialog's text joins this
+# file with stage 5.
+
+[statements]
+# "{provider} ({model})" is filled from llm_client at run time — there is no
+# LLM selection in this installation, so "<your_selected_LLM>" is the one
+# model the circle actually calls. Never a literal here.
+privacy = "This information is yours. It never leaves your device apart from going to {provider} ({model}); see your provider's privacy policies."
+optional = "These brief steps are optional. They support more robust understanding and can enhance the quality of part replies."
+completion = "Your answers have been recorded."
+skipped = "No answers for now - you will be invited again before your next circle."
+
+# ---------------------------------------------------------------- the issue dialog
+# ISSUE_ADD_DIALOG — R324 (once, at a circle start, while issues/ holds no
+# node), R328 (the two added questions: an issue needs a short name to be
+# addressable and an absence clause to be LIVE — without one it opens as a
+# LEAD, which no circle projects), R332 (data_type/data_max per question,
+# read at call time). The four asked answers compose the description; `label`
+# declares unique_in = "issue_labels" (the operator: duplicates of a unique
+# key are rejected, echo and loop).
+[issue]
+purpose = """We all have issues. Maybe something hurt you way back and still pisses you off? Maybe you are \
+hard on yourself? Some people get really sad, or really angry.  How about you?"""
+
+[[issue.questions]]
+key       = "describe"
+ask       = "Describe your issue (up to 40 words)"
+data_type = "STRING"
+data_max  = 200
+
+[[issue.questions]]
+key       = "triggers"
+ask       = "What sorts of events can 'trigger' this issue (up to 40 words)"
+data_type = "STRING"
+data_max  = 200
+
+[[issue.questions]]
+key       = "body_place"
+ask       = "When triggered, is there a place you really feel that in your body"
+data_type = "STRING"
+data_max  = 40
+
+[[issue.questions]]
+key       = "recovery_hours"
+ask       = "At its worst, about how many hours for you to get over it"
+data_type = "NUMERIC_STRING"
+data_max  = 100
+
+[[issue.questions]]
+key       = "label"
+ask       = "A short name for it (a few words)"
+data_type = "STRING"
+data_max  = 40
+unique_in = "issue_labels"
+
+[[issue.questions]]
+key       = "absence"
+ask       = "What would be different when it no longer has you"
+data_type = "STRING"
+data_max  = 200
+
+# ---------------------------------------------------------------- the part dialog
+# PART_ADD_DIALOG — R324 (NEVER at a circle start: it fires on approval of a
+# part's `[proposed: /part-add ...]`, or from /part-add typed at cmd>), R323
+# (the bracket's strings arrive prefilled), R332 (the validator; the name is
+# checked against roster rules in part_add.precheck as well). The directory
+# name derives from the part's name; the dialog only asks for one when the
+# derivation collides or empties.
+[part]
+purpose = """We all have parts. The one that loves sports, loves music, loves learning, loves art... so many \
+possibilities. What is one of the best parts of you? (troubles are called 'issues' here; parts are always good)"""
+
+[[part.questions]]
+key       = "describe"
+ask       = "Describe that aspect of yourself (up to 40 words)"
+data_type = "STRING"
+data_max  = 200
+
+[[part.questions]]
+key       = "part_name"
+ask       = "What name would you like to call that part"
+data_type = "STRING"
+data_max  = 40
+unique_in = "part_tags"

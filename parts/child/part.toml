@@ -1,0 +1,94 @@
+# part.toml — the presence of THIS FILE is what makes a directory a part.
+#
+# `roster.py` scans `parts/` and reads only this. A directory WITHOUT one is
+# not a part, and is reported by `roster.verify()` rather than silently
+# skipped — a part that vanishes from the roster is a part that is absent
+# from the circle, writes no short_term, and reads as no engagement.
+#
+# The directory name gives the id. Nothing in a directory name can give the
+# display Tag, which is why this file exists: `injured_soul` was `Soul`.
+#
+# R123, 2026-08-08 — *"other parts will be created per-user; NOT 7 parts."*
+# The roster was seven names hardcoded in a module that SHIPS, which is one
+# person's system exported as though it were mechanism.
+
+tag = "Child"
+
+# Historical spellings of this part's Tag, for reading CLOSED transcripts
+# written before a rename. Empty is the normal case and the expected one.
+#
+# This is where `roster.ALT_TAGS` went, ruled 2026-08-08: a historical
+# spelling is one installation's history, not mechanism, so it belongs in
+# the part's own file rather than in shipped code.
+alt_tags = []
+
+# ---------------------------------------------------------------- [context]
+# WHAT THE CHILD WANTS TO KNOW ABOUT ITS HUMAN'S CHILDHOOD — R331,
+# 2026-08-23 (docs/Initialization.md). The initialization dialog asks these at
+# a circle start while every answer below is empty, records the answers in the
+# `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
+# its `render` sentence, in my own voice — `prompt_build.identity_tail()`.
+#
+# `data_type` / `data_max` ride with each question (R332) and
+# are read at call time: hand-tune a number here and the next dialog enforces
+# it. STRING: at most data_max characters. NUMERIC_STRING: numerals only, at
+# most data_max as a number. An empty answer is always valid.
+#
+# THE RENDER SENTENCES ARE DRAFTS, for the operator to rewrite in the Child's
+# voice. Several questions take a yes/no answer, so the draft keeps the
+# question's own shape and lets the answer follow it.
+
+[context]
+purpose = "What was your childhood like:"
+
+[[context.questions]]
+key       = "siblings"
+ask       = "How many siblings did you have"
+data_type = "NUMERIC_STRING"
+data_max  = 100
+render    = "I grew up with {answer} sibling(s)."
+
+[[context.questions]]
+key       = "home_schooled"
+ask       = "Were you home schooled"
+data_type = "STRING"
+data_max  = 40
+render    = "Was I home schooled? {answer}."
+
+[[context.questions]]
+key       = "enjoyed_school"
+ask       = "Did you enjoy school"
+data_type = "STRING"
+data_max  = 40
+render    = "Did I enjoy school? {answer}."
+
+[[context.questions]]
+key       = "favourites"
+ask       = "What were your favorite things to do"
+data_type = "STRING"
+data_max  = 40
+render    = "My favourite things to do were {answer}."
+
+[[context.questions]]
+key       = "bullied"
+ask       = "Were you bullied a lot"
+data_type = "STRING"
+data_max  = 40
+render    = "Was I bullied a lot? {answer}."
+
+[[context.questions]]
+key       = "music_or_art"
+ask       = "Did you make much music or art"
+data_type = "STRING"
+data_max  = 40
+render    = "Did I make much music or art? {answer}."
+
+# >>> context.answers
+[context.answers]
+siblings = ""
+home_schooled = ""
+enjoyed_school = ""
+favourites = ""
+bullied = ""
+music_or_art = ""
+# <<< context.answers

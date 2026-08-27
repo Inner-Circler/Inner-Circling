@@ -1,0 +1,32 @@
+# Byte-exact storage. Do not change these lines without reading the reasoning.
+#
+# `-text` tells git this path has NO text semantics: never normalise line endings
+# on commit, never convert them on checkout. Files come back out of git exactly as
+# they went in, byte for byte.
+#
+# WHY THIS MATTERS HERE, MORE THAN IN AN ORDINARY REPO
+#
+# git is this project's rollback target (NIGHTLY_DESIGN.md §6), and three separate
+# mechanisms compare these files by exact bytes and sha256:
+#
+#   * scripts/circle_close.py  writes each short_term's sha256 into
+#     work/logs/close_<OT>.json at close, and --reconcile re-verifies it before the
+#     nightly dreams. A checkout that "helpfully" rewrote LF to CRLF would report
+#     RECONCILE-DRIFT on files nobody had touched -- and the documented response to
+#     DRIFT is to backfill from the transcript, i.e. to overwrite a good record.
+#
+#   * coordinator/ifs_model.py  enforces that dream-entry bodies, the identity
+#     preamble, and unchanged sections are byte-identical. Line-ending conversion
+#     would fail every one of those checks at once.
+#
+#   * work/nightly/<RUN>/rollback/  restores by copying bytes back over the live
+#     paths. A rollback that changes the file it restores is not a rollback.
+#
+# The tree is also legitimately mixed: coordinator/circle.py wrote CRLF on Windows
+# (fixed 2026-07-26, but the 2026-07-26_1910 circle's eight files remain CRLF and
+# their sha256s are already recorded in work/logs/close_2026-07-26_1910.json).
+# `-text` preserves that history instead of rewriting it.
+#
+# Also set, locally:  git config core.autocrlf false
+
+* -text

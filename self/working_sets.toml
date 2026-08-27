@@ -1,0 +1,21 @@
+# Empty delegate for packaging/exceptions.toml's self/ entry -- see
+# packaging/scaffold/self/README.md. The live self/working_sets.toml
+# holds the operator's own per-circle rows; this delegate ships none.
+# Must stay valid, loadable TOML matching self_schema.py's own shape --
+# transcript_store.record_working_set()'s lazy-create path loads this
+# file on a fresh install before ever writing to it.
+
+register = "working_sets"
+working_set = []
+
+[doc]
+preamble = """
+
+Which issues each circle was shown, chosen by Self at open. chosen is "none"
+for no issues at all (the blank answer's meaning since the default flipped,
+R301), [] for the whole live graph (all), or the issue ids. Ruled
+2026-08-03. Withdrawn in the one case ruled 2026-08-09: a circle that died
+before its first statement leaves no trace, so its transcript is removed and
+this entry with it. An entry naming a transcript that does not exist is a
+dangling reference, not a record of what a room was shown. Nothing else is
+ever removed, and nothing is ever edited in place."""

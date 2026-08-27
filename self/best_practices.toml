@@ -1,0 +1,12 @@
+register = "best_practices"
+next_id = 1
+practice = []
+
+[doc]
+preamble = """
+
+BEST PRACTICES -- how the CIRCLE behaves and, merged in since R133, how the OPERATOR moves. Routing is by the `addressee` field alone (R134); check_best_practices.py projects broadcast entries into BLOCK 1 and narrowcast entries into the addressed part's BLOCK 3, and verifies both arrive verbatim.
+
+**Entries: 0** -- a TALLY, never a cap, asserted by coordinator/check_best_practices.py.
+
+SHIPPED EMPTY, and empty is correct: a circle that has ruled nothing in has no practices. Entries arrive as you rule them. `next_id = 1` and an empty table are exactly what the register's own reader builds when the file is absent."""

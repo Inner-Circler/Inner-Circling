@@ -31,7 +31,9 @@ and the close (short_terms, verifier, commit, phase 2). Everything it calls live
 `rounds`, `markers`, `vetting`, `command_surface`, `commands`, `help_system`, `quote_as_mark`,
 `prompt_capture`, `token_count`, `inter_circle`, and the issue-graph code under `memory/`.
 
-Two modes. SANDBOX (the default) writes only under `work/sandbox/`; `--live` may write the
+Two modes, and ONE IS REQUIRED since R360 — a bare invocation refuses (exit 2) rather than
+falling back to a default. `--dry-run` is the test rig: no model calls, every part passes, and
+writes land only under `work/sandbox/`. `--live` may write the
 live transcript, each speaking part's `short_term_<OT>.md`, `work/logs/` (through
 `circle_close.py`) and `work/prompts/<OT>/`; `WriteGuard` enforces it. Nothing is written until
 the integrity gate and the API check pass, and a run that dies before its first statement
@@ -234,9 +236,16 @@ if (live) then {
 ```
 
 ## COMMAND-LINE ARGUMENTS
+**ONE OF `--live` / `--dry-run` IS REQUIRED** (R360, 2026-08-27). Neither has a usable default any
+more: a bare invocation prints "Choose a mode" and returns 2. The retired default was the practice
+mode — real model calls whose writes went to `work/sandbox/` — and practice lives in the lab
+checkout now.
+
 - `--live`: write the live transcript, each speaking part's `short_term_<OT>.md`, and run
-  `coordinator/circle_close.py` at close. Default: off (sandbox — writes land under `work/sandbox/` only).
-- `--dry-run`: no network, no API key needed; every part passes. Default: off.
+  `coordinator/circle_close.py` at close. Default: off — and with `--dry-run` also off the run is
+  refused, not sandboxed.
+- `--dry-run`: no network, no API key needed; every part passes; writes only under
+  `work/sandbox/`. Default: off — see the line above.
 - `--parts <dirs>`: comma-separated part directories. Default: every part in `parts/` (the roster).
   A reduced LIVE roster asks for `yes` unless `--yes`.
 - (`--minimal` retired with the practice mode, R360 2026-08-27.)
@@ -369,10 +378,26 @@ if (the failure ledger is empty) then { return 0 }
 ```
 
 ## BUGS
-- `_interrupted_closes()` cannot see a close that died before writing ANY short_term; after the
-  45-minute quiet window neither it nor `circle_state` reports one. Stated in its docstring;
-  `circle_audit.py`'s safety net is the catch, by hand.
-- The module docstring's WHAT THIS IS section still describes the agent-teams mechanism as
-  "untouched and fully operational" (retired 2026-07-26), and its INTEROP paragraph says "the
-  nightly --reconcile guard keeps working unchanged" (no nightly since 2026-07-28; circle_audit.py
-  phase 2 runs --reconcile, by hand). History, not behaviour; the RUN section is four shell lines.
+None open. Both entries recorded here were re-examined 2026-08-27; one was already fixed in the
+code and one was fixed that day.
+
+WITHDRAWN 2026-08-27 — "`_interrupted_closes()` cannot see a close that died before writing ANY
+short_term". True when written (2026-08-21) and false since 2026-08-23, when `mark_close_started()`
+landed with `coordinator/tests/test_close_marker.py`. The all-missing branch now reads
+`len(missing) < len(spoke) or _close_began(ot_i)`, so a close that began and wrote nothing IS
+reported. The function's own docstring still carried the superseded paragraph — including
+"Narrowing this would need a marker written at the START of a close, which nothing writes today",
+directly above the line that calls `_close_began()` — and was corrected the same day. **The
+residue is real and does not shrink:** a circle that closed before 2026-08-23 has no marker, so
+for those the old exemption stands and `circle_audit.py`'s transcript safety net is still the only
+catch, by hand.
+
+RESOLVED 2026-08-27 — the module docstring's stale history. It described the agent-teams mechanism
+as "UNTOUCHED and fully operational" (retired 2026-07-26) and named `scripts/*.py` among its paths
+(the directory was deleted 2026-08-18); its INTEROP paragraph claimed "the nightly --reconcile
+guard keeps working unchanged" (no nightly since 2026-07-28). **This entry understated it.** The
+same docstring's TWO MODES section still announced `sandbox (default)`, which R360 retired on
+2026-08-27 — a bare invocation now refuses with exit 2 — and its RUN block offered
+`python coordinator/circle.py --parts <part1>,<part2>,<part3>`, an invocation that refuses as
+printed. All four corrected; the docstring now states each superseded claim and its date rather
+than dropping it.

@@ -477,7 +477,22 @@ def ensure_attributes(log) -> None:
 # gives the probe a trigger AND an invocation, the v45 lesson. Installed
 # from the main checkout after the merge (--git-setup), never from the
 # worktree that wrote it.
-HOOK_MARK = "# inner-circling pre-commit v83"
+# v85, 2026-08-27 — --simple joins the redraw. The diagram gained a
+# readable cut (call/spawn arcs only, constant reads to the table); it is a
+# RENDERING mode, so it shares --check's fingerprint and needs no dump of
+# its own, but its .svg/.html rot exactly as the other four would if this
+# case did not regenerate them together. Ten artifacts now, not six.
+# ui/ JOINS THE TRIGGER in the same version, ruled by the operator: the
+# diagram has drawn ui/ since R316 while this case still named the two
+# directories it had when written. One install, so one number.
+# WRITTEN AS v81 ON THE BRANCH AND RENUMBERED HERE: master reached v84 while
+# the branch was open, which is the ordinary case for a version that is a
+# single integer in one file. The number is taken at the MERGE, exactly as
+# an R-number is (R238) — a branch that keeps one ships a stale mark, and a
+# stale mark means ensure_hooks() installs nothing.
+# Installed from the main checkout after the merge (--git-setup), never
+# from the worktree that wrote it.
+HOOK_MARK = "# inner-circling pre-commit v86"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1021,10 +1036,34 @@ PY=".venv/Scripts/python.exe"
 # part of the product — so before v78 a recipient who ran `--git-setup` got a
 # hook that refused every commit, naming a test file they were never sent. The
 # gates they DO have still run, and still fail the commit when they fail.
+# WHERE A REFUSAL GOES — v86, 2026-08-27, ruled by the operator. A check that
+# refuses is the moment its reader is most stuck, and the checkers speak to a
+# developer. So the output is CAPTURED as well as shown, and on a non-zero exit
+# coordinator/gate_report.py writes work/diagnostics/gate_<time>.md — ordinary
+# language on the screen, the technical account and a prompt the person may
+# choose to send in the file. It opens no socket; the sending is theirs.
+#
+# STREAMED AND CAPTURED BOTH. `cmd | tee` would report tee's exit status, so
+# the status is carried out of the pipeline through a file — POSIX, and it
+# keeps a long check printing as it goes rather than in one lump at the end.
+GATE_OUT="${{TMPDIR:-/tmp}}/ic-gate-out.$$"
+GATE_RC="${{TMPDIR:-/tmp}}/ic-gate-rc.$$"
+trap 'rm -f "$GATE_OUT" "$GATE_RC"' EXIT
+
+refused() {{   # $1 = exit code, rest = the check and its arguments
+    code="$1"; shift
+    if [ -f coordinator/gate_report.py ]; then
+        "$PY" coordinator/gate_report.py --code "$code" --out "$GATE_OUT" -- "$@"
+    fi
+    exit 1
+}}
+
 run() {{
     [ -f "$1" ] || return 0
     if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE"; NOTE=""; fi
-    "$PY" "$@" || exit 1
+    {{ "$PY" "$@" 2>&1; echo $? > "$GATE_RC"; }} | tee "$GATE_OUT"
+    rc=$(cat "$GATE_RC" 2>/dev/null || echo 1)
+    [ "$rc" = "0" ] || refused "$rc" "$@"
 }}
 
 # AND THE SAME, FOR A SCRIPT WHOSE OWN OUTPUT IS NOISE. `run X >/dev/null`
@@ -1034,7 +1073,9 @@ run() {{
 quiet() {{
     [ -f "$1" ] || return 0
     if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE"; NOTE=""; fi
-    "$PY" "$@" >/dev/null || exit 1
+    "$PY" "$@" > "$GATE_OUT" 2>&1
+    rc=$?
+    [ "$rc" = "0" ] || {{ cat "$GATE_OUT"; refused "$rc" "$@"; }}
 }}
 
 # FIRST, and unconditional. `.gitattributes` sets `* -text`, so a CR that
@@ -1327,6 +1368,17 @@ case "$FILES" in *coordinator/check_line_endings.py*\
     run coordinator/tests/test_check_line_endings.py
 esac
 
+case "$FILES" in *coordinator/gate_report.py*\
+|*coordinator/tests/test_gate_report.py*)
+    # v86, 2026-08-27. The note a refused check leaves TELLS its reader the
+    # block carries no name, no circle words and no record contents — and then
+    # invites them to send it. A claim like that is worth nothing unless
+    # something fails when it stops being true.
+    NOTE="  pre-commit: the diagnostic note touched — asserting what it does
+  and does not carry"
+    run coordinator/tests/test_gate_report.py
+esac
+
 case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_backup_hooks.py*)
     NOTE="  pre-commit: the hook templates touched — asserting the backup hooks
   still install on the path that actually runs"
@@ -1353,9 +1405,25 @@ esac
 #     wanted it on every commit. --check parses and fingerprints instead, in
 #     well under a second, so the expensive half runs ONLY when the module
 #     graph actually moved. RULED to regenerate rather than refuse: "tell me
-#     and regen", so this stages the six artifacts and lets the commit
+#     and regen", so this stages the ten artifacts and lets the commit
 #     proceed. It is the one case here that writes, and it writes only paths
 #     it generated — never `git add -A`.
+#
+#     ui/ JOINED THE TRIGGER at v85, 2026-08-27, ruled by the operator the
+#     same session it was found. The diagram's PACKAGES has drawn ui/ since
+#     2026-08-23 (R316) while this case still listed the two directories it
+#     had when it was written, so an edit to ui/circling.py moved the module
+#     graph without firing --check and every artifact could go stale from
+#     that one direction. It is the v45 lesson from the other side: not a
+#     probe with no trigger, but a trigger that stopped covering its subject.
+#
+#     TEN SINCE v85, 2026-08-27, not six: --simple draws the same graph with
+#     only the control-moving arcs, and a picture that is not regenerated here
+#     is a picture that goes stale silently — which is this case's whole
+#     subject. It shares the fingerprint (--simple changes no parsed fact and
+#     --simple --dump is refused), so the cheap --check above still decides
+#     for all four; only the expensive half grew, and only on a commit that
+#     genuinely moved the module graph.
 case "$FILES" in *coordinator/circle.py*|*coordinator/tests/test_close_marker.py*)
     NOTE="  pre-commit: circle.py's open-time failure reports touched"
     run coordinator/tests/test_close_marker.py
@@ -1366,7 +1434,7 @@ case "$FILES" in *work/graph/coordinator_draw.py*|*work/graph/test_coordinator_d
     run work/graph/test_coordinator_draw.py
 esac
 
-case "$FILES" in *coordinator/*.py*|*memory/*.py*)
+case "$FILES" in *coordinator/*.py*|*memory/*.py*|*ui/*.py*)
     NOTE=""
     if [ ! -f work/graph/coordinator_draw.py ]; then
         :                    # not shipped in this tree
@@ -1376,8 +1444,10 @@ case "$FILES" in *coordinator/*.py*|*memory/*.py*)
         echo "  pre-commit: the module graph CHANGED — redrawing the diagrams"
         quiet work/graph/coordinator_draw.py --dump
         quiet work/graph/coordinator_draw.py --live --dump
-        git add work/graph/coordinator_graph.svg work/graph/coordinator_graph.html                 work/graph/coordinator_graph.toml work/graph/coordinator_graph_live.svg                 work/graph/coordinator_graph_live.html work/graph/coordinator_graph_live.toml || exit 1
-        echo "  pre-commit: six diagram artifacts regenerated and staged"
+        quiet work/graph/coordinator_draw.py --simple
+        quiet work/graph/coordinator_draw.py --live --simple
+        git add work/graph/coordinator_graph.svg work/graph/coordinator_graph.html                 work/graph/coordinator_graph.toml work/graph/coordinator_graph_live.svg                 work/graph/coordinator_graph_live.html work/graph/coordinator_graph_live.toml                 work/graph/coordinator_graph_simple.svg work/graph/coordinator_graph_simple.html                 work/graph/coordinator_graph_live_simple.svg work/graph/coordinator_graph_live_simple.html || exit 1
+        echo "  pre-commit: ten diagram artifacts regenerated and staged"
     fi
 esac
 
@@ -1516,6 +1586,15 @@ esac
 case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_capture.py*)
     NOTE=""
     run coordinator/tests/test_prompt_capture.py
+    # v84: AND the OTHER suite that calls verify(). test_llm_client.py builds
+    # a capture and asserts `verify() == 0`, so a new assertion inside
+    # verify() can break it — and on 2026-08-27 one did. R362 landed the
+    # projection assertion in prompt_capture.py, whose only trigger was the
+    # case above, so the suite it broke was never invoked; the gate went red
+    # on master and ten commits landed over it before a docs pass tripped
+    # circle.py's own trigger and found it. Cheap to run, and the exposure is
+    # exactly the v45 lesson: a change also needs its TRIGGER checked.
+    run coordinator/tests/test_llm_client.py
 esac
 '''
 

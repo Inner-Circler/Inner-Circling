@@ -5,11 +5,11 @@ prompt_capture.py — saves what each part was sent, verbatim, per circle: the f
 
 ## SYNOPSIS
 ```
-python coordinator/prompt_capture.py --verify           # check every capture (live + sandbox)
+python coordinator/prompt_capture.py --verify           # check every capture
 python coordinator/prompt_capture.py --verify <OT>       # check one circle's capture
 python coordinator/prompt_capture.py --stats [<OT>]      # per-block, per-item character counts
 ```
-(As a library: `write(ot, sysblocks, notes, live, sandbox_dir=None, names=None)` from `circle.py` at circle open; `open_turn_log(dir, ot)` right after it; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request; `discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `read_manifest(dir)` and `block_shas(manifest)` for the resume compare.)
+(As a library: `write(ot, sysblocks, notes, live, names=None)` from `circle.py` at circle open; `open_turn_log(dir, ot)` right after it; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request; `discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `read_manifest(dir)` and `block_shas(manifest)` for the resume compare.)
 
 ## DESCRIPTION
 The system prompt sent to a part is GENERATED CODE — `prompt_build.system_blocks()`
@@ -138,11 +138,11 @@ else {
 }
 ```
 
-### write(ot, sysblocks, notes, live, sandbox_dir=None, names=None)
+### write(ot, sysblocks, notes, live, names=None)
 ```
 if (live) then { the directory is work/prompts/<ot> }
-else if (sandbox_dir is given) then { the directory is sandbox_dir/<ot> }
-else { return None — nothing is written. }
+else { return None — nothing is written. The sandbox_dir root left with
+       --minimal, R360; a dry run's evidence is its transcript. }
 {
     names default to BLOCK_NAMES; a block past the names is "block<i>".
     FOR EACH SHARED block position: collect the distinct texts across every
@@ -160,12 +160,26 @@ else { return None — nothing is written. }
         compute block_items() (a failure becomes one "(item extraction failed)"
         item, never a refusal); record block, index, shared, part, bytes, chars,
         sha256, cached (whether the block carried cache_control), items.
+    FOR EACH part, ask its OWN remember register what must be in its identity
+        blocks (_remember_expectation): no records -> {records: 0}; a register
+        whose rendered records exceed remember.BUDGET -> {windowed: true},
+        because the projection never promised to show any particular one; else
+        the count, and the NEWEST record's chars, sha256 and first 96
+        characters. Any exception becomes {error: ...}. It never costs a
+        capture, and verify() skips anything but the third case.
     write manifest.json: open_time, block_order, files, parts (briefing_filter
-    note + block list each), block_bytes, turns = [], turn_bytes = 0, and a
-    one-line turns_format.
+    note + block list + remember_projection each), block_bytes, turns = [],
+    turn_bytes = 0, and a one-line turns_format.
     return the directory.
 }
 ```
+**Why the register is read here and not at verify time (R362, 2026-08-27).** A
+capture is checked months after its circle, against a register that has moved
+on; a verifier reading today's register would be answering a different
+question. So the bytes to look for travel WITH the capture. The two paths stay
+independent — `prompt_build` assembles Block 3/4 through
+`remember.block_settled()`/`block_tail()`, this reads `remember.entries()` —
+which is the point: a check that reads the same object twice checks nothing.
 
 ### read_manifest(d) / block_shas(manifest)
 `read_manifest` loads `<d>/manifest.json`. `block_shas` returns, per part, the sha256
@@ -266,6 +280,13 @@ FOR EACH Block file in files:
         if (shared) then { run _leak_check } }
 FOR EACH part's block list: if (a name is not in files) then { record };
     if (a shared file is bound to a part) then { record }
+FOR EACH part's remember_projection (R362 — absent on a pre-R362 capture,
+        which makes no claim and is skipped):
+    if (error, or windowed, or records == 0) then { skip — no claim was made }
+    read the part's part_identity and part_objectives files;
+    if (the recorded prefix is in NEITHER) then { record — the register
+        projection did not carry the newest remembered record into the
+        prompt, which is the safety net R355 rests on }
 FOR EACH turn record:
     if (the file is missing) then { record; continue }
     re-read; count it; if (size or sha256 differs) then { record; continue }

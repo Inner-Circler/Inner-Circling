@@ -169,7 +169,9 @@ def _roots() -> list[pathlib.Path]:
 BLOCK_NAMES = ("circle_identity", "circle_objectives",
                "part_identity", "part_objectives")
 SHARED_BLOCKS = ("circle_identity", "circle_objectives")
+IDENTITY_BLOCKS = ("part_identity", "part_objectives")   # the per-part pair
 MANIFEST = "manifest.json"
+PROJECTION_PREFIX = 96      # chars of the newest record recorded as the probe
 
 # B29: derived from roster.py — were hand-typed copies.
 PART_TAGS = tuple(R.TAGS)
@@ -178,6 +180,56 @@ PART_TAGS_BY_DIR = R.TAG_BY_DIR
 
 def _sha(b: bytes) -> str:
     return hashlib.sha256(b).hexdigest()
+
+
+def _remember_expectation(part: str) -> dict:
+    """What this part's OWN register says must be inside its identity blocks
+    — recorded at capture time so --verify can check it forever after.
+
+    THE INVARIANT R355 LEANS ON, ASSERTED. The distillation drops a fresh
+    single-source record BY INSTRUCTION (mid_term SYSTEM v9; ruled to stand
+    2026-08-26), and that drop is harmless for exactly one reason: the
+    register projection carries every fresh record verbatim into BLOCK 3/4
+    until reinforcement consolidates it. That was a load-bearing claim with
+    nothing asserting it — --verify re-hashed every block and never once
+    asked whether a remembered thing had reached the part it belongs to.
+    Built R362, 2026-08-27.
+
+    RECORDED HERE BECAUSE IT CANNOT BE RECOVERED LATER. A capture is checked
+    months after its circle, against a register that has moved on; a
+    verifier reading today's register would be answering a different
+    question. So the bytes to look for travel WITH the capture.
+
+    TWO INDEPENDENT PATHS, which is the whole point: prompt_build assembles
+    Block 3/4 through remember.block_settled()/block_tail(), and this reads
+    remember.entries() directly. A check that reads the same object twice
+    checks nothing.
+
+    THE WINDOW IS RESPECTED, NOT ASSUMED AWAY. The projection shows records
+    newest-first to a character BUDGET, in a salience-bounded order that can
+    promote an older record — so an individual record is only GUARANTEED to
+    appear when the whole register fits. When it does not, `windowed` is
+    recorded and the verifier skips rather than inventing an expectation the
+    projection never made.
+
+    IT NEVER COSTS A CAPTURE. Any failure is recorded as `error` and skipped
+    at verify time, the same degrade block_items() takes."""
+    try:
+        import remember as RM
+        es = sorted(RM.entries(part), key=lambda r: r.get("date", ""),
+                    reverse=True)
+        if not es:
+            return {"records": 0}
+        rendered = sum(len("\n- " + str(r.get("text", "")) + "\n") for r in es)
+        if rendered > RM.BUDGET:
+            return {"records": len(es), "windowed": True,
+                    "rendered_chars": rendered, "budget": RM.BUDGET}
+        newest = str(es[0].get("text", ""))
+        return {"records": len(es), "chars": len(newest),
+                "sha256": _sha(newest.encode("utf-8")),
+                "prefix": newest[:PROJECTION_PREFIX]}
+    except Exception as e:                                   # noqa: BLE001
+        return {"error": f"{type(e).__name__}: {e}"}
 
 
 def block_filename(index: int, name: str, part: str) -> str:
@@ -274,7 +326,8 @@ def write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
                 fname = block_filename(i, nm, p)
                 _emit(fname, b, i, nm, p)
             mine.append(fname)
-        per_part[p] = {"briefing_filter": notes.get(p, ""), "blocks": mine}
+        per_part[p] = {"briefing_filter": notes.get(p, ""), "blocks": mine,
+                       "remember_projection": _remember_expectation(p)}
 
     manifest = {
         "open_time": ot,
@@ -705,6 +758,30 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
                 fails.append(f"{d.name}: {p} lists {fname}, not in manifest")
             elif files[fname].get("shared") and files[fname]["part"] is not None:
                 fails.append(f"{d.name}/{fname}: shared but bound to a part")
+    # THE PROJECTION ASSERTION (R362) — the safety net R355 leans on, made
+    # self-checking. `_remember_expectation()` carries the why; here it is
+    # only ever a skip or a failure, never a repair.
+    for p, rec in man.get("parts", {}).items():
+        exp = rec.get("remember_projection")
+        if not isinstance(exp, dict):
+            continue                       # a pre-R362 capture: no claim made
+        if exp.get("error") or exp.get("windowed") or not exp.get("records"):
+            continue                       # nothing on file, or not promised
+        prefix = exp.get("prefix") or ""
+        if not prefix:
+            continue
+        idents = [(d / f).read_text(encoding="utf-8", errors="replace")
+                  for f in rec.get("blocks", [])
+                  if files.get(f, {}).get("block") in IDENTITY_BLOCKS
+                  and (d / f).is_file()]
+        if not idents:
+            continue
+        if not any(prefix in text for text in idents):
+            fails.append(
+                f"{d.name}: {p}'s newest remembered record reached neither "
+                f"BLOCK 3 nor BLOCK 4 — the register projection did not "
+                f"carry it into the prompt (the safety net R355 rests on)")
+
     seen_seq: set[int] = set()
     for t in man.get("turns", []):
         f = d / t["file"]

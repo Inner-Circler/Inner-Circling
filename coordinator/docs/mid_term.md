@@ -78,6 +78,36 @@ placed plainly: the distillate is attributed to the model, its sources
 are named by hash in the front matter, and the untouched source record
 remains readable. Nothing here ever deletes a source.
 
+**THE STANDING PRACTICE — run the memory eval before trusting a change
+here.** Ruled R362, 2026-08-27. `SYSTEM` and `PROMPT` in this module decide
+what a part remembers and what it forgets, and NOTHING in the gate battery
+measures that: the suites prove the derivation runs, not that a remembered
+thing still reaches the room. So after any change to `SYSTEM`, to `PROMPT`,
+to the dreaming prompt, or to the projection code (`remember.py`,
+`prompt_build`'s Block 3/4 assembly), run both of these in the lab before
+trusting it:
+
+```
+python work/tools/memory_probe.py niah      --name <run> --topic "..."   the ladder
+python work/tools/memory_probe.py retention --part <part>                the R355 fixture
+```
+
+`niah` plants one synthetic record and follows it through five rungs —
+record bytes, projection, distillate, prompt bytes, speech — and reports
+what it finds; an ABSENT rung is a reading, not a failure, so it exits 0
+whenever the ladder RAN. `retention` is a fixture with a right answer, and it
+asserts exactly one thing: a fact planted in a SINGLE source must be ABSENT
+from the distillate afterwards. That is R355's ruled drop, and it exits 1 if
+this module stops behaving the way the ruling says it does. The reinforcement
+curve — the same fact at two and three sources, and reinforcement then
+withdrawn — runs only on request and is reported as a READING, never a
+verdict: those numbers are B70(b)'s findings, and a finding is not a ruling
+(ruled 2026-08-27, after the curve failed to reproduce on a synthetic plant
+while the ruled drop held). The other half of R355's watch — a fresh record
+still reaching the room — is asserted at every live circle by
+`prompt_capture --verify`, not here. Both verbs cost real model calls and
+both refuse outside the lab.
+
 ## MAIN
 ```
 read argv (no argparse; manual dispatch on argv[0]).

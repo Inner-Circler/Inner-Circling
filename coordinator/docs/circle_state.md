@@ -158,6 +158,17 @@ Returns every transcript that may still be being written; an empty list is the "
 
 ## BUGS
 
-- `main()`'s "safe to read" branch reports a transcript count computed independently of `open_circles()`'s own directory-existence checks: it calls `LIVE.glob(...)` and `SANDBOX.glob(...)` directly without first checking `is_dir()` on either. `pathlib.Path.glob()` on a non-existent directory simply yields nothing rather than raising, so this doesn't crash, but if one of the two directories doesn't exist, `open_circles()` silently skips it (per its own `if not d.is_dir(): continue`) while `main()`'s count line still reports as if both were considered — in practice harmless since the count is used only for the printed "safe to read" message, not for any decision.
+*Both re-verified 2026-08-27 and both stand. Neither is a wrong answer — the check's verdicts are
+correct in every case below; what is imprecise is a printed count and a caller's ability to read
+one boolean two ways.*
 
-- `is_circle_in_progress()`'s fail-closed guarantee is easy to lose silently in a caller that only checks the return value and doesn't distinguish it from a genuine "no circle open" case, since both are `False`/`True` with no way to tell an inconclusive check from a confident one from the boolean alone. `main()` avoids this by handling its own `try`/`except` separately with a distinct message, but any other caller of `is_circle_in_progress()` directly gets no such distinction — a caller who logs or acts on the boolean alone cannot tell "confirmed open" from "could not tell, so treated as open."
+- **CONFIRMED (cosmetic).** `main()`'s "safe to read" branch reports a transcript count computed independently of `open_circles()`'s own directory-existence checks: it calls `LIVE.glob(...)` and `SANDBOX.glob(...)` directly without first checking `is_dir()` on either. `pathlib.Path.glob()` on a non-existent directory simply yields nothing rather than raising, so this doesn't crash, but if one of the two directories doesn't exist, `open_circles()` silently skips it (per its own `if not d.is_dir(): continue`) while `main()`'s count line still reports as if both were considered — in practice harmless since the count is used only for the printed "safe to read" message, not for any decision. **Mitigation:** call `open_circles()`'s own directory list rather than re-globbing, or apply the same `is_dir()` guard. One line; no verdict changes either way.
+
+- **CONFIRMED (design caveat, not a defect).** `is_circle_in_progress()`'s fail-closed guarantee is easy to lose silently in a caller that only checks the return value and doesn't distinguish it from a genuine "no circle open" case, since both are `False`/`True` with no way to tell an inconclusive check from a confident one from the boolean alone. `main()` avoids this by handling its own `try`/`except` separately with a distinct message, but any other caller of `is_circle_in_progress()` directly gets no such distinction — a caller who logs or acts on the boolean alone cannot tell "confirmed open" from "could not tell, so treated as open."
+
+  The three callers outside this module were checked 2026-08-27 — `circle_audit.py` (twice: the
+  snapshot guard and the survey's `circle_in_progress` field) and
+  `.claude/skills/run-inner-circling/driver.py`. All three take the same safe action either way,
+  so nothing is wrong today. **Mitigation, if wanted:** a companion `open_circles_or_reason()`
+  returning `(bool, reason | None)` for the caller that wants to distinguish them, leaving the
+  boolean's fail-closed contract untouched. Not queued — no caller currently needs it.

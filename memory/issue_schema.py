@@ -5,6 +5,12 @@ issue_schema.py — the one reader and writer for an issue node.
     python memory/issue_schema.py            load every node, report
     python memory/issue_schema.py --render nNNNN   markdown, to stdout
 
+    exit 0 rendered, or every node parsed and checked
+         1 validation failures were found
+         2 the command itself was wrong (no id after --render, or no node
+           of that id) — never mixed with 1, so a caller can tell a broken
+           node from a mistyped argument
+
 Ruled 2026-08-03. `issues/` moves from Markdown to TOML.
 
 WHY. Every parsing defect this project has recorded was Markdown ambiguity in a
@@ -399,9 +405,33 @@ def check(doc: dict, p: pathlib.Path) -> list[str]:
 
 def main() -> int:
     if "--render" in sys.argv:
-        nid = sys.argv[sys.argv.index("--render") + 1]
-        p = next(q for q in nodes() if nid_of(q.stem) == nid_of(nid))
-        print(render(load(p)))
+        # BOTH MISSES ARE ANSWERED, AND NEITHER RETURNS 1 — 2026-08-27.
+        # These two lines were unguarded, so `--render n9999` raised
+        # StopIteration and `--render` with nothing after it raised
+        # IndexError; each printed a Python traceback and exited 1, which
+        # is THIS script's documented code for "validation failures found".
+        # A caller reading exit codes could not tell a malformed node from
+        # a mistyped id, and colliding with a documented code is worse than
+        # falling outside the set. 2 is neither.
+        #
+        # IT IS A SHIPPED SURFACE, which is why it outranked the local
+        # defects found beside it: packaging/required.toml ships `memory`
+        # as a whole directory, and packaging/additions.toml ships this
+        # module's man page for "the --render <id> a person uses to read
+        # one as Markdown". The advertised spelling was the one that
+        # tracebacked.
+        i = sys.argv.index("--render") + 1
+        if i >= len(sys.argv):
+            print("  --render needs a node id: "
+                  "python memory/issue_schema.py --render nNNNN")
+            return 2
+        nid = sys.argv[i]
+        q = next((x for x in nodes() if nid_of(x.stem) == nid_of(nid)), None)
+        if q is None:
+            print(f"  no issue node matches {nid!r}. The id is the filename "
+                  f"without its status prefix — try `ls issues/`.")
+            return 2
+        print(render(load(q)))
         return 0
     fails, n = [], 0
     for p in nodes():

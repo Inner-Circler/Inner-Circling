@@ -3,40 +3,51 @@
 IFS inner circle — local coordinator (direct Messages API).
 
 WHAT THIS IS
-    The production successor to spike_asyncio/circle_spike.py. A local Python
-    "Scribe" drives the parts as direct, stateless Messages API calls. There is
-    no agent-teams runtime, no SendMessage, no teammate file writes, no sandbox
-    mount in the write path. A part's statement is the HTTP return value.
+    THE DRIVER, NOT THE PROGRAM. A local Python "Scribe" drives the parts as
+    direct, stateless Messages API calls; a part's statement is the HTTP return
+    value. There is no agent-teams runtime, no SendMessage, no teammate file
+    writes, no sandbox mount in the write path. Almost everything this file once
+    held now lives in its own module and is called from here — the turn engine
+    (rounds.py), the annotation grammar (markers.py), the four-block assembly
+    (prompt_build.py), the transport (llm_client.py).
 
-    The live agent-teams mechanism is UNTOUCHED and fully operational:
-    .claude/agents/, .claude/commands/circle_close.md, process.md, and
-    scripts/*.py are neither read for control flow nor modified by this file.
-    Both paths can be used interchangeably, circle by circle.
+    THE AGENT-TEAMS PATH IS GONE, not parallel. This paragraph said that
+    mechanism was "UNTOUCHED and fully operational" until 2026-08-27 — a month
+    after it was retired (2026-07-26), and nine days after `scripts/`, one of
+    the four paths it named, was deleted outright. There is one path.
 
-TWO MODES
-    sandbox (default)  Writes ONLY under work/sandbox/. Reads the real
-                       identity files read-only. Cannot touch circles/, parts/,
-                       or any other work/ subdirectory. Use for test rounds.
-    --live             Additionally permits writing:
-                         circles/circle_<OT>.md
-                         parts/<name>/short_term_<OT>.md   (that name only)
-                         work/logs/                        (via circle_close.py)
-                       Nothing else, ever. Enforced by assert_write_safe().
+TWO MODES, AND ONE IS REQUIRED
+    --live      Permits writing:
+                  circles/circle_<OT>.md
+                  parts/<name>/short_term_<OT>.md   (that name only)
+                  work/logs/                        (via circle_close.py)
+                Nothing else, ever. Enforced by assert_write_safe().
+    --dry-run   The test rig: no network, no API key needed, every part passes.
+                Writes only under work/sandbox/.
 
-INTEROP WITH THE EXISTING PIPELINE
+    A BARE INVOCATION REFUSES (R360, 2026-08-27, exit 2). The old bare default
+    — real model calls with the writes sent to work/sandbox/ — was the practice
+    mode R250 deprecated, and practice lives in the lab checkout now. This
+    section described that default as the live behaviour until the day it went.
+
+INTEROP
     Transcript lines use the canonical "[Tag]:" / "[Tag] [To: X]:" form that
     coordinator/circle_close.py::parts_that_spoke() parses. short_term files carry
     the four canonical sections. At close in --live mode this script shells out
     to coordinator/circle_close.py --short-term-only --write-report, so the durable
     close report work/logs/close_<OT>.json is produced by the SAME verifier as
-    today and the nightly --reconcile guard keeps working unchanged.
+    always.
+
+    NOTHING RE-VERIFIES THAT REPORT AUTOMATICALLY, and this said "the nightly
+    --reconcile guard keeps working unchanged". There has been no nightly since
+    2026-07-28. circle_audit.py phase 2 runs --reconcile — when a human runs it.
 
 RUN
     pip install anthropic python-dotenv
     set ANTHROPIC_API_KEY=...            (or put it in the project .env)
-    python coordinator/circle.py --dry-run
-    python coordinator/circle.py --parts <part1>,<part2>,<part3>
     python coordinator/circle.py --live
+    python coordinator/circle.py --dry-run
+    python coordinator/circle.py --dry-run --parts <part1>,<part2>
 """
 
 from __future__ import annotations
@@ -646,16 +657,21 @@ def _interrupted_closes(base: pathlib.Path) -> list[tuple[str, list[str]]]:
     a circle exists; an unparseable old transcript is not a reason to
     refuse to start a new one, and the audit is where that belongs.
 
-    THE ONE CASE NOTHING SEES, stated rather than left to be discovered: a
-    close that died before writing ANY short_term. It is indistinguishable
-    here from an /abort, and indistinguishable to circle_state once the
-    transcript has been quiet 45 minutes — so after that window it is
-    reported by neither. The exemption is deliberate (reporting
-    all-missing would fire on every circle actually in progress, which is
-    what circle_state's own warning is for), and the cost is real. What
-    still catches it is circle_audit.py's transcript safety net, by hand.
-    Narrowing this would need a marker written at the START of a close,
-    which nothing writes today."""
+    THE CASE NOTHING SAW IS SEEN SINCE 2026-08-23, and this paragraph
+    said otherwise until 2026-08-27. A close that died before writing ANY
+    short_term used to be indistinguishable here from an /abort, and
+    indistinguishable to circle_state once the transcript had been quiet
+    45 minutes — reported by neither, after that window. It asked for a
+    marker written at the START of a close; mark_close_started() is that
+    marker, and the all-missing branch below consults it.
+
+    THE RESIDUE IS HISTORY, and it does not shrink: a circle that closed
+    BEFORE the marker existed has none, so for those the old exemption
+    stands exactly as it did, and circle_audit.py's transcript safety net
+    is still the only thing that catches them — by hand. The exemption
+    itself is deliberate and stays: without a marker, all-missing is what
+    a circle actually in progress looks like, which is what
+    circle_state's own warning is for."""
     out: list[tuple[str, list[str]]] = []
     for f in sorted(base.glob("circle_*.md")):
         ot_i = f.stem[len("circle_"):]

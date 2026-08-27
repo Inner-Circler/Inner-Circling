@@ -851,7 +851,9 @@ def main() -> int:
                     help="validate the live tree against this snapshot instead of "
                          "self-checking it")
     ap.add_argument("--validate", action="store_true",
-                    help="run phases 0, 1, 2, 6 (the default)")
+                    help="run phases 0, 1, 2, 6 (the default) and NOTHING else "
+                         "— refuses if combined with a flag that selects "
+                         "another path")
     ap.add_argument("--selfcheck", action="store_true",
                     help="phase 6 only, no lock, no git, no reconcile")
     ap.add_argument("--git-setup", action="store_true",
@@ -921,6 +923,30 @@ def main() -> int:
     if args.selfcheck:
         phase6(run, None)
         return 1 if run.failures else 0
+
+    # --validate IS READ NOW, 2026-08-27. It was a documented argparse flag
+    # that `main()` never consulted anywhere in its dispatch chain: bare
+    # already fell through to phases 0/1/2/6, so the flag changed nothing
+    # whether given or not, while its help text implied it selected a mode.
+    # Worse than decoration, because `--validate --backfill` ran the
+    # BACKFILL and said nothing — the flag lost silently to whichever other
+    # flag was present.
+    #
+    # HONOURED RATHER THAN DELETED. It ships: circle_audit.py is listed
+    # file-by-file in packaging/required.toml, so removing a documented flag
+    # from a shipped CLI breaks anyone who typed it. Selecting the default
+    # path explicitly, and refusing a combination that would silently
+    # override it, makes the help text true without taking anything away.
+    _OTHER_PATHS = ("snapshot", "backfill", "stage_synthetic", "commit")
+    if args.validate:
+        clash = [f"--{x.replace('_', '-')}" for x in _OTHER_PATHS
+                 if getattr(args, x)]
+        if clash:
+            # run.fail() prints it; a second print here said it twice.
+            run.fail(f"--validate runs phases 0, 1, 2, 6 and nothing else; "
+                     f"{', '.join(clash)} selects a different path. Give one "
+                     f"or the other.")
+            return 1
 
     # may_commit follows --commit: check_git's docstring says the git
     # preconditions are "ENFORCED only when the run could write to the live

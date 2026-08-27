@@ -101,6 +101,12 @@ Stdout only, no stdin. Prints an unknown-id notice when a working set names ids 
     }
 
 ## BUGS
-The function `working_set()` returns a 3-tuple `(keep, pulled, unknown)`, but at its call site in `main()` the assignment is `keep, pulled, unknown = working_set(g, chosen)` and `keep` is then discarded — `main()` immediately recomputes `live`/`leads`/`roots`/`closed` by filtering `keep`, which is fine, but the local variable `keep` returned from the function is never itself referenced again by that name after the filters run, so nothing is actually wrong here; flagged and then dismissed as not a defect — the values are used, just filtered rather than iterated directly (not raised as a bug).
+None found.
+
+WITHDRAWN 2026-08-27 — the `working_set()` / `keep` note recorded here. It reached its own verdict
+inside its own sentence ("nothing is actually wrong here; flagged and then dismissed as not a
+defect") and should never have been left standing in a BUGS section: a reader scanning for open
+defects has to read to the end of a paragraph to learn there is none. The values are used, just
+filtered rather than iterated directly.
 
 RESOLVED 2026-08-19 (review tier 2 #24): `ruled`/`n_all` used to be computed twice, and a SECOND near-identical working-set banner followed the first — gated on a condition only a `--working-set` restriction could produce, and instructing "Regenerate with `--all`, `--limit N`", flags this tool has never accepted. One banner remains, computed once; the misleading self-instructions are gone.

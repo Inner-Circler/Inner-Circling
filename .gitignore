@@ -64,6 +64,12 @@ work/logs/nightly*.log
 work/logs/closing_*.json
 work/logs/dream_[0-9]*.json
 
+# THE DIAGNOSTIC NOTES a refused check writes — work/diagnostics/gate_<time>.md,
+# 2026-08-26. Each is written FOR its reader, who may hand-edit it before
+# sending it anywhere; a copy in the history would be a second version they did
+# not choose. The screen names the path, which is where it lives.
+work/diagnostics/
+
 # Temp workspaces — staging, caches, locks, snapshots
 work/issue_trial/
 

@@ -66,7 +66,21 @@ byte-for-byte against what was sent; a SHARED block that differs between parts i
 refused before anything is written) and re-checked by `--verify`, which re-hashes
 every file, asserts no SHARED block carries a part-addressed marker (E09), and
 asserts every turn file's block references resolve to the Block files by sha — the
-static-blocks claim, proven per request. Size: ~80 KB of Block files per circle for
+static-blocks claim, proven per request.
+
+`--verify` also holds every request to **the wire contract**, `coordinator/
+turn_contract.toml` (R368). The sha checks prove a capture has not been altered
+since it was written; the contract proves what was written was the shape the code
+is supposed to send: the four blocks in order, `cache_control` on 1-3 and never on
+4, a messages tail that alternates and ends on the cue, `model` equal to
+`llm_client.MODEL` (grepped from the source, never imported, so this stays cheap
+enough for the pre-commit hook), a pre-warm asking for no output, and a response
+in either the live shape or the narrower dry-run one. A missing contract file is
+reported as a NOTE, never passed over in silence. `check_contract()` is the one
+reader; `coordinator/tests/test_turn_contract.py` breaks one thing at a time and
+asserts each rule still refuses, so the walker cannot quietly stop walking.
+
+Size: ~80 KB of Block files per circle for
 seven parts (the shared blocks once, not seven times), plus one turn file of a few KB
 per request; a content-addressed store is still deliberately not built.
 

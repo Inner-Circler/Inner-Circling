@@ -709,6 +709,197 @@ def _leak_check(fname: str, text: str) -> list[str]:
             f"in part_objectives (E09)" for t in hits]
 
 
+# ------------------------------------------------------------ the wire contract
+
+CONTRACT = pathlib.Path(__file__).resolve().parent / "turn_contract.toml"
+
+_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict}
+
+
+def load_contract() -> dict:
+    """turn_contract.toml, or {} when it is absent or unreadable. A MISSING
+    CONTRACT IS A NOTE, NOT A PASS — _verify_dir says so out loud, because a
+    check that quietly stops checking is the defect this whole file exists
+    to catch."""
+    try:
+        import tomllib as _toml
+    except ModuleNotFoundError:                              # pragma: no cover
+        import tomli as _toml                                # type: ignore
+    try:
+        with CONTRACT.open("rb") as fh:
+            return _toml.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def _source_constant(spec: str) -> "str | None":
+    """`coordinator/llm_client.py::MODEL`, GREPPED FROM THE SOURCE TEXT and
+    never imported — importing llm_client pulls `anthropic` and its API-key
+    check into a verifier the pre-commit hook runs. Same discipline, and the
+    same reason, as bnf_conformance.py's own site resolver."""
+    path, _, name = spec.partition("::")
+    if not name:
+        return None
+    try:
+        src = (ROOT / path).read_text(encoding="utf-8")
+    except OSError:
+        return None
+    m = re.search(r'^' + re.escape(name) + r'\s*=\s*["\']([^"\']+)["\']',
+                  src, re.M)
+    return m.group(1) if m else None
+
+
+def _typed(where: str, obj: dict, types: dict, out: list) -> None:
+    for key, want in types.items():
+        if key not in obj:
+            continue
+        cls = _TYPES.get(want)
+        if cls is None:
+            continue
+        # bool is an int subclass, so an int field must not accept True
+        if cls is int and isinstance(obj[key], bool):
+            out.append(where + ": " + key + " is a bool, contract says int")
+        elif not isinstance(obj[key], cls):
+            out.append(where + ": " + key + " is "
+                       + type(obj[key]).__name__ + ", contract says " + want)
+
+
+def _keys(where: str, obj: dict, spec: dict, out: list) -> None:
+    for key in spec.get("required", []):
+        if key not in obj:
+            out.append(where + ": missing required key " + repr(key))
+    if spec.get("closed"):
+        allowed = set(spec.get("required", [])) | set(spec.get("optional", []))
+        for key in sorted(set(obj) - allowed):
+            out.append(where + ": unexpected key " + repr(key)
+                       + " — the contract is closed")
+    _typed(where, obj, spec.get("types", {}), out)
+
+
+def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
+    """Every rule in turn_contract.toml against ONE captured turn. Returns
+    the failures; empty when the turn honours the contract."""
+    out: list[str] = []
+    if not contract:
+        return out
+
+    t = contract.get("turn", {})
+    _keys(fname, body, t, out)
+    kinds = t.get("kinds") or []
+    if kinds and body.get("kind") not in kinds:
+        out.append(fname + ": kind " + repr(body.get("kind"))
+                   + " is not one of " + repr(kinds))
+    if t.get("time_re") and isinstance(body.get("time"), str) \
+            and not re.match(t["time_re"], body["time"]):
+        out.append(fname + ": time " + repr(body["time"])
+                   + " is not the recorded shape")
+    if t.get("filename") and isinstance(body.get("seq"), int) \
+            and all(k in body for k in ("part", "time")):
+        want = t["filename"].format(part=body["part"], time=body["time"],
+                                    seq=body["seq"])
+        if want != fname:
+            out.append(fname + ": the body says it should be named " + want)
+    if t.get("null_response_needs_error") and body.get("response") is None \
+            and not body.get("error"):
+        out.append(fname + ": response is null and no error is recorded")
+
+    req = body.get("request")
+    if not isinstance(req, dict):
+        out.append(fname + ": request is not an object")
+        return out
+    rspec = contract.get("request", {})
+    _keys(fname + " request", req, rspec, out)
+
+    want_model = _source_constant(rspec.get("model_from", ""))
+    if want_model and req.get("model") != want_model:
+        out.append(fname + ": model " + repr(req.get("model"))
+                   + " is not the code's own constant " + repr(want_model))
+    cap = (rspec.get("max_tokens_when") or {}).get(body.get("kind"))
+    if cap is not None and req.get("max_tokens") != cap:
+        out.append(fname + ": a " + str(body.get("kind")) + " turn must send "
+                   "max_tokens " + str(cap) + ", not "
+                   + repr(req.get("max_tokens")))
+
+    sspec = contract.get("system", {})
+    order = sspec.get("order") or []
+    system = req.get("system")
+    if order and isinstance(system, list):
+        got = [b.get("block") if isinstance(b, dict) else None for b in system]
+        if got != order:
+            out.append(fname + ": system blocks are " + repr(got)
+                       + ", contract says " + repr(order))
+        for b in system:
+            if not isinstance(b, dict):
+                out.append(fname + ": a system entry is not an object")
+                continue
+            name = str(b.get("block"))
+            for key in sspec.get("entry_required", []):
+                if key not in b:
+                    out.append(fname + ": system " + name + " has no "
+                               + repr(key))
+            groups = sspec.get("entry_one_of") or []
+            if groups and not any(all(k in b for k in g) for g in groups):
+                out.append(fname + ": system " + name
+                           + " is neither by reference nor inline")
+            cached = bool(b.get("cache_control"))
+            if name in sspec.get("cached", []) and not cached:
+                out.append(fname + ": system " + name + " lost its "
+                           "cache_control — the cached-prefix claim broke")
+            if name in sspec.get("uncached", []) and cached:
+                out.append(fname + ": system " + name + " carries "
+                           "cache_control, and the uncached tail never may")
+
+    mspec = contract.get("messages", {})
+    msgs = req.get("messages")
+    if mspec and isinstance(msgs, list):
+        if len(msgs) < mspec.get("min", 0):
+            out.append(fname + ": " + str(len(msgs)) + " message(s), contract "
+                       "wants at least " + str(mspec["min"]))
+        roles = []
+        for m in msgs:
+            if not isinstance(m, dict):
+                out.append(fname + ": a message is not an object")
+                continue
+            for key in mspec.get("entry_required", []):
+                if key not in m:
+                    out.append(fname + ": a message has no " + repr(key))
+            roles.append(m.get("role"))
+        allowed = mspec.get("roles") or []
+        for r in roles:
+            if allowed and r not in allowed:
+                out.append(fname + ": message role " + repr(r)
+                           + " is not one of " + repr(allowed))
+        if roles and mspec.get("ends_with") \
+                and roles[-1] != mspec["ends_with"]:
+            out.append(fname + ": the recorded tail ends on "
+                       + repr(roles[-1]) + ", contract says "
+                       + repr(mspec["ends_with"]))
+        if mspec.get("alternates"):
+            for a, b in zip(roles, roles[1:]):
+                if a == b:
+                    out.append(fname + ": two " + repr(a)
+                               + " messages in a row")
+                    break
+
+    resp = body.get("response")
+    # A dry run records what WOULD have been sent and gets no service
+    # reply, so it answers to its own shape (R368).
+    pspec = contract.get("response_dry_run" if body.get("dry_run")
+                         else "response", {})
+    if isinstance(resp, dict) and pspec:
+        _keys(fname + " response", resp, pspec, out)
+        reasons = pspec.get("stop_reasons") or []
+        if reasons and resp.get("stop_reason") not in reasons:
+            out.append(fname + ": stop_reason "
+                       + repr(resp.get("stop_reason"))
+                       + " is not one of " + repr(reasons))
+        uspec = pspec.get("usage", {})
+        usage = resp.get("usage")
+        if uspec and isinstance(usage, dict):
+            _keys(fname + " response.usage", usage, uspec, out)
+    return out
+
+
 def _verify_dir(d: pathlib.Path, fails: list[str],
                 notes: "list[str] | None" = None) -> tuple[int, int]:
     """Returns (block files checked, turn files checked)."""
@@ -732,6 +923,12 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
             f"old per-part captures were retired 2026-08-21)")
         return 0, 0
     files = man.get("files", {})
+    contract = load_contract()
+    if not contract:
+        # R368: a checker that quietly stops checking is worse than none.
+        (notes if notes is not None else fails).append(
+            f"{CONTRACT.name} is missing or unreadable — the wire contract "
+            f"was NOT checked for {d.name}")
     nb = nt = 0
     for fname, rec in files.items():
         f = d / fname
@@ -802,6 +999,12 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
         except Exception as e:                               # noqa: BLE001
             fails.append(f"{d.name}/{t['file']}: not JSON — {e}")
             continue
+        # THE WIRE CONTRACT, per request (R368). The sha checks above
+        # prove the file has not been altered since it was written;
+        # this proves what was written was the shape the code is
+        # supposed to send.
+        for bad in check_contract(t["file"], body, contract):
+            fails.append(f"{d.name}/{bad}")
         part = body.get("part")
         for b in (body.get("request") or {}).get("system") or []:
             if not isinstance(b, dict):
@@ -854,7 +1057,7 @@ def verify(ot: "str | None" = None) -> int:
         nb += b
         nt += t
     print(f"  {len(dirs)} circle(s), {nb} block file(s) and {nt} turn file(s) "
-          f"re-hashed")
+          f"re-hashed, each request against turn_contract.toml")
     for n in notes:
         print(f"  note  {n}")
     if fails:
@@ -864,7 +1067,8 @@ def verify(ot: "str | None" = None) -> int:
         return 1
     print("  PASS — every file reproduces its sha256, no shared block\n"
           "         carries an addressed marker, and every turn's block\n"
-          "         references resolve to the Block files")
+          "         references resolve to the Block files, and every\n"
+          "         request honours turn_contract.toml")
     return 0
 
 

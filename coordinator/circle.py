@@ -581,6 +581,56 @@ def mark_close_started(ot: str) -> None:
         indent=2) + "\n")
 
 
+def redraw_issue_graph() -> None:
+    """Redraw the picture of the issue graph, if the graph has moved since
+    it was last drawn. LIVE closes only; the caller gates it.
+
+    WHY AT A CLOSE. A circle is the one thing that moves this graph, and it
+    moves it by two routes, both of which are complete by the time this
+    runs: a ruling Self types at cmd> or embeds as an annotation, applied
+    by issue_commands.apply() over the circle's own batch; and a
+    `[proposed: ...]` row a part offered, accepted at the vetting
+    checkpoint and applied by that same function through vetting.py.
+    Drawing at the close rather than at each
+    mutation means one picture per circle instead of one per ruling, and
+    means the picture a person opens afterwards is of the graph they
+    actually left behind.
+
+    WHY A SUBPROCESS AND NOT AN IMPORT. ui/ is not on this process's
+    sys.path and nothing in coordinator/ imports from it — the dependency
+    runs the other way, ui/circling.py -> coordinator/. The literal
+    "ui/issue_draw.py" below is also what packaging/scan.py resolves to
+    make the tool (and its man page, by the docs-partner rule) ship at
+    all; an import would leave the bundle without either.
+
+    IT CANNOT FAIL THE CLOSE. Same contract as the coalesce refresh that
+    runs a few statements earlier at the same checkpoint: any failure is
+    one line on the command channel and the close carries on. This is a picture, not a record — nothing reads it
+    back, and issue_draw.py has form for sitting broken unnoticed (its
+    sys.path hop was wrong for eleven days because nothing ran it). It
+    must never be what stands between a circle and its short_terms."""
+    import subprocess
+    try:
+        r = subprocess.run(
+            [sys.executable, "ui/issue_draw.py", "issues/", "--if-stale"],
+            cwd=str(ROOT), capture_output=True, text=True,
+            encoding="utf-8", errors="replace")
+    except Exception as e:                       # noqa: BLE001 — see docstring
+        emit("command", f"  issue graph: not redrawn ({e})")
+        return
+    out = (r.stdout + r.stderr).rstrip()
+    if r.returncode != 0:
+        emit("command", f"  issue graph: not redrawn (exit {r.returncode})")
+        if out:
+            emit("command", out)
+        return
+    # SILENCE IS THE UNCHANGED CASE, and it is the common one — --if-stale
+    # returns 0 having printed nothing when the picture is already right.
+    if out:
+        emit("command", "")
+        emit("command", out)
+
+
 def _close_began(ot: str) -> bool:
     """Did a close START for this circle? See mark_close_started()."""
     return _close_mark(ot).is_file()
@@ -2148,6 +2198,21 @@ def main() -> int:
     # moment the circle is being taken down. Printed at OPEN it names what
     # the room is ABOUT to carry, and the commands it names are usable
     # then. See the open banner, beside the working-set price line.
+
+    # THE PICTURE OF THE GRAPH, R365, 2026-08-27. HERE and not later: every
+    # ruling this circle made is applied by now — the batch above, and
+    # whatever the vetting checkpoint just accepted — and nothing below
+    # touches issues/ (phase 2 writes parts/ and self/). Here and not
+    # earlier for the same reason: a ruling accepted at the checkpoint
+    # would have missed an earlier draw.
+    #
+    # NOT ON THE /abort PATH, deliberately. An abort returns above this
+    # line with its cmd>-typed rulings already applied, so the picture is
+    # left stale — and the next live close redraws it, because what is
+    # tested is the FILES against the picture, not this circle against
+    # itself. See issue_draw.is_stale().
+    if args.live:
+        redraw_issue_graph()
 
     # THE START-OF-CLOSE MARKER, 2026-08-23. Written HERE and not at the
     # `/close` verb: everything above this line can still return without

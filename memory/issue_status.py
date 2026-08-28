@@ -195,10 +195,18 @@ def main() -> int:
     # moment the next circle opens. No projection step, nothing to trigger.
     #
     # `issue_draw.py issues/` also dropped from this chain, 2026-08-13:
-    # issue_draw.py is a development tool -- a picture for a human to read,
+    # issue_draw.py was a development tool -- a picture for a human to read,
     # nothing a part or a gate ever reads back -- so it moved to work/graph/
-    # beside its own output and is no longer auto-regenerated. Run it by
-    # hand when the picture is wanted current.
+    # beside its own output and is no longer auto-regenerated HERE.
+    #
+    # IT IS AUTO-REGENERATED AGAIN SINCE 2026-08-27, from a different place
+    # and on a different trigger: circle.py redraws it at every live /close
+    # whose graph moved (ui/issue_draw.py --if-stale), so a status change
+    # made in a circle reaches the picture at that circle's close. This
+    # chain still does not run it, and should not -- once per circle, not
+    # once per ruling. A status change made OUTSIDE a circle leaves the
+    # picture stale until the next live close, or until it is run by hand:
+    #     python ui/issue_draw.py issues/
     # memory/, not coordinator/ — both scripts moved with the issue-graph
     # code (R203) and this chain kept the old directory: every real status
     # change reported "FAILED" and neither ever ran. The tests never saw it

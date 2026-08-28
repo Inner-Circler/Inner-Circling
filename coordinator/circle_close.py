@@ -306,6 +306,256 @@ def resolve_transcript(circles: Path, open_time: str | None):
     return None, None, None
 
 
+# ------------------------------------------- the close report as a postcondition
+
+CLOSE_CONTRACT = Path(__file__).resolve().parent / "close_contract.toml"
+
+_PC_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict}
+
+
+def load_close_contract() -> dict:
+    """close_contract.toml, or {} when absent. A MISSING CONTRACT IS SAID OUT
+    LOUD by the caller, never passed over — R368."""
+    try:
+        import tomllib as _toml
+    except ModuleNotFoundError:                              # pragma: no cover
+        import tomli as _toml                                # type: ignore
+    try:
+        with CLOSE_CONTRACT.open("rb") as fh:
+            return _toml.load(fh)
+    except (OSError, ValueError):
+        return {}
+
+
+def _pc_shape(where: str, obj: dict, spec: dict, out: list) -> None:
+    for key in spec.get("required", []):
+        if key not in obj:
+            out.append(where + ": missing required key " + repr(key))
+    if spec.get("closed"):
+        allowed = set(spec.get("required", [])) | set(spec.get("optional", []))
+        for key in sorted(set(obj) - allowed):
+            out.append(where + ": unexpected key " + repr(key)
+                       + " — the contract is closed")
+    for key, want in (spec.get("types") or {}).items():
+        if key not in obj:
+            continue
+        cls = _PC_TYPES.get(want)
+        if cls is None:
+            continue
+        if cls is int and isinstance(obj[key], bool):
+            out.append(where + ": " + key + " is a bool, contract says int")
+        elif not isinstance(obj[key], cls):
+            out.append(where + ": " + key + " is "
+                       + type(obj[key]).__name__ + ", contract says " + want)
+    for key, allowed in (spec.get("values") or {}).items():
+        if key in obj and obj[key] not in allowed:
+            out.append(where + ": " + key + " is " + repr(obj[key])
+                       + ", contract says one of " + repr(allowed))
+
+
+def check_postcondition(name: str, report: dict, root: Path,
+                        contract: dict) -> "tuple[list[str], str]":
+    """Every rule in close_contract.toml against ONE close report. Returns
+    (failures, note). A sandbox report yields no failures and a note: it is a
+    different artefact in a different shape, and refusing it would turn a
+    legitimate record into a red gate."""
+    out: list[str] = []
+    if not contract:
+        return out, ""
+    marker = (contract.get("era") or {}).get("sandbox_report_marker")
+    if marker and marker in report:
+        return out, (name + ": a sandbox close report — a different shape, "
+                     "naming a circle under work/sandbox/; not checked")
+
+    _pc_shape(name, report, contract.get("report", {}), out)
+    parts = report.get("parts")
+    if not isinstance(parts, list):
+        return out, ""
+    for row in parts:
+        if not isinstance(row, dict):
+            out.append(name + ": a parts row is not an object")
+            continue
+        _pc_shape(name + " parts[" + str(row.get("part")) + "]", row,
+                  contract.get("part", {}), out)
+
+    ot = report.get("open_time")
+    rel = report.get("transcript")
+    tpath = (root / rel) if isinstance(rel, str) else None
+
+    # names_its_own_transcript
+    if tpath is None or not tpath.is_file():
+        out.append(name + " [names_its_own_transcript]: names "
+                   + repr(rel) + ", which is not on disk")
+        return out, ""
+    if isinstance(ot, str) and isinstance(rel, str) and ot not in rel:
+        out.append(name + " [names_its_own_transcript]: open_time " + ot
+                   + " is not the transcript it names, " + rel)
+
+    # THE ONE READER of a transcript's speaker tags — never a second regex
+    spoke = parts_that_spoke(tpath)
+    rows = {r.get("part"): r for r in parts if isinstance(r, dict)}
+
+    # A DIRECTORY RENAME IS NOT A DEFECT (see close_contract.toml). A row
+    # naming a directory today's roster does not have is PAIRED with an
+    # unmatched speaker when their counts agree, and both leave the
+    # name-based checks. Derived from the roster and the counts; no date
+    # and no old name is written down anywhere.
+    renamed: list[str] = []
+    renamed_rows: set = set()
+    paired_speakers: set = set()
+    unmatched = {p: n for p, n in spoke.items() if p not in rows}
+    for part in [p for p in rows if p not in R.DIR_NAMES]:
+        n = rows[part].get("statements")
+        mate = next((s for s, m in unmatched.items() if m == n), None)
+        if mate is None:
+            continue
+        renamed.append(str(part) + " -> " + mate + " (" + str(n)
+                       + " statement(s))")
+        del unmatched[mate]
+        # THE ROW STAYS IN `rows`. Only the two NAME-based rules skip
+        # it; the digest, the missing/present agreement and the shape
+        # checks all still run, which is what close_contract.toml
+        # promises. Popping it here made a rename an exemption from
+        # everything, and test_close_postcondition caught that.
+        renamed_rows.add(part)
+        paired_speakers.add(mate)
+
+    # statements_agree_with_the_transcript
+    for part, row in rows.items():
+        if part in renamed_rows:
+            continue
+        want = spoke.get(part)
+        if want is None:
+            out.append(name + " [statements_agree_with_the_transcript]: "
+                       + str(part) + " has a row but does not speak in the "
+                       "transcript")
+        elif row.get("statements") != want:
+            out.append(name + " [statements_agree_with_the_transcript]: "
+                       + str(part) + " recorded " + repr(row.get("statements"))
+                       + " statement(s), the transcript shows " + str(want))
+
+    # every_speaking_part_has_a_row
+    for part in sorted(set(spoke) - set(rows) - paired_speakers):
+        out.append(name + " [every_speaking_part_has_a_row]: " + part
+                   + " spoke " + str(spoke[part]) + "× and has no row at all "
+                   "— not recorded absent, simply unmentioned")
+
+    # result_agrees_with_missing
+    missing = report.get("missing")
+    if isinstance(missing, list) and isinstance(report.get("result"), str):
+        want = "pass" if not missing else "fail"
+        if report["result"] != want:
+            out.append(name + " [result_agrees_with_missing]: result is "
+                       + repr(report["result"]) + " while missing is "
+                       + repr(missing))
+
+    # missing_agrees_with_present
+    if isinstance(missing, list):
+        absent = {p for p, r in rows.items() if r.get("present") is False}
+        for p in sorted(absent - set(missing)):
+            out.append(name + " [missing_agrees_with_present]: " + str(p)
+                       + " is recorded absent but is not in `missing`")
+        for p in sorted(set(missing) - absent):
+            out.append(name + " [missing_agrees_with_present]: " + str(p)
+                       + " is in `missing` but no row records it absent")
+
+    # a_present_part_carries_its_digest
+    for part, row in rows.items():
+        if row.get("present") is not True:
+            continue
+        sha = row.get("sha256")
+        if not isinstance(sha, str) or len(sha) != 64:
+            out.append(name + " [a_present_part_carries_its_digest]: "
+                       + str(part) + " is present but its sha256 is "
+                       + repr(sha))
+        if not isinstance(row.get("bytes"), int):
+            out.append(name + " [a_present_part_carries_its_digest]: "
+                       + str(part) + " is present but its byte count is "
+                       + repr(row.get("bytes")))
+
+    # The rename note rides out AFTER every rule has run: only the two
+    # NAME-based postconditions skipped the paired rows, which is what
+    # close_contract.toml says happens.
+    if renamed:
+        return out, (name + ": " + ", ".join(renamed)
+                     + " — a parts/ directory renamed since the close; "
+                       "the report was true when written")
+    return out, ""
+
+
+def postcondition_sweep(root: Path, open_time: "str | None" = None) -> int:
+    """`--postcondition`: every close report read against the transcript it
+    names. With --open-time, one report."""
+    print("Close-report postcondition check (R368)")
+    contract = load_close_contract()
+    if not contract:
+        print("  FAIL  " + CLOSE_CONTRACT.name + " is missing or unreadable — "
+              "nothing was checked")
+        return 1
+
+    logs = root / "work" / "logs"
+    reports = ([logs / ("close_" + open_time + ".json")] if open_time
+               else sorted(logs.glob("close_*.json")))
+    reports = [p for p in reports if p.is_file()]
+    if not reports:
+        print("  no close reports found — nothing to check")
+        return 0
+
+    fails: list[str] = []
+    notes: list[str] = []
+    checked = 0
+    for p in reports:
+        try:
+            report = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            fails.append(p.name + ": unreadable — " + str(e))
+            continue
+        bad, note = check_postcondition(p.name, report, root, contract)
+        if note:
+            notes.append(note)
+        # A NOTE IS NOT AN EXEMPTION. A sandbox report returns no
+        # failures because it is a different artefact; a renamed
+        # directory returns whatever the other rules found. Both are
+        # counted as read, so the printed total is the real one.
+        checked += 1
+        fails.extend(bad)
+
+    # THE CENSUS, both ways. A transcript older than the OLDEST report predates
+    # close reporting and is out of scope — derived from the reports themselves,
+    # never a hand-kept date.
+    stamps = sorted(p.name[len("close_"):-len(".json")] for p in reports)
+    if stamps and open_time is None:
+        oldest = stamps[0]
+        seen = set(stamps)
+        circles = root / "circles"
+        for t in sorted(circles.glob("circle_*.md")):
+            ot = t.name[len("circle_"):-len(".md")]
+            if ot < oldest:
+                continue
+            if ot not in seen:
+                fails.append(t.name + ": closed after close reporting began ("
+                             + oldest + ") and has no close report")
+        before = sum(1 for t in circles.glob("circle_*.md")
+                     if t.name[len("circle_"):-len(".md")] < oldest)
+        if before:
+            notes.append(str(before) + " transcript(s) predate the oldest "
+                         "close report (" + oldest + ") and are out of scope")
+
+    n_rules = len(contract.get("postcondition", []))
+    print("  " + str(checked) + " report(s) read against the transcript each "
+          "names, " + str(n_rules) + " postcondition(s) per report")
+    for n in notes:
+        print("  note  " + n)
+    if fails:
+        print("\n  " + str(len(fails)) + " FAILURE(S):")
+        for f in fails:
+            print("    - " + f)
+        return 1
+    print("  PASS — every close report is a true statement about the circle "
+          "it closed")
+    return 0
+
+
 def main() -> int:
     ap = argparse.ArgumentParser(description="Circle-close teardown verifier.")
     ap.add_argument("--claude-home", default=str(Path.home() / ".claude"),
@@ -332,6 +582,9 @@ def main() -> int:
                          "audit reconcile can verify the durable store against what "
                          "existed at close (closes the silent 'clean close, empty "
                          "nightly' gap, #69866).")
+    ap.add_argument("--postcondition", action="store_true",
+                    help="read every close report against the transcript "
+                         "it names (R368); --open-time narrows it to one")
     ap.add_argument("--reconcile", action="store_true",
                     help="audit durability check (runs BEFORE dreaming): re-read the "
                          "on-disk short_terms and compare to work/logs/close_<open-time>."
@@ -356,6 +609,20 @@ def main() -> int:
     # the durable store, #69866) is caught as MISSING/DRIFT against a known
     # expectation — never silently read as no-engagement. Absence is unambiguous
     # even through a stale mount; a spurious DRIFT only triggers a safe re-backfill.
+    if args.postcondition:
+        # READING circles/ — circle_state fails closed, and a partial
+        # transcript is well-formed, so a mid-circle sweep would report
+        # a protocol failure that is only an in-flight circle (ruled
+        # 2026-08-05).
+        import circle_state
+        if circle_state.is_circle_in_progress():
+            print("Close-report postcondition check (R368)")
+            print("  SKIPPED — a circle may be open; its transcript is "
+                  "still being written.")
+            print("  Run coordinator/circle_state.py to see which.")
+            return 0
+        return postcondition_sweep(root, args.open_time)
+
     if args.reconcile:
         ot = args.open_time
         print("Circle-close reconcile (audit durability check)")

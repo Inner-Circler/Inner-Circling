@@ -449,8 +449,22 @@ def project(part: str) -> tuple[str, dict]:
     whether writing another is worth pushing an older one out of view.
 
     NOTHING IS EVER DROPPED FROM THE FILE — only from what is shown here.
-    An omitted memory is still on disk and returns to view once newer ones
-    age past it or are never written."""
+
+    BUT AN OMITTED MEMORY DOES NOT COME BACK ON ITS OWN, and this said it
+    "returns to view once newer ones age past it or are never written"
+    until 2026-08-27. NEITHER CLAUSE HOLDS. Records do not age; nothing is
+    ever deleted; and _window() takes a strict newest-first PREFIX — it
+    `break`s at the first record that does not fit, so the shown set is
+    always the newest N. The set of records NEWER than an omitted one
+    therefore only ever grows, and eviction is monotonic.
+
+    MEASURED, not reasoned: fill past BUDGET, read it back (omitted),
+    write nothing (still omitted), write ten more records (still
+    omitted). The one thing that could pull a record back is the bounded
+    salience/chain reorder above — capped at SALIENCE_K positions, and a
+    no-op on every record in this tree today, 0 of 25 carrying either
+    field. So the only lever a part actually has is to write the thing
+    again, which is what the standing guidance tells it to do."""
     es = sorted(entries(part), key=lambda r: r.get("date", ""), reverse=True)
     if not es:
         return "", {"part": part, "total": 0, "shown": 0, "omitted": 0,
@@ -583,7 +597,26 @@ def _window(es: list[dict]) -> tuple[str, int, int]:
     projection changes a byte."""
     lines, used, shown = [], 0, 0
     for r in es:
-        block = f"\n- {r['text']}\n"
+        # TAGGED WITH THE CIRCLE IT WAS WRITTEN IN — R<OT>:, the operator's
+        # own spelling, 2026-08-27. The register has stamped `circle` on
+        # every record since the field was added; until now the projection
+        # threw it away, so a part received an undated list and could not
+        # tell a memory written last night from one written in June.
+        #
+        # THE COORDINATOR STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
+        # the OT reaches no block and no message of its view — verified
+        # 2026-08-27 against render_messages() and a rendered prompt — so a
+        # part-authored tag could only ever be guessed. Stamping also covers
+        # the 25 records already on file, which no instruction could.
+        #
+        # THE TEXT IS UNTOUCHED, which is the point: the tag is a prefix
+        # OUTSIDE `r['text']`, so what a part gets back is still its own
+        # words byte-for-byte. An absent or blank `circle` renders bare
+        # rather than as `R: ` — no record has one today, and a degrade is
+        # cheaper than a migration.
+        ot = str(r.get("circle") or "").strip()
+        tag = f"R{ot}: " if ot else ""
+        block = f"\n- {tag}{r['text']}\n"
         if used + len(block) > BUDGET:
             break
         lines.append(block)

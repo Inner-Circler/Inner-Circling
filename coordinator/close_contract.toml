@@ -1,0 +1,120 @@
+# close_contract.toml — THE CLOSE REPORT READ AS A POSTCONDITION.
+#
+# R368, 2026-08-27. The second DERIVED checker. work/logs/close_<OT>.json has
+# been written at every close since 2026-07-26 and read by exactly one thing:
+# `circle_close.py --reconcile`, which asks whether the short_terms it recorded
+# are still on disk. That is a durability question. This asks the prior one —
+# WAS THE REPORT A TRUE STATEMENT ABOUT THE CLOSE WHEN IT WAS WRITTEN?
+#
+# Nothing here is new evidence. The report is a signed statement of what the
+# close should have left behind, and the transcript beside it is the ground
+# truth for who spoke. Reading one against the other costs nothing and was
+# never done.
+#
+# circle_close.check_postcondition() is the one reader. Every rule below is
+# checked against every report; nothing here is aspirational.
+
+[report]
+required = ["open_time", "checked_at", "transcript", "verifier", "result",
+            "missing", "note", "parts"]
+closed   = true
+
+[report.types]
+open_time  = "str"
+checked_at = "str"
+transcript = "str"
+verifier   = "str"
+result     = "str"
+missing    = "list"
+note       = "str"
+parts      = "list"
+
+[report.values]
+result = ["pass", "fail"]
+
+[part]
+required = ["part", "statements", "present", "bytes", "sha256", "status"]
+closed   = true
+
+[part.types]
+part       = "str"
+statements = "int"
+present    = "bool"
+status     = "str"
+
+# ---------------------------------------------------------------------------
+# THE POSTCONDITIONS. Each is a claim the close made about itself, checked
+# against the transcript it names. `id` is what a failure is reported as.
+# ---------------------------------------------------------------------------
+
+[[postcondition]]
+id   = "names_its_own_transcript"
+says = """The report's open_time is the transcript's open_time, and the
+transcript it names is on disk. A report that points at a circle which is not
+there is not a postcondition of anything."""
+
+[[postcondition]]
+id   = "statements_agree_with_the_transcript"
+says = """Every part's `statements` equals what the transcript says that part
+spoke, re-derived NOW through circle_close.parts_that_spoke() — the one reader
+of a transcript's speaker tags, never a second regex. A disagreement means the
+transcript moved after the close, or the report was written from stale state.
+This is the check the whole file exists for."""
+
+[[postcondition]]
+id   = "every_speaking_part_has_a_row"
+says = """Every part the transcript shows speaking has a row in `parts`. A part
+that spoke and has NO row is the invisible case: it is not recorded absent, it
+is simply not mentioned, and nothing downstream would ever look for it. A
+SILENT part correctly has no row and owes nothing."""
+
+[[postcondition]]
+id   = "result_agrees_with_missing"
+says = """`result` is "pass" exactly when `missing` is empty. A report that says
+pass while naming a missing part contradicts itself, and the two halves are
+written by different lines of the same function."""
+
+[[postcondition]]
+id   = "missing_agrees_with_present"
+says = """A part is in `missing` exactly when its row says `present = false`.
+The list and the flags are two spellings of one fact."""
+
+[[postcondition]]
+id   = "a_present_part_carries_its_digest"
+says = """A row recorded present carries a byte count and a 64-character
+sha256. `--reconcile` compares those to disk later and cannot report anything
+if they were never written."""
+
+# ---------------------------------------------------------------------------
+# ERA AND SCOPE. Both derived, never hand-listed.
+# ---------------------------------------------------------------------------
+
+[era]
+# A transcript older than the OLDEST close report predates close reporting and
+# is out of scope — the same rule circle_audit.py uses for dream/<OT> tags,
+# and for the same reason: an absent artefact from before the mechanism is not
+# evidence of anything. On 2026-08-27 that is 32 of 43 transcripts, every one
+# between 2026-06-15 and 2026-07-11.
+transcripts_before_the_oldest_report = "out of scope"
+
+# A SANDBOX report is a different artefact in a different shape (`circle`,
+# `mode`, `closed`, `short_terms`, and a `transcript` that is an object rather
+# than a path) and names a circle under work/sandbox/. It is NOTED, never
+# failed — the same disposition prompt_capture gives a pre-R277 manifest.
+sandbox_report_marker = "mode"
+
+# A DIRECTORY RENAME IS NOT A DEFECT. A report records the parts/ directory
+# name as it stood at the close, and a directory can be renamed afterwards —
+# `injured_soul` became `soul`, and eight reports written between 2026-07-26
+# and 2026-08-02 carry the older name. Those reports were TRUE WHEN WRITTEN.
+#
+# So a row naming a directory that is not in today's roster is PAIRED with an
+# unmatched speaker in the same transcript when their statement counts agree,
+# and the pair is noted rather than failed. Derived from roster.DIR_NAMES and
+# from the counts themselves — no hand-kept date and no hardcoded old name, so
+# the next rename is absorbed the same way without an edit here.
+#
+# It degrades exactly one thing: for that pair, the two name-based
+# postconditions do not run. Every other rule still does, and a row whose
+# count does NOT match any unmatched speaker still fails.
+renamed_directory = "paired by statement count, then noted"

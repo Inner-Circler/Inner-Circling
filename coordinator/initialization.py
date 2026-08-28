@@ -1,21 +1,30 @@
 #!/usr/bin/env python3
 """
-initialization.py — the first-run dialogs. docs/Initialization.md is the
-design; the rulings are R323-R332 (2026-08-23). Built in stages; this file
-holds what has landed:
+initialization.py — the first-run dialogs. docs/BNF.md §INITIALIZATION is the
+grammar, docs/Initialization.md the design; the rulings are R323-R332
+(2026-08-23). Everything the grammar names is here:
 
+    run_initialization()          THE STEP: PART_CONTEXT_DIALOG for every part
+                                  with no answer recorded, then
+                                  ISSUE_ADD_DIALOG, then one commit of the
+                                  paths those writers touched. Holds the four
+                                  skips itself (--live, interactive, not
+                                  --resume, not --yes).
     PART_CONTEXT_DIALOG(part)     ask a part's declared [context] questions
                                   on the COMMAND lane, validate each answer
                                   per its data_type/data_max, record the
                                   answers through roster.write_context().
+    ISSUE_ADD_DIALOG              the first issue, composed into one
+                                  description and written by cmd_issue_add().
+    PART_ADD_DIALOG               a new part — NOT an element of the step; it
+                                  fires at CHECKPOINT 2 on approval, or from
+                                  /part-add typed at cmd>.
     /part-context-update <part>   the same dialog, PREFILLED with what is
                                   recorded, so an answer can be taken as-is
                                   or edited on the line. Any dev state, any
                                   recorded values (the operator, 2026-08-23).
-
-NOT HERE YET: the circle-start step (PART_CONTEXT_DIALOG for every part with
-no answer recorded, then ISSUE_ADD_DIALOG — design §2, stage 2), the issue
-and part dialogs (stages 3, 5-6), /part-context-list and -clear (stage 4).
+    /part-context-list [<part>]   the record, read-only.
+    /part-context-clear <part>    empty it after "yes", re-arming the trigger.
 
 ONE VALIDATOR FOR EVERY DIALOG — R332, the operator's own
 words: *"each member should receive a "data_type" - start with STRING or
@@ -35,9 +44,9 @@ their entry as-is OR their edit on the line"*). A plain terminal cannot seed
 a line (seam.read_line's own contract), so the CURRENT VALUE IS ALSO SAID IN
 WORDS on the channel and an EMPTY line KEEPS it on both surfaces — which is
 what Enter on an untouched prefilled row returns too. To CLEAR an answer type
-`-` alone (Claude's addition, so the terminal can clear at all; the designed
-/part-context-clear is not built yet). At a first-run dialog nothing is
-recorded, so empty means skip, as ruled.
+`-` alone (Claude's addition, so the terminal can clear ONE answer;
+/part-context-clear empties a part's whole record). At a first-run dialog
+nothing is recorded, so empty means skip, as ruled.
 
 NEVER A NAME INTO A PROMPT — R329. This module writes
 answers; what renders is prompt_build.identity_tail()'s business, and a

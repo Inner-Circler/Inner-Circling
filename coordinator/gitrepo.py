@@ -492,7 +492,13 @@ def ensure_attributes(log) -> None:
 # stale mark means ensure_hooks() installs nothing.
 # Installed from the main checkout after the merge (--git-setup), never
 # from the worktree that wrote it.
-HOOK_MARK = "# inner-circling pre-commit v86"
+# v87, 2026-08-27 (R365) — a case for ui/tests/test_issue_draw.py. It
+# moved work/graph/ -> ui/, started shipping, and is now RUN BY circle.py at
+# every live /close. Its own trigger has to include coordinator/circle.py,
+# which *ui/* does not match, because the half that breaks packaging is the
+# CALL SITE's path literal and it lives there. The redraw is gated
+# `if args.live:`, so no dry-run end-to-end suite can reach it.
+HOOK_MARK = "# inner-circling pre-commit v91"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1293,6 +1299,21 @@ case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_k
     # the only order that means anything.
     run work/tools/test_bnf_conformance.py
     run work/tools/bnf_conformance.py
+    # v91: THE PICTURE OF THE GRAMMAR, kept current the way the module
+    # graph already is. prompt_grammar.svg and .html are DERIVED from
+    # docs/BNF.md and tracked on purpose (.gitignore says so), but
+    # nothing regenerated them — so they sat 148px stale at HEAD while
+    # every gate passed, found 2026-08-27. The trigger above is already
+    # the right one: parse_bnf() reads docs/BNF.md and nothing else, so
+    # no commit can move the picture without matching this case.
+    if "$PY" work/graph/prompt_grammar_draw.py --check 2>/dev/null; then
+        :
+    else
+        echo "  pre-commit: the grammar picture is BEHIND — redrawing"
+        quiet work/graph/prompt_grammar_draw.py
+        git add work/graph/prompt_grammar.svg work/graph/prompt_grammar.html || exit 1
+        echo "  pre-commit: prompt_grammar.svg + .html regenerated and staged"
+    fi
 esac
 
 case "$FILES" in *coordinator/dream_history.py*|*coordinator/tests/test_dream_history.py*)
@@ -1478,6 +1499,23 @@ case "$FILES" in *coordinator/transaction.py*|*coordinator/circle_audit.py*\
     run coordinator/tests/test_circle_audit_lock.py
 esac
 
+case "$FILES" in *ui/issue_draw.py*|*ui/tests/test_issue_draw.py*|*coordinator/circle.py*)
+    NOTE="  pre-commit: the issue picture and the close that draws it"
+    # v87, 2026-08-27. issue_draw.py became shipped code the day circle.py
+    # started running it at every live /close, and the two halves of that
+    # wiring fail in opposite directions: the SCRIPT can break at import
+    # time (its sys.path hop to memory/ was wrong for eleven days and
+    # nothing noticed, because nothing invoked it), and the CALL SITE can
+    # stop naming "ui/issue_draw.py" as a literal, which is the only
+    # reason packaging/scan.py ships the script and its man page at all.
+    #
+    # A CASE OF ITS OWN RATHER THAN A LINE IN THE ui/ CASE BELOW: this must
+    # also fire for a commit that touches only coordinator/circle.py, which
+    # *ui/* does not match. The redraw runs under `if args.live:`, so
+    # test_circle_engine.py — which forces --dry-run — cannot reach it.
+    run ui/tests/test_issue_draw.py
+esac
+
 case "$FILES" in *ui/*)
     NOTE="  pre-commit: ui/ touched — running its self-tests"
     # circling.py's own --selftest needs no real import beyond circle.py
@@ -1557,7 +1595,17 @@ case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstag
     run coordinator/tests/test_remote_classify.py
 esac
 
-case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close.py*|*coordinator/tests/test_circle_close.py*|*coordinator/transcript_store.py*)
+case "$FILES" in *coordinator/check_circling.py*|*coordinator/circling_contract.toml*|*coordinator/tests/test_check_circling.py*|*docs/BNF.md*)
+    NOTE="  pre-commit: the CIRCLING grammar or its guards touched"
+    # v90, R368 item 1. docs/BNF.md is IN THE TRIGGER because the
+    # grammar lives there and the guards live in the TOML beside the
+    # checker: check_circling asserts the two still name the same set,
+    # so an edit to EITHER can break the agreement while touching
+    # nothing the other case matches.
+    run coordinator/tests/test_check_circling.py
+esac
+
+case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close.py*|*coordinator/tests/test_circle_close.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*)
     NOTE="  pre-commit: a record-safety module touched"
     # v61. Three modules that decide whether the record survives, none of
     # which had a suite before 2026-08-19: the write guard (nothing imported
@@ -1566,6 +1614,12 @@ case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guar
     run coordinator/tests/test_write_guard.py
     run coordinator/tests/test_circle_state.py
     run coordinator/tests/test_circle_close.py
+    # v89, R368: the close report read as a POSTCONDITION —
+    # `--postcondition` against the transcript each report names.
+    # close_contract.toml is DATA, so a commit can loosen every
+    # postcondition in the project without touching a .py; it needs
+    # its own trigger for the same reason turn_contract.toml does.
+    run coordinator/tests/test_close_postcondition.py
 esac
 
 case "$FILES" in *coordinator/self_schema.py*|*coordinator/tests/test_self_schema.py*)
@@ -1583,9 +1637,15 @@ case "$FILES" in *coordinator/live_probe.py*|*coordinator/tests/test_live_probe.
     run coordinator/tests/test_live_probe.py
 esac
 
-case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_capture.py*)
+case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_capture.py*|*coordinator/turn_contract.toml*|*coordinator/tests/test_turn_contract.py*)
     NOTE=""
     run coordinator/tests/test_prompt_capture.py
+    # v88, R368: the WIRE CONTRACT and the probe that proves it still
+    # refuses. turn_contract.toml is DATA read by prompt_capture, so a
+    # commit that touches only the TOML changes what every capture is
+    # checked against while touching no .py at all — it needs its own
+    # trigger or the contract could be loosened silently.
+    run coordinator/tests/test_turn_contract.py
     # v84: AND the OTHER suite that calls verify(). test_llm_client.py builds
     # a capture and asserts `verify() == 0`, so a new assertion inside
     # verify() can break it — and on 2026-08-27 one did. R362 landed the

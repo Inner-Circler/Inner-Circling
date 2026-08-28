@@ -13,7 +13,7 @@ issue_index.py — generate issues/INDEX.md, the one scannable document summaris
 
 It was rewritten for the 2026-07-31 "recognition pass," when the graph went from 35 unreviewed nodes to 9 live plus 26 recording a ruling already made — so the index now leads with the live nine and, deliberately, counts only *live* edges everywhere (a retired edge counted alongside a live one would report a graph making a claim it no longer makes).
 
-It supports a `--working-set`/`--live` view that restricts which nodes are summarised without ever removing anything from `issues/` itself, and pulls in any node a chosen node has a live edge to (so the index never shows half an edge) — the same `--working-set`/`--live` design `issue_draw.py` had until its own `--live` was retired 2026-08-13 (see `issue_draw.md` NOTES); this script's `--live` is unaffected.
+It supports a `--working-set`/`--live` view that restricts which nodes are summarised without ever removing anything from `issues/` itself, and pulls in any node a chosen node has a live edge to (so the index never shows half an edge) — the same `--working-set`/`--live` design `issue_draw.py` had until its own `--live` was retired 2026-08-13 (see `ui/docs/issue_draw.md` NOTES — that page moved out of `coordinator/docs/` with its script on 2026-08-27); this script's `--live` is unaffected.
 
 ## MAIN
     parse any --working-set/--live arguments into a chosen id list (using a

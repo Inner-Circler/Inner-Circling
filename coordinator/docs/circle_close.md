@@ -26,12 +26,22 @@ It runs in two live modes, both invoked for you rather than by hand in the ordin
     --reconcile --open-time <OT>       the audit's guard, run BEFORE dreaming. Re-reads
                                        those notes from disk and compares them to the
                                        manifest.
+    --postcondition [--open-time <OT>] the report read as a POSTCONDITION (R368).
+                                       Re-derives who spoke from the transcript the
+                                       report names and holds the report to what it
+                                       claimed. Read-only, no --open-time needed.
 
 The second exists because of a specific failure shape: a write that succeeds at close and is gone by the time anything reads it, because the store it landed on had not flushed. Without a manifest that is indistinguishable from a part that never wrote. With one, it is caught as a **named absence against a known expectation** and the part is backfilled from the transcript instead of being read as disengaged. That is the exact "clean close, empty aftermath" contradiction this closes.
 
 **By hand, the one you would type is the reconcile:**
 
     python coordinator/circle_close.py --reconcile --open-time 2026-08-09_1520
+
+**`--reconcile` and `--postcondition` ask different questions of the same file, and both are worth asking.** The reconcile asks whether what the report recorded is STILL on disk — a durability question about the time since the close. The postcondition asks the prior one: **was the report a true statement about the close when it was written?** It re-derives who spoke through `parts_that_spoke()` — the one reader of a transcript's speaker tags, never a second regex — and checks the report against that: every count agreeing, every speaking part having a row at all, `result` agreeing with `missing`, `missing` agreeing with the `present` flags, and every present row carrying the digest the reconcile will later need. The rules and their prose live in `coordinator/close_contract.toml`; `coordinator/tests/test_close_postcondition.py` breaks one thing at a time and asserts each still refuses.
+
+**Three dispositions, all derived, none of them an exemption.** A transcript older than the OLDEST close report predates close reporting and is out of scope — the same rule `circle_audit.py` uses for `dream/<OT>` tags. A SANDBOX report is a different artefact in a different shape and is noted. And a `parts/` directory RENAMED since the close (`injured_soul` became `soul`; eight reports carry the older name and were true when written) is paired back to its speaker by statement count and noted — pairing only suspends the two NAME-based rules, and a row whose count matches nothing still fails.
+
+**It refuses to read `circles/` while a circle may be open.** `circle_state` fails closed and a partial transcript is well-formed, so a mid-circle sweep would report disagreements that are only an in-flight circle.
 
 **A note counts as present only if it is well formed.** Present, non-empty, and carrying all four of its sections. A file that exists but is half-written is a failure, not a pass.
 

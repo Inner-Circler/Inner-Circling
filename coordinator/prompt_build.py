@@ -379,6 +379,35 @@ def system_blocks(part: str, core: str, shared) -> list[dict]:
     _it = identity_tail(part)
     if _it.strip():
         identity += "\n\n" + _it.strip()
+
+    # THE INSTRUMENT PROFILE, TO THE ONE PART THAT CARRIES THE ROOTS — ruled
+    # 2026-08-27, the same day it was first built into BLOCK 1 and objected
+    # to there. Self: BLOCK 1 and 2 are Circle Identity and Objectives, so a
+    # profile in BLOCK 1 lets *"every part get to know Self intimately, which
+    # is in opposition to the nature of a part"*. The place is the Soul's own
+    # BLOCK 3, *"isolating it from group knowledge and giving the Soul a
+    # unique role: carrier of the unseen roots of the self"*.
+    #
+    # This is R303/R304's rule applied to new content rather than re-learned:
+    # material belonging to ONE part goes to BLOCK 3, and only what all seven
+    # need belongs in BLOCK 1. The Soul was the occasion of that ruling too.
+    #
+    # AND IT IS THE MEASURED-EFFECTIVE FORM. parts/soul/part.toml records the
+    # measurement that decided the render sentences: a planted sentence came
+    # back 20/25 from FIRST-PERSON IDENTITY material against 1/25 from
+    # third-person catalogue material. The BLOCK 1 version was third-person
+    # catalogue prose — the losing form, in the losing block.
+    #
+    # WHICH PART, FROM THE DATA, NEVER FROM HERE. instruments.block(part)
+    # returns ε unless the register's own [block] names this part. A part
+    # NAME typed into shipped mechanism is the B29/R123 class two rulings
+    # were spent removing, and keying on the directory means a rename
+    # follows by itself — the same reasoning identity_tail() above uses.
+    import instruments as INST
+    _prof = INST.block(part)
+    if _prof.strip():
+        identity += "\n\n" + _prof.strip()
+
     if distilled.strip():
         identity += f"\n\n{distilled.strip()}"
     # RELATIONSHIPS ARE NO LONGER PROJECTED, DIRECTLY OR INDIRECTLY. R302,
@@ -434,6 +463,12 @@ def system_blocks(part: str, core: str, shared) -> list[dict]:
     ident = core
     if practices.strip():
         ident += "\n\n" + practices.rstrip("\n")
+
+    # THE INSTRUMENT PROFILE IS NOT HERE, AND WAS FOR ONE DAY. It landed in
+    # BLOCK 1 on 2026-08-27 and moved to BLOCK 3 the same day, on Self's
+    # objection: BLOCK 1 is the CIRCLE's identity, so a profile here tells
+    # all seven parts who Self is intimately, *"which is in opposition to the
+    # nature of a part"*. See instruments.block() and identity_tail().
 
     # BLOCK 3 — a ratified, THIS-part-addressed practice joins here, not
     # block 4 (R134, 2026-08-11): it is stabilised content, the same

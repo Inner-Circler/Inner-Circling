@@ -82,3 +82,23 @@ work/circle_audit/
 
 # Run logs — derived, one per run
 work/logs/circle_audit*.log
+
+# THE PICTURE OF THE ISSUE GRAPH — work/graph/issue_graph.{svg,html},
+# R365, 2026-08-27, the operator's ruling ("local only"). ui/issue_draw.py redraws it at
+# the end of every LIVE circle whose graph moved, and commit_circle() commits
+# only the circle's own paths, so a TRACKED copy would sit permanently dirty
+# in the tree — the exact shape closing_<OT>.json and dream_<OT>.json had
+# above, which deadlocked a lab `pull-main` on a dirty tree. Nothing reads
+# the picture back: it is for a person to open, and it is rebuilt from
+# issues/*.toml, which IS tracked, whenever it falls behind.
+#
+# NAMED FILES, not the directory: work/graph/ also holds coordinator_graph.*,
+# command_flow.*, prompt_grammar.* and system_architecture.*, which are
+# tracked on purpose. TWO of those sets the pre-commit hook regenerates and
+# `git add`s itself: coordinator_graph.* when the module graph moves, and
+# prompt_grammar.* when docs/BNF.md does (v91, 2026-08-27 — until then
+# nothing regenerated the grammar picture and it sat 148px stale at HEAD
+# while every gate passed). command_flow.* and system_architecture.* are
+# still redrawn by hand.
+work/graph/issue_graph.svg
+work/graph/issue_graph.html

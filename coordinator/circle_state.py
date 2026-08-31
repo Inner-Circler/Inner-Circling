@@ -50,13 +50,21 @@ if hasattr(sys.stdout, "reconfigure"):
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
+sys.path.insert(0, str(HERE))
+import settings as SET                                        # noqa: E402
 LIVE = ROOT / "circles"
 SANDBOX = ROOT / "work" / "sandbox" / "circles"  # moved, R176, 2026-08-15
 LOGS = ROOT / "work" / "logs"
 
 # A part may think for a long time, and a Self prompt waits on a human.
 # 45 minutes of silence is not a pause; under 45 minutes might be.
-QUIET_SECONDS = 45 * 60
+#
+# STATED IN MINUTES because that is the unit a person setting it thinks in;
+# the seconds below are derived and are what the code compares against. The
+# two must never both be settable — one derived value cannot disagree with
+# itself.
+QUIET_MINUTES = SET.value("quiet_minutes", 45)
+QUIET_SECONDS = QUIET_MINUTES * 60
 
 
 def _closed(ot: str) -> bool:

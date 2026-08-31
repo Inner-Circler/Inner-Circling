@@ -96,7 +96,14 @@ _REMEMBER_OPEN = r"\[remember:"
 # A tuple of literals is what a scraper can read without tracking regex
 # syntax at all: bnf_conformance already literal-evals module constants, and
 # test_circling's copy becomes one ast.literal_eval.
-ASK_KEYWORDS = ("remember", "proposed")
+# "recall" JOINED 2026-08-30 (R400-R402): the parts' private search. Its
+# EXECUTION never reaches this grammar's routing — recall_index.apply_recall
+# strips every recall bracket before extract_markers runs, exactly as
+# apply_remember does for remember — but the ONE parser must still accept
+# the form: test_annotation_exemplars holds every process_core.md exemplar
+# to ASK_RE, and a taught spelling the parser refuses is the drift that
+# suite exists to catch.
+ASK_KEYWORDS = ("remember", "proposed", "recall")
 
 # ACCEPTED SPELLINGS THAT ARE NOT TAUGHT, 2026-08-21 — the operator, verbatim:
 # *"accept with or without the d"*. `[propose: ...]` is the SAME annotation as
@@ -111,6 +118,25 @@ ASK_SYNONYMS: dict[str, str] = {"propose": "proposed"}
 ASK_RE = re.compile(
     r"\[(" + "|".join(ASK_KEYWORDS + tuple(ASK_SYNONYMS)) + r"):([^\]]*)\]",
     re.I)
+
+# WHOSE KEYWORD IS WHOSE -- RULED 2026-08-30, the operator, verbatim:
+# *"refuse it."* A `[recall: ...]` is a PART's own search of its own record;
+# Self's read path is the cmd> `remember-list` verb. Nothing enforced that
+# until this ruling: circle.py's Self> loop ran apply_self_remember() and
+# strip_malformed_markers() and nothing else -- apply_recall() is called from
+# rounds.py alone, on the PART path -- so a recall typed at the circle prompt
+# was neither executed nor stripped nor refused. withheld() was False for it,
+# render_messages() showed it to all seven parts as ordinary Self speech, and
+# route_markers() echoed a staging promise nothing keeps. E06's shape.
+#
+# DECLARED AS A SUBTRACTION, the same way command_surface builds
+# PROPOSABLE_COMMANDS: SELF_KEYWORDS is what Self may type, derived, so a
+# future keyword joins ASK_KEYWORDS once and both surfaces follow. circle.py
+# reads SELF_KEYWORDS for its refusal and for the hint it prints at the two
+# opening prompts -- that hint was built from ASK_KEYWORDS and so had been
+# teaching the operator that `[recall: ...]` was valid at the circle prompt.
+PART_ONLY_KEYWORDS = ("recall",)
+SELF_KEYWORDS = tuple(k for k in ASK_KEYWORDS if k not in PART_ONLY_KEYWORDS)
 
 # RULED 2026-08-16 (R202): "the PROPOSE CLASS... subsumes every possible
 # future, including request." `[proposed: <command>]` is the ONE marker
@@ -445,8 +471,23 @@ def extract_markers(text: str) -> list[dict]:
                 shape = _propose_command_shape(body)
                 if shape is None:
                     rec["malformed"] = True
-                    rec["why"] = ("not a command that may be proposed. "
-                                  + _proposable_list())
+                    # THE ROOT OF THE DIAGNOSIS (the operator, 2026-08-30,
+                    # from his journal: "note the root of the diagnosis is
+                    # missing"). The Child wrote `[proposed: "/practice-add
+                    # ... never [pass], which ..."]` and ASK_RE, which
+                    # cannot nest, closed the proposal at [pass]'s own `]`
+                    # — leaving a body that opens a quote it never closes,
+                    # so the head token is `"/practice-add` and "not a
+                    # command" was true but useless. Name the cause when
+                    # the body shows it.
+                    nested = "[" in body or arg.count('"') % 2 == 1
+                    rec["why"] = ((
+                        "a bracket inside the annotation ended it early — "
+                        "`[pass]` inside `[proposed: ...]` closes the "
+                        "proposal at its own `]`; write the word bare. "
+                        if nested else "")
+                        + "not a command that may be proposed. "
+                        + _proposable_list())
                 elif shape["ok"]:
                     rec["cmd_shape"] = shape
                     rec["text"] = body
@@ -826,6 +867,29 @@ def annotations_in(text: str) -> list[str]:
     return [text[a:b] for a, b in sorted(spans)]
 
 
+def part_only_in(text: str) -> list[str]:
+    """Every bracket in `text` whose keyword belongs to a PART alone --
+    today that is `[recall: ...]` and nothing else (PART_ONLY_KEYWORDS).
+    Verbatim source spans, in order, exactly as annotations_in() returns
+    them and for the same reason: the caller quotes back what was typed.
+
+    RULED 2026-08-30, the operator: *"refuse it."* This is the detector
+    behind circle.py's refusal at the Self> prompt, and it is deliberately
+    the SAME parser annotations_in() uses rather than recall_index's
+    RECALL_RE. Two reasons. The refusal must fire on what a TYPIST wrote,
+    which is what ASK_RE recognizes and what the hint at the two opening
+    prompts already quotes; and RECALL_RE is the EXECUTION seam, whose job
+    is to strip a bracket on the part path. Pointing the refusal at the
+    execution regex would have made the two drift apart in exactly the
+    direction markers.py's own header warns about for REMEMBER_RE.
+
+    EMPTY LIST IS THE ONLY THING A CALLER NEEDS: a line with no part-only
+    bracket is a line Self may speak."""
+    return [text[rec["span"][0]:rec["span"][1]]
+            for rec in sorted(extract_markers(text), key=lambda r: r["span"])
+            if rec["kind"] in PART_ONLY_KEYWORDS]
+
+
 def _checkpoint(live: bool) -> str:
     """What actually happens to this row, said at the moment it is uttered.
 
@@ -868,6 +932,17 @@ def route_markers(display: str, text: str, *, live: bool) -> None:
     never actually happen; test_practice_annotations.py covers the
     ordering, not this function re-checking it."""
     for rec in extract_markers(text):
+        # A RECALL NEVER BELONGS HERE, AND SAYING SO IS CHEAPER THAN THE LIE.
+        # Two upstream conventions already keep it away: a PART's recall is
+        # stripped by recall_index.apply_recall() before this is called, and
+        # since 2026-08-30 Self's is refused at the prompt (SELF_KEYWORDS).
+        # If either ever breaks, the `else` below would announce the recall
+        # to the command pane with this function's own checkpoint suffix —
+        # "staged at /close; ruled there" — a promise nothing keeps, since a
+        # recall stages nothing and is never ruled. Silence is the honest
+        # fallthrough for an invariant this function does not itself enforce.
+        if rec["kind"] in PART_ONLY_KEYWORDS:
+            continue
         # THE PRACTICE BRANCH IS GONE WITH ITS SIX KINDS, 2026-08-20. What
         # `[proposed practice: ...]` said is now `[proposed: /practice-add
         # ...]`, which is a command like any other and needs no branch of

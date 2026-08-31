@@ -541,6 +541,205 @@ def cmd_issue_status_op(node_id: str, op_raw: str, trailing: list[str]) -> bool:
     return True
 
 
+# ------------------------------------------------------------- the settings
+# THE CONFIGURATION EDITOR, 2026-08-28 (R379). Three verbs
+# over coordinator/settings.py, on the COMMAND pane only.
+#
+# NOTHING HERE RECORDS TO THE TRANSCRIPT, and that is not an omission: a
+# settings verb has no Self> surface at all (command_surface classifies all
+# three as "command"), so there is no line for a part to see and nothing to
+# withhold. Contrast /practice-add, which takes `record=` for exactly that
+# reason.
+
+
+def _settings_rows():
+    """What this person may see. dev ADDS fields; it never takes one away."""
+    import command_surface as CS
+    import settings as SET
+    return SET.visible(dev=bool(getattr(CS, "dev_mode", False)))
+
+
+def _emit_wrapped(indent: str, text: str) -> None:
+    """Description lines wrap at 80 COLUMNS — the operator's ruling,
+    2026-08-29, reviewing the settings listing in the Ticker flavor."""
+    import textwrap
+    for line in textwrap.wrap(text, width=80, initial_indent=indent,
+                              subsequent_indent=indent) or [indent.rstrip()]:
+        seam.emit("command", line)
+
+
+def cmd_settings_list() -> None:
+    import settings as SET
+    rows = _settings_rows()
+    act, pend = SET.active(), SET.pending()
+    if not SET.REGISTER.is_file():
+        seam.emit("command", "  nothing has been changed — every setting is "
+                             "what the program decides")
+    seam.emit("command", f"\n  SETTINGS ({len(rows)})")
+    for s in rows:
+        lit, _why = SET._source_default(s.owner, s.key)
+        chosen = s.key in act
+        # RENDERED IN THE PERSON'S OWN WORDS — settings.show(), 2026-08-29.
+        # Without it the first BOOL setting reports `True` in a list whose
+        # dialog asks a yes/no question.
+        cur = SET.show(s.key, act[s.key] if chosen else lit)
+        tail = "" if chosen else "   (unchanged)"
+        unit = f" {s.unit}" if s.unit else ""
+        seam.emit("command", f"    {s.key:<24} {cur}{unit}{tail}")
+        _emit_wrapped("        ", s.ask)
+        if s.key in pend:
+            seam.emit("command", f"        waiting: {pend[s.key]}{unit} — "
+                                 f"from the next circle")
+    _settings_tuning_list()
+    seam.emit("command", "\n  /settings-update <name> to change one, "
+                         "/settings-clear <name> to undo it")
+
+
+def _settings_tuning_list() -> None:
+    """The ACTIVE PROVIDER's own knobs — stage 4 (R382). Listed under their
+    own heading because they are that service's, not this program's: they
+    appear and disappear with the provider, and what they accept is its
+    business."""
+    import settings as SET
+    import llm_client as LC
+    prov = LC.PROVIDER_IMPL
+    knobs = getattr(prov, "TUNING", ())
+    if not knobs:
+        return
+    set_now, defaults = SET.tuning(prov), SET.tuning_defaults(prov)
+    seam.emit("command", f"\n  {prov.name.upper()} ({len(knobs)})")
+    for k in knobs:
+        chosen = k.key in set_now
+        cur = set_now.get(k.key, defaults.get(k.key))
+        seam.emit("command", f"    {k.key:<24} {cur}"
+                             f"{'' if chosen else '   (unchanged)'}")
+        _emit_wrapped("        ", k.ask)
+        _emit_wrapped("        ", "one of: " + ", ".join(k.values))
+
+
+def cmd_settings_update(rest_text: str, *, interactive: bool = True) -> None:
+    """`/settings-update <name> <value>` applies directly, on ANY surface;
+    `/settings-update <name>` alone asks, where a surface can ask.
+
+    THE VALUE-ON-THE-LINE FORM IS THE OPERATOR'S RULING (2026-08-29), after
+    the Ticker flavor's cmd> pane — a real interactive surface — was told
+    "(no interactive surface — nothing changed)" and had its typed value
+    ignored. The verb read only the first token by design; now a second
+    token is the new value, validated by the same writers the question-form
+    uses, so no surface needs a blocking read to change a setting. Where a
+    bare-key ask lands on a surface that cannot block, the tail line says
+    HOW to change it instead of falsely describing the surface.
+
+    Output shape, same ruling: the blank line follows the output; nothing
+    is emitted before it.
+
+    A BARE `/settings-update` PRINTS USAGE AND READS NOTHING. That is a real
+    contract, not a nicety: test_dispatch_partition.py discovers which verbs
+    this dispatcher answers by CALLING each one with no argument, so a verb
+    that blocked on input there would hang the suite rather than fail it."""
+    import settings as SET
+    toks = (rest_text or "").split()
+    key = toks[0] if toks else ""
+    value = " ".join(toks[1:]).strip()
+    rows = _settings_rows()
+    if not key:
+        seam.emit("command", "  usage: /settings-update <name> [<new value>]")
+        seam.emit("command", "  " + ", ".join(s.key for s in rows))
+        seam.emit("command", "")
+        return
+    # A PROVIDER'S OWN KNOB, tried first — settings --check refuses a knob
+    # whose name collides with a plain setting, so the two namespaces cannot
+    # overlap and the order here cannot make a name ambiguous.
+    import llm_client as LC
+    prov = LC.PROVIDER_IMPL
+    knob = next((k for k in getattr(prov, "TUNING", ()) if k.key == key), None)
+    if knob is not None:
+        cur = SET.tuning(prov).get(key, knob.default)
+        seam.emit("command", f"  {knob.ask}?")
+        seam.emit("command", f"  it is {cur} now; {prov.name} accepts "
+                             f"{', '.join(knob.values)}")
+        if value:
+            ok, msg = SET.write_tuning(prov, key, value)
+            seam.emit("command", ("  " + msg) if ok
+                      else f"  not changed — {msg}")
+            seam.emit("command", "")
+            return
+        if not interactive:
+            seam.emit("command",
+                      f"  to change it: /settings-update {key} <value>")
+            seam.emit("command", "")
+            return
+        answer = seam.read_line("  new value (Enter keeps it): ").strip()
+        if not answer:
+            seam.emit("command", "  kept")
+            seam.emit("command", "")
+            return
+        ok, msg = SET.write_tuning(prov, key, answer)
+        seam.emit("command", ("  " + msg) if ok else f"  not changed — {msg}")
+        seam.emit("command", "")
+        return
+    spec = next((s for s in rows if s.key == key), None)
+    if spec is None:
+        # A REAL SETTING THIS PERSON MAY NOT SEE IS NOT "NO SUCH SETTING" —
+        # but it is not named either, because naming it would leak the
+        # dev-only surface that dev=false exists to keep back.
+        seam.emit("command", f"  {key} is not a setting you can change here")
+        seam.emit("command", "")
+        return
+    lit, _why = SET._source_default(spec.owner, spec.key)
+    # MERGED 2026-08-29: master's SET.show display formatting AND the
+    # branch's value-on-the-line form + blank-line-after shape, together.
+    cur = SET.show(spec.key, SET.active().get(spec.key, lit))
+    seam.emit("command", f"  {spec.ask}?")
+    seam.emit("command", f"  it is {cur} now"
+                         + (f" ({spec.unit})" if spec.unit else ""))
+    seam.emit("command", f"  the program's own value is "
+                         f"{SET.show(spec.key, lit)}, set in {spec.owner}")
+    if value:
+        ok, msg = SET.write(spec.key, value, now=_no_circle_open())
+        seam.emit("command", ("  " + msg) if ok else f"  not changed — {msg}")
+        seam.emit("command", "")
+        return
+    if not interactive:
+        seam.emit("command", f"  to change it: /settings-update {key} <value>")
+        seam.emit("command", "")
+        return
+    answer = seam.read_line("  new value (Enter keeps it): ").strip()
+    if not answer:
+        seam.emit("command", "  kept")
+        seam.emit("command", "")
+        return
+    ok, msg = SET.write(spec.key, answer, now=_no_circle_open())
+    seam.emit("command", ("  " + msg) if ok else f"  not changed — {msg}")
+    seam.emit("command", "")
+
+
+def cmd_settings_clear(rest_text: str) -> None:
+    import settings as SET
+    key = (rest_text or "").strip().split(" ")[0]
+    if not key:
+        seam.emit("command", "  usage: /settings-clear <name>")
+        return
+    if key not in {s.key for s in _settings_rows()}:
+        seam.emit("command", f"  {key} is not a setting you can change here")
+        return
+    ok, msg = SET.clear(key)
+    seam.emit("command", "  " + msg)
+
+
+def _no_circle_open() -> bool:
+    """May an immediate change take effect right now? THIS MODULE ASKS;
+    settings.py never does — the one component that knows whether a circle
+    is running is the one that decides, and circle_state fails closed, so an
+    unanswerable question becomes "wait for the next circle" rather than
+    "change it under a transcript in flight"."""
+    try:
+        import circle_state
+        return not circle_state.is_circle_in_progress()
+    except Exception:                                          # noqa: BLE001
+        return False
+
+
 def dispatch_dev_cmd(head: str, rest_text: str, *, record=None,
                      guard=None,
                      interactive: bool = True) -> bool:
@@ -602,8 +801,26 @@ def dispatch_dev_cmd(head: str, rest_text: str, *, record=None,
     verbs and this chain handles the rest, with /help the one deliberate
     overlap (the loop answers the ROOM's /help; this door answers the
     command pane's)."""
+    # THE SECOND FLUSH POINT — 2026-08-28. A settings correction found at
+    # import must reach a surface, and this dispatcher is the other one: the
+    # command pane with no circle running, and `--dev-cmd` from a shell.
+    # Flushing here rather than in each verb means it cannot be forgotten by
+    # a verb added later, and flush_corrections() is a no-op when the queue
+    # is empty, so it costs nothing on every other call.
+    import settings as _SET
+    _SET.flush_corrections(lambda t: seam.emit("command", t))
+
     if head == "/help":
         cmd_help(rest_text)
+    elif head == "/settings-list":
+        # READ-ONLY. Nothing reaches the room from any of these three —
+        # they are command-pane verbs, so there is no transcript step to
+        # make and no live/sandbox split to draw.
+        cmd_settings_list()
+    elif head == "/settings-update":
+        cmd_settings_update(rest_text, interactive=interactive)
+    elif head == "/settings-clear":
+        cmd_settings_clear(rest_text)
     elif head == "/practice-add":
         cmd_practice_add(rest_text, record=record)
     elif head == "/practice-list":

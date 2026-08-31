@@ -142,27 +142,15 @@ def _render_dream(d: dict) -> str:
 def _call(user: str, client=None) -> tuple[str, str]:
     """(text, stop_reason); client injectable so no test reaches the
     network — coalesce._call's own shape."""
-    if client is None:
-        import llm_client as LC
-        from anthropic import Anthropic
-        import os
-        key = os.environ.get("ANTHROPIC_API_KEY")
-        if not key:
-            env = ROOT / ".env"
-            if env.is_file():
-                for ln in env.read_text(encoding="utf-8").splitlines():
-                    if ln.strip().startswith("ANTHROPIC_API_KEY"):
-                        key = ln.split("=", 1)[1].strip().strip('"').strip("'")
-        client = Anthropic(api_key=key)
-        model = LC.MODEL
-    else:
-        model = getattr(client, "model", "fake")
-    resp = client.messages.create(
-        model=model, max_tokens=MAX_TOKENS, system=SYSTEM,
-        messages=[{"role": "user", "content": user}])
-    text = "".join(b.text for b in resp.content
-                   if getattr(b, "type", "") == "text").strip()
-    return text, getattr(resp, "stop_reason", None) or ""
+    # THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1 of the provider
+    # socket) — same move, and the same reason, as coalesce._call beside it:
+    # the key resolution here was a second hand-rolled copy, and a fold had
+    # no retry ladder and reached no meter. The injection contract this
+    # docstring names is unchanged.
+    import llm_client as LC
+    text, _usage, stop = LC.call_once(SYSTEM, user, MAX_TOKENS,
+                                      kind="dream_fold", client=client)
+    return text, stop
 
 
 def _derive(prior: str | None, dreams: list[dict], client=None,

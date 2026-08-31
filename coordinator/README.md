@@ -4,6 +4,10 @@ A local Python coordinator that runs a circle as direct Messages API calls.
 Successor to `spike_asyncio/`. **The agent-teams mechanism is untouched and
 fully operational** — `/circle_close`, `.claude/agents/`, `process.md`,
 `scripts/*.py` are neither modified nor read for control flow by this path.
+
+(The windowed way in is the Ticker flavor — `ui/ticker/`, manual at
+`ui/docs/bridge.md`; `ui/circling.py` remains the two-pane terminal. Both
+run this directory underneath.)
 Either mechanism can be used for any given circle.
 
 ---
@@ -138,7 +142,7 @@ interpreter.
 /round    let the parts take another round without a Self statement
 /status   since-Self counters and running cost
 /close    collect short_terms, verify, print the usage report
-/abort    quit now — no short_terms, transcript kept
+/abort    end the circle without a close — no short_terms, transcript kept
 ```
 
 ---

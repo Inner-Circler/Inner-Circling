@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import datetime
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -316,7 +317,12 @@ def withheld(e: dict) -> bool:
     four — and the one that gets missed fails silently, in one direction
     only. The live/resume divergence rebuild_state's own comment records is
     exactly that shape, and addressed_since() had no test whatsoever."""
-    return bool(e.get("cmd") or e.get("remember_only"))
+    # recall_only joined 2026-08-30 (R402), the THIRD member: a statement
+    # that was ENTIRELY a [recall: ...] — the query reaches the file, the
+    # room hears a pass, and the answer rides privately in that part's own
+    # next request.
+    return bool(e.get("cmd") or e.get("remember_only")
+                or e.get("recall_only"))
 
 
 def _split_remember(e: dict) -> None:
@@ -342,10 +348,21 @@ def _split_remember(e: dict) -> None:
     markers.py reaches into the issue-graph modules, and this file is
     imported by things that have no business pulling those in."""
     import markers as MK
-    if not MK.REMEMBER_RE.search(e["text"]):
+    import recall_index as RC
+    has_rem = bool(MK.REMEMBER_RE.search(e["text"]))
+    has_rec = bool(RC.RECALL_RE.search(e["text"]))
+    if not (has_rem or has_rec):
         return
     e["raw"] = e["text"]
-    e["text"] = MK.strip_remember(e["text"])
+    text = e["text"]
+    if has_rem:
+        text = MK.strip_remember(text)
+    if has_rec:
+        # The recall bracket takes the identical resume treatment (R402):
+        # strip_recall is spelled once, in recall_index, for the same
+        # byte-identity reason strip_remember is spelled once in markers.
+        text = RC.strip_recall(text)
+    e["text"] = text
     # SELF-IDENTIFYING ON THE WAY BACK IN, the same discipline the `cmd`
     # flag follows ("a recorded Self line beginning `/` can only be an
     # echoed command"). Nothing left for the room means the whole statement
@@ -362,9 +379,17 @@ def _split_remember(e: dict) -> None:
     # SPOKEN statement from the whole room on resume — the counters and
     # every part's view silently diverged from what the live loop held.
     if not e["text"]:
-        e["remember_only"] = True
+        if has_rem:
+            e["remember_only"] = True
+        else:
+            e.pop("remember_only", None)
+        if has_rec:
+            e["recall_only"] = True
+        else:
+            e.pop("recall_only", None)
     else:
         e.pop("remember_only", None)
+        e.pop("recall_only", None)
 
 
 # The line circle.py emits at open to say where it is writing. This module
@@ -460,7 +485,9 @@ def parse_transcript(raw: str) -> tuple[str, str, list[dict]]:
                 # construction. Function-local import for the same reason
                 # _split_remember's is.
                 import markers as MK
-                if (MK.REMEMBER_RE.search(body) and transcript
+                import recall_index as RC
+                if ((MK.REMEMBER_RE.search(body)
+                     or RC.RECALL_RE.search(body)) and transcript
                         and not transcript[-1].get("is_topic")
                         and transcript[-1].get("speaker") != "__scribe__"):
                     note = False        # fall through to the merge below
@@ -737,7 +764,19 @@ def run_verifier(ot: str) -> int:
     cmd = [sys.executable, str(ROOT / "coordinator" / "circle_close.py"),
            "--short-term-only", "--open-time", ot, "--write-report"]
     seam.emit("command", f"\n  $ {' '.join(cmd)}")
-    r = subprocess.run(cmd, cwd=str(ROOT))
+    # CAPTURED, never inherited (the operator's lab close, 2026-08-30): a child
+    # writing to the real stdout lands inside the Ticker bridge's NDJSON
+    # protocol stream, and every report line arrives as a loud
+    # "unparseable event". The seam is the one road to a pane. Same
+    # contract issue_draw's spawn in circle.py already keeps; the child
+    # writes UTF-8 into the pipe because cp1252 is the piped default.
+    env = dict(os.environ, PYTHONIOENCODING="utf-8")
+    r = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
+                       encoding="utf-8", errors="replace", env=env)
+    for line in (r.stdout or "").splitlines():
+        seam.emit("command", line.rstrip())
+    for line in (r.stderr or "").splitlines():
+        seam.emit("command", f"  !! {line.rstrip()}")
     seam.emit("command", f"  verifier exit {r.returncode}"
               + ("" if r.returncode == 0 else "  <-- ACTION NEEDED"))
     if r.returncode != 0:

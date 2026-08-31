@@ -86,6 +86,11 @@ import sys
 from collections import Counter
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
+
+# ui/ is not on sys.path when this is imported rather than run — circle.py
+# spawns it at a live close, and the probe imports it.
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import palette as P                                            # noqa: E402
 ISSUES_DIR = ROOT / "issues"
 
 # THE OUTPUT DIRECTORY IS NAMED, not derived from __file__. It was
@@ -197,12 +202,20 @@ W, H = 2400, 1250
 # `_check_vocabulary()` below now fails if this table and issue_schema ever
 # disagree again; nothing checked it before, which is why it drifted silently
 # through ten edge migrations.
+# THE COLOURS COME FROM ui/palette.py SINCE 2026-08-30. They were the same
+# four hex strings work/graph/palette.py holds — this tool left that directory
+# for ui/ at R365 and carried them out by hand, so a fifth drawing agreed with
+# the other four by luck. The roles line up exactly with what the edges mean:
+# laddering is the settled green, cause-and-effect the gold of what is owed,
+# protection the coordinator's purple, opposition red. `related-to` keeps its
+# own grey — the weakest claim has no role in the palette, and #8a8a8a is not
+# MUTED's {P.MUTED}, so importing one for the other would move the picture.
 EDGE_STYLE = {
-    "narrower-than":  ("#2c6e49", "laddering — up for meaning, down for the concrete"),
-    "leads-to":       ("#b8860b", "gives rise to — cause first, forward in time"),
-    "protects":       ("#7b5ea7", "stands in front of"),
+    "narrower-than":  (P.GREEN, "laddering — up for meaning, down for the concrete"),
+    "leads-to":       (P.GOLD, "gives rise to — cause first, forward in time"),
+    "protects":       (P.PURPLE, "stands in front of"),
     "related-to":     ("#8a8a8a", "associative — the weakest claim"),
-    "polarized-with": ("#c0392b", "opposed strategies escalating against each other"),
+    "polarized-with": (P.RED, "opposed strategies escalating against each other"),
 }
 
 
@@ -220,7 +233,7 @@ def _check_vocabulary() -> None:
 
 
 _check_vocabulary()
-TIERS = [("spine", 8, "#2c6e49"), ("thread", 3, "#7b5ea7"), ("thin", 0, "#9a9a9a")]
+TIERS = [("spine", 8, P.GREEN), ("thread", 3, P.PURPLE), ("thin", 0, "#9a9a9a")]
 
 
 def tier(depth: int):
@@ -658,7 +671,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
                    f'fill="{c}"/></marker>')
     out.append('</defs>')
     out.append(f'<rect x="{vx0:.0f}" y="{vy0:.0f}" width="{vw:.0f}" '
-               f'height="{vh:.0f}" fill="#fbfbf9"/>')
+               f'height="{vh:.0f}" fill="{P.GROUND}"/>')
 
     # cluster regions, drawn under everything: a rounded box around each
     # community, named for its highest-degree member. Relational clustering made
@@ -749,7 +762,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
             yy = y0 + li * 15
             out.append(f'<text x="{x:.0f}" y="{yy:.0f}" text-anchor="middle" '
                        f'font-size="13" font-weight="600" fill="none" '
-                       f'stroke="#fbfbf9" stroke-width="4" '
+                       f'stroke="{P.GROUND}" stroke-width="4" '
                        f'stroke-linejoin="round">{esc(ln)}</text>')
             out.append(f'<text x="{x:.0f}" y="{yy:.0f}" text-anchor="middle" '
                        f'font-size="13" font-weight="600" '
@@ -864,19 +877,19 @@ data-live="{1 if nid in live_ids else 0}">
     return f'''<!doctype html><meta charset="utf-8">
 <title>Issue graph — {len(g)} nodes</title>
 <style>
-body{{font-family:system-ui,sans-serif;margin:0;background:#fbfbf9;color:#1e1e1e}}
-header{{padding:18px 26px;border-bottom:1px solid #e3e3de}}
+body{{font-family:system-ui,sans-serif;margin:0;background:{P.GROUND};color:#1e1e1e}}
+header{{padding:18px 26px;border-bottom:1px solid {P.RULE}}}
 h1{{margin:0 0 4px;font-size:20px}} .sub{{color:#767670;font-size:13px}}
 #wrap{{display:flex;align-items:flex-start;gap:0}}
 #svg,#svg2{{flex:1 1 auto;position:sticky;top:0;padding:10px}}
 #svg svg,#svg2 svg{{width:100%;height:auto}}
-#tbl{{flex:0 0 520px;max-height:100vh;overflow:auto;border-left:1px solid #e3e3de;
+#tbl{{flex:0 0 520px;max-height:100vh;overflow:auto;border-left:1px solid {P.RULE};
 background:#fff}}
 table{{border-collapse:collapse;width:100%}}
 td{{padding:12px 14px;border-bottom:1px solid #eee;vertical-align:top;font-size:13px}}
 td.n{{width:52px;font-weight:700;color:#2c6e49;font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace}}
-tr.hi{{background:#fffbe6}} tr:target{{background:#eef7f1}}
-.m{{color:#8a8a84;font-size:11px;margin:3px 0 7px}}
+tr.hi{{background:{P.GOLD_WASH}}} tr:target{{background:#eef7f1}}
+.m{{color:{P.MUTED};font-size:11px;margin:3px 0 7px}}
 .d{{margin-bottom:6px;line-height:1.5}}
 .a{{color:#4a4a44;font-size:12px;line-height:1.45;margin-bottom:6px}}
 ul.e{{margin:6px 0;padding-left:18px;font-size:12px;color:#555}}

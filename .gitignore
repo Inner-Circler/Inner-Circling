@@ -61,14 +61,28 @@ work/logs/nightly*.log
 # a real diagnostic naming what refused and how to re-run, and it stays
 # visible on purpose. inter_circle.py globs the run marker the same way, for
 # the same reason.
+#   delta_<OT>.json    circle_delta's close-time memo (circle_stats,
+#                      2026-08-30). Re-derivable in full — the registers,
+#                      the machine commits and close_<OT>.json are the
+#                      record; `python coordinator/circle_delta.py --ot <OT>`
+#                      regenerates it byte-for-fact.
 work/logs/closing_*.json
 work/logs/dream_[0-9]*.json
+work/logs/delta_[0-9]*.json
 
 # THE DIAGNOSTIC NOTES a refused check writes — work/diagnostics/gate_<time>.md,
 # 2026-08-26. Each is written FOR its reader, who may hand-edit it before
 # sending it anywhere; a copy in the history would be a second version they did
 # not choose. The screen names the path, which is where it lives.
 work/diagnostics/
+
+# WHICH MEMORY IS THE EXPERIMENT — work/memory_probe_planted.toml,
+# 2026-08-28. A planted record stopped carrying its own probe label when R372
+# began showing a memory's circle tag to the part, so the identity moved to a
+# file instead. It is lab scratch between a `seed` and its `unseed`, it is
+# never true of any tree but the one mid-run, and committing it would put the
+# answer sheet in the history of the thing being tested.
+work/memory_probe_planted.toml
 
 # Temp workspaces — staging, caches, locks, snapshots
 work/issue_trial/
@@ -92,13 +106,55 @@ work/logs/circle_audit*.log
 # the picture back: it is for a person to open, and it is rebuilt from
 # issues/*.toml, which IS tracked, whenever it falls behind.
 #
-# NAMED FILES, not the directory: work/graph/ also holds coordinator_graph.*,
-# command_flow.*, prompt_grammar.* and system_architecture.*, which are
-# tracked on purpose. TWO of those sets the pre-commit hook regenerates and
-# `git add`s itself: coordinator_graph.* when the module graph moves, and
-# prompt_grammar.* when docs/BNF.md does (v91, 2026-08-27 — until then
-# nothing regenerated the grammar picture and it sat 148px stale at HEAD
-# while every gate passed). command_flow.* and system_architecture.* are
-# still redrawn by hand.
+# EVERY HOOK-REDRAWN PICTURE JOINED IT, 2026-08-30, the operator: *"stop
+# saving them and do the merges yourself"*. coordinator_graph.* (ten files)
+# and prompt_grammar.* (two) were tracked AND regenerated-and-`git add`ed by
+# the pre-commit hook, so any commit touching coordinator/, memory/ or ui/
+# python rewrote all ten — and two branches editing UNRELATED modules
+# conflicted on every one of them. Git then asked which drawing to keep, of
+# the person least able to answer; the honest answer is "neither, redraw
+# from the merged source", which is what a generator does in one command.
+# A file stored for no reader is the only kind that can conflict for no
+# reason. The redraw arms went with the tracking (hook v101) — `git add` on
+# an ignored path exits 1, so leaving them would have refused every commit
+# in every tree at once.
+#
+# NAMED FILES, not the directory: work/graph/ also holds the four *_draw.py
+# generators, test_coordinator_draw.py, the .psd, the two product_lexicon
+# documents, and command_flow.* / system_architecture.* — all still tracked.
+# Those last two are redrawn BY HAND, have never been staged by a hook, and
+# so have never conflicted; they stay until they do.
 work/graph/issue_graph.svg
 work/graph/issue_graph.html
+work/graph/coordinator_graph.svg
+work/graph/coordinator_graph.html
+work/graph/coordinator_graph.toml
+work/graph/coordinator_graph_live.svg
+work/graph/coordinator_graph_live.html
+work/graph/coordinator_graph_live.toml
+work/graph/coordinator_graph_simple.svg
+work/graph/coordinator_graph_simple.html
+work/graph/coordinator_graph_live_simple.svg
+work/graph/coordinator_graph_live_simple.html
+work/graph/prompt_grammar.svg
+work/graph/prompt_grammar.html
+
+# The Ticker flavor (ui/ticker, branch Ticker_Research): toolchain output.
+# node_modules and target are per-checkout builds; dist is vite's bundle;
+# gen/ is Tauri's generated schema dir. The tiny icon IS tracked.
+ui/ticker/node_modules/
+ui/ticker/dist/
+ui/ticker/src-tauri/target/
+ui/ticker/src-tauri/gen/
+
+# tier A recall trial logs (remember_expand.py) — per-circle JSON, lab
+# trial data; the record is the transcript, this is instrumentation.
+work/recall_trial/
+
+# the Entries semantic index's cache (ticking_index.py, R400) — derived,
+# rebuildable bytes, one re-embed to recreate; never record.
+work/ticker/
+
+# the parts' recall index cache (recall_index.py, R402) — derived,
+# rebuildable, one re-embed to recreate; never record.
+work/recall_index/

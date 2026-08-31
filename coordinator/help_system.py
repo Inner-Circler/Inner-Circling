@@ -451,11 +451,15 @@ def object_class_read_text(name: str, pos_raw: str) -> str:
 # wrong in a sorted listing. circle_pane_help() reads these too.
 # `/dev` is never a key here — same "stays deliberately absent" reasoning as
 # COMMANDS never carrying it. test_help_system.py asserts the key set stays
-# exactly these four, so a stale or missing gloss breaks loudly.
+# exactly these, so a stale or missing gloss breaks loudly.
+# /abort JOINED 2026-08-31 with its move to the circle pane
+# (R414): its COMMANDS text is two lines, and _one_liner's
+# first-line fallback would have cut it mid-sentence in the room's listing.
 _HELP_ONE_LINERS = {
     "/round": "let the parts continue without a Self statement",
     "/pass": "alias for /round",
     "/close": "collect short_terms, verify, apply rulings, report",
+    "/abort": "end the circle without a close; a second /abort confirms",
     "/help": "this list",
 }
 
@@ -485,9 +489,15 @@ def circle_pane_help() -> str:
 
     A SEPARATE RENDERER BECAUSE IT ANSWERS A DIFFERENT QUESTION. Every
     other help path renders COMMANDS, which is the command-PANE's surface;
-    the circle pane recognizes speech, three verbs and two annotations, and
-    nothing else. Handing the room the command table would list verbs that
-    are refused there — which is the opposite of help.
+    the circle pane recognizes speech, the circle-class verbs and two
+    annotations, and nothing else. Handing the room the command table would
+    list verbs that are refused there — which is the opposite of help.
+
+    THE VERBS ARE READ OFF PANE_OF, NOT LISTED BY HAND, since 2026-08-31
+    (R414): the operator ruled that each pane's help shows
+    only what that pane operates, and /abort joined the room the same day.
+    A hand list here was the second copy that drifts; the class is the
+    one source, and the command pane's renderers exclude the same class.
 
     THE ANNOTATION GRAMMAR IS QUOTED FROM THE ONE PLACE THAT PARSES IT.
     The propose subset is read live rather than restated, so this cannot
@@ -502,7 +512,7 @@ def circle_pane_help() -> str:
         "  IN THE ROOM you speak. Type and press Enter — that IS your turn.",
         "",
         "\n".join(help_rows((c, _one_liner(c))
-                            for c in ("/round", "/pass", "/close", "/help"))),
+                            for c in circle_verbs() + ("/help",))),
         "",
         "  INSIDE what you say, two annotations ride along:",
         "",
@@ -609,16 +619,30 @@ def _help_level0() -> str:
     return "\n".join(out) + "\n"
 
 
+def circle_verbs() -> tuple[str, ...]:
+    """The room's own verbs, in COMMANDS order — PANE_OF's circle class.
+    /round, /pass, /close, and /abort since 2026-08-31."""
+    return tuple(h for h, p in CS.PANE_OF.items() if p == "circle")
+
+
 def _visible_head(head: str) -> bool:
-    """The whole dev gate, as ONE test. Two disjoint tables kept disjoint
-    by hand until now: DEV_MIN_CMDS and USER_SUBSET_COMMANDS are what a
-    non-dev reader sees, plus the circle pane's three, which sit in neither
-    tuple and were added by hand at the render site."""
+    """The whole gate for the COMMAND PANE's listings, as ONE test.
+
+    PANE-SCOPED SINCE 2026-08-31 (R414) — the operator:
+    *"help in the two panes properly show only the commands operable in
+    their panes."* A circle-class verb is never a row here, dev on or off:
+    it is refused at cmd>, and a listing that names a verb the pane refuses
+    is the opposite of help. Until then the room's three were ADDED by
+    hand for the non-dev tier, so cmd> help listed /close beside the verbs
+    it could run. circle_pane_help() is the room's own listing.
+
+    Then the dev gate, unchanged: DEV_MIN_CMDS and USER_SUBSET_COMMANDS
+    are what a non-dev reader sees."""
+    if CS.PANE_OF.get(head) == "circle":
+        return False
     if CS.dev_mode:
         return True
-    return (head in CS.DEV_MIN_CMDS
-            or head in CS.USER_SUBSET_COMMANDS
-            or head in ("/round", "/pass", "/close"))
+    return head in CS.DEV_MIN_CMDS or head in CS.USER_SUBSET_COMMANDS
 
 
 def _class_tree_text(cls: str) -> str:

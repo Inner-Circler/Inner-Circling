@@ -106,6 +106,36 @@ SOUL_DIR = "soul"
 PREFERRED_NAME_KEY = "preferred_name"
 
 
+def consumed_keys() -> tuple:
+    """The context answers THE MECHANISM READS — 2026-08-28, and the answer to
+    a question the audience rule left open.
+
+    A part's context answer normally reaches a model and nothing else: it is
+    rendered into BLOCK 3 through its own `render` string, and a model reads
+    around a typo, so freedom of expression is the asset and a gate would only
+    get in the way. A few answers are different — something in the program
+    ACTS on them — and those must be discrete and always valid.
+
+    A THIRD CATEGORY EXISTS AND HAD NO NAME. Ten of the Soul's questions
+    declare no `render` at all: the two names (PII, R329) and, since
+    2026-08-27, the gender and religion answers the operator ruled recorded
+    but never spoken. Those reach NEITHER a model NOR the mechanism. Nothing
+    acts on them, so there is nothing to keep valid, and they need no gate —
+    only the shape rules every answer has.
+
+    WHICH LEAVES THIS LIST, and it is declared HERE rather than inferred,
+    because "the mechanism reads this" is not visible from the declaration
+    and roster.verify() would otherwise have to guess. Adding a reader of an
+    answer means adding its key here, and the check then demands that answer
+    declare how it is kept valid.
+
+    NO FLAG ON THE QUESTION ITSELF. R329 made the ABSENCE of `render` the
+    gate — "not a flag the code has to remember to check" — and a second
+    marker saying the same thing from the other side would be one fact in two
+    places, which is the defect check_one_home.py exists for."""
+    return (PREFERRED_NAME_KEY,)
+
+
 def soul_preferred_name() -> str:
     """parts/soul/part.toml [context.answers].preferred_name, stripped; ""
     when the file, the table or the key is absent, empty, or unreadable —

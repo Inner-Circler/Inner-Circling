@@ -45,6 +45,19 @@ THE LAYOUT — R277, 2026-08-21. One directory per circle, and inside it:
                                      short_term and its retry. Not the API
                                      ping (no part, no system prompt) and
                                      not a token count.
+                                     AND, since R412/R413 (2026-08-30/31),
+                                     every call the coordinator makes for
+                                     itself at a live /close that WRITES
+                                     THE RECORD: dreaming (per part), the
+                                     synthesis, the mid_term refresh (per
+                                     part), the coalesce pass — one string
+                                     system prompt inline, one user message,
+                                     the same reply record. The two
+                                     circle-wide kinds have no part, and
+                                     the KIND fills the slot:
+                                     Per_turn_synthesis_<time>_<seq>.json.
+                                     Not the failure diagnostic, which
+                                     writes nothing.
     manifest.json                    sha256, size and item counts per
                                      block file; one record per turn file.
 
@@ -76,7 +89,8 @@ THE PER-TURN RECORD is the Messages-API request body as sent, plus the reply:
         "messages": [...],                              ; VERBATIM — see TAIL
         "messages_omitted": {"turns": n, "sha256": "..."}   ; when trimmed
       },
-      "response": {"id", "model", "stop_reason", "text", "usage"},
+      "response": {"id", "model", "stop_reason", "text", "usage",
+                   "thinking"},                   ; when RECORD_THINKING is on
       "error": "..."                                    ; only when it raised
     }
 
@@ -102,8 +116,24 @@ THE PER-TURN RECORD is the Messages-API request body as sent, plus the reply:
     `response.text` is the RAW reply — before rounds.ask_statement() strips a
     sign-off, a `[To: ...]` prefix or a bracket, and before "[pass]" becomes
     silence. The transcript holds the cleaned text; this is the only record
-    of what the model actually returned. `usage` is the SDK's usage object as
-    a dict, so the cache hit/miss of every request is on file.
+    of what the model SAID. `usage` is the SDK's usage object as a dict, so
+    the cache hit/miss of every request is on file.
+
+    THAT SENTENCE READ "the only record of what the model actually returned"
+    until 2026-08-29, and it was overbroad in a way nothing here would have
+    caught. `text` is the TEXT BLOCKS. A reply also carries the model's
+    reasoning, on every statement, and this file recorded the SIZE of it —
+    `usage.output_tokens_details.thinking_tokens`, on file since the captures
+    began — while dropping the thing itself.
+
+    `response.thinking` IS THAT REASONING, kept since the operator ruled it
+    kept (llm_client.RECORD_THINKING, default on). Two things bound what it
+    is worth. It is a SUMMARY the service returns, not the raw trace; and its
+    PRESENCE is the record of the setting — an empty string means recording
+    was on and the model thought nothing, an ABSENT key means recording was
+    off or the capture predates this. `thinking_redacted_blocks` appears only
+    when the reply carried reasoning this project cannot read, so that a
+    partial record never passes for a whole one.
 
 VERBATIM, AND CHECKED
 
@@ -166,8 +196,26 @@ def _roots() -> list[pathlib.Path]:
 
 # The four blocks of system_blocks(), in order. Names are recorded in the
 # manifest so a reader knows what each file IS without reading prompt_build.
-BLOCK_NAMES = ("circle_identity", "circle_objectives",
-               "part_identity", "part_objectives")
+#
+# DERIVED, NOT COPIED (2026-08-28). These four strings were written out here
+# AND in prompt_build.ORDER — one fact in two modules, and prompt_build's own
+# block_order() already said "`prompt_capture` labels by this", which was the
+# intent but not the mechanism.
+#
+# LAZILY, which is this file's established way of reaching a coordinator
+# module (see the `import remember as RM` inside record_projection). It
+# matters here: prompt_build pulls the transport and the provider behind it,
+# and this module is a VERIFIER the pre-commit hook runs — the same reason
+# _source_constant greps a constant out of source text rather than importing
+# the module that holds it.
+#
+# NOT taken from turn_contract.toml, though it names the same four. That file
+# is the contract's INDEPENDENT expectation — the thing a capture is checked
+# against — and a contract that derived its expectation from the code would
+# check nothing.
+def block_names() -> tuple:
+    import prompt_build as _PB
+    return tuple(_PB.ORDER)
 SHARED_BLOCKS = ("circle_identity", "circle_objectives")
 IDENTITY_BLOCKS = ("part_identity", "part_objectives")   # the per-part pair
 MANIFEST = "manifest.json"
@@ -265,7 +313,7 @@ def write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
         d = PROMPTS / ot
     else:
         return None
-    names = tuple(names or BLOCK_NAMES)
+    names = tuple(names or block_names())
     parts = list(sysblocks)
 
     def _name(i: int) -> str:
@@ -410,7 +458,7 @@ def _system_record(part: str, system: list, man: dict) -> list:
     """Blocks 1-3 by reference to the Block files when the bytes match;
     BLOCK 4 inline; anything that does not match its Block file inline and
     flagged, so the record is exact whatever the generator did."""
-    order = man.get("block_order") or list(BLOCK_NAMES)
+    order = man.get("block_order") or list(block_names())
     files = man.get("files", {})
     out = []
     for i, b in enumerate(system):
@@ -436,13 +484,23 @@ def _system_record(part: str, system: list, man: dict) -> list:
     return out
 
 
-def record_turn(part: str, kind: str, request: dict,
+def record_turn(part: "str | None", kind: str, request: dict,
                 response: "dict | None" = None, dry_run: bool = False,
                 error: "str | None" = None) -> "pathlib.Path | None":
     """Write one Per_turn file and its manifest record. Returns the path, or
     None when no log is open. `request` is the messages.create kwargs —
     model, max_tokens, system, messages — exactly as passed; `response` is
     already a plain dict (llm_client builds it from the SDK object).
+
+    TWO SHAPES OF REQUEST PASS THROUGH HERE since R412/R413 (2026-08-31). A
+    PART's turn carries `system` as the four blocks, and 1-3 are written by
+    reference to their Block files. A PROCESSING turn — dreaming, synthesis,
+    mid_term, coalesce — carries `system` as ONE STRING, recorded inline and
+    untouched (a string has no Block file to point at), and `part` may be
+    None: the synthesis and the coalesce pass speak for no one part. The file
+    then takes the KIND in the part slot — Per_turn_synthesis_<time>_<seq>
+    — and the body says `"part": null`. check_contract() makes the same
+    substitution when it checks the name, so writer and checker agree.
 
     Thread-safe: the blind round asks seven parts in parallel, so the
     sequence number, the file write and the manifest rewrite all happen
@@ -458,7 +516,10 @@ def record_turn(part: str, kind: str, request: dict,
         req: dict = {}
         for k, v in request.items():
             if k == "system":
-                req["system"] = _system_record(part, list(v or []), man)
+                # a list is the four blocks, by reference where the bytes
+                # match; a string is a processing prompt and rides as it is
+                req["system"] = (_system_record(part or "", list(v or []), man)
+                                 if isinstance(v, list) else v)
             elif k == "messages":
                 req["messages"] = tail
                 if omitted:
@@ -470,7 +531,8 @@ def record_turn(part: str, kind: str, request: dict,
                       "response": response}
         if error:
             body["error"] = error
-        fname = f"Per_turn_{part}_{now}_{seq:03d}.json"
+        actor = part if part is not None else kind
+        fname = f"Per_turn_{actor}_{now}_{seq:03d}.json"
         f = d / fname
         text = json.dumps(body, indent=1, ensure_ascii=False) + "\n"
         atomic_write(f, text)
@@ -713,7 +775,31 @@ def _leak_check(fname: str, text: str) -> list[str]:
 
 CONTRACT = pathlib.Path(__file__).resolve().parent / "turn_contract.toml"
 
-_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict}
+_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict,
+          # a processing turn's `part` (R412): a part's name, or null for the
+          # synthesis and the coalesce pass, which speak for no one part
+          "str|null": (str, type(None))}
+
+
+def shape_of(kind: "str | None", contract: dict) -> tuple["str | None", dict]:
+    """(name, spec) of the [shape.*] table that declares `kind`; (None, {})
+    when none does. R412/R413, 2026-08-31: a PART's turn and a PROCESSING
+    turn are two wire shapes under one file format, and the shape is what
+    the kind names."""
+    for name, spec in (contract.get("shape") or {}).items():
+        if kind in (spec.get("kinds") or []):
+            return name, spec
+    return None, {}
+
+
+def all_kinds(contract: dict) -> list[str]:
+    """Every kind any shape declares — the ONE list, derived, never copied.
+    Falls back to a pre-shape contract's `[turn] kinds` so an old TOML still
+    checks something rather than nothing."""
+    out: list[str] = []
+    for spec in (contract.get("shape") or {}).values():
+        out.extend(spec.get("kinds") or [])
+    return out or list((contract.get("turn") or {}).get("kinds") or [])
 
 
 def load_contract() -> dict:
@@ -746,7 +832,33 @@ def _source_constant(spec: str) -> "str | None":
         return None
     m = re.search(r'^' + re.escape(name) + r'\s*=\s*["\']([^"\']+)["\']',
                   src, re.M)
-    return m.group(1) if m else None
+    if m:
+        return m.group(1)
+    # THE CONSTANT MAY NOW BE OVERRIDABLE, 2026-08-28 (R379).
+    # llm_client.MODEL became `SET.value("model", "claude-sonnet-5")`, and the
+    # literal-only pattern above stopped matching it — which did not fail the
+    # check, it SKIPPED it (`if want_model and ...` below), turning the one
+    # assertion that a request carries the code's own model into a gate that
+    # checked nothing. That silent-pass shape is the defect this project
+    # treats as worse than a loud failure, so the form is understood here
+    # rather than left to miss.
+    #
+    # The EFFECTIVE model is what the request actually carried, so the
+    # override is applied on top of the source default. settings is imported
+    # for it — not llm_client, which would pull `anthropic` and an API-key
+    # check into a verifier the pre-commit hook runs. That is the same reason
+    # this function greps rather than imports in the first place.
+    m = re.search(r'^' + re.escape(name)
+                  + r'\s*=\s*(?:\w+\.)?value\(\s*["\'](\w+)["\']\s*,\s*'
+                    r'["\']([^"\']+)["\']\s*\)', src, re.M)
+    if not m:
+        return None
+    key, default = m.group(1), m.group(2)
+    try:
+        import settings as SET
+        return SET.value(key, default)
+    except Exception:                                          # noqa: BLE001
+        return default
 
 
 def _typed(where: str, obj: dict, types: dict, out: list) -> None:
@@ -785,17 +897,27 @@ def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
 
     t = contract.get("turn", {})
     _keys(fname, body, t, out)
-    kinds = t.get("kinds") or []
-    if kinds and body.get("kind") not in kinds:
-        out.append(fname + ": kind " + repr(body.get("kind"))
+    kind = body.get("kind")
+    kinds = all_kinds(contract)
+    if kinds and kind not in kinds:
+        out.append(fname + ": kind " + repr(kind)
                    + " is not one of " + repr(kinds))
+    # THE SHAPE TYPES `part` — a str for a part's turn, str-or-null for a
+    # processing one, where null means the synthesis or the coalesce pass.
+    _shape_name, shape = shape_of(kind, contract)
+    if "part" in shape:
+        _typed(fname, body, {"part": shape["part"]}, out)
     if t.get("time_re") and isinstance(body.get("time"), str) \
             and not re.match(t["time_re"], body["time"]):
         out.append(fname + ": time " + repr(body["time"])
                    + " is not the recorded shape")
     if t.get("filename") and isinstance(body.get("seq"), int) \
             and all(k in body for k in ("part", "time")):
-        want = t["filename"].format(part=body["part"], time=body["time"],
+        # THE ACTOR fills the part slot: the part, or the kind when there is
+        # none — the same substitution record_turn() makes when it names the
+        # file, so writer and checker cannot disagree about a synthesis turn.
+        actor = body["part"] if body["part"] is not None else kind
+        want = t["filename"].format(part=actor, time=body["time"],
                                     seq=body["seq"])
         if want != fname:
             out.append(fname + ": the body says it should be named " + want)
@@ -809,6 +931,11 @@ def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
         return out
     rspec = contract.get("request", {})
     _keys(fname + " request", req, rspec, out)
+    # `system` IS TYPED BY THE SHAPE: four blocks for a part's turn, one
+    # string for a processing turn. A list under a processing kind or a string
+    # under a part kind is refused here, by name.
+    if "system" in shape:
+        _typed(fname + " request", req, {"system": shape["system"]}, out)
 
     want_model = _source_constant(rspec.get("model_from", ""))
     if want_model and req.get("model") != want_model:
@@ -823,7 +950,11 @@ def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
     sspec = contract.get("system", {})
     order = sspec.get("order") or []
     system = req.get("system")
-    if order and isinstance(system, list):
+    # THE BLOCK WALK IS THE PART SHAPE'S. A processing turn declares
+    # `system = "str"` and has no blocks to order or to cache; a shape that
+    # declares nothing (an unknown kind) is walked as before, so the checker
+    # never checks LESS than it did.
+    if order and isinstance(system, list) and shape.get("system", "list") == "list":
         got = [b.get("block") if isinstance(b, dict) else None for b in system]
         if got != order:
             out.append(fname + ": system blocks are " + repr(got)
@@ -855,6 +986,12 @@ def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
         if len(msgs) < mspec.get("min", 0):
             out.append(fname + ": " + str(len(msgs)) + " message(s), contract "
                        "wants at least " + str(mspec["min"]))
+        # a processing turn is one user message — the material, assembled by
+        # the caller — and never a conversation
+        exactly = shape.get("messages_exactly")
+        if exactly is not None and len(msgs) != exactly:
+            out.append(fname + ": " + str(len(msgs)) + " message(s), a "
+                       + str(kind) + " turn carries exactly " + str(exactly))
         roles = []
         for m in msgs:
             if not isinstance(m, dict):
@@ -1020,7 +1157,7 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
                                  f"moved mid-circle?")
             elif b.get("block") == "part_objectives" and "text" in b \
                     and not b.get("differs_from_capture"):
-                idx = (man.get("block_order") or list(BLOCK_NAMES))
+                idx = (man.get("block_order") or list(block_names()))
                 i = idx.index("part_objectives") if "part_objectives" in idx else 3
                 fname = block_filename(i, "part_objectives", part or "")
                 rec = files.get(fname)

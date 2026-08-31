@@ -13,10 +13,16 @@ B28, 2026-08-07: `--refresh` MAKES THE CALL. Until this, the derivation was
 "by hand" in the literal sense — a Claude conversation reading `--sources`
 output and a human pasting the result through `write()`. That produced the
 first fourteen (seven at v1, seven at v3) and is not repeatable: a nightly
-cannot hold a conversation. This is the same shape as `circle.py`'s own API
-path — `Anthropic()`, `ANTHROPIC_API_KEY` from the environment or `.env`,
-one call per part, no caching (each part's sources are read once and never
-reused, so there is no shared prefix worth paying to cache).
+cannot hold a conversation. One call per part, no caching (each part's
+sources are read once and never reused, so there is no shared prefix worth
+paying to cache).
+
+THE CALL GOES THROUGH llm_client SINCE 2026-08-28 (stage 1 of the provider
+socket). This paragraph used to say the module built its own client the way
+`circle.py` does — env var, else `.env` — and that was exactly the
+duplication stage 1 removes: `llm_client.build_client()` is the one builder,
+`call_once()` the one call, so a distillation now rides the retry ladder and
+reaches the meter like everything else.
 
 RULED 2026-08-07, over three exchanges. First, on reading the live-vs-minimal
 diff for two parts:
@@ -116,6 +122,7 @@ the material it was made from has not moved.
 
 from __future__ import annotations
 
+import concurrent.futures
 import hashlib
 import pathlib
 import sys
@@ -133,6 +140,17 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
+
+# THE ONE MODULE-LEVEL PROJECT IMPORT, and it is deliberate against this file's
+# own lazy-import convention (2026-08-28, R379). MODEL and the
+# RATE_* pair below were LITERAL COPIES of llm_client's, and a price or a model
+# id written twice is one edit away from two answers — the defect ifs_model's
+# REGISTERS dict already records for circle_history's cap. llm_client is light at
+# import (os, threading, time, seam, paths; `anthropic` is lazy inside its own
+# functions), so this costs no import-time weight and closes no cycle:
+# prompt_build already imports it at module level.
+import llm_client as LC                                        # noqa: E402
+import settings as SET                                         # noqa: E402
 
 PROMPT = "v9"   # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
                 # EVERY TIME. v8 told the model to "revise it incrementally"
@@ -178,8 +196,9 @@ PROMPT = "v9"   # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
                 # v4, 2026-08-12: dreams.toml added as a source (dream
                 # corpus moved out of long_term.md); SYSTEM gained the
                 # identity-core anti-duplication line
-MODEL = "claude-sonnet-5"
-BUDGET = 5000        # chars. The two hand-derived examples ran 3,094 and 4,113.
+MODEL = LC.MODEL     # IMPORTED, NOT COPIED — the transport owns the model id
+BUDGET = SET.value("mid_term_budget", 5000)   # chars. The two hand-derived
+                     # examples ran 3,094 and 4,113.
 
 # RAISED 2026-08-26 from 2,000 (R354, B68's diagnosis): claude-sonnet-5
 # THINKS ADAPTIVELY BY DEFAULT and its thinking tokens COUNT AGAINST
@@ -188,10 +207,16 @@ BUDGET = 5000        # chars. The two hand-derived examples ran 3,094 and 4,113.
 # calls stopped at max_tokens on every part measured: judge's thinking
 # consumed the whole budget (0 text chars, SUSPECT-refused), mourner's left
 # a document cut mid-sentence that PASSED the half-budget floor, and a live
-# /close starved 4 of 7 derivations. Sized like DREAM_MAX_TOKENS: the
-# visible document targets BUDGET (5,000 chars, ~1,250 tokens); the rest is
-# the thinking's room.
-DERIVE_MAX_TOKENS = 8000
+# /close starved 4 of 7 derivations.
+# RAISED AGAIN 2026-08-30 from 8,000, on the lab close of 2026-08-29_2359:
+# real derivations write 11,000-15,600 chars (~3-4K tokens of document, not
+# the ~1,250 the 8,000 was sized for), and with thinking on top the five
+# that succeeded finished near the cap while judge and philosopher hit it
+# exactly and were SUSPECT-refused — which then left their stale block-3
+# cutoffs to fail check_block_overlap and refuse the whole phase-2 commit.
+# 16,000 fits the measured envelope with room; a genuine runaway is still
+# caught, and /settings-update derive_max_tokens overrides either way.
+DERIVE_MAX_TOKENS = SET.value("derive_max_tokens", 16000)
 
 FRONT = "<!-- mid_term {hash} · {model} · {when} · from {n} chars -->"
 
@@ -486,24 +511,21 @@ def write(part: str, body: str, locked_by_self: bool = False,
                           encoding="utf-8", newline="\n")
 
 
-RATE_IN = 2.00          # $/M input tokens, no cache — verified against circle.py
-RATE_OUT = 10.00        # $/M output tokens, 2026-07-26; rise 2026-09-01
+# IMPORTED, NOT COPIED (2026-08-28). These were literal 2.00/10.00 here while
+# llm_client carried the same two numbers plus the two cache tiers — so a rate
+# change had to land in two files or this module would quietly price a
+# derivation at yesterday's rates. The rise due 2026-09-01 would have done
+# exactly that. llm_client.Meter is the owner; this module prices ONE uncached
+# call, so it uses that owner's uncached pair and no cache tier.
+RATE_IN = LC.RATE_IN
+RATE_OUT = LC.RATE_OUT
 
 
-def _client():
-    """Same construction as circle.py's --live path: env var, else .env,
-    else fail with the same message. One client, reused across parts."""
-    import os
-    from anthropic import Anthropic
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(ROOT / ".env")
-        except ImportError:
-            pass
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("set ANTHROPIC_API_KEY (env var or project .env)")
-    return Anthropic()
+# _client() MOVED to llm_client.build_client(), 2026-08-28 (stage 1 of the
+# provider socket) — same construction, same refusal message. The "one
+# client, reused across parts" property this docstring claimed is kept at
+# the call site in refresh(), which builds one and hands it to every
+# derive(); call_once uses an injected client as given.
 
 
 def derive(client, part: str, src: "dict | None" = None) -> tuple[str, object]:
@@ -561,14 +583,17 @@ def derive(client, part: str, src: "dict | None" = None) -> tuple[str, object]:
         user_parts.append(
             f"# Your remember register, salience-ranked (most weight first)"
             f"\n{lines}")
-    resp = client.messages.create(
-        model=MODEL,
-        max_tokens=DERIVE_MAX_TOKENS,
-        system=SYSTEM.format(budget=BUDGET),
-        messages=[{"role": "user", "content": "\n\n".join(user_parts)}],
-    )
-    text = "".join(b.text for b in resp.content if b.type == "text").strip()
-    return text, resp.usage, getattr(resp, "stop_reason", None)
+    # THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1). This called the SDK
+    # directly, so a distillation had no retry ladder and its spend reached
+    # no meter — this module priced itself with its own t_in/t_out sum
+    # below, which is why RATE_IN/RATE_OUT had to exist here at all.
+    # RECORDED FOR THE PART (R412, 2026-08-30) — when a turn log is open,
+    # which is a live /close or the hand re-run; `mid_term --refresh` by hand
+    # opens none and records nothing.
+    return LC.call_once(
+        SYSTEM.format(budget=BUDGET), "\n\n".join(user_parts),
+        DERIVE_MAX_TOKENS, kind="mid_term", client=client,
+        record=True, part=part)
 
 
 def suspect_reasons(body: str, stop_reason: "str | None") -> list[str]:
@@ -633,28 +658,65 @@ def refresh(only: str | None = None, dry_run: bool = False,
         say("  nothing to derive")
         return 0
 
-    client = None if dry_run else _client()
     t_in = t_out = 0
     fails = 0
-    for p, info, src in todo:
-        say(f"  {p}: deriving from {info['chars']:,} source chars"
-            f"{' (dry run)' if dry_run else ''}...")
-        if dry_run:
-            say(f"    (skipped — no model call)")
-            continue
-        body, usage, stop = derive(client, p, src)
-        t_in += getattr(usage, "input_tokens", 0) or 0
-        t_out += getattr(usage, "output_tokens", 0) or 0
-        bad = suspect_reasons(body, stop)
-        if bad:
-            fails += 1
-            say(f"    SUSPECT — {'; '.join(bad)}")
-            say("    NOT written — rerun by hand or inspect before forcing.")
-            continue
-        write(p, body, src=src)
-        say(f"    wrote {len(body):,} chars, hash {source_hash(p, src)}")
 
-    if not dry_run and (t_in or t_out):
+    if dry_run:
+        for p, info, _src in todo:
+            say(f"  {p}: deriving from {info['chars']:,} source chars (dry run)...")
+            say("    (skipped — no model call)")
+        return 0
+
+    # THE DERIVATIONS RUN IN PARALLEL — B77, built 2026-08-30. This loop took
+    # one part at a time while inter_circle's dreaming pass has run seven at
+    # once since R170 for comparable per-part work, and the phase clock
+    # finally priced the difference at a live close that morning:
+    #
+    #     inter.dreaming            47.6 s   (7 parts, parallel)
+    #     inter.mid_term_refresh   697.4 s   (stale parts, one at a time)
+    #
+    # 697 s was 62% of an 1,120 s close against a 300 s aim. The wait was
+    # never compute — the machine sat far below capacity — it is model-call
+    # latency, serialized.
+    #
+    # ONLY THE CALL IS CONCURRENT. suspect_reasons(), write() and every say()
+    # stay on this thread and are taken ONE FINISHED PART AT A TIME, which is
+    # what keeps a part's report whole: interleaved output would make the
+    # SUSPECT line and the "NOT written" line beneath it read as belonging to
+    # whichever part happened to print between them. It also means nothing
+    # mutates a file from a worker, so write()'s per-part path stays a fact
+    # about this module rather than a thing to reason about.
+    #
+    # A CLIENT PER WORKER, not one shared — R170's own rule for the dreaming
+    # pool, kept here for the reason it gives: it costs nothing and removes
+    # every thread-safety question rather than answering one.
+    say(f"  deriving {len(todo)} part(s) in parallel:")
+    for p, info, _src in todo:
+        say(f"    {p}: started, {info['chars']:,} source chars")
+
+    src_of = {p: src for p, _info, src in todo}
+
+    def _derive_one(part: str, src: dict):
+        return derive(LC.build_client(), part, src)
+
+    with concurrent.futures.ThreadPoolExecutor(len(todo)) as ex:
+        futs = {ex.submit(_derive_one, p, src): p for p, _info, src in todo}
+        for f in concurrent.futures.as_completed(futs):
+            p = futs[f]
+            body, usage, stop = f.result()
+            t_in += getattr(usage, "input_tokens", 0) or 0
+            t_out += getattr(usage, "output_tokens", 0) or 0
+            bad = suspect_reasons(body, stop)
+            if bad:
+                fails += 1
+                say(f"    {p}: SUSPECT — {'; '.join(bad)}")
+                say("      NOT written — rerun by hand or inspect before forcing.")
+                continue
+            write(p, body, src=src_of[p])
+            say(f"    {p}: wrote {len(body):,} chars, "
+                f"hash {source_hash(p, src_of[p])}")
+
+    if t_in or t_out:
         cost = (t_in * RATE_IN + t_out * RATE_OUT) / 1_000_000
         say(f"\n  {t_in:,} in + {t_out:,} out tok, ~${cost:.3f}")
     return fails

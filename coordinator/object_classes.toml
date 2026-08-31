@@ -127,3 +127,24 @@ name = "prompt"
 description = '''
 What a part is actually sent — the assembled system prompt, block by block.
 '''
+
+# ADDED 2026-08-28 (R379). The class exists so the three
+# settings verbs are reachable by browsing — test_help_system.py's "every
+# USER verb is reachable through its class" is what caught their absence the
+# moment they joined USER_SUBSET_COMMANDS, which is the check working.
+#
+# The description says what a person gets, not how it is stored: the register
+# is coordinator/settings.py's business and self/settings.toml is not
+# something anyone needs to know the name of to use this.
+[[class]]
+name = "settings"
+description = '''
+What this copy of the circle runs on, where you want something other than
+what the program decides. A change that would disturb a circle already
+running waits for the next one to open, and says so when you make it.
+'''
+# The closing sentence here read "With the advanced view off you see the few
+# settings meant for everyday use" until 2026-08-29 — the operator: an
+# allusion to a view he keeps as an easter egg is a leak, not a courtesy.
+# The listing simply shows what this person may see, and says nothing about
+# there being more.

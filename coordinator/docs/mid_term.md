@@ -22,9 +22,33 @@ in a future prompt. Before this file (B28, 2026-08-07), that distillation
 was done by hand: a human read `--sources` output in a Claude conversation
 and pasted the result through `write()`. That produced the first fourteen
 distillates and cannot be repeated automatically — a nightly cannot hold a
-conversation. This file makes `--refresh` actually call the model,
-mirroring `circle.py`'s own live API path (same `Anthropic()` client
-construction, same `ANTHROPIC_API_KEY` resolution via env or `.env`).
+conversation. This file makes `--refresh` actually call the model.
+
+**Through `llm_client` since 2026-08-28** (stage 1 of the provider socket).
+It used to mirror `circle.py`'s live API path — its own `Anthropic()`
+construction, its own `ANTHROPIC_API_KEY` resolution — which is exactly the
+duplication stage 1 removed: `llm_client.build_client()` is the one builder
+and `llm_client.call_once()` the one call, so a distillation now rides the
+retry ladder and reaches the one meter like every other model call.
+
+**`--refresh` DERIVES ITS PARTS IN PARALLEL since 2026-08-30 (B77)**, the
+shape `inter_circle.py`'s dreaming pass has had since R170. It ran one part
+at a time until then, and the phase clock priced that at a live close the
+same morning: `inter.dreaming` 47.6 s for seven parts at once against
+`inter.mid_term_refresh` 697.4 s for the stale ones in turn — 62% of an
+1,120 s close whose ruled aim is 300 s. The wait was never compute; it is
+model-call latency, serialized.
+
+Only the model call is concurrent. `suspect_reasons()`, `write()` and every
+`say()` line run on the calling thread, taken one FINISHED part at a time,
+which is what keeps a part's report whole — interleaved output would leave
+the "NOT written" line hanging under whichever part printed between it and
+its own SUSPECT line. Each worker builds its own client, R170's rule for the
+dreaming pool, kept for the reason that ruling gives: it costs nothing and
+removes the thread-safety question rather than answering it.
+`coordinator/tests/test_mid_term.py` asserts the calls genuinely overlap
+(peak concurrency, not merely wall time), that the failure count is exact,
+and that the two-line SUSPECT report stays adjacent.
 
 The sources are named precisely and their names are meant to describe what
 they now are, following a 2026-08-07 ruling: `long_term.md` is the settled
@@ -108,6 +132,14 @@ still reaching the room — is asserted at every live circle by
 `prompt_capture --verify`, not here. Both verbs cost real model calls and
 both refuse outside the lab.
 
+**The derivation's own request is on record since R412 (2026-08-30).**
+`derive()` asks the transport to record it for the part — kind `mid_term`,
+the string system prompt and the one user message as sent, the raw reply and
+its thinking — and the transport does so only while a turn log is open: a live
+`/close`, or the hand re-run `inter_circle.py --ot <OT> --live`, which opens the
+circle's own `work/prompts/<OT>/`. `mid_term --refresh` by hand opens none and
+records nothing, as before.
+
 ## MAIN
 ```
 read argv (no argparse; manual dispatch on argv[0]).
@@ -156,7 +188,13 @@ Read: `parts/<part>/long_term.md` (via `prompt_build.read_ro`, with settled sect
 Written: `parts/<part>/mid_term.md` — by `write()`, called from `refresh()` on a successful derivation; and by the `--lock`/`--unlock` path directly, which since 2026-08-19 toggles the `mid_term_locked` marker on the existing front-matter line and leaves every other byte (hash included) as the derivation wrote it.
 
 ## NETWORK ACCESS
-Yes, conditionally: one `Anthropic().messages.create()` call per part being refreshed (model `claude-sonnet-5`, `max_tokens=8000` (`DERIVE_MAX_TOKENS` — thinking tokens count against the cap, R354)), made only when `--refresh` is run without `--dry-run`. No network call in any other mode.
+Yes, conditionally: one `llm_client.call_once()` per part being refreshed (model
+`llm_client.MODEL`, `max_tokens` = `DERIVE_MAX_TOKENS` — a setting since
+2026-08-28, defaulting to 8000, because thinking tokens count against the cap,
+R354), made only when `--refresh` is run without `--dry-run`. No network call in
+any other mode. It went through the transport on 2026-08-28 (stage 1 of the
+provider socket); before that this module built its own client and its calls
+rode no retry ladder and reached no meter.
 
 ## HUMAN I/O
 No stdin. `refresh()` reports per-part state listings, per-part derivation progress ("deriving from N source chars..."), a SUSPECT warning (with reasons) for any derivation that comes back short, stopped at `max_tokens` (a truncated document, refused whatever its length — `suspect_reasons()`, R354), or leaks a raw dream-corpus heading — such results are explicitly NOT written — and a final token/cost summary, all through a `say` parameter (default `print`, so a direct/CLI call is unchanged) — fixed 2026-08-16 from a bare `print()` that bypassed whatever routing the caller used, invisible under circling's alternate screen buffer even when `inter_circle.py`'s own summary line was already routing correctly. `refresh()` returns the number of failed derivations, used directly as `main()`'s exit code for `--refresh`; all other subcommands return 0 (or 1 for lock/unlock on a part with no mid_term).
@@ -276,16 +314,13 @@ if (state is "absent") then {
 }
 ```
 
-### _client()
+### _client() — REMOVED 2026-08-28
 ```
-if (ANTHROPIC_API_KEY is not set) then {
-    try loading it from .env via python-dotenv (ignored if unavailable).
-}
-if (still not set) then {
-    raise RuntimeError with the required-env-var message.
-} else {
-    return an Anthropic() client.
-}
+Moved to llm_client.build_client(), which is now the one place in the
+project a client is constructed. Same env-then-.env resolution, same
+refusal message. refresh() calls it once and hands the client to every
+derive(), keeping the "one client, reused across parts" property this
+function had.
 ```
 
 ### derive(client, part, src=None)

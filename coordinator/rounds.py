@@ -30,12 +30,14 @@ import random
 import re
 
 import seam
+import settings as SET
 import token_count as TC
 from llm_client import call, MODEL
 from markers import (apply_remember, strip_malformed_markers,
                      route_markers, REMEMBER_RE)
+import recall_index as RC
 from paths import PART_TAGS
-from prompt_build import render_messages
+from prompt_build import render_messages, LENGTH_MAX_WORDS
 from transcript_store import statement_line, append, withheld
 
 # ~100 words is ~135 tokens; the ceiling is deliberately far above the word cap so
@@ -54,7 +56,7 @@ from transcript_store import statement_line, append, withheld
 # A ceiling is not a spend. Output is billed on tokens PRODUCED, so raising
 # this costs nothing until a statement actually gets longer; the word rule in
 # process_core is the control, and this is only headroom for the thinking.
-MAX_TOKENS = 2500
+MAX_TOKENS = SET.value("statement_max_tokens", 2500)
 # RAISED FROM 1000, 2026-08-06. Five parts ran long in circle_2026-08-06_1012
 # and a part truncated TWICE, which is a data failure. The ceiling is
 # headroom for THINKING, which bills against it — so a part that thinks for
@@ -65,7 +67,8 @@ MAX_TOKENS = 2500
 # emitted is billed. That circle spent $3.72 with 33,674 output tokens across
 # 88 calls — 383 on average, nowhere near 1000. The truncations were thinking,
 # not verbosity, and the fix is headroom rather than a shorter instruction.
-MAX_SINCE_SELF = 2                      # process_core: max 2 statements per Self turn
+MAX_SINCE_SELF = SET.value("statements_per_part", 2)   # process_core: max 2
+                                        # statements per Self turn
 
 TRUNCATION_MARKER = "[statement truncated at the token ceiling -- incomplete]"
 
@@ -128,15 +131,22 @@ def for_display(text: str) -> str:
 def ask_statement(client, part: str, blocks: list[dict], transcript: list[dict],
                   dry: bool) -> tuple[str | None, str | None]:
     """Returns (statement, to_whom) or (None, None) for a pass."""
-    text, stop = call(client, part, blocks, render_messages(part, transcript),
+    text, stop = call(client, part, blocks,
+                      render_messages(part, transcript,
+                                      recall=RC.pending_text(part)),
                       MAX_TOKENS, dry)
     if stop == "max_tokens":
         # Truncation is a failure, not a statement. One retry, then give up.
         seam.emit("command", f"  [{part} ran long — asking again, shorter]")
+        # THE NUMBER IS THE ROOM'S OWN, 2026-08-28. This said "UNDER 150
+        # words" as a literal while process_core.md told the same part never
+        # to exceed 100 — the retry contradicting the rulebook, in the one
+        # moment a part is being corrected. Both read LENGTH_MAX_WORDS now.
         msgs = render_messages(
             part, transcript,
-            "(the circle comes to you — speak in UNDER 150 words and finish "
-            "your sentence, or reply [pass])",
+            f"(the circle comes to you — speak in UNDER {LENGTH_MAX_WORDS} "
+            f"words and finish your sentence, or reply [pass])",
+            recall=RC.pending_text(part),
         )
         text, stop = call(client, part, blocks, msgs, MAX_TOKENS, dry)
         if stop == "max_tokens":
@@ -243,6 +253,7 @@ def run_blind_round(client, parts, sysblocks, transcript, since_self, state,
     shuffled order, not the completion order, so a run is reproducible under
     --seed and the transcript does not record network timing as if it were
     conversational order."""
+    RC.new_round()
     order = parts[:]
     random.shuffle(order)
     snapshot = list(transcript)          # frozen: nothing said now is visible now
@@ -272,7 +283,13 @@ def run_blind_round(client, parts, sysblocks, transcript, since_self, state,
             continue
         raw = text
         text, recorded = apply_remember(guard, part, display, text)
-        why = " — REMEMBER recorded)" if recorded else ")"
+        # RECALL rides the same discipline, after remember (R402): the
+        # bracket is stripped from the room here, the query executes, and
+        # the private reply waits for this part's next request.
+        text, asked = RC.apply_recall(part, display, text, live=live)
+        notes = (["REMEMBER recorded"] if recorded else []) \
+            + (["RECALL asked"] if asked else [])
+        why = (" — " + ", ".join(notes) + ")") if notes else ")"
         if text:
             text = strip_malformed_markers(text, display)
             if not text:
@@ -290,10 +307,15 @@ def run_blind_round(client, parts, sysblocks, transcript, since_self, state,
             # line is indistinguishable from an ordinary statement, which is
             # why the flag is RE-DERIVED on resume rather than stored.
             record = strip_malformed_markers(raw.strip(), display, quiet=True)
-            if record and REMEMBER_RE.search(raw):
-                transcript.append({"speaker": part, "display": display,
-                                   "text": "", "raw": record,
-                                   "remember_only": True, "to": to})
+            if record and (REMEMBER_RE.search(raw)
+                           or RC.RECALL_RE.search(raw)):
+                entry = {"speaker": part, "display": display,
+                         "text": "", "raw": record, "to": to}
+                if REMEMBER_RE.search(raw):
+                    entry["remember_only"] = True
+                if RC.RECALL_RE.search(raw):
+                    entry["recall_only"] = True
+                transcript.append(entry)
                 append(guard, path, statement_line(display, to, record))
             seam.emit("command", f"  {display}: (passes{why}")
             seam.emit("circle", f"\n{display} passes")
@@ -320,7 +342,7 @@ def run_blind_round(client, parts, sysblocks, transcript, since_self, state,
         # `quiet`: the room pass above already warned about each malformed
         # marker. Two notices for one bracket read as two brackets.
         record = text
-        if REMEMBER_RE.search(raw):
+        if REMEMBER_RE.search(raw) or RC.RECALL_RE.search(raw):
             record = strip_malformed_markers(raw.strip(), display, quiet=True)
         since_self[part] = since_self.get(part, 0) + 1
         state["last"] = part
@@ -507,7 +529,9 @@ def run_round(client, parts, sysblocks, transcript, since_self, state,
     next part is asked, so parts genuinely respond to one another within a round.
     Enforces, in code:
       - max 2 statements since Self last spoke
-      - never speak twice in a row"""
+      - never speak twice in a row
+      - one recall per part per round (recall_index.new_round())"""
+    RC.new_round()
     order = parts[:]
     random.shuffle(order)
     spoke = 0
@@ -530,7 +554,13 @@ def run_round(client, parts, sysblocks, transcript, since_self, state,
             continue
         raw = text
         text, recorded = apply_remember(guard, part, display, text)
-        why = " — REMEMBER recorded)" if recorded else ")"
+        # RECALL rides the same discipline, after remember (R402): the
+        # bracket is stripped from the room here, the query executes, and
+        # the private reply waits for this part's next request.
+        text, asked = RC.apply_recall(part, display, text, live=live)
+        notes = (["REMEMBER recorded"] if recorded else []) \
+            + (["RECALL asked"] if asked else [])
+        why = (" — " + ", ".join(notes) + ")") if notes else ")"
         if text:
             text = strip_malformed_markers(text, display)
             if not text:
@@ -548,10 +578,15 @@ def run_round(client, parts, sysblocks, transcript, since_self, state,
             # line is indistinguishable from an ordinary statement, which is
             # why the flag is RE-DERIVED on resume rather than stored.
             record = strip_malformed_markers(raw.strip(), display, quiet=True)
-            if record and REMEMBER_RE.search(raw):
-                transcript.append({"speaker": part, "display": display,
-                                   "text": "", "raw": record,
-                                   "remember_only": True, "to": to})
+            if record and (REMEMBER_RE.search(raw)
+                           or RC.RECALL_RE.search(raw)):
+                entry = {"speaker": part, "display": display,
+                         "text": "", "raw": record, "to": to}
+                if REMEMBER_RE.search(raw):
+                    entry["remember_only"] = True
+                if RC.RECALL_RE.search(raw):
+                    entry["recall_only"] = True
+                transcript.append(entry)
                 append(guard, path, statement_line(display, to, record))
             seam.emit("command", f"  {display}: (passes{why}")
             seam.emit("circle", f"\n{display} passes")
@@ -578,7 +613,7 @@ def run_round(client, parts, sysblocks, transcript, since_self, state,
         # `quiet`: the room pass above already warned about each malformed
         # marker. Two notices for one bracket read as two brackets.
         record = text
-        if REMEMBER_RE.search(raw):
+        if REMEMBER_RE.search(raw) or RC.RECALL_RE.search(raw):
             record = strip_malformed_markers(raw.strip(), display, quiet=True)
         since_self[part] = since_self.get(part, 0) + 1
         state["last"] = part

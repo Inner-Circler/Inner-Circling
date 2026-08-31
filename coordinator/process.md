@@ -42,8 +42,19 @@ no effect on what parts say.
 - never speak twice in a row
 - a part at the limit is held, and the hold is recorded in the transcript
 
-**Truncation is an error, never a pass.** `MAX_TOKENS` is 600 — far above the
-100-word cap, so reaching it means runaway generation. A part that truncates is
+**Truncation is an error, never a pass.** `rounds.MAX_TOKENS` is the ceiling and
+the length rule is `prompt_build.LENGTH_MAX_WORDS` — **no number is written here,
+deliberately**: both are settings since 2026-08-28, and a rulebook that restated
+them would be a fourth literal to go stale. This paragraph carried two at once
+("`MAX_TOKENS` is 600", "the 100-word cap") long after the ceiling had been
+raised to 2500 and while the room's own rule said something else again.
+
+The ceiling sits far above the word rule ON PURPOSE, so reaching it means
+runaway generation rather than a slightly long thought — and because this model
+bills its THINKING against the same ceiling, most of what a statement spends
+there is reasoning, not words. Measured on circle 2026-08-21_1139: thinking was
+49% of a statement's output tokens at the median, and the longest turn reached
+86% of the ceiling. A part that truncates is
 asked again, shorter. If it truncates twice the statement is *kept* and marked in
 the transcript with a trailing `[statement truncated at the token ceiling --
 incomplete]`, and the run is failed. The marker is trailing so the part still

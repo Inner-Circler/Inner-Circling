@@ -498,7 +498,7 @@ def ensure_attributes(log) -> None:
 # which *ui/* does not match, because the half that breaks packaging is the
 # CALL SITE's path literal and it lives there. The redraw is gated
 # `if args.live:`, so no dry-run end-to-end suite can reach it.
-HOOK_MARK = "# inner-circling pre-commit v91"
+HOOK_MARK = "# inner-circling pre-commit v102"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1067,7 +1067,21 @@ refused() {{   # $1 = exit code, rest = the check and its arguments
 run() {{
     [ -f "$1" ] || return 0
     if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE"; NOTE=""; fi
-    {{ "$PY" "$@" 2>&1; echo $? > "$GATE_RC"; }} | tee "$GATE_OUT"
+    # THE STATUS HAS TO SURVIVE `set -e` — v92, 2026-08-28. A pipeline stage
+    # is a SUBSHELL and inherits errexit, so a FAILING probe killed the brace
+    # group before `echo $?` could run. rc then read whatever the PREVIOUS
+    # probe left in the file — and the first check of every invocation
+    # (check_line_endings) passes and leaves "0" behind. So from the second
+    # probe onward a red gate printed its failure IN FULL and the commit went
+    # through anyway. Live from v81 (2026-08-27) to here; found 2026-08-28 by
+    # a lab merge whose battery said FAIL and committed.
+    # Two guards, because either alone suffices and neither is obvious:
+    #   `set +e` inside the group  the TRUE exit code is recorded
+    #   `rm -f` before it          a group that dies anyway leaves NO file,
+    #                              and a missing file reads as 1 rather than
+    #                              as the last probe's success. FAILS CLOSED.
+    rm -f "$GATE_RC"
+    {{ set +e; "$PY" "$@" 2>&1; echo $? > "$GATE_RC"; }} | tee "$GATE_OUT"
     rc=$(cat "$GATE_RC" 2>/dev/null || echo 1)
     [ "$rc" = "0" ] || refused "$rc" "$@"
 }}
@@ -1079,8 +1093,14 @@ run() {{
 quiet() {{
     [ -f "$1" ] || return 0
     if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE"; NOTE=""; fi
-    "$PY" "$@" > "$GATE_OUT" 2>&1
-    rc=$?
+    # `|| rc=$?` TESTS the status, so errexit does not fire — v92. This half
+    # always DID refuse: the bare command tripped `set -e`, which exits the
+    # hook non-zero. It refused SILENTLY, though — the exit happened before
+    # `cat "$GATE_OUT"` and before gate_report, so the reader got a failed
+    # commit and not one word about which check failed or why. The refusal
+    # was never the defect here; the missing account of it was.
+    rc=0
+    "$PY" "$@" > "$GATE_OUT" 2>&1 || rc=$?
     [ "$rc" = "0" ] || {{ cat "$GATE_OUT"; refused "$rc" "$@"; }}
 }}
 
@@ -1099,6 +1119,9 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/check_best_practices.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
 |*coordinator/prompt_build.py*|*coordinator/markers.py*\
+|*coordinator/remember_expand.py*|*coordinator/tests/test_remember_expand.py*\
+|*coordinator/recall_index.py*|*coordinator/tests/test_recall_index.py*\
+|*coordinator/embed_store.py*|*coordinator/process_core.md*\
 |*coordinator/help_system.py*|*coordinator/commands.py*\
 |*coordinator/vetting.py*|*coordinator/rounds.py*\
 |*coordinator/self_schema.py*|*coordinator/tests/test_check_best_practices.py*\
@@ -1108,6 +1131,9 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history.py*\
 |*coordinator/self_observation_log.py*\
 |*coordinator/tests/test_self_observation_log.py*\
+|*coordinator/settings.py*|*coordinator/tests/test_settings.py*\
+|*coordinator/process_core.md*\
+|*coordinator/providers.py*|*coordinator/tests/test_providers.py*\
 |*coordinator/backfill.py*|*coordinator/tests/test_register_gate.py*\
 |*coordinator/ifs_model.py*|*coordinator/tests/test_markers.py*\
 |*coordinator/remember.py*|*coordinator/tests/test_remember.py*\
@@ -1192,10 +1218,38 @@ case "$FILES" in *parts/*|*self/*\
     run coordinator/tests/test_convergence_queue.py
     run coordinator/tests/test_proposals.py
     run coordinator/tests/test_markers.py
+    # v96, 2026-08-29: tier A recall — the match rule, spans, caps,
+    # every degrade row, the BLOCK-4-only placement invariant.
+    run coordinator/tests/test_remember_expand.py
+    # v98, 2026-08-30 (R400-R402): part-initiated recall — the grammar,
+    # the corpora, the throttle, the resume round-trip, and the two
+    # structural journal-unawareness greps. FAKE embedder: the gate
+    # needs neither model nor network.
+    run coordinator/tests/test_recall_index.py
     # v66: the room/record split in rounds.py — see the v66 note above.
     run coordinator/tests/test_rounds_display.py
     # v66: Self's retry ladder over the transport — see the v66 note above.
     run coordinator/tests/test_llm_client.py
+    # v93: work/logs/spend_<OT>.json (R380). ITS SUBJECT RUNS
+    # ONLY AT A LIVE CLOSE — a dry-run circle takes the `not live` branch on
+    # the function's first line, so test_circle_engine.py exercises the guard
+    # and never the write. Added to the TRIGGER and the INVOCATION together,
+    # which is v19's rule and v45's lesson; its subjects, circle.py and
+    # llm_client.py, already fire this case.
+    run coordinator/tests/test_spend_report.py
+    # v93: the settings register (R379) and the length rule it now owns.
+    # test_settings.py SHIPPED UNINVOKED — it merged to master with no case
+    # naming it, so from the day it was written it reported nothing, which is
+    # precisely the v45 defect it would itself have caught elsewhere. Found by
+    # test_hook_template.py's stray-suite check, which only runs when this
+    # file is touched. process_core.md joins the trigger because settings.py
+    # now gates its length rule against a literal being typed back in.
+    run coordinator/settings.py --check
+    run coordinator/tests/test_settings.py
+    # v94: the provider socket (R382 stage 2, R383's closed registry). Its
+    # subjects — llm_client.py, prompt_build.py, circle.py — already fire this
+    # case; trigger and invocation land together, v19's rule.
+    run coordinator/tests/test_providers.py
     # v67: the counter that replaced chars//4 — see the v67 note above.
     run coordinator/tests/test_token_count.py
     # v48: the resume parser's room/record split and the mid_term lock
@@ -1299,21 +1353,16 @@ case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_k
     # the only order that means anything.
     run work/tools/test_bnf_conformance.py
     run work/tools/bnf_conformance.py
-    # v91: THE PICTURE OF THE GRAMMAR, kept current the way the module
-    # graph already is. prompt_grammar.svg and .html are DERIVED from
-    # docs/BNF.md and tracked on purpose (.gitignore says so), but
-    # nothing regenerated them — so they sat 148px stale at HEAD while
-    # every gate passed, found 2026-08-27. The trigger above is already
-    # the right one: parse_bnf() reads docs/BNF.md and nothing else, so
-    # no commit can move the picture without matching this case.
-    if "$PY" work/graph/prompt_grammar_draw.py --check 2>/dev/null; then
-        :
-    else
-        echo "  pre-commit: the grammar picture is BEHIND — redrawing"
-        quiet work/graph/prompt_grammar_draw.py
-        git add work/graph/prompt_grammar.svg work/graph/prompt_grammar.html || exit 1
-        echo "  pre-commit: prompt_grammar.svg + .html regenerated and staged"
-    fi
+    # v101, 2026-08-30: THE GRAMMAR PICTURE IS NO LONGER REDRAWN OR STAGED
+    # HERE. v91 added that because prompt_grammar.svg/.html were tracked and
+    # nothing kept them current, so they sat stale at HEAD while every gate
+    # passed. The operator's answer to the whole class was to stop tracking
+    # the drawings — *"stop saving them"* — which removes the staleness the
+    # redraw existed to cure, and with it the conflict it caused: a tracked
+    # picture that two branches both rewrite conflicts every time, and the
+    # question git then asks ("which drawing?") has no human answer.
+    # Regenerate by hand when you want to look at one:
+    #     python work/graph/prompt_grammar_draw.py
 esac
 
 case "$FILES" in *coordinator/dream_history.py*|*coordinator/tests/test_dream_history.py*)
@@ -1374,6 +1423,14 @@ case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*
     # trigger for a directory the linter does not scan is a dead leg).
     # test_check_lint asserts this pattern and CODE_DIRS stay one thing.
     run coordinator/check_lint.py
+    # v95: ONE FACT, ONE HOME. The same value declared in two modules is the
+    # defect this project records more often than any other — ifs_model's
+    # REGISTERS says so twice in its own comments, and every instance so far
+    # was found by a person reading code. Rides check_lint's trigger because
+    # its subject is the same: every module in the tree. Trigger and
+    # invocation together, v19's rule.
+    run coordinator/check_one_home.py
+    run coordinator/tests/test_check_one_home.py
     run coordinator/tests/test_check_lint.py
 esac
 
@@ -1421,30 +1478,20 @@ esac
 #     lint trigger above now (as an EXTRA_LEG, not a CODE_DIR — see
 #     check_lint's own note on why), and its probe runs here.
 #
-# (c) THE DIAGRAMS GO STALE SILENTLY, and redrawing them costs about fifteen
-#     seconds — almost all of it crossing minimisation — which is why nobody
-#     wanted it on every commit. --check parses and fingerprints instead, in
-#     well under a second, so the expensive half runs ONLY when the module
-#     graph actually moved. RULED to regenerate rather than refuse: "tell me
-#     and regen", so this stages the ten artifacts and lets the commit
-#     proceed. It is the one case here that writes, and it writes only paths
-#     it generated — never `git add -A`.
-#
-#     ui/ JOINED THE TRIGGER at v85, 2026-08-27, ruled by the operator the
-#     same session it was found. The diagram's PACKAGES has drawn ui/ since
-#     2026-08-23 (R316) while this case still listed the two directories it
-#     had when it was written, so an edit to ui/circling.py moved the module
-#     graph without firing --check and every artifact could go stale from
-#     that one direction. It is the v45 lesson from the other side: not a
-#     probe with no trigger, but a trigger that stopped covering its subject.
-#
-#     TEN SINCE v85, 2026-08-27, not six: --simple draws the same graph with
-#     only the control-moving arcs, and a picture that is not regenerated here
-#     is a picture that goes stale silently — which is this case's whole
-#     subject. It shares the fingerprint (--simple changes no parsed fact and
-#     --simple --dump is refused), so the cheap --check above still decides
-#     for all four; only the expensive half grew, and only on a commit that
-#     genuinely moved the module graph.
+# (c) THE DIAGRAMS WENT STALE SILENTLY — and this hook answered that by
+#     redrawing and staging them on every commit that moved the module graph.
+#     RETIRED v101, 2026-08-30, because the cure cost more than the disease:
+#     ten TRACKED artifacts rewritten by any commit touching coordinator/,
+#     memory/ or ui/ python meant two branches editing unrelated modules
+#     conflicted on all ten, and the operator was left holding a question
+#     with no human answer. He removed the premise instead — the drawings are
+#     untracked now, so they cannot be stale IN GIT and cannot conflict.
+#     Staleness on disk is a person's to notice and one command to fix.
+#     History of what this used to do, kept because the trigger's SHAPE was
+#     twice the lesson: ui/ joined it at v85 after an edit to ui/circling.py
+#     moved the graph without firing --check (a trigger that had stopped
+#     covering its subject — v45's lesson from the other side), and it grew
+#     from six artifacts to ten in the same pass.
 case "$FILES" in *coordinator/circle.py*|*coordinator/tests/test_close_marker.py*)
     NOTE="  pre-commit: circle.py's open-time failure reports touched"
     run coordinator/tests/test_close_marker.py
@@ -1455,22 +1502,30 @@ case "$FILES" in *work/graph/coordinator_draw.py*|*work/graph/test_coordinator_d
     run work/graph/test_coordinator_draw.py
 esac
 
-case "$FILES" in *coordinator/*.py*|*memory/*.py*|*ui/*.py*)
-    NOTE=""
-    if [ ! -f work/graph/coordinator_draw.py ]; then
-        :                    # not shipped in this tree
-    elif "$PY" work/graph/coordinator_draw.py --check 2>/dev/null; then
-        :
-    else
-        echo "  pre-commit: the module graph CHANGED — redrawing the diagrams"
-        quiet work/graph/coordinator_draw.py --dump
-        quiet work/graph/coordinator_draw.py --live --dump
-        quiet work/graph/coordinator_draw.py --simple
-        quiet work/graph/coordinator_draw.py --live --simple
-        git add work/graph/coordinator_graph.svg work/graph/coordinator_graph.html                 work/graph/coordinator_graph.toml work/graph/coordinator_graph_live.svg                 work/graph/coordinator_graph_live.html work/graph/coordinator_graph_live.toml                 work/graph/coordinator_graph_simple.svg work/graph/coordinator_graph_simple.html                 work/graph/coordinator_graph_live_simple.svg work/graph/coordinator_graph_live_simple.html || exit 1
-        echo "  pre-commit: ten diagram artifacts regenerated and staged"
-    fi
-esac
+# THE MODULE-GRAPH REDRAW IS GONE, v101, 2026-08-30. It fired on any commit
+# touching coordinator/, memory/ or ui/ python, rewrote ten tracked artifacts
+# (~1.85 MB of SVG/HTML/TOML) and `git add`ed them. That is what put merge
+# conflicts in front of the operator: two branches editing unrelated modules
+# both redrew the same ten files, git asked which drawing to keep, and the
+# question has no human answer — the answer is "neither, redraw from the
+# merged source". He ruled the cause out of existence rather than the
+# symptom: *"stop saving them and do the merges yourself"*.
+#
+# THE DRAWINGS ARE UNTRACKED NOW, the way work/graph/issue_graph.* already
+# was (R365) and for the same stated reason — nothing reads a picture back;
+# it is for a person to open, and it is rebuilt from tracked source whenever
+# it falls behind. Nothing stored is nothing to conflict over.
+#
+#     python work/graph/coordinator_draw.py --dump
+#     python work/graph/coordinator_draw.py --live --dump
+#     python work/graph/coordinator_draw.py --simple
+#     python work/graph/coordinator_draw.py --live --simple
+#
+# AND THE `git add` HAD TO GO WITH THE TRACKING, not after it: `git add` on an
+# ignored, untracked path EXITS 1, and both redraw arms ended in `|| exit 1`.
+# Left in place for even one commit, this hook would have refused every commit
+# touching those paths — in all four worktrees and the lab at once, since
+# .git/hooks/ is shared.
 
 case "$FILES" in *coordinator/check_integrity.py*|*coordinator/tests/test_check_integrity.py*)
     NOTE="  pre-commit: the corruption gate touched — asserting it still refuses"
@@ -1538,6 +1593,24 @@ case "$FILES" in *ui/*)
     run ui/circling.py --selftest
     run ui/tests/test_circle_engine.py
     run ui/tests/test_circling.py --fast
+    # v96, 2026-08-29: the Ticker flavor's adaptor probe — bridge.py
+    # over real stdio, a full dry-run session, the lens RPCs, the
+    # reload handshake. Joined at the merge, as the design doc's
+    # merge-time follow-up promised.
+    run ui/tests/test_ticker_bridge.py
+    # v97, 2026-08-29 (R400): the Entries semantic index — local
+    # embeddings, FAKE embedder in the probe so the gate needs neither
+    # model nor network; the real model is ticking_index.py --selftest,
+    # by hand.
+    run ui/tests/test_ticking_index.py
+    # v102, 2026-08-30: the palette, and the ONE gate that can see the
+    # Ticker's CSS. check_one_home.py reads only Python, so a hex string
+    # hand-edited into app.css could drift from the role it was generated
+    # from forever with nothing able to notice — --check is what notices.
+    # The probe beside it pins the rest: both grounds per role, 4-bit ANSI,
+    # and that a drifted app.css really is caught.
+    run ui/palette.py --check
+    run ui/tests/test_palette.py
 esac
 
 case "$FILES" in *parts/*|*coordinator/roster.py*|*coordinator/tests/test_roster.py*)
@@ -1584,7 +1657,33 @@ case "$FILES" in *coordinator/initialization.py*|*coordinator/initialization.tom
     run coordinator/tests/test_initialization.py
 esac
 
-case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*)
+case "$FILES" in *coordinator/phase_clock.py*|*coordinator/tests/test_phase_clock.py*|*coordinator/docs/phase_clock.md*)
+    # v100, 2026-08-30 — the SECOND stray in one day, and the second merge
+    # to be refused by it. phase_clock landed a module, a doc and a probe
+    # and wired none of them, exactly as circle_delta had hours earlier;
+    # test_hook_template.py's stray-suite check caught both, but only after
+    # the work had merged, and the second one refused the lab's pull-main
+    # rather than a commit. TWO IN A DAY MAKES IT A PATTERN, not an
+    # oversight: a new module's trigger is easy to forget precisely because
+    # nothing needs it until someone else's commit touches an unrelated
+    # file. The check is doing its job; what is missing is a habit.
+    NOTE="  pre-commit: the phase clock touched"
+    run coordinator/tests/test_phase_clock.py
+esac
+
+case "$FILES" in *coordinator/circle_delta.py*|*coordinator/tests/test_circle_delta.py*|*coordinator/docs/circle_delta.md*)
+    # v99, 2026-08-30. circle_delta landed with a probe and NO trigger, so
+    # test_hook_template.py's stray-suite check had been failing on master
+    # for every commit that touched coordinator/gitrepo.py — the arm above
+    # is what runs that check, so the omission blocked the one file able to
+    # fix it. A TRIGGER AND ITS INVOCATION LAND TOGETHER; v45's lesson is
+    # the same rule seen from the other side, where a triggered suite was
+    # never invoked and reported nothing while looking green.
+    NOTE="  pre-commit: the per-circle delta report touched"
+    run coordinator/tests/test_circle_delta.py
+esac
+
+case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*|*coordinator/tests/test_hook_gate.py*)
     NOTE="  pre-commit: the hook's own module touched"
     # v61. Until now editing PRE_COMMIT ran no shell check at commit time:
     # *coordinator/* fires check_lint, which compiles the PYTHON and cannot
@@ -1593,6 +1692,26 @@ case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstag
     run coordinator/tests/test_hook_template.py
     run coordinator/tests/test_gitrepo_unstage.py
     run coordinator/tests/test_remote_classify.py
+    # v92, 2026-08-28. The three above READ the template; this one RUNS it.
+    # Every assertion about run()/quiet() was a substring search until now,
+    # which is exactly why v81's swallowed failures survived a green
+    # battery — the line the search looked for was present and unreachable.
+    run coordinator/tests/test_hook_gate.py
+esac
+
+case "$FILES" in *coordinator/instruments.py*|*self/instruments.toml*|*coordinator/tests/test_instruments.py*)
+    NOTE="  pre-commit: the instruments register or its reader touched"
+    # v92, 2026-08-28. instruments.py and its suite arrived 2026-08-27 with
+    # NO trigger at all, so test_hook_template.py had been reporting
+    # `STRAY: test_instruments.py` ever since — into a battery that was
+    # swallowing the report. Two defects that hid each other: the gate could
+    # not refuse, and what it was trying to say was that a gate was missing.
+    # self/instruments.toml is in the trigger for the reason
+    # close_contract.toml and turn_contract.toml are in theirs — it is DATA a
+    # human edits, and BLOCK 3's <profile> can be loosened without touching a
+    # .py. self/ never ships, so an installed bundle has neither file and
+    # run() skips the suite.
+    run coordinator/tests/test_instruments.py
 esac
 
 case "$FILES" in *coordinator/check_circling.py*|*coordinator/circling_contract.toml*|*coordinator/tests/test_check_circling.py*|*docs/BNF.md*)
@@ -1737,9 +1856,31 @@ def _backup_push_hook(kind: str, mark: str, when: str, prelude: str = "") -> str
 #
 # Silent on success, loud on failure — a hook that prints every time trains
 # a reader to stop reading its output.
+#
+# THE TWO PUSHES ARE SEQUENCED, NEVER CHAINED. They were joined by `&&` until
+# 2026-08-30, so a single unpushable BRANCH withheld every TAG — and the tags
+# are the RECORD (circle/<OT>, dream/<OT>). It cost nothing that day only by
+# luck: the rejection came from a worktree branch that had been `git reset`
+# past a sandbox commit already on the disk, and no tag had been minted since
+# the last good push, so the disk stayed current by coincidence rather than by
+# design. The next live close would have minted a tag the disk never saw,
+# while the console said only what it had already said three times.
+#
+# `git push --all` IS NOT ATOMIC — every ref it can advance, it advances, and
+# it still exits non-zero for the one it cannot. So a rejection means "one ref
+# is stuck", never "the backup got nothing"; that is why master reached the
+# disk in the same run that printed the warning. Both pushes now run
+# unconditionally and the warning fires if EITHER failed.
 if git remote get-url backup >/dev/null 2>&1; then
-    if ! {{ git push backup --all --quiet && git push backup --tags --quiet; }} 2>/tmp/inner-circling-backup-push.log; then
-        echo "  {kind}: WARNING — backup push to 'backup' remote failed." >&2
+    {{
+        git push backup --all --quiet
+        _all_rc=$?
+        git push backup --tags --quiet
+        _tag_rc=$?
+    }} 2>/tmp/inner-circling-backup-push.log
+    if [ "$_all_rc" -ne 0 ] || [ "$_tag_rc" -ne 0 ]; then
+        echo "  {kind}: WARNING — backup push to 'backup' remote failed" \\
+             "(branches rc=$_all_rc, tags rc=$_tag_rc)." >&2
         echo "  {kind}: see /tmp/inner-circling-backup-push.log" >&2
     fi
 fi
@@ -1754,11 +1895,17 @@ exit 0
 # bump exists so the installer REPLACES the hand-written file rather than
 # finding a matching mark and leaving two different programs in agreement
 # about their name — v8's lesson, applied to the hook v8 did not cover.
-POST_COMMIT_MARK = "# inner-circling post-commit v2"
+# v3 — 2026-08-30: the two pushes are sequenced, not chained. Under v2 a
+# single unpushable branch short-circuited the tag push, so the RECORD tags
+# could be withheld by an unrelated worktree branch. Both marks move together
+# because both hooks are one generator; a bump on one alone would install a
+# fixed body beside an unfixed one and the divergence would be silent, which
+# is the exact property _backup_push_hook()'s docstring exists to protect.
+POST_COMMIT_MARK = "# inner-circling post-commit v3"
 POST_COMMIT_FAMILY = "# inner-circling post-commit v"
 POST_COMMIT = _backup_push_hook("post-commit", POST_COMMIT_MARK, "commit")
 
-POST_MERGE_MARK = "# inner-circling post-merge v2"
+POST_MERGE_MARK = "# inner-circling post-merge v3"
 POST_MERGE_FAMILY = "# inner-circling post-merge v"
 
 # v2, R-NEW 2026-08-24: THE LEDGER FOLD RUNS HERE.

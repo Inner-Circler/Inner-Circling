@@ -140,6 +140,201 @@ BAD_IN_TAG = ("[", "]", "\n", "\r")
 CONTEXT_OPEN = "# >>> context.answers"
 CONTEXT_CLOSE = "# <<< context.answers"
 DATA_TYPES = ("STRING", "NUMERIC_STRING")
+
+# HOW A FIELD IS MADE VALID — ruled 2026-08-28, "declare the gate kind". The
+# vocabulary and the checking live in initialization.py beside validate(),
+# which is what actually enforces them; this file gates the DECLARATION, so a
+# question cannot be added that says it is constrained and is not.
+#
+# `data_type` is the SHAPE (a string, a number). `gate` is the CONSTRAINT.
+# ONE_OF is a gate over a STRING rather than a type of its own, which is why
+# a question declares both — the two answer different questions and collapsing
+# them would make "a number from a fixed list" inexpressible.
+GATES = ("ONE_OF", "BOUNDED", "UNIQUE_IN", "CHECK_AT_USE")
+
+
+# A BOUND MAY BE A RULE RATHER THAN A NUMBER, and for a birth year it must
+# be: `current year - 15` is 2011 today and 2012 on the first of January. A
+# literal in a register would be quietly wrong within months — the shape of
+# every stale number this project has had to find twice.
+#
+# A CLOSED TABLE, NOT AN EXPRESSION LANGUAGE. Nothing is parsed and nothing is
+# evaluated: a bound is an integer or one of these names. `"year - 15"` read
+# out of a register and evaluated would be a small language inside a file a
+# person edits by hand, and there would be no way to gate it.
+#
+# IT LIVES HERE, IN THE LEAF, and initialization.py imports it — this was
+# briefly a mirrored copy with a note that a probe would keep the two equal,
+# which is the two-copies-of-one-fact defect this project records more than
+# any other. `initialization` imports `roster`, so the one direction that
+# closes no cycle is this one.
+BOUND_RULES = {"year_minus_15": lambda today: today.year - 15}
+
+
+def resolve_bound(spec, today=None):
+    """A declared bound as a number, or None when there is none."""
+    if isinstance(spec, bool):
+        return None
+    if isinstance(spec, int):
+        return spec
+    rule = BOUND_RULES.get(spec) if isinstance(spec, str) else None
+    if rule is None:
+        return None
+    import datetime
+    return rule(today or datetime.date.today())
+
+
+def check_value(q: dict, answer: str) -> "str | None":
+    """THE ONE VALUE CHECK, shared by every editor — None when `answer` is
+    acceptable for the declaration `q`, else the line to print before asking
+    again.
+
+    IT LIVES IN THE LEAF SO THERE IS ONLY ONE. Before 2026-08-28 there were
+    three: initialization.validate() for a part's context questions,
+    settings.coerce() for the settings register, and — added the same week and
+    the reason this consolidation happened at all — an inline `not in
+    knob.choices` in settings.write_tuning() for provider tuning, which
+    bypassed both. Three vocabularies for one idea is how they drift.
+
+    PURE, DELIBERATELY. Everything here is decidable from the declaration and
+    the answer alone. The checks that need live data — uniqueness against the
+    roster or the issue graph — stay in initialization.validate(), which calls
+    this first and then adds its own.
+
+    Empty is always valid: unset, take the default. That is R332's rule and it
+    holds for every gate."""
+    if answer == "":
+        return None
+    dt = q.get("data_type")
+
+    values = q.get("values")
+    if q.get("gate") == "ONE_OF" or values:
+        vals = [str(v) for v in (values or ())]
+        if answer.strip().lower() not in {v.lower() for v in vals}:
+            return f"  one of: {', '.join(vals)}"
+        return None
+
+    dm = q.get("data_max")
+    if dt == "NUMERIC_STRING":
+        lo = resolve_bound(q.get("minimum", 0))
+        lo = 0 if lo is None else lo
+        hi = resolve_bound(q.get("maximum"))
+        if hi is None:
+            hi = dm if isinstance(dm, int) and not isinstance(dm, bool) else None
+        if not is_whole_number(answer.strip()):
+            shape = "whole" if lo < 0 else "whole, positive"
+            return f"  a number is needed here — {shape}, numerals only"
+        n = int(answer.strip())
+        if n < lo:
+            return f"  too small — at least {lo}"
+        if hi is not None and n > hi:
+            return f"  too large — at most {hi}"
+        return None
+
+    if isinstance(dm, int) and not isinstance(dm, bool) and len(answer) > dm:
+        return f"  too long — {len(answer)} characters; at most {dm}"
+    if "[" in answer or "]" in answer:
+        return "  no square brackets — they mean something to the circle"
+    return None
+
+
+def is_whole_number(t: str) -> bool:
+    """Whole, optionally negative. NEGATIVES ARE NEW, 2026-08-28 (minimum
+    defaults to 0 but may go below it) — the old test was `answer.isdigit()`,
+    which refuses a leading minus outright, and the line it printed said
+    "positive"."""
+    body = t[1:] if t.startswith("-") else t
+    return bool(body) and body.isdigit() and body.isascii()
+
+
+def canonical(q: dict, answer: str) -> str:
+    """What to STORE for an accepted answer. A ONE_OF match is
+    case-insensitive, so the declared spelling is what lands in the file and
+    the register stays canonical however it was typed."""
+    vals = q.get("values")
+    if vals:
+        for v in vals:
+            if str(v).lower() == answer.strip().lower():
+                return str(v)
+    return answer
+
+
+def _mechanism_keys() -> tuple:
+    """Context answers the MECHANISM reads, from the module that reads them.
+    Late import: identity is a leaf this one is imported BY."""
+    try:
+        import identity as _ID
+        return tuple(_ID.consumed_keys())
+    except Exception:                                          # noqa: BLE001
+        return ()
+
+
+def _gate_faults(where: str, k: str, q: dict) -> list:
+    """What is wrong with one question's gate declaration, or [].
+
+    A GATE IS REQUIRED WHERE THE MECHANISM READS THE ANSWER, and nowhere else
+    — 2026-08-28. An answer that only reaches a model may be loose, because a
+    model reads around a typo and the looseness is the asset. An answer that
+    reaches NEITHER (the ten questions declaring no `render`: the two names,
+    and the gender and religion answers ruled recorded-but-never-spoken) has
+    nothing acting on it, so there is nothing to keep valid.
+
+    Which is why the requirement is keyed on identity.consumed_keys() rather
+    than on anything in the declaration: whether the mechanism reads an answer
+    is a fact about the READER, and only the reader can state it."""
+    out = []
+    if k in _mechanism_keys() and not q.get("gate"):
+        out.append(f"{where} {k}: the mechanism reads this answer "
+                   f"(identity.consumed_keys), so it must declare a `gate` — "
+                   f"one of {', '.join(GATES)}")
+    gate = q.get("gate")
+    if gate is not None and gate not in GATES:
+        out.append(f"{where} {k}: `gate` must be one of "
+                   f"{', '.join(GATES)}, got {gate!r}")
+        return out
+    if gate == "ONE_OF" or "values" in q:
+        vals = q.get("values")
+        if not isinstance(vals, list) or not vals:
+            out.append(f"{where} {k}: ONE_OF needs a non-empty `values` list")
+            return out
+        if not all(isinstance(v, str) and v.strip() for v in vals):
+            out.append(f"{where} {k}: every `values` entry must be a "
+                       f"non-empty string")
+        folded = [str(v).strip().lower() for v in vals]
+        if len(set(folded)) != len(folded):
+            # Case-folded, because matching is: two choices differing only in
+            # case would make one of them unreachable.
+            out.append(f"{where} {k}: `values` has duplicates, case-insensitively")
+        if "data_max" in q:
+            # A closed list IS the constraint; a length cap on top could only
+            # ever refuse a value already in the list, which reads as a bug.
+            out.append(f"{where} {k}: ONE_OF must not also declare `data_max`")
+        return out
+    # Everything else still needs its size bound — this is the rule that has
+    # always been here, now conditional so ONE_OF is expressible at all.
+    # WITHOUT THAT CONDITION THIS CRASHED: validate() read int(data_max)
+    # unconditionally, so a ONE_OF question declared without one took down the
+    # first-run dialog rather than failing a check.
+    dm = q.get("data_max")
+    if not isinstance(dm, int) or isinstance(dm, bool) or dm <= 0:
+        out.append(f"{where} {k}: `data_max` must be a positive integer, "
+                   f"got {dm!r}")
+    for bound in ("minimum", "maximum", "advisory_maximum"):
+        if bound not in q:
+            continue
+        v = q[bound]
+        ok = (isinstance(v, int) and not isinstance(v, bool)) or (
+            isinstance(v, str) and v in BOUND_RULES)
+        if not ok:
+            out.append(f"{where} {k}: `{bound}` must be a whole number or one "
+                       f"of {', '.join(sorted(BOUND_RULES))}, got {v!r}")
+    if "advisory_maximum" in q and not str(q.get("advisory_note", "")).strip():
+        out.append(f"{where} {k}: `advisory_maximum` needs an "
+                   f"`advisory_note` — a threshold that says nothing is just "
+                   f"a bound nobody enforces")
+    return out
+
+
 # `unique_in`, OPTIONAL per question — the operator, 2026-08-23: *"Duplicates
 # of any UNIQUE KEY member (e.g. part name "Soul", issue id "n0001") must be
 # detected and rejected, echo error and loop at the prompt."* A question may
@@ -180,10 +375,7 @@ def context_problems(dir_name: str, doc: dict) -> list[str]:
         if q.get("data_type") not in DATA_TYPES:
             out.append(f"{where} {k}: `data_type` must be one of "
                        f"{', '.join(DATA_TYPES)}, got {q.get('data_type')!r}")
-        dm = q.get("data_max")
-        if not isinstance(dm, int) or isinstance(dm, bool) or dm <= 0:
-            out.append(f"{where} {k}: `data_max` must be a positive integer, "
-                       f"got {dm!r}")
+        out.extend(_gate_faults(where, k, q))
         if "render" in q and not isinstance(q["render"], str):
             out.append(f"{where} {k}: `render` must be a string when present")
         if "unique_in" in q and q["unique_in"] not in UNIQUE_SPACES:

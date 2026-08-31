@@ -840,6 +840,18 @@ def _ch_cap() -> int:
         return 8000        # R191's ruled value; see circle_history.CAP
 
 
+def _tp_cap() -> int:
+    """topics.CAP, IMPORTED NOT COPIED — the last row in REGISTERS that still
+    held a literal, while the dict's own comments prescribe the opposite twice
+    (see _ch_cap below, whose row said 600 for weeks after R191 made it 8000,
+    and the gate then enforced the stale number against correct records).
+
+    Late import for the same reason _ch_cap is late: that module imports
+    self_schema."""
+    import topics as _TP
+    return _TP.CAP
+
+
 def _mem_cap() -> int:
     """remember.GATE_CHAR_CEILING, imported rather than duplicated — the rule
     _ch_cap() below already writes down, applied to the register that needed
@@ -895,7 +907,7 @@ REGISTERS: dict[str, dict] = {
     "self/topics.toml": {
         "table": "topic",
         "order": ("id", "circle", "date", "text", "state"),
-        "id_prefix": "TP-", "cap": 800, "per_run_max": None,
+        "id_prefix": "TP-", "cap": _tp_cap(), "per_run_max": None,
         "preamble": True,
         "state_values": ("open",), "state_prefixes": ("closed by Self ",),
         "new_state": "open",

@@ -256,6 +256,29 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "this circle's statements, numbered — what\n"
      "/issue-evidence-add cites by number. Named /statements\n"
      "until 2026-08-21 (D59)", "command"),
+    # THE SETTINGS EDITOR — 2026-08-28 (R379). COMMAND
+    # pane, deliberately: cmd> only means no Self> surface, so a settings
+    # change writes no transcript line and there is nothing for a part to
+    # see. That is guarantee 2 of three in coordinator/settings.py's
+    # docstring, and it holds by construction rather than by a filter.
+    #
+    # THESE ARE NOT IN PROPOSE_SUBSET_COMMANDS AND MUST NEVER BE. Ruled by
+    # the operator, 2026-08-28: *"I do NOT want such operations surfaced for
+    # parts."* coordinator/tests/test_settings.py asserts the exclusion
+    # against all three sets a proposal could travel through.
+    # NEITHER ROW ALLUDES TO ANY FURTHER VIEW — 2026-08-29, the operator:
+    # the earlier "dev adds the rest" tail was a leak of a surface he keeps
+    # deliberately unannounced.
+    ("/settings-list",
+     "what this installation has changed, and what it would\n"
+     "run on otherwise", "command"),
+    ("/settings-update <name> [<value>]",
+     "change one setting — give the new value on the line,\n"
+     "or answer the question with the current value offered.\n"
+     "A change that would disturb a circle already running\n"
+     "waits for the next one to open", "command"),
+    ("/settings-clear <name>",
+     "put one setting back to what the code decides", "command"),
     ("/help",
      "this list", "command"),
     ("/close",
@@ -272,9 +295,17 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # transcript kept, /issue rulings discarded, mid-circle writes not
     # undone — is what /abort's own confirmation prints before the second
     # /abort is asked for.
+    #
+    # CIRCLE-PANE SINCE 2026-08-31 (R414): the operator
+    # separated the APP's lifecycle from the CIRCLE's — quit ends the
+    # window and belongs to cmd>; /close ends the circle and belongs to
+    # the room — and /abort ends the circle, so it moved beside /close.
+    # The gloss's first word was "quit" (R347's verbatim); that word now
+    # names the other lifecycle, so it is the one word of his that
+    # changed here, on his ruling.
     ("/abort",
-     "quit — shows what stays and what's discarded first;\n"
-     "a second /abort confirms.", "command"),
+     "end the circle without a close — shows what stays and\n"
+     "what's discarded first; a second /abort confirms.", "circle"),
 )
 
 # DERIVED from COMMANDS — the two can no longer drift apart.
@@ -315,7 +346,10 @@ PANE_OF: dict[str, str] = {c.split(" ", 1)[0]: p for c, _, p in COMMANDS
 # in this tuple and already ran ahead of the same gate. The two verbs
 # reported the same text in different units over different spans and
 # disagreed with each other in public; one report cannot.
-DEV_MIN_CMDS = ("/help", "/abort", "/status")
+#
+# /abort dropped 2026-08-31 for /close's reason: reclassified "circle"
+# (R414), so it no longer reaches the command pane at all.
+DEV_MIN_CMDS = ("/help", "/status")
 
 # The always-available, no-circle-needed verb surface a COMMAND-class
 # propose may name — deliberately NARROWER than every real command-pane
@@ -390,7 +424,18 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
     "/part-context-list", "/part-context-clear",     # the same data, same owner
     "/part-add", "/part-list",               # the user's own growth path (stage 5;
                                              # Claude's reading of R288's line)
-    "/help", "/status", "/abort",
+    # THE SETTINGS VERBS RIDE THE USER TABLE, and the FIELDS are what dev
+    # gates — 2026-08-28. Putting them in DEV_SUBSET_COMMANDS instead would
+    # have hidden the verb outright with dev off, and the operator asked for
+    # the opposite: a chosen few settings visible to an ordinary person, "such
+    # as the LLM provider/model". So the verb is always there and
+    # settings.visible(dev) decides what it shows — R266's "dev adds, never
+    # takes away", one level down from the verb to the field.
+    "/settings-list", "/settings-update", "/settings-clear",
+    # /abort LEFT this table 2026-08-31 with its reclassification to the
+    # circle pane (R414) — like /close, /round and /pass it
+    # is no command-pane verb, and these tables are the command pane's.
+    "/help", "/status",
 )
 
 DEV_SUBSET_COMMANDS: tuple[str, ...] = (
@@ -507,6 +552,73 @@ def _disjoint() -> None:
 
 
 _disjoint()
+
+def pane_verb(text: str) -> str | None:
+    """The command-pane verb this circle-dialog line stands alone as, or
+    None. D55(2), 2026-08-20, verbatim: *"no command pane verb standing
+    alone in any circle dialog text may EVER be recognised - standalones
+    MUST be ignored no-ops."*
+
+    HOISTED HERE 2026-08-30 from ui/circling.py's AppState._pane_verb — the
+    Ticker flavor's bridge feeds the engine's circle lane directly, below
+    the TUI's pane layer, so the ruling was enforced for one flavor and
+    bypassed by the other: with dev on, `/practice-add ...` typed into the
+    window's room wrote a practice, the exact regression D55(2) closed.
+    One classifier, both flavors; circling.py delegates here.
+
+    STANDING ALONE is the whole test: a verb INSIDE an annotation is a
+    different thing entirely (it stages for vetting, which is the one way a
+    command may be named from the room), and ordinary speech that merely
+    mentions one is speech. So this looks at the FIRST WORD of the line and
+    nothing else. No leading slash, no verb: in the room everything typed
+    is SPEECH unless marked, and a bare word like "close" is a word.
+
+    BARE /help IS THE ROOM'S OWN (R287): PANE_OF classes /help as a
+    command-pane verb, but bare `/help` passes to the loop, which answers
+    with the room set alone; `/help <anything>` is the command pane's.
+    /dev IS cmd>-ONLY (R286) and no PANE_OF key (R199): refused by name.
+    /quit IS THE WINDOW'S OWN, cmd>-ONLY SINCE 2026-08-31
+    (R414) and no PANE_OF key either — a pane-local verb of
+    both flavors' UI layer, so it too is refused by name. A caller should
+    word its notice for it separately: "stage it as an annotation" is
+    advice for a command, and quit is not one."""
+    cls = verb_class(text)
+    if cls in ("command", "window"):
+        return normalise_head(text.strip().split(" ", 1)[0])
+    return None
+
+
+def verb_class(text: str) -> str | None:
+    """What lifecycle the FIRST WORD of a typed line belongs to, if it is a
+    verb standing alone — or None, which means the line is text: speech in
+    a running room, a journal entry in an idle one.
+
+        "circle"     /close, /abort, /round, /pass — PANE_OF's circle class:
+                     the CIRCLE's lifecycle, the room's own while one runs
+        "command"    a PANE_OF command-class verb, or /dev, or `/help <arg>`
+        "window"     /quit — the APP's lifecycle, cmd> only
+        None         not a verb (no slash, an unknown word, or bare /help,
+                     which is the room's own)
+
+    R414, 2026-08-31 — the operator: *"there are two
+    lifecycles to be managed: the app and the circle."* ONE classifier for
+    every input surface in both flavors: pane_verb() above is this filtered
+    to what a running room refuses, and the Ticker bridge asks it directly
+    for the idle band and the closing band, where a verb typed in the wrong
+    box becomes a NOTICE rather than a journal entry — his journal carried
+    `/close`, `/circle`, `quit` and `/quit` as fossils before this."""
+    first = text.strip().split(" ", 1)[0]
+    if not first.startswith("/"):
+        return None
+    head = normalise_head(first)
+    if head == "/help":
+        return None if text.strip() == "/help" else "command"
+    if head == "/dev":
+        return "command"
+    if head == "/quit":
+        return "window"
+    return PANE_OF.get(head)
+
 
 def normalise_head(word: str) -> str:
     """A typed verb, normalised to the one spelling the tables hold.

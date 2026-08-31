@@ -100,6 +100,102 @@ def reset_statements_shown() -> None:
 
 
 # ------------------------------------------------------------------ validation
+# THE GATE KINDS — ruled 2026-08-28. A field the MECHANISM acts on must say
+# HOW it is made valid; a field only a model reads need not, because a model
+# reads around a typo and the looseness is part of the point. Where a field is
+# both, the mechanism's rule governs.
+#
+#   ONE_OF        a closed list, checked at entry        `values`
+#   BOUNDED       a number in a range, at entry          `minimum` / `maximum`
+#   UNIQUE_IN     refused against a LIVE set             `unique_in`
+#   CHECK_AT_USE  no local set exists — the first real use IS the check, and
+#                 it must fail loudly and name the value
+#
+# THE FOURTH IS AN IMPERATIVE, AND THE OTHER THREE ARE NOT — the operator,
+# 2026-08-28, naming it. The first three say what the value must BE; this one
+# says WHEN to look, so it reads as an instruction to the checker rather than
+# a description of the value.
+#
+# IT WAS `AT_USE` FOR A DAY AND THE NAME FAILED ON FIRST CONTACT. Read beside
+# the ordinary English "IN_USE", it looks like a STATE — present, not yet
+# consumed — which is a different concept entirely from the timing it labels.
+# A name whose plain reading is not the thing it names is a name to change
+# while changing it is cheap.
+#
+# CHECK_AT_USE EXISTS TO BE UNCOMFORTABLE. The model id is the case: what is
+# valid is whatever that account can reach, which changes without this code
+# changing, so a closed list here would refuse a model that works. Declaring
+# it makes "we cannot check this here" look different from "nobody checked",
+# which is the whole reason to write it down.
+#
+# AND IT PUTS THE JUDGEMENT WITH THE CONSUMER, which is where it belongs —
+# the operator, 2026-08-28: *"when to look = 'at the user's gate' places
+# reasonability where it ought to be, with the consumer. Unreasonability is
+# conveyed to the command pane."*
+#
+# So CHECK_AT_USE carries TWO obligations, not one, and the second is the
+# half that is easy to skip:
+#
+#   THE CONSUMER JUDGES.  Only the thing that uses the value can say whether
+#                         it is reasonable. Nothing upstream may pretend to.
+#   AND SAYS SO, IN THE   A failure reaches the COMMAND PANE as a sentence a
+#   COMMAND PANE.         person can act on, naming the value that was
+#                         refused — never a traceback, never a silent
+#                         fallback to something nobody chose.
+#
+# The model honours both today: llm_client.preflight_api() makes one real
+# call before anything at all is written, and circle.py emits the provider's
+# own explanation to "command" and returns 2 — "Nothing was written — no
+# transcript, no working-set entry." A CHECK_AT_USE field whose failure
+# reached only a log would satisfy the first obligation and fail the one that
+# matters to the person sitting there.
+# IMPORTED, NOT COPIED. Declared in roster.py, which gates the DECLARATION;
+# this module enforces it. A tuple written out in both would be one fact in
+# two files — and it was, for a few hours on 2026-08-28, which is exactly how
+# long it takes.
+GATES = R.GATES
+
+# THE BOUND RULES LIVE IN roster.py, NOT HERE. They were briefly declared in
+# both — this module for resolving them, that one for gating a declaration
+# that names one — with a note that a probe would keep the two equal. That is
+# the two-copies-of-one-fact defect this project records more than any other,
+# and the fix is one home rather than a probe over two. roster is the leaf
+# this module already imports, so that direction closes no cycle.
+resolve_bound = R.resolve_bound
+BOUND_RULES = R.BOUND_RULES
+
+
+def advice(question: dict, answer: str, today=None) -> "str | None":
+    """A note to SHOW rather than a refusal — or None. Ruled 2026-08-28:
+    someone reporting an age under fifteen is told, gracefully, that circles
+    with other people would serve them better, AND IS NOT BLOCKED.
+
+    A LIMIT THAT CAN ONLY BE PASSED BY LYING PROTECTS NOBODY. Refusing here
+    would teach a fourteen-year-old to enter a false year and then proceed on
+    it — a corrupted record AND the suggestion unheeded. So the advisory bound
+    accepts the true answer, says the true thing once, and lets them decide.
+
+    Kept clear of the crisis line in process_core.md on purpose: those are
+    different things, and being fourteen is not a crisis."""
+    if answer == "" or question.get("data_type") != "NUMERIC_STRING":
+        return None
+    t = answer.strip()
+    if not _is_int(t):
+        return None
+    hi = resolve_bound(question.get("advisory_maximum"), today)
+    if hi is None or int(t) <= hi:
+        return None
+    return question.get("advisory_note") or ""
+
+
+def _is_int(t: str) -> bool:
+    """Whole number, optionally negative. NEGATIVES ARE NEW, 2026-08-28 — the
+    old test was `answer.isdigit()`, which refuses a leading minus outright,
+    and the message it printed said "positive"."""
+    body = t[1:] if t.startswith("-") else t
+    return bool(body) and body.isdigit() and body.isascii()
+
+
 def validate(question: dict, answer: str, *, part: str = "") -> str | None:
     """None when `answer` is acceptable for `question`, else one line saying
     what was wrong — the line the dialog prints before asking again.
@@ -115,19 +211,15 @@ def validate(question: dict, answer: str, *, part: str = "") -> str | None:
     of Claude's, named in docs/Initialization.md §3.6: no square bracket in
     a STRING (the annotation grammar — a part quoting its own BLOCK 3 back
     into the room would stage a bracket nobody wrote)."""
+    # THE PURE CHECKS ARE roster.check_value's — one validator, shared with
+    # the settings register and with provider tuning. What stays here is the
+    # part that needs LIVE data: uniqueness against the roster or the issue
+    # graph, which a leaf module has no business reading.
+    why = R.check_value(question, answer)
+    if why is not None:
+        return why
     if answer == "":
         return None
-    dt, dm = question["data_type"], int(question["data_max"])
-    if dt == "NUMERIC_STRING":
-        if not answer.isdigit() or not answer.isascii():
-            return "  a number is needed here — whole, positive, numerals only"
-        if int(answer) > dm:
-            return f"  too large — at most {dm}"
-    else:
-        if len(answer) > dm:
-            return f"  too long — {len(answer)} characters; at most {dm}"
-        if "[" in answer or "]" in answer:
-            return "  no square brackets — they mean something to the circle"
     space = question.get("unique_in")
     if space and answer.strip().lower() in {v.lower() for v in unique_values(space)}:
         return (f"  {answer.strip()!r} is already "
@@ -217,6 +309,17 @@ def part_context_dialog(part: str, *, prefill: bool = False,
                 raw = ""
             why = validate(q, raw, part=part)
             if why is None:
+                # ACCEPTED, AND THE THRESHOLD MAY STILL SPEAK — ruled
+                # 2026-08-28. An advisory bound does not refuse; it says the
+                # true thing once and the person decides. Shown AFTER the
+                # answer is accepted, so it reads as a suggestion rather than
+                # an error, which is the whole difference.
+                note = advice(q, raw)
+                if note:
+                    seam.emit("command", "")
+                    for _ln in note.splitlines():
+                        seam.emit("command", "  " + _ln)
+                    seam.emit("command", "")
                 break
             seam.emit("command", why)
         new[q["key"]] = raw
@@ -279,6 +382,17 @@ def _ask(qs: list[dict], *, seeds: "dict[str, str] | None" = None,
                 raw = ""
             why = validate(q, raw, part=part)
             if why is None:
+                # ACCEPTED, AND THE THRESHOLD MAY STILL SPEAK — ruled
+                # 2026-08-28. An advisory bound does not refuse; it says the
+                # true thing once and the person decides. Shown AFTER the
+                # answer is accepted, so it reads as a suggestion rather than
+                # an error, which is the whole difference.
+                note = advice(q, raw)
+                if note:
+                    seam.emit("command", "")
+                    for _ln in note.splitlines():
+                        seam.emit("command", "  " + _ln)
+                    seam.emit("command", "")
                 break
             seam.emit("command", why)
         answers[q["key"]] = raw

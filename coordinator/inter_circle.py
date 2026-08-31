@@ -91,11 +91,22 @@ import ifs_model as M                                          # noqa: E402  (B5
 import backfill as BF                                          # noqa: E402  (B54)
 import command_surface as CS                                   # noqa: E402  dev_mode,
                                                                # attribute access only
+import llm_client as LC                                        # noqa: E402  MODEL's owner
+import settings as SET                                         # noqa: E402
+import phase_clock as PC                                       # noqa: E402  wall-clock
+                                                               # per phase (2026-08-30)
+import prompt_capture as PCAP                                  # noqa: E402  the circle's
+                                                               # capture (R412/R413)
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-MODEL = "claude-sonnet-5"       # circle.MODEL — the parts' own model
+# IMPORTED, NOT COPIED (2026-08-28, R379). This said
+# `"claude-sonnet-5"  # circle.MODEL — the parts' own model`: a comment naming
+# the owner, beside a literal that did not read from it. Dreaming and synthesis
+# must run on the same model the parts spoke on, and that is now true by
+# construction rather than by two files agreeing.
+MODEL = LC.MODEL
 # RAISED 2026-08-21 (the operator: "raise the caps as you suggest"), after the
 # lab circle 2026-08-21_1139: child and mourner stopped at max_tokens=4,000 with
 # only ~4.5k chars of visible reply. A probe the same day showed why —
@@ -104,13 +115,17 @@ MODEL = "claude-sonnet-5"       # circle.MODEL — the parts' own model
 # thinking tokens COUNT AGAINST max_tokens. The visible document is the same
 # size it always was; the budget it shares is not. 4,000 was "proven
 # sufficient, 7/7 parts" only while the thinking stayed small.
-DREAM_MAX_TOKENS = 8000         # was 4000 — see above
-SYNTH_MAX_TOKENS = 12000        # was 8000: one circle-wide call across five
+DREAM_MAX_TOKENS = SET.value("dream_max_tokens", 8000)    # was 4000 — see above
+SYNTH_MAX_TOKENS = SET.value("synth_max_tokens", 12000)   # was 8000: one
+                                # circle-wide call across five
                                 # sections — HISTORY alone is capped at CH.CAP
                                 # (8000 chars) — needs more headroom than a
                                 # single part's dreaming pass, and now also
                                 # the room for the thinking above.
-DIAG_MAX_TOKENS = 4000          # the diagnostic call is a few paragraphs
+# IMPORTED, NOT COPIED (2026-08-28) — the diagnostic call is a few
+# paragraphs, and coalesce's grouping pass a few lines, but the number is set
+# by thinking headroom in both. See llm_client.AUX_MAX_TOKENS.
+DIAG_MAX_TOKENS = LC.AUX_MAX_TOKENS
 
 # ---------------------------------------------------------------- prompts
 # VERSIONED CODE CONSTANTS (docs/INTER_CIRCLE_DESIGN.md) — the chain and
@@ -474,23 +489,27 @@ def _headings(text: str) -> list[str]:
 
 
 # ------------------------------------------------------------------- model
-def _client():
-    import os
-    from anthropic import Anthropic
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(ROOT / ".env")
-        except ImportError:
-            pass
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        raise RuntimeError("set ANTHROPIC_API_KEY (env var or project .env)")
-    return Anthropic()
+# _client() MOVED to llm_client.build_client(), 2026-08-28 (stage 1 of the
+# provider socket). It was one of five copies; two of the other four resolved
+# the key by hand-parsing .env for a line starting ANTHROPIC_API_KEY, which
+# reads a key the shell has already overridden. One builder now, and its
+# refusal message is this one's, word for word.
 
 
-def _call(system: str, user: str, max_tokens: int) -> tuple[str, object, str]:
+def _call(system: str, user: str, max_tokens: int, *,
+          kind: str = "dreaming", record: bool = False,
+          part: "str | None" = None) -> tuple[str, object, str]:
     """One call, its own client — a client per worker costs nothing and
     removes every thread-safety question (R170: the seven run in parallel).
+
+    `kind` NAMES THE CALL — dreaming, synthesis, backfill, diagnosis — for
+    the retry ladder's wait line and, since R412 (2026-08-30), the capture:
+    until then every call this module made was labelled "dreaming", the
+    synthesis and the diagnostic included. `record=True` writes the request
+    to the circle's capture as it is sent, when a turn log is open (a live
+    /close, or the one process_circle() opens for a hand re-run); `part` is
+    who it is for, None for the circle-wide synthesis. The diagnostic is
+    never recorded — it writes nothing, and the ruling left it out.
 
     Returns (text, usage, stop_reason). stop_reason lives on the Message
     response itself, NOT on usage — Usage carries only token counts. An
@@ -498,12 +517,18 @@ def _call(system: str, user: str, max_tokens: int) -> tuple[str, object, str]:
     `usage._stop_reason`, an attribute that does not exist on either object,
     and so silently reported no stop_reason on every failure ever seen,
     including 2026-08-09_1520 — the one case that most needed it, to tell a
-    genuine max_tokens truncation apart from the model stopping on its own."""
-    resp = _client().messages.create(
-        model=MODEL, max_tokens=max_tokens, system=system,
-        messages=[{"role": "user", "content": user}])
-    return ("".join(b.text for b in resp.content if b.type == "text").strip(),
-            resp.usage, resp.stop_reason)
+    genuine max_tokens truncation apart from the model stopping on its own.
+
+    THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1 of the provider socket).
+    This built its own client and called the SDK directly, so it had no
+    retry ladder: a transient 529 in one of seven parallel dreaming calls
+    failed the whole run, and staging is all-or-nothing, so the cost was a
+    re-run rather than the 15-second wait the ladder would have taken. It
+    also metered nothing. Both arrive with the routing; the per-call client
+    R170 wanted is unchanged — call_once builds one per call unless handed
+    one."""
+    return LC.call_once(system, user, max_tokens, kind=kind,
+                        record=record, part=part)
 
 
 # ---------------------------------------------------------------- dreaming
@@ -536,7 +561,8 @@ def dream_one(part: str, ot: str, transcript: str) -> dict:
                     f"{prior['text']}")
     system = DREAMING_PROMPT_V1.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
     user_text = "\n\n".join(user)
-    text, usage, stop_reason = _call(system, user_text, DREAM_MAX_TOKENS)
+    text, usage, stop_reason = _call(system, user_text, DREAM_MAX_TOKENS,
+                                     kind="dreaming", record=True, part=part)
     chars = {"system": system, "user": user_text, "reply": text,
              "blocks": user}
     sections, err = parse_sections(
@@ -633,7 +659,10 @@ def synthesise(ot: str, transcript: str, payloads: list[dict],
         ot=ot, n=len(R.DIR_NAMES), roster=", ".join(R.TAGS),
         history_cap=CH.TARGET)
     body = "\n\n".join(user)
-    text, usage, stop_reason = _call(system, body, SYNTH_MAX_TOKENS)
+    # RECORDED WITH NO PART (R412): the synthesis speaks for the circle, and
+    # its turn file is named by kind — Per_turn_synthesis_<time>_<seq>.json.
+    text, usage, stop_reason = _call(system, body, SYNTH_MAX_TOKENS,
+                                     kind="synthesis", record=True)
     _report_chars(say, "synthesis", {"system": system, "user": body,
                                      "reply": text, "blocks": user})
     sections, err = parse_sections(text, SYN_HEADERS)
@@ -654,7 +683,8 @@ def synthesise(ot: str, transcript: str, payloads: list[dict],
             insisted_system = system + _INSIST.format(
                 got=n_hist, cap=CH.CAP, target=CH.TARGET)
             text2, usage2, stop_reason2 = _call(insisted_system, body,
-                                                SYNTH_MAX_TOKENS)
+                                                SYNTH_MAX_TOKENS,
+                                                kind="synthesis", record=True)
             _report_chars(say, "synthesis re-ask",
                          {"system": insisted_system, "user": body,
                           "reply": text2, "blocks": user})
@@ -837,7 +867,13 @@ def backfill_step(ot: str, say) -> int:
         say(f"    {part}: spoke {n}x — {why}")
         shared, _ = C.shared_block(part, briefing, False)
         system = C.system_blocks(part, core, shared)
-        text, err = BF.reconstruct(part, ot, R.TAG_BY_DIR[part], system, _call)
+        # a real part prompt, so it records under the PART shape — kind
+        # backfill, R277's own rule ("every request that carries a part's
+        # system prompt"), which the wiring never honoured until R412
+        text, err = BF.reconstruct(
+            part, ot, R.TAG_BY_DIR[part], system,
+            lambda s, u, m, _p=part: _call(s, u, m, kind="backfill",
+                                           record=True, part=_p))
         if err:
             failed.append(f"{part}: {err}")
             say(f"    {part}: RECONSTRUCTION FAILED — {err}")
@@ -919,10 +955,88 @@ def write_dream_marker(ot: str, *, committed: bool, tag: str | None) -> None:
                                 encoding="utf-8", newline="\n")
 
 
+def _capture_paths(ot: str, dirty: "list[str] | None" = None
+                   ) -> tuple[list[pathlib.Path], bool]:
+    """Every file in the circle's capture directory, and whether any of them
+    is new or changed since the last commit. R412/R413, 2026-08-31.
+
+    WHY THE DREAM COMMIT CARRIES THEM: commit_circle() runs BEFORE this
+    module and takes the capture as it stood; every processing turn recorded
+    since — dreaming, synthesis, the refresh, the coalesce pass at close —
+    and the manifest they rewrote land after it, and nothing else commits
+    them. Called AFTER the refresh, so its turns are in. A path already
+    committed costs nothing; a capture that was never opened (a re-run of a
+    circle with none) contributes nothing.
+
+    `dirty` is git's own porcelain (gitrepo.dirty()) so "changed" means what
+    the commit will see; injectable so a probe can hand it a line. A tree
+    with no git, or a capture root outside the repository (a suite's temp
+    redirect), answers (files, False) and the tier-1 branch reports as it
+    always has."""
+    d = PCAP.PROMPTS / ot
+    if not d.is_dir():
+        return [], False
+    files = sorted(p for p in d.iterdir() if p.is_file())
+    try:
+        rel = d.resolve().relative_to(ROOT.resolve()).as_posix() + "/"
+    except ValueError:
+        return files, False
+    if dirty is None:
+        try:
+            import gitrepo as G
+            dirty = G.dirty()
+        except Exception:                                      # noqa: BLE001
+            dirty = []
+    moved = any(line[3:].strip().strip('"').startswith(rel) for line in dirty)
+    return files, moved
+
+
+def _open_capture_log(ot: str, live: bool, say) -> bool:
+    """For the HAND RE-RUN (R168's `--ot <OT> --live`): open the circle's own
+    capture directory so this run's processing calls record there, exactly
+    as they do under circle.py's /close, whose turn log is already open when
+    it calls process_circle(). Returns True only when THIS call opened it —
+    the caller closes what it opened and nothing else. R412/R413, 2026-08-31.
+
+    LIVE ONLY: a rehearsal and a dry run record nothing (R360). A circle with
+    no capture (closed before R277) has nowhere to record and is skipped; a
+    capture that cannot be read is skipped too and said so — a capture
+    failure must not cost a run, the rule the transport already keeps."""
+    if not live or PCAP.turn_log_dir() is not None:
+        return False
+    d = PCAP.PROMPTS / ot
+    if not (d / PCAP.MANIFEST).is_file():
+        return False
+    try:
+        PCAP.open_turn_log(d, ot)
+    except Exception as e:                                     # noqa: BLE001
+        say(f"  capture: {_shown(d)}/ could not be opened "
+            f"({type(e).__name__}: {e}) — this run's requests are NOT "
+            f"recorded")
+        return False
+    say(f"  capture: this run's requests record into {_shown(d)}/")
+    return True
+
+
 def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
                    say=print) -> int:
     """Phase 2, whole. Returns 0 on success; non-zero means the circle's
-    own record is UNTOUCHED and work/logs/dream_error_<OT>.json says why."""
+    own record is UNTOUCHED and work/logs/dream_error_<OT>.json says why.
+
+    Opens the circle's capture for a hand re-run and closes it after — see
+    _open_capture_log(); under a live /close the log is circle.py's, already
+    open, and is left exactly as found."""
+    opened = _open_capture_log(ot, live, say)
+    try:
+        return _process_circle(ot, live, confirmed, say)
+    finally:
+        if opened:
+            PCAP.open_turn_log(None)
+
+
+def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
+                    say) -> int:
+    """process_circle()'s body — everything but the capture log's lifetime."""
     confirmed = confirmed or []
     if already_processed(ot):
         say(f"  circle {ot} is already processed (git tag dream/{ot}) — "
@@ -936,8 +1050,14 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
         say(f"  no transcript at {tpath.relative_to(ROOT)} — is {ot!r} a "
             f"closed LIVE circle?")
         return 1
+    # THE HEARTBEAT, for the hand re-run path: under a live /close circle.py
+    # is already beating and this returns False; run from the CLI it starts
+    # one, so the every-10-seconds rule (2026-08-30) holds either way in.
+    PC.PHASES.start_heartbeat(SET.value("close_heartbeat_seconds", 10),
+                              notify=say)
     if live:
-        rc0 = backfill_step(ot, say)
+        with PC.PHASES.span("inter.backfill"):
+            rc0 = backfill_step(ot, say)
         if rc0:
             return rc0
     parts = R.DIR_NAMES
@@ -947,7 +1067,8 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
     try:
         for p in parts:
             say(f"  {p}: started")
-        with concurrent.futures.ThreadPoolExecutor(len(parts)) as ex:
+        with PC.PHASES.span("inter.dreaming"), \
+                concurrent.futures.ThreadPoolExecutor(len(parts)) as ex:
             futs = {ex.submit(dream_one, p, ot, transcript): p for p in parts}
             for f in concurrent.futures.as_completed(futs):
                 pay = f.result()
@@ -991,7 +1112,8 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
                             for p in payloads if p.get("raw")))
 
         say("\nsynthesis — one circle-wide call:")
-        syn = synthesise(ot, transcript, payloads, confirmed, say)
+        with PC.PHASES.span("inter.synthesis"):
+            syn = synthesise(ot, transcript, payloads, confirmed, say)
         if syn.get("error"):
             raise _Unparseable(f"SYNTHESIS: {syn['error']}", syn.get("raw"),
                                syn.get("stop_reason"), syn.get("output_tokens"))
@@ -1073,7 +1195,8 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
             say("  first synthesis of this tree — self.md's shrink "
                 "tolerance is waived this once: the seed is not yet a "
                 "record (R348)")
-        findings = tx.validate(first_synthesis=first)
+        with PC.PHASES.span("inter.gate"):
+            findings = tx.validate(first_synthesis=first)
         fails = [f for f in findings if f.level == "FAIL"]
         for f in fails:
             say(f"  GATE FAIL  {f.path}: {f.message}")
@@ -1085,8 +1208,11 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
             say("\nREHEARSAL — gate green, nothing committed. Staging kept "
                 "for inspection; rerun with --live to commit.")
             return 0
-        if staged and not tx.commit(lambda lvl, msg: say(f"  {lvl}  {msg}")):
-            raise RuntimeError("Transaction.commit refused — see above")
+        if staged:
+            with PC.PHASES.span("inter.tx_commit"):
+                tx_ok = tx.commit(lambda lvl, msg: say(f"  {lvl}  {msg}"))
+            if not tx_ok:
+                raise RuntimeError("Transaction.commit refused — see above")
 
         # PAST tx.commit(), THE LIVE TREE IS ALREADY UPDATED (whenever
         # anything was staged). Anything that RAISES from here on —
@@ -1105,7 +1231,8 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
         # handler stays correct there and the raise passes through.
         try:
             say("\nmid_term refresh — stale parts only (R186/H3):")
-            mt_fails = MT.refresh(say=say)
+            with PC.PHASES.span("inter.mid_term_refresh"):
+                mt_fails = MT.refresh(say=say)
             if mt_fails:
                 say(f"  {mt_fails} SUSPECT derivation(s) NOT written — rerun "
                     f"mid_term --refresh by hand; everything else committed")
@@ -1113,6 +1240,16 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
             import gitrepo as G
             paths = [ROOT / rel for rel in staged]
             paths += [MT.path(p) for p in parts if MT.path(p).is_file()]
+            # THE CIRCLE'S CAPTURE RIDES THIS COMMIT (R412/R413): the turns
+            # recorded since commit_circle() took the directory, and the
+            # manifest they rewrote. AND IT COMMITS EVEN WHEN NOTHING WAS
+            # STAGED — an empty staging is right for mid_term.md, a
+            # re-derivable cache, and wrong for the capture, which is the
+            # record: the calls happened whether or not their output moved a
+            # register.
+            cap_paths, cap_moved = _capture_paths(ot)
+            paths += cap_paths
+            to_commit = bool(staged) or cap_moved
             committed, tag = False, None
             # NO GIT HISTORY IS A SUPPORTED TREE SINCE 2026-08-24, ruled by
             # the operator ("Tier 1"): a distributed bundle that was never
@@ -1125,13 +1262,13 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
             # refused, and telling a recipient their record is "REAL and
             # UNCOMMITTED" in a tree that commits nothing would be a
             # warning about the design working.
-            if staged and not git_history_here():
+            if to_commit and not git_history_here():
                 say("  no git history in this tree — the run's output is "
                     "written but not committed. "
                     f"work/logs/dream_{ot}.json records that this circle "
                     f"was processed; that file is what refuses a re-run "
                     f"here, in place of the dream/{ot} tag.")
-            elif staged and not G.identity_known():
+            elif to_commit and not G.identity_known():
                 # git is HERE but unconfigured — the fresh-install case,
                 # R349 (2026-08-25): the same
                 # skip as the tier above, never a refusal escalated to
@@ -1144,13 +1281,23 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
                     f"work/logs/dream_{ot}.json records that this circle "
                     f"was processed; that file is what refuses a re-run "
                     f"here, in place of the dream/{ot} tag.")
-            elif staged:
+            elif to_commit:
                 tag = G.tag_name("dream", ot)
-                committed = G.commit_paths(
-                    paths, f"dream/synthesis for circle {ot}",
-                    lambda lvl, msg: say(f"  {lvl}  {msg}"),
-                    tag=tag)
-                if not committed:
+                with PC.PHASES.span("inter.git_commit"):
+                    committed = G.commit_paths(
+                        paths, f"dream/synthesis for circle {ot}",
+                        lambda lvl, msg: say(f"  {lvl}  {msg}"),
+                        tag=tag)
+                if not committed and not staged:
+                    # only the capture moved and its commit was refused: no
+                    # register is at stake, so this is a warning, not the
+                    # escalation below — the files sit where a hand commit
+                    # finds them, and the marker below still refuses a re-run
+                    tag = None
+                    say(f"  the capture's new turn files under "
+                        f"work/prompts/{ot}/ are written but NOT committed — "
+                        f"see the 'fail' line above; commit them by hand.")
+                elif not committed:
                     raise _PostCommitFailed(
                         f"the live tree was already updated ({len(staged)} "
                         f"file(s), via Transaction.commit) before the git "
@@ -1169,6 +1316,13 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
             # all-or-nothing staging gives the tag, kept by writing this
             # only once everything else has succeeded.
             write_dream_marker(ot, committed=committed, tag=tag)
+            # One line of wall-clock per phase, here as well as in the spend
+            # report — the hand re-run path has no spend report to read.
+            rows = [r for r in PC.PHASES.snapshot()["phases"]
+                    if r["phase"].startswith("inter.")]
+            if rows:
+                say("\n  phase seconds — " + ", ".join(
+                    f"{r['phase'][6:]} {r['seconds']:.0f}" for r in rows))
             say(f"\nphase 2 complete for {ot}.")
             return 0
         except _PostCommitFailed:
@@ -1193,6 +1347,9 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
         # would falsely claim "the live tree is untouched" and suggest a
         # re-run that would double-dream on top of the uncommitted content.
         report = {"ot": ot, "error": str(e),
+                 # the field circle.py's failure banner branches on — its
+                 # absence in a report means the old prose is the only signal
+                 "rerun_safe": False,
                  "note": "PARTIAL SUCCESS, NOT a clean failure: dreaming and "
                          "synthesis both completed and Transaction.commit "
                          "already wrote their output into the live tree — "
@@ -1223,6 +1380,7 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
                       for p in sorted(payloads, key=lambda x: x.get("part", ""))],
             "dream_max_tokens": DREAM_MAX_TOKENS,
             "synth_max_tokens": SYNTH_MAX_TOKENS,
+            "rerun_safe": True,
             "note": "all-or-nothing staging: the live tree is untouched; "
                     "the re-run below starts clean",
         }
@@ -1261,7 +1419,9 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
         say(f"\n!! phase 2 FAILED — report: {_shown(rp)}")
         try:
             diag_user = json.dumps(report, indent=2)
-            diag, _u, _sr = _call(DIAGNOSIS_PROMPT, diag_user, DIAG_MAX_TOKENS)
+            # NOT RECORDED, by ruling (R412): it writes nothing
+            diag, _u, _sr = _call(DIAGNOSIS_PROMPT, diag_user, DIAG_MAX_TOKENS,
+                                  kind="diagnosis")
             _report_chars(say, "diagnosis", {"system": DIAGNOSIS_PROMPT,
                                              "user": diag_user, "reply": diag})
             say(f"\ndiagnosis (one model call, diagnostic only):\n{diag}")

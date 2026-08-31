@@ -30,13 +30,45 @@ import roster as R                 # IDENTITY_TAILS — the per-part BLOCK 3 tai
 from paths import ROOT, PART_TAGS
 from transcript_store import withheld   # the recorded-but-never-in-the-room test
 from llm_client import CACHE_TTL   # cc()'s TTL — the transport owns it
+import llm_client as _LC           # PROVIDER_IMPL — cc()'s wire form is the
+                                   # provider's, stage 2 (R382)
 import ifs_model as IFS            # IDENTITY_END — the long_term.md boundary
+import settings as SET             # the length rule's two numbers
 
 HERE = pathlib.Path(__file__).resolve().parent
 
+# THE LENGTH RULE, ruled by the operator 2026-08-28, in his own sentence:
+# "aim for 60 words or fewer and never exceed 150; reformulate down to less
+# than 150 in all cases." process_core.md carries that sentence with these two
+# numbers as placeholders, and load_shared() puts them in.
+#
+# ONE SOURCE FOR BOTH PLACES THE NUMBER APPEARS, which is the actual fix. The
+# rulebook said "never exceed 100" while rounds.py's truncation retry told a
+# part to "speak in UNDER 150 words", and process.md said a stale 100 beside a
+# stale ceiling of 600 — three documents, three literals, no way for any of
+# them to notice the others. rounds.py imports LENGTH_MAX_WORDS from here now,
+# so the room's rule and the retry's cannot disagree again.
+#
+# NOTHING COUNTS WORDS. The rule is advisory and always has been; no code in
+# the statement path measures one. Measured 2026-08-28 across the 374 part
+# statements in the parseable corpus, all of which ran under the previous
+# "aim 120, never exceed 200": median 98 words — 0.82x the aim — with 2.1%
+# over the cap. An advisory rule demonstrably shapes these parts, which is
+# why the operator's ruling is that never enforcing it is fine.
+LENGTH_AIM_WORDS = SET.value("statement_aim_words", 60)
+LENGTH_MAX_WORDS = SET.value("statement_max_words", 150)
 
-def cc() -> dict:
-    return {"type": "ephemeral", "ttl": CACHE_TTL}
+
+def cc() -> "dict | None":
+    """The wire form of "this block is stable, cache it" — THE PROVIDER'S,
+    since stage 2 (R382). `{"type": "ephemeral", "ttl": ...}` is Anthropic's
+    spelling of a request this project makes in its own terms, and it was the
+    most vendor-specific thing left in prompt assembly.
+
+    A provider with no prompt cache returns None; the caller then sends no
+    marker at all and the Meter's cache columns read zero, which is correct
+    rather than broken."""
+    return _LC.PROVIDER_IMPL.cache_control(CACHE_TTL)
 
 
 # ------------------------------------------------------------------ identity (read-only)
@@ -563,8 +595,32 @@ def load_shared() -> str:
     Briefing: self/circle_briefing.md is GONE (2026-08-11) — circle_objectives
     is built directly by build_briefing(chosen), not read from a file here.
 
-    HERE, not ROOT: the rulebooks moved to coordinator/ on 2026-08-08."""
-    return read_ro(HERE / "process_core.md")
+    HERE, not ROOT: the rulebooks moved to coordinator/ on 2026-08-08.
+
+    THE LENGTH RULE'S TWO NUMBERS ARE SUBSTITUTED HERE, 2026-08-28. The rule
+    is the operator's own sentence; the numbers in it are settings, so a
+    person can change what the parts are asked for without editing a
+    rulebook. This is the ONE place process_core.md is read — six callers go
+    through it — so there is nowhere else for the substitution to be missed.
+
+    NOT A GENERATED FILE, and the distinction matters because this project
+    retired one. self/circle_briefing.md was written to disk by one process
+    and read back by another, so it could go stale between them; nothing is
+    written here, there is no second copy, and the source of truth is still
+    process_core.md plus the register. instruments.py already puts register
+    content into a block this way.
+
+    STILL BYTE-IDENTICAL FOR EVERY PART: both numbers are circle-wide, so
+    BLOCK 1 is the same bytes for all seven and the cached prefix is
+    unaffected. A change to either does move those bytes, which is why both
+    settings are next_circle — the fold happens before any prompt is warmed.
+
+    `.replace()`, not `.format()`: the document is prose that may legally
+    contain a brace, and a rulebook must not fail to load because someone
+    wrote one."""
+    return (read_ro(HERE / "process_core.md")
+            .replace("{LENGTH_AIM}", str(LENGTH_AIM_WORDS))
+            .replace("{LENGTH_MAX}", str(LENGTH_MAX_WORDS)))
 
 
 def shared_block(part: str, briefing: str):
@@ -591,11 +647,19 @@ def shared_block(part: str, briefing: str):
 
 
 # ------------------------------------------------------------------ transcript view
-def render_messages(part: str, transcript: list[dict], closing: str | None = None) -> list[dict]:
+def render_messages(part: str, transcript: list[dict], closing: str | None = None,
+                    *, recall: str | None = None) -> list[dict]:
     """Reconstruct THIS part's view from the single canonical transcript: its own
     lines become assistant turns, everyone else's become user turns. Consecutive
     same-role turns are merged so roles alternate (API requirement) and the block
-    count stays well inside the 20-block cache lookback window."""
+    count stays well inside the 20-block cache lookback window.
+
+    `recall` is the ONE private addition to a part's view (R402): the latest
+    <recall_result> answered for THIS part, appended to the tail — never a
+    prompt block (blocks are static per circle, capture-verified), never
+    another part's request, and absent from the /close short_term ask, which
+    passes no recall and is how "expires at /close" is enforced. It rides at
+    the very end, so the shared transcript prefix caches exactly as before."""
     msgs: list[dict] = []
     for e in transcript:
         # RECORDED, BUT NEVER IN THE ROOM — transcript_store.withheld().
@@ -623,6 +687,8 @@ def render_messages(part: str, transcript: list[dict], closing: str | None = Non
     if not msgs or msgs[0]["role"] == "assistant":
         msgs.insert(0, {"role": "user", "content": "(the circle opens)"})
     tail = closing or "(the circle comes to you — speak, or reply [pass])"
+    if recall:
+        tail = recall + "\n\n" + tail
     if msgs[-1]["role"] == "assistant":
         msgs.append({"role": "user", "content": tail})
     else:

@@ -55,7 +55,9 @@ from __future__ import annotations
 import argparse
 import atexit
 import datetime
-import os
+# `os` went with the client construction at stage 2 (R382) — its only readers
+# here were the ANTHROPIC_API_KEY check and the .env fallback, both of which
+# are the provider's business now.
 import pathlib
 import random
 import re
@@ -73,6 +75,8 @@ import check_integrity as CI       # the corruption gate, run before anything op
 from paths import ROOT, SANDBOX, PART_TAGS   # phase-1 step 0: one home
                                    # for path constants (2026-08-16)
 import seam                        # the I/O seams + failure ledger
+import settings as SET             # self/settings.toml — the override register
+import phase_clock as PC           # wall-clock per phase + the close heartbeat
                                    # (phase-1 step 1, 2026-08-16)
 from seam import FAILURES, fail    # aliases to the SAME list object and
                                    # the same never-rebound function
@@ -83,7 +87,7 @@ import command_surface as CS       # phase-2 stage 0 (2026-08-16): the
                                    # CS.dev_mode, never a from-import.
 from command_surface import KNOWN_CMDS
 from llm_client import (call, METER, prewarm, preflight_api,  # phase-2
-                        MODEL, KEY_MISSING_HELP,
+                        MODEL, KEY_MISSING_HELP, build_client,
                         key_source_note, explain_api_failure,  # stage 1:
                         RATE_CACHE_WRITE_1H,                   # the API
                         RATE_CACHE_READ, SHORT_TERM_SECTIONS)  # transport
@@ -182,7 +186,9 @@ def read_line(prompt: str = "", channel: str = "command",
     # accept the two positional arguments it always did, plus `**_`.
     # Passing it positionally would break every stub in the suites at
     # once, for an argument most of them have no opinion about.
-    return seam.read_line(prompt, channel, prefill=prefill)
+    # timed_read: every second at a prompt lands under the one
+    # waiting_on_self span, so no phase ever carries human time (2026-08-30).
+    return PC.timed_read(seam.read_line, prompt, channel, prefill=prefill)
 
 
 def read_line_no_annotation(prompt: str, where: str,
@@ -238,7 +244,15 @@ def read_line_no_annotation(prompt: str, where: str,
         # typist who followed the hint would have spoken it to the room as
         # prose and staged nothing. ASK_KEYWORDS is what ASK_RE is built
         # from, so the hint and the parser cannot disagree again.
-        forms = " and ".join(f"[{k}: ...]" for k in MK.ASK_KEYWORDS)
+        #
+        # SELF_KEYWORDS, NOT ASK_KEYWORDS, since 2026-08-30: `recall` joined
+        # the taught set on 2026-08-29 and this line began promising the
+        # operator that `[recall: ...]` was valid at the circle prompt. It
+        # never was by design and is refused there now, so the hint names
+        # what SELF may type. Still derived, never a literal — a keyword
+        # added to ASK_KEYWORDS reaches this line by itself unless
+        # PART_ONLY_KEYWORDS withholds it.
+        forms = " and ".join(f"[{k}: ...]" for k in MK.SELF_KEYWORDS)
         emit("command", f"     {forms} are valid only "
              f"at the {CONSOLE_NAME}> prompt, in an open circle.")
         emit("command", f"     Nothing was recorded. Type the {where} again.")
@@ -549,6 +563,28 @@ SHORT_TERM_PROMPT = (
     "dropped. Writing none is a real answer and costs you nothing."
 )
 
+# THE CLOSE BUDGET, named 2026-08-28 (R379). It was the bare
+# literal `5000` in collect_short_terms()'s retry loop, and a value with no name
+# is a value nothing can configure — a settings override is resolved BY NAME.
+#
+# 5000, not 2000 (R255): four substantive sections plus a remember of up to 1000
+# words does not fit in 2000, and the failure mode is not a short answer — it is
+# stop == "max_tokens", which that loop RETRIES, so an under-budget close would
+# have paid for two truncated calls per part and then written the second one
+# anyway.
+#
+# NOT rounds.MAX_TOKENS, which is the ceiling for one STATEMENT. These are two
+# different requests with two different shapes; they were never one number.
+SHORT_TERM_MAX_TOKENS = SET.value("short_term_max_tokens", 5000)
+
+# THE CLOSE AIM AND THE HEARTBEAT — ruled 2026-08-30, the operator: "After
+# circle /close, I want to aim for no more than 5 minutes, and progress must
+# be being reported in the command pane at least every 10 seconds, even if
+# its just a spinner." The aim is REPORTED, never enforced: a slow close must
+# not fail a close that otherwise held (the spend report's own rule).
+CLOSE_AIM_SECONDS = SET.value("close_aim_seconds", 300)
+CLOSE_HEARTBEAT_SECONDS = SET.value("close_heartbeat_seconds", 10)
+
 
 CLOSING_MARK = "closing_{ot}.json"
 
@@ -782,15 +818,12 @@ def collect_short_terms(client, parts, sysblocks, transcript, ot, guard, dry) ->
         # a missing section OR truncation; the retry's own result is
         # judged on sections alone, exactly as before.
         for attempt in (1, 2):
-            # 5000, not 2000 (R255): four substantive sections plus a
-            # remember of up to 1000 words does not fit in 2000, and the
-            # failure mode is not a short answer — it is stop ==
-            # "max_tokens", which this loop RETRIES, so an under-budget
-            # close would have paid for two truncated calls per part and
-            # then written the second one anyway.
+            # SHORT_TERM_MAX_TOKENS, not a literal here — see its own comment
+            # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
             text, stop = call(
                 client, part, sysblocks[part],
-                render_messages(part, transcript, SHORT_TERM_PROMPT), 5000, dry,
+                render_messages(part, transcript, SHORT_TERM_PROMPT),
+                SHORT_TERM_MAX_TOKENS, dry,
                 kind="short_term",
             )
             missing = [h for h in SHORT_TERM_SECTIONS if h not in text]
@@ -1008,6 +1041,13 @@ def main() -> int:
                          f"{len(DEFAULT_PARTS)} part(s) in parts/). "
                          f"A reduced roster is for TESTING — omitted parts are "
                          f"absent from the circle and stay unaware of it.")
+    ap.add_argument("--recall-arm", default="off",
+                    choices=["off", "delivered", "withheld"],
+                    help="tier A recall (remember_expand.py, "
+                         "docs/MEMORY_DESIGN.md): expand topic-matched seeds "
+                         "into each part's BLOCK 4. Default: off. 'withheld' "
+                         "computes and logs the packs without delivering "
+                         "them — the trial's control arm.")
     ap.add_argument("--no-prewarm", action="store_true",
                     help="skip prewarm() — the sequential, zero-output-token "
                          "calls that write each part's cached prompt prefix "
@@ -1226,26 +1266,30 @@ def main() -> int:
 
     client = None
     if not args.dry_run:
+        # THE PROVIDER BUILDS IT — stage 2 of the socket (R382). This block
+        # named `anthropic` three ways: the import, the key variable, and the
+        # `.env` fallback. All three are one vendor's, and after stage 2 the
+        # ONLY module in the tree that names the SDK is providers.py.
+        #
+        # THE TWO FAILURES STAY DISTINGUISHABLE, because they need different
+        # answers from a person: the package missing is an install, and the
+        # key missing is R330's whole page of how to get one and where to put
+        # it. build_client() raises for the second and lets the first through
+        # as ImportError.
         try:
-            from anthropic import Anthropic
+            client = build_client()
         except ImportError:
             emit("command", "pip install anthropic")
             return 2
-        if not os.environ.get("ANTHROPIC_API_KEY"):
-            try:
-                from dotenv import load_dotenv
-                load_dotenv(ROOT / ".env")
-            except ImportError:
-                pass
-        if not os.environ.get("ANTHROPIC_API_KEY"):
+        except RuntimeError:
             # HOW TO GET ONE, WHERE TO PUT IT, HOW TO KEEP IT — R330,
             # 2026-08-23. This printed one line, `set
             # ANTHROPIC_API_KEY (env var or project .env)`, which is the whole
             # answer for the person who wrote it and none of the answer for
-            # a first-run user. The text lives beside the API check.
+            # a first-run user. The text is the provider's, since every word
+            # of it is that vendor's console.
             emit("command", "\n" + KEY_MISSING_HELP + "\n")
             return 2
-        client = Anthropic()
 
     mode = "LIVE" if args.live else "sandbox"
     emit("command", f"\nIFS circle coordinator — {mode} — "
@@ -1296,8 +1340,16 @@ def main() -> int:
     # once went dark rather than raised. Opening on a known-corrupt tree writes
     # that corruption into a transcript and, at close, into a sha256 that makes it
     # the record. There is no --force; the remedy is a git checkout.
+    # SETTINGS CORRECTIONS, FLUSHED HERE — 2026-08-28. They are collected at
+    # IMPORT, which in the two-pane UI happens before seam.emit is rebound, so
+    # printing them where they are found would put them under the alt-screen
+    # and lose them. This is the first point in the open where a surface
+    # certainly exists.
+    SET.flush_corrections(lambda t: emit("command", t))
+
     emit("command", "\nintegrity check:", end=" ", flush=True)
-    _findings, _seen = CI.sweep()
+    with PC.PHASES.span("open.integrity_check"):
+        _findings, _seen = CI.sweep()
     if _findings:
         emit("command", "FAILED")
         emit("command", f"\n  !! {len(_findings)} operational file(s) are corrupted. "
@@ -1318,13 +1370,17 @@ def main() -> int:
         emit("command", f"\n  !! {note}")
     if client is not None:
         emit("command", "\napi check:", end=" ", flush=True)
-        if why := preflight_api(client, args.dry_run):
-            emit("command", "FAILED")
-            emit("command", f"\n  !! {why}")
-            emit("command", "\n     Nothing was written — no transcript, no working-set "
-                  "entry.\n     Fix the key and open again; the topic has not "
-                  "been asked for yet.")
-            return 2
+        # The span wraps the WHOLE check — test_providers.py greps this file
+        # for the walrus line verbatim, so the timing goes around it, not
+        # through it.
+        with PC.PHASES.span("open.api_check"):
+            if why := preflight_api(client, args.dry_run):
+                emit("command", "FAILED")
+                emit("command", f"\n  !! {why}")
+                emit("command", "\n     Nothing was written — no transcript, no working-set "
+                      "entry.\n     Fix the key and open again; the topic has not "
+                      "been asked for yet.")
+                return 2
         emit("command", "ok")
 
     # IS A CIRCLE ALREADY OPEN? CLAUDE.md has required this before any write
@@ -1416,6 +1472,32 @@ def main() -> int:
                 emit("command", f"  coalesce: skipped ({e})")
         vet_pending_proposals("before this circle's prompts are warmed", args.live)
 
+        # THE SETTINGS FOLD, 2026-08-28 (R379). A change to
+        # anything that shapes a prompt block, the model, or a budget a block
+        # is sized against is written to [pending] and lands HERE — the one
+        # moment it can move without changing block 1 out from under a
+        # transcript already in flight. That is the hazard the comment above
+        # this checkpoint already names for the practice register; a setting
+        # carries it too, and more directly.
+        #
+        # BEFORE prompt assembly and BEFORE prewarm, deliberately: a fold
+        # after either would warm a cache for one value and run the circle on
+        # another. It is also before the resume branch's reach, because a
+        # RESUMED circle must keep the settings its own transcript began
+        # under — `if not args.resume` above is what gives it that.
+        try:
+            import settings as _SET
+            folded = _SET.fold_pending()
+            if folded:
+                emit("command", "\nsettings now in force for this circle:")
+                for k in folded:
+                    emit("command", f"  {k} = {_SET.active().get(k)}")
+        except Exception as e:                                 # noqa: BLE001
+            # FAILS OPEN, like the coalesce refresh above it. A settings file
+            # that cannot be folded must not stop a circle opening; the
+            # defaults are what the code runs on, and they are sound.
+            emit("command", f"  settings: fold skipped ({e})")
+
     # INITIALIZATION — R330 (docs/Initialization.md §2): the first-run
     # dialogs, between CHECKPOINT 2 and the working-set question, so THIS
     # circle's blocks are built from what they record — the Soul's and
@@ -1461,18 +1543,19 @@ def main() -> int:
     # projects, so an empty one means there was nothing to choose from.
     if not args.resume and IP.live_nodes():
         chosen = ask_working_set(IP)
-    briefing, unknown = build_briefing(chosen)
-    if unknown:
-        emit("command", f"  unknown issue id(s) ignored: {', '.join(unknown)}")
-    if chosen:
-        focus, per, _ = IP.resolve(chosen)
-        emit("circle", f"  focus {', '.join(focus) or '—'}"
-              + (f" · related {', '.join(per)}" if per
-                 else " · NO LIVE ISSUE-RELATIONSHIP reaches these"))
-    sysblocks, notes = {}, {}
-    for p in parts:
-        shared, notes[p] = shared_block(p, briefing)
-        sysblocks[p] = system_blocks(p, core, shared)
+    with PC.PHASES.span("open.prompt_build"):
+        briefing, unknown = build_briefing(chosen)
+        if unknown:
+            emit("command", f"  unknown issue id(s) ignored: {', '.join(unknown)}")
+        if chosen:
+            focus, per, _ = IP.resolve(chosen)
+            emit("circle", f"  focus {', '.join(focus) or '—'}"
+                  + (f" · related {', '.join(per)}" if per
+                     else " · NO LIVE ISSUE-RELATIONSHIP reaches these"))
+        sysblocks, notes = {}, {}
+        for p in parts:
+            shared, notes[p] = shared_block(p, briefing)
+            sysblocks[p] = system_blocks(p, core, shared)
     # The per-part briefing note used to print here unconditionally, every
     # open — a development artifact once circling made
     # it one of the first things on screen. REVISED 2026-08-10: moved to
@@ -1643,6 +1726,21 @@ def main() -> int:
     # to exist first. If the pre-warm then fails, discard_unspoken() removes
     # the capture with the transcript — "a run that dies before its first
     # statement leaves no trace" still holds.
+    #
+    # TIER A RECALL (remember_expand.py, ruled 2026-08-29) — HERE, after the
+    # topic is known and BEFORE the capture below, because the capture
+    # records BLOCK 4 as sent and the pack is part of the emitted program.
+    # Off unless the trial arm says otherwise; its own module guarantees a
+    # failure here cannot cost the open.
+    import remember_expand as REX
+    REX.apply(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm)
+    # PART-INITIATED RECALL (recall_index.py, R402) arms from the same
+    # flag, and clears here because CircleEngine runs this main() inside a
+    # long-lived UI process — module state must not survive one circle
+    # into the next.
+    import recall_index as RC
+    RC.clear()
+    RC.set_arm(args.recall_arm)
     pdir = None
     try:
         import prompt_capture
@@ -1700,7 +1798,8 @@ def main() -> int:
     if not args.no_prewarm:
         emit("command", "\npre-warming caches:")
         try:
-            prewarm(client, parts, sysblocks, args.dry_run)
+            with PC.PHASES.span("open.prewarm"):
+                prewarm(client, parts, sysblocks, args.dry_run)
         except Exception as e:                                   # noqa: BLE001
             # The 2026-08-09 traceback's exact site. Seven API calls, and a
             # failure in any of them used to print a stack trace over a
@@ -1756,12 +1855,14 @@ def main() -> int:
         _, transcript, since_self, state = resumed
     elif args.no_blind:
         emit("command", "\nopening round — SEQUENTIAL (prior protocol, --no-blind).")
-        run_round(client, parts, sysblocks, transcript, since_self, state,
-                  guard, path, args.dry_run, live=args.live)
+        with PC.PHASES.span("round"):
+            run_round(client, parts, sysblocks, transcript, since_self, state,
+                      guard, path, args.dry_run, live=args.live)
     else:
         emit("command", "\nopening round — BLIND (parallel; CIRCLE_DESIGN §1).")
-        run_blind_round(client, parts, sysblocks, transcript, since_self, state,
-                        guard, path, args.dry_run, live=args.live)
+        with PC.PHASES.span("round"):
+            run_blind_round(client, parts, sysblocks, transcript, since_self,
+                            state, guard, path, args.dry_run, live=args.live)
 
     # DISARMED. Past this point the circle has had its opening round, and
     # whatever the transcript holds is the record — including an empty one, if
@@ -1808,6 +1909,35 @@ def main() -> int:
             # Not a keystroke: stdin is gone, and looping would spin forever.
             emit("command", "\n(stdin closed — closing)")
             break
+        # A RECALL IS A PART'S, NOT SELF'S — RULED 2026-08-30, the operator,
+        # verbatim: *"refuse it."* Asked as a decision because nothing
+        # enforced it: apply_recall() is called from rounds.py alone, so a
+        # `[recall: ...]` typed here was neither executed, nor stripped, nor
+        # refused. withheld() was False for it, so render_messages() spoke it
+        # to all seven parts as ordinary Self speech and the raw line entered
+        # the transcript — E06's contamination shape, through the one door
+        # R225's guard never covered.
+        #
+        # REFUSED, NOT STRIPPED, and that is R225's own distinction: the
+        # topic prompt loops until the line is clean rather than repairing
+        # it, because a statement silently shortened is one the typist never
+        # chose. Same here — nothing is recorded, nothing is searched, and
+        # the whole line comes back to be retyped. The complaint goes to the
+        # COMMAND channel, never into the room's pane.
+        #
+        # BEFORE EVERY BRANCH BELOW, so a recall cannot ride into the room
+        # inside a line that also carries speech, and before the /close and
+        # /abort verbs so it can never sit between Self and ending a circle.
+        stray = MK.part_only_in(cmd)
+        if stray:
+            more = f" (+{len(stray) - 1} more)" if len(stray) > 1 else ""
+            emit("command", f"  !! {stray[0]}{more} — a recall is a part's "
+                 f"own search of its own record, not Self's.")
+            emit("command", "     Your own record reads back with "
+                 "`remember-list` at the command pane.")
+            emit("command", "     Nothing was recorded, nothing was searched. "
+                 "Type your statement again.")
+            continue
         # RULED 2026-08-17 (R205): "/close" is start-anchored, not exact —
         # `/close this circle` closes same as bare `/close`, any text after
         # the verb is accepted and ignored, never parsed, never stored. The
@@ -1911,8 +2041,9 @@ def main() -> int:
             # both spellings name the one operation the circle pane
             # recognizes beyond speech itself (circling_and_evolving.md
             # §5, §9). Not a rename: /round keeps working unchanged.
-            run_round(client, parts, sysblocks, transcript, since_self, state,
-                      guard, path, args.dry_run, live=args.live)
+            with PC.PHASES.span("round"):
+                run_round(client, parts, sysblocks, transcript, since_self,
+                          state, guard, path, args.dry_run, live=args.live)
             continue
         # NO /dev BRANCH, 2026-08-21 (R286): "dev should not
         # be parsed in circle dialog, nor recognised at self's circle prompt;
@@ -2095,8 +2226,9 @@ def main() -> int:
         route_markers(SELF_DISPLAY, cmd, live=args.live)
         since_self = {p: 0 for p in parts}     # Self spoke — reset, per process_core
         state["last"] = None
-        run_round(client, parts, sysblocks, transcript, since_self, state,
-                  guard, path, args.dry_run, live=args.live)
+        with PC.PHASES.span("round"):
+            run_round(client, parts, sysblocks, transcript, since_self, state,
+                      guard, path, args.dry_run, live=args.live)
 
     # ---- the circle's graph rulings -------------------------------------
     # Written for EVERY circle, sandbox or live, beside its transcript. A
@@ -2211,8 +2343,18 @@ def main() -> int:
     # left stale — and the next live close redraws it, because what is
     # tested is the FILES against the picture, not this circle against
     # itself. See issue_draw.is_stale().
+    # THE CLOSE STOPWATCH AND THE HEARTBEAT (2026-08-30) start HERE — after
+    # the vetting checkpoint, which is human time, and before the first
+    # automated step. Everything below is what the <=5-minute aim covers,
+    # and while it runs the command pane hears something at least every
+    # CLOSE_HEARTBEAT_SECONDS, even if only the beat.
+    PC.PHASES.close_begin()
+    PC.PHASES.start_heartbeat(CLOSE_HEARTBEAT_SECONDS,
+                              notify=lambda s: emit("command", s))
+
     if args.live:
-        redraw_issue_graph()
+        with PC.PHASES.span("close.redraw_graph"):
+            redraw_issue_graph()
 
     # THE START-OF-CLOSE MARKER, 2026-08-23. Written HERE and not at the
     # `/close` verb: everything above this line can still return without
@@ -2224,8 +2366,9 @@ def main() -> int:
         mark_close_started(ot)
     emit("command", "\ncollecting short_terms:")
     try:
-        written = collect_short_terms(client, parts, sysblocks, transcript, ot,
-                                      guard, args.dry_run)
+        with PC.PHASES.span("close.short_terms"):
+            written = collect_short_terms(client, parts, sysblocks, transcript,
+                                          ot, guard, args.dry_run)
     except KeyboardInterrupt:
         # The second Ctrl-C on 2026-08-02 landed here and left a traceback, no
         # short_terms and no close report. The transcript was never at risk —
@@ -2237,11 +2380,14 @@ def main() -> int:
         emit("command", f"     resume:   python coordinator\\circle.py --live --resume {ot}")
         emit("command", "     or leave it: the nightly's transcript safety net backfills")
         emit("command", "     every part that spoke but has no short_term.")
+        PC.PHASES.stop_heartbeat()
         emit("command", METER.report())
         return report_failures()
     if args.live:
-        run_verifier(ot)
-        commit_circle(ot, written)
+        with PC.PHASES.span("close.verifier"):
+            run_verifier(ot)
+        with PC.PHASES.span("close.commit_circle"):
+            commit_circle(ot, written)
         # PHASE 2 — dreaming then synthesis, synchronous, AFTER the circle's
         # own commit (R167: a phase-2 failure leaves the circle safely
         # committed; R168: failures write a report, get one diagnostic
@@ -2261,8 +2407,79 @@ def main() -> int:
         emit("command", "  (sandbox mode: no dreaming/synthesis — phase 2 "
               "writes self/, live circles only)")
     emit("command", METER.report())
+    write_spend_report(ot, guard.live)
+    # THE DELTA REPORT (circle_stats, 2026-08-30) — what this circle changed
+    # across the registers, both segments. AFTER write_spend_report so the
+    # spend it cites is on file; LIVE ONLY, because its anchors are the two
+    # machine commits a sandbox never makes. Fails open, like the spend
+    # report above it and for the same reason.
+    if args.live:
+        try:
+            import circle_delta as CD
+            with PC.PHASES.span("close.delta_report"):
+                CD.at_close(ot, lambda s: emit("command", s))
+        except Exception as e:                                 # noqa: BLE001
+            emit("command", f"  circle_delta skipped "
+                            f"({type(e).__name__}: {e})")
+    PC.PHASES.stop_heartbeat()
+    PC.PHASES.report_close(lambda s: emit("command", s), CLOSE_AIM_SECONDS)
     emit("circle", f"\nclosed. transcript: {path}")
     return report_failures()
+
+
+def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
+    """work/logs/spend_<OT>.json — WHAT THIS CIRCLE COST, per provider and
+    model. 2026-08-28, the operator: "provider/model costs should be
+    independently tracked and inspectable".
+
+    NOTHING KEPT IT BEFORE. METER was read at four sites in this file, every
+    one of them an emit to the console, and close_<OT>.json carries the
+    transcript, the verifier result and each part's size and sha256 — no
+    usage, no cost. Every circle's spend was printed once and lost, which is
+    why "what does the inter-circle half actually cost" could not be answered
+    from the record at all.
+
+    WRITTEN HERE BECAUSE THE METER LIVES HERE. circle_close.py writes the
+    close report from a SEPARATE PROCESS, shelled out to, and has no access
+    to this process's meter — so the two records stay separate rather than
+    one pretending to hold the other's facts.
+
+    AFTER inter_circle, deliberately: the dreaming, synthesis and
+    distillation calls all meter through the same METER since stage 1, so a
+    report written before them would record the circle and silently omit the
+    half this exists to measure.
+
+    THE RATES TRAVEL WITH THE ROWS (Meter.rows()), so a later price change
+    cannot reprice history — the 2026-09-01 rise is exactly the event that
+    would otherwise quietly rewrite what every past circle "cost".
+
+    THE PHASES RIDE THIS FILE (2026-08-30): PHASES.snapshot() adds a
+    `phases` list — wall-clock per named phase, waiting_on_self separated
+    out — plus `close_seconds` against `close_aim_seconds`. Spend and time
+    are the same question, "what did this circle cost", so they share the
+    one record rather than earning a second file about the same close. One
+    span is later than this write, close.delta_report; the heartbeat still
+    reports it, the file just cannot hold it."""
+    if not live:
+        return None                    # a sandbox circle spends nothing real
+    try:
+        import json
+        from atomic_write import atomic_write     # local, as elsewhere here
+        payload = {"open_time": ot,
+                   "written_at": datetime.datetime.now().isoformat(timespec="seconds"),
+                   "close_aim_seconds": CLOSE_AIM_SECONDS,
+                   **PC.PHASES.snapshot(),
+                   **METER.snapshot()}
+        dest = ROOT / "work" / "logs" / f"spend_{ot}.json"
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        atomic_write(dest, json.dumps(payload, indent=2) + "\n")
+        emit("command", f"  spend recorded: {dest.name}")
+        return dest
+    except Exception as e:                                     # noqa: BLE001
+        # FAILS OPEN. A circle's record is the transcript and the short_terms;
+        # losing the accounting must never fail a close that otherwise held.
+        emit("command", f"  spend report skipped ({type(e).__name__}: {e})")
+        return None
 
 
 def report_failures() -> int:
@@ -2291,9 +2508,36 @@ def report_failures() -> int:
     for f in phase2:
         m = _re.search(r"dream_error_(\S+?)\.json", f)
         ot_ = m.group(1) if m else "<OT>"
-        emit("command", f"  the repair is: python coordinator/inter_circle.py "
-                        f"--ot {ot_} --live  (nothing was written by the "
-                        f"failed run; see the report it names)")
+        # THE TWO PHASE-2 SHAPES NEED OPPOSITE REPAIRS, 2026-08-30 (the lab
+        # close of 2026-08-29_2359 read the wrong one off this banner). A
+        # failure BEFORE Transaction.commit staged nothing and the re-run is
+        # clean by construction (R168); one AFTER it left the live tree
+        # updated and uncommitted, and a re-run would DREAM AGAIN on top of
+        # it. The report's own rerun_safe field says which this was; a
+        # report without one (or unreadable) gets no asserted repair at all.
+        rerun = None
+        try:
+            import json as _json
+            rep_ = _json.loads(
+                (ROOT / "work" / "logs" / f"dream_error_{ot_}.json")
+                .read_text(encoding="utf-8"))
+            rerun = rep_.get("rerun_safe")
+        except Exception:
+            pass
+        if rerun is True:
+            emit("command", f"  the repair is: python coordinator/"
+                            f"inter_circle.py --ot {ot_} --live  (nothing "
+                            f"was written by the failed run; see the report "
+                            f"it names)")
+        elif rerun is False:
+            emit("command", f"  DO NOT re-run inter_circle for {ot_} — "
+                            f"dreaming already landed in the live tree, "
+                            f"uncommitted. The report above carries the "
+                            f"by-hand commit repair.")
+        else:
+            emit("command", f"  the repair depends on which step failed — "
+                            f"read work/logs/dream_error_{ot_}.json before "
+                            f"acting; a partial phase 2 must NOT be re-run.")
     emit("command", f"{'=' * 68}")
     return 1
 

@@ -270,7 +270,7 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
 
 ## NETWORK ACCESS
 
-Only inside phase 3 (`--backfill`, without `--dry-run`): one Anthropic API request per part-needing-backfill, via the `anthropic` package's `Anthropic().messages.create()`, using model `circle.MODEL` and a 16,000-token ceiling (`BACKFILL_MAX_TOKENS`). No other phase, flag, or code path makes a network call; git operations are all local.
+Only inside phase 3 (`--backfill`, without `--dry-run`): one API request per part-needing-backfill, via `llm_client.call_once()`, using `llm_client.MODEL` and a 16,000-token ceiling (`BACKFILL_MAX_TOKENS`). No other phase, flag, or code path makes a network call; git operations are all local. It went through the transport on 2026-08-28 (stage 1 of the provider socket) — this file previously built its own `Anthropic()` client, so a backfill rode no retry ladder and reached no meter. It is also the one caller whose `system` is a LIST OF BLOCKS rather than a string, being the only one that assembles a real part prompt.
 
 ## HUMAN I/O
 

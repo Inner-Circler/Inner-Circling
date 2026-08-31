@@ -69,6 +69,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import self_schema as SS                                       # noqa: E402
+import settings as SET                                         # noqa: E402
 import remember as RM                                          # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
@@ -84,7 +85,8 @@ TABLE = "topic"
 ORDER = ("id", "circle", "date", "text", "state")
 
 CAP = 800       # chars per topic — one short paragraph
-BUDGET = 2400   # chars projected into BLOCK 2, newest first (~3 topics)
+BUDGET = SET.value("topics_budget", 2400)   # chars projected into BLOCK 2,
+                # newest first (~3 topics)
 
 _PREAMBLE = (
     "SYNTHESIS's unvetted BLOCK 2 topics -- R184, 2026-08-15: 'unvetted "

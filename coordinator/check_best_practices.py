@@ -164,8 +164,12 @@ def narrowcast(part_tag: str) -> list[dict]:
 
 
 # ------------------------------------------------------------------ projection
-# THE PROJECTION IS `title` ALONE (R135). No per-shape branch: a "Self"
-# record and a "Learner" record project through the exact same line.
+# THE PROJECTION IS `id — title` (R135 gave title alone; R401 added the id:
+# "practice_id (yes add)" — a BP- id a part cannot see is a breadcrumb it
+# cannot quote). No per-shape branch: a "Self" record and a "Learner"
+# record project through the exact same line. _entry_line_in() below is
+# the same line's READER and moves in lockstep, or the leak checks go
+# silently blind (they match the full rendered line).
 
 def broadcast_block() -> str:
     """BLOCK 1's contribution — every part reads this, identically.
@@ -177,10 +181,10 @@ def broadcast_block() -> str:
     if not all_parts and not for_self:
         return ""
     out = ["## Best practices", ""]
-    out += [f"- {p['title']}" for p in all_parts]
+    out += [f"- {p['id']} — {p['title']}" for p in all_parts]
     if for_self:
         out += ["", "### Better options (for Self)", ""]
-        out += [f"- {p['title']}" for p in for_self]
+        out += [f"- {p['id']} — {p['title']}" for p in for_self]
     return "\n".join(out)
 
 
@@ -193,7 +197,7 @@ def narrowcast_block(part_tag: str) -> str:
     if not mine:
         return ""
     return "\n".join(["## Your best practices", ""]
-                     + [f"- {p['title']}" for p in mine])
+                     + [f"- {p['id']} — {p['title']}" for p in mine])
 
 
 # ------------------------------------------------------------------ mutation
@@ -446,14 +450,17 @@ def delete(n: int) -> tuple[bool, str]:
 
 
 # ------------------------------------------------------------------ verify
-def _entry_line_in(title: str, block: str) -> bool:
-    """Does `block` carry `title` as a RENDERED ENTRY — a full `- title`
-    line — rather than anywhere in its text? The leak checks used bare
-    substring matching until 2026-08-19 (review, tier 3 #29), so a title
-    that happened to be a substring of another entry's text reported a
-    routing leak that was not there — and main() exits 1 in the hook, so
-    the false positive blocked every commit."""
-    want = f"- {title}"
+def _entry_line_in(p: dict, block: str) -> bool:
+    """Does `block` carry this row as a RENDERED ENTRY — the full
+    `- id — title` line (R401 added the id) — rather than anywhere in its
+    text? The leak checks used bare substring matching until 2026-08-19
+    (review, tier 3 #29), so a title that happened to be a substring of
+    another entry's text reported a routing leak that was not there — and
+    main() exits 1 in the hook, so the false positive blocked every
+    commit. Takes the ROW, not the title: the rendered line carries the id,
+    and a matcher spelling the line differently from the renderer is a
+    detector that silently stops detecting."""
+    want = f"- {p.get('id', '')} — {p.get('title', '')}"
     return any(line == want for line in block.splitlines())
 
 
@@ -503,7 +510,7 @@ def _routing_check() -> list[str]:
             if other_tag == tag:
                 continue
             for p in ncast[other_tag]:
-                if p["title"] and _entry_line_in(p["title"], mine) \
+                if p["title"] and _entry_line_in(p, mine) \
                         and not any(q.get("title") == p["title"]
                                     for q in ncast[tag]):
                     fails.append(f"{tag} receives {other_tag}'s narrowcast "
@@ -536,11 +543,11 @@ def _routing_check() -> list[str]:
         # duplicate-staged title was a hook-blocking false positive).
         if p["title"] in proj_titles:
             continue
-        if _entry_line_in(p["title"], b):
+        if _entry_line_in(p, b):
             fails.append(f"{p['id']}: state={p.get('state')!r} but its "
                          f"title leaked into broadcast_block()")
         for tag in R.TAG_BY_DIR.values():
-            if _entry_line_in(p["title"], nblock[tag]):
+            if _entry_line_in(p, nblock[tag]):
                 fails.append(f"{p['id']}: state={p.get('state')!r} but its "
                              f"title leaked into {tag}'s narrowcast_block()")
     return fails

@@ -67,7 +67,7 @@ The bare invocation writes nothing and makes no model call.
 
 ## DEPENDENCIES
 
-`self_schema` for load and save; `llm_client` for the model id; the `anthropic` client, imported only when a real call is about to happen. `pathlib`, `sys`, `datetime`, `copy`, `argparse`, `os`.
+`self_schema` for load and save; `llm_client` for the model call itself (`call_once`, which owns the client, the key resolution, the retry ladder and the meter — 2026-08-28). `pathlib`, `sys`, `datetime`, `copy`, `argparse`, `os`. It no longer imports `anthropic` at all.
 
 ## EXTERNAL FILES
 
@@ -109,6 +109,8 @@ Pure. The corpus rows are not touched, which is this module's one-writer promise
 
 ### _call(user, client)
 Sends the system prompt and one user message, returns the reply text and the stop reason. The client is injectable so no test reaches the network.
+
+**Through `llm_client.call_once()` since 2026-08-28** (stage 1 of the provider socket). It previously built its own client and resolved the key by hand-parsing `.env` for a line starting `ANTHROPIC_API_KEY` — which finds a key in the file even when the shell has set a different one, inverting this project's own precedence. A fold now rides the retry ladder and reaches the one meter; the injection contract is unchanged.
 
 ### _derive(prior, dreams, client, say)
     Build the message: the prior DREAM_HISTORY (or an explicit note that this is

@@ -1,7 +1,7 @@
 # PROMPT_CAPTURE.PY(1)
 
 ## NAME
-prompt_capture.py — saves what each part was sent, verbatim, per circle: the four system blocks once, as one file per block, and then every request the transport sends on a part's behalf, one JSON file per request; verifies that every saved file still reproduces its recorded bytes.
+prompt_capture.py — saves what each part was sent, verbatim, per circle: the four system blocks once, as one file per block, and then every request the transport sends on a part's behalf, one JSON file per request — and, since R412/R413, every request the coordinator sends for itself at a live /close that writes the record (dreaming, synthesis, the mid_term refresh, the coalesce pass); verifies that every saved file still reproduces its recorded bytes.
 
 ## SYNOPSIS
 ```
@@ -9,7 +9,7 @@ python coordinator/prompt_capture.py --verify           # check every capture
 python coordinator/prompt_capture.py --verify <OT>       # check one circle's capture
 python coordinator/prompt_capture.py --stats [<OT>]      # per-block, per-item character counts
 ```
-(As a library: `write(ot, sysblocks, notes, live, names=None)` from `circle.py` at circle open; `open_turn_log(dir, ot)` right after it; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request; `discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `read_manifest(dir)` and `block_shas(manifest)` for the resume compare.)
+(As a library: `write(ot, sysblocks, notes, live, names=None)` from `circle.py` at circle open; `open_turn_log(dir, ot)` right after it — and from `inter_circle.process_circle()` for a hand re-run, which opens the circle's own capture and closes it after; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request, `part` None for a call made for no one part; `discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `read_manifest(dir)` and `block_shas(manifest)` for the resume compare.)
 
 ## DESCRIPTION
 The system prompt sent to a part is GENERATED CODE — `prompt_build.system_blocks()`
@@ -33,7 +33,14 @@ under the retired `--minimal` mode (R360), holding:
 - `Block3_<part>_identity.md`, `Block4_<part>_objectives.md` — per part;
 - `Per_turn_<part>_<time>_<seq>.json` — ONE PER REQUEST that carried the part's
   system prompt: the pre-warm, each statement and its truncation retry, the `/close`
-  short_term and its retry (not the API ping, not a token count);
+  short_term and its retry (not the API ping, not a token count); AND, since R412
+  (2026-08-30) and R413 (2026-08-31), one per PROCESSING request — every call the
+  coordinator makes for itself at a live `/close` that writes the record: dreaming
+  (per part), the synthesis, the mid_term refresh (per part), the coalesce pass.
+  Those carry the contract's SECOND SHAPE — one plain-string system prompt inline,
+  exactly one user message, the same reply record — and the two circle-wide kinds
+  have no part, so the KIND fills the slot: `Per_turn_synthesis_<time>_<seq>.json`,
+  `"part": null` in the body. Not the failure diagnostic, which writes nothing;
 - `manifest.json` — sha256, size, chars, cached flag and per-item counts per Block
   file; the per-part file lists; one record per turn file.
 
@@ -59,7 +66,19 @@ this module only records it (D57 asked whether the sending should narrow too; R2
 no — the whole transcript is sent).
 `response.text` is the RAW reply, before `rounds.ask_statement()` strips a sign-off,
 a `[To: ...]` or a bracket and before "[pass]" becomes silence, with the stop reason
-and the usage object as a dict.
+and the usage object as a dict. It is the text BLOCKS — this line called it "what the
+model actually returned" until 2026-08-29, which was overbroad: a reply also carries
+the model's reasoning, on every statement.
+
+`response.thinking` is that reasoning, kept since the operator ruled it kept —
+`llm_client.RECORD_THINKING`, a yes/no setting, default on. The provider extracts it,
+because where reasoning sits in a reply is one vendor's business. Two bounds on what
+it is worth: it is a SUMMARY the service returns rather than the raw trace, and the
+KEY'S PRESENCE is the record of the setting — empty means "recording was on, the model
+thought nothing", absent means "recording was off, or the capture predates this".
+`thinking_redacted_blocks` appears only when a reply carried reasoning this project
+cannot read, so a partial record never passes for a whole one. The transcript is
+unaffected either way: thinking never enters the room.
 
 Verbatim-ness is enforced at write (every Block file is re-read and compared
 byte-for-byte against what was sent; a SHARED block that differs between parts is
@@ -243,11 +262,15 @@ under the module lock {
     if (no log is open) then { return None }
     seq += 1; time = now to the second;
     split request["messages"] into (tail, omitted) with _messages_tail;
-    build the record's request: "system" via _system_record, "messages" = tail,
-        "messages_omitted" when anything was trimmed, every other key verbatim;
+    build the record's request: "system" via _system_record when it is a list of
+        blocks, AS IT IS when it is a string (a processing prompt has no Block file
+        to point at — R412/R413), "messages" = tail, "messages_omitted" when
+        anything was trimmed, every other key verbatim;
     body = {seq, part, kind, time, dry_run, request, response} plus "error" when
-        one was given;
-    file = Per_turn_<part>_<time>_<seq:03d>.json; atomic_write the JSON; re-read;
+        one was given — part is null for a call made for no one part;
+    file = Per_turn_<actor>_<time>_<seq:03d>.json, actor = part, or the KIND when
+        part is null (check_contract makes the same substitution); atomic_write the
+        JSON; re-read;
     append {file, seq, part, kind, time, bytes, sha256, dry_run, error: bool} to
         the manifest's turns; recompute turn_bytes; atomic_write the manifest;
     return the file path.

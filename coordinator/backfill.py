@@ -27,10 +27,16 @@ failure text says *"backfill from the transcript before dreaming"*. Any fix
 that runs after dreaming repairs the file and not the dream, which is the part
 that mattered.
 
-THE MODEL CALL IS INJECTED, not built here. inter_circle has `_call` (retries,
-metering, the failure ledger); circle_audit builds its own `Anthropic()`. This
-module takes whichever the caller has, in one shape, so neither driver has to
-adopt the other's client.
+THE MODEL CALL IS INJECTED, not built here. inter_circle has `_call` and
+circle_audit has its own; this module takes whichever the caller has, in one
+shape, so neither driver has to adopt the other's.
+
+BOTH OF THOSE ARE NOW llm_client.call_once — 2026-08-28, stage 1 of the
+provider socket. This paragraph said circle_audit "builds its own
+`Anthropic()`", which was true and is the thing that changed: five modules
+each had their own client, none of them on the retry ladder or the meter.
+The injection contract here is untouched; what the two callers inject is now
+the same function.
 """
 from __future__ import annotations
 
@@ -150,3 +156,35 @@ def reconstruct(part: str, ot: str, tag: str, system: str,
     if bad:
         return "", f"regenerated record is malformed — {bad[0].code}: {bad[0].message}"
     return out, None
+
+
+# --------------------------------------------------------------- what it costs
+# PRICED FROM THE LIVE RATE TABLE, not from a number typed once — 2026-08-28.
+# circle_audit's --dry-run said "~${len(todo) * 0.03}", a per-item price
+# hardcoded inside a print. Two things were wrong with it: rates rise on
+# 2026-09-01 and nothing would have moved it, and it was WRONG ANYWAY —
+# roughly half, as the measured sizes below show.
+#
+# THE SIZES ARE MEASURED AND NAMED, so the assumption is visible rather than
+# buried in an arithmetic expression. From circle 2026-08-21_1139's own
+# captures: a short_term's reply ran a median of 1,116 output tokens, and a
+# part's request carried 24,651 input tokens (10,139 written to cache +
+# 14,512 read from it).
+#
+# A BACKFILL PAYS FULL PRICE FOR ALL OF IT. It runs outside a circle, so there
+# is no warmed prefix to read from and every input token is uncached — which
+# is exactly why the old estimate was low.
+TYPICAL_INPUT_TOKENS = 24_651
+TYPICAL_OUTPUT_TOKENS = 1_116
+
+
+def estimate_cost(n: int) -> float:
+    """Roughly what `n` backfills cost, in dollars, at whatever the rate table
+    currently says. AN ESTIMATE, and labelled as one wherever it prints: a
+    part that spoke twice has a longer transcript to reconstruct from than one
+    that spoke once, and nothing here knows which."""
+    import llm_client as LC
+    r_in, _cw, _cr, r_out = LC.rates_for(LC.MODEL)
+    per = (TYPICAL_INPUT_TOKENS * r_in
+           + TYPICAL_OUTPUT_TOKENS * r_out) / 1_000_000
+    return n * per

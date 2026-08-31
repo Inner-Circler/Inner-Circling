@@ -67,8 +67,12 @@ sys.path.insert(0, str(HERE))
 TABLE = "group"
 ORDER = ("id", "members", "primary", "gloss", "sources", "status")
 ID_PREFIX = "CG-"
-MAX_TOKENS = 4000     # thinking counts against the cap (DERIVE_MAX_TOKENS's
-                      # lesson, R354); the visible output is a few lines.
+# IMPORTED, NOT COPIED (2026-08-28). Thinking counts against the cap
+# (DERIVE_MAX_TOKENS's lesson, R354) and the visible output is a few lines —
+# but that reasoning is shared with inter_circle's diagnostic call, and the
+# two held the same literal. llm_client owns it now.
+import llm_client as _LC                                       # noqa: E402
+MAX_TOKENS = _LC.AUX_MAX_TOKENS
 
 SYSTEM = """\
 You are grouping a vetting queue for an IFS-circle coordinator. Below are
@@ -191,27 +195,22 @@ def parse_reply(reply: str, valid_refs: set[str]) -> tuple[list[dict], list[str]
 def _call(system: str, user: str, client=None) -> tuple[str, str]:
     """(text, stop_reason). A client per call, inter_circle._call's own
     shape; `client` is injectable so no test ever reaches the network."""
-    if client is None:
-        import llm_client as LC
-        from anthropic import Anthropic
-        import os
-        key = os.environ.get("ANTHROPIC_API_KEY")
-        if not key:
-            env = ROOT / ".env"
-            if env.is_file():
-                for ln in env.read_text(encoding="utf-8").splitlines():
-                    if ln.strip().startswith("ANTHROPIC_API_KEY"):
-                        key = ln.split("=", 1)[1].strip().strip('"').strip("'")
-        client = Anthropic(api_key=key)
-        model = LC.MODEL
-    else:
-        model = getattr(client, "model", "fake")
-    resp = client.messages.create(
-        model=model, max_tokens=MAX_TOKENS, system=system,
-        messages=[{"role": "user", "content": user}])
-    text = "".join(b.text for b in resp.content
-                   if getattr(b, "type", "") == "text").strip()
-    return text, getattr(resp, "stop_reason", None) or ""
+    # THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1 of the provider
+    # socket). The hand-rolled key resolution that stood here read `.env`
+    # line by line for one key name — which misses a key the shell has
+    # already set differently, and every other spelling of the file. The
+    # injected-client contract this function documents is unchanged:
+    # call_once uses a fake exactly as given and reaches no network.
+    import llm_client as LC
+    # RECORDED WITH NO PART (R413, 2026-08-31): the grouping pass speaks for
+    # the circle, so its turn file is named by kind. The /close checkpoint
+    # runs while the circle's turn log is open and lands in the capture; the
+    # open checkpoint runs before the next circle's capture exists and, by
+    # the ruling's own bound, stays unrecorded.
+    text, _usage, stop = LC.call_once(system, user, MAX_TOKENS,
+                                      kind="coalesce", client=client,
+                                      record=True)
+    return text, stop
 
 
 def derive(rows: list[dict], client=None) -> tuple[int, list[str]]:

@@ -138,6 +138,13 @@ import time
 # eagerly; CircleEngine.start() does that lazily.
 COORD_DIR = pathlib.Path(__file__).resolve().parent.parent / "coordinator"
 
+# ui/ is this file's own directory, and it is not on sys.path when circling
+# is imported rather than run — ui/tests/ imports it, and so does the Ticker
+# bridge through CircleEngine. The palette is the only thing it takes from
+# there, and it takes ROLES, not RGB (see C_PROMPT below).
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import palette as PALETTE                                      # noqa: E402
+
 # WINDOWS CONSOLES: same reasoning as the rest of this project's scripts —
 # degrade rather than crash on characters a legacy console can't encode.
 if hasattr(sys.stdout, "reconfigure"):
@@ -580,44 +587,14 @@ class AppState:
 
     def _pane_verb(self, text: str) -> str | None:
         """The command-pane verb this circle-dialog line stands alone as,
-        or None. D55(2), 2026-08-20 — see `_submit`.
-
-        STANDING ALONE is the whole test: a verb INSIDE an annotation is a
-        different thing entirely (it stages for vetting, which is the one
-        way a command may be named from the room), and ordinary speech that
-        merely mentions one is speech. So this looks at the FIRST WORD of
-        the line and nothing else.
-
-        The three circle-pane verbs are not command-pane verbs and pass
-        through untouched, as does anything PANE_OF has never heard of —
-        an unknown slash word is already refused further down, and turning
-        it into a second refusal here would say the same thing twice."""
-        first = text.strip().split(" ", 1)[0]
-        if not first.startswith("/"):
-            # NO LEADING SLASH, NO VERB. The command pane makes the slash
-            # optional (R201) because everything typed there IS a command;
-            # in the room the opposite holds — everything typed is SPEECH
-            # unless it is marked, and a bare word like "close" is a word.
-            return None
+        or None. D55(2), 2026-08-20 — see `_submit`. The classifier itself
+        moved to command_surface.pane_verb 2026-08-30, when the Ticker
+        bridge turned out to need the same test below this pane layer;
+        one classifier, both flavors."""
         cs = getattr(self, "_CS", None) or _command_surface()
         if cs is None:
             return None
-        head = cs.normalise_head(first)
-        # BARE /help IS THE ROOM'S OWN — R287,
-        # 2026-08-21. PANE_OF classes /help as a command-pane verb, so this
-        # guard refused it and the room form of /help (circle_pane_help,
-        # 2026-08-20) was reachable only through a `?` alias — which is
-        # gone. Bare `/help` passes to the loop, which answers with the room
-        # set alone; `/help <anything>` is the command pane's and is refused
-        # like any other command-pane verb, notice included.
-        if head == "/help":
-            return None if text.strip() == "/help" else head
-        # /dev IS cmd>-ONLY — R286, the same day. It is no
-        # PANE_OF key (R199: in neither table), so this guard let it through
-        # and the loop toggled dev mode from the room. Refused by name.
-        if head == "/dev":
-            return head
-        return head if cs.PANE_OF.get(head) == "command" else None
+        return cs.pane_verb(text)
 
     def _answering(self, pane: Pane) -> bool:
         """True when a blocked `read_line` will consume THIS pane's next
@@ -936,7 +913,14 @@ class AppState:
             # "no-op" has to mean for the parts.
             head = self._pane_verb(text)
             if head is not None:
+                # /quit IS THE WINDOW'S VERB, cmd>-only (2026-08-31,
+                # R414) — refused here like a command-pane
+                # verb, but "stage it as an annotation" is advice for a
+                # command, and quit is not one
                 self.command.append(
+                    "  quit closes this window — type it at cmd>. Nothing "
+                    "was spoken."
+                    if head == "/quit" else
                     f"  {head} is a command-pane verb — ignored in the room, "
                     f"not spoken and not run. Type it at cmd>, or bracket it "
                     f"as an annotation to stage it for a ruling.")
@@ -1098,6 +1082,27 @@ class AgentSimulator:
 # AgentSimulator on purpose -- main_loop() drains either one the same way,
 # just demultiplexed by channel here since CircleEngine's items carry one.
 # --------------------------------------------------------------------------
+
+
+def _reset_process_accumulators() -> None:
+    """Zero the two module singletons that tally ACROSS a circle, so the next
+    circle in this process reports only its own.
+
+    `llm_client.METER` prices the close's usage report; `phase_clock.PHASES`
+    aggregates spans by name and holds the close stopwatch. Both were written
+    when a process was one circle, and both say so in their own docstrings.
+
+    Imported HERE rather than at module scope, and every failure swallowed:
+    `llm_client` pulls in `anthropic`, and `test_circling.py` asserts that
+    module never enters its process. That suite never calls `start()`, so this
+    is not reached there — but a reset is housekeeping, and housekeeping must
+    not be the thing that stops a circle from opening."""
+    for mod, attr in (("llm_client", "METER"), ("phase_clock", "PHASES")):
+        try:
+            import importlib
+            getattr(importlib.import_module(mod), attr).reset()
+        except Exception:                                     # noqa: BLE001
+            pass          # a missing or fake module is not a reason to refuse
 
 
 class CircleEngine:
@@ -1461,16 +1466,17 @@ class CircleEngine:
     # circle.py. They are real, they are typed here, and until 2026-08-20
     # no help output named any of them — /help renders circle.py's own
     # COMMANDS table and a pane-local verb cannot be a row in it.
-    # abort's and status's glosses are the operator's words, verbatim
-    # (R347, 2026-08-25) — the session section that used to
-    # describe both a second time, above this table, left the reply the
-    # same day, so these rows are now the reply's ONE description of each.
+    # status's gloss is the operator's words, verbatim (R347, 2026-08-25)
+    # — the session section that used to describe it a second time, above
+    # this table, left the reply the same day, so this row is the reply's
+    # ONE description of it.
+    # abort LEFT THIS TABLE 2026-08-31 (R414): it ends the
+    # CIRCLE, so it is a circle-pane verb beside /close now — PANE_OF says
+    # so, and the merged surface below refuses it here like /close.
     LOCAL_VERBS = (
         ("quit", "close this window. A circle mid-write finishes first; one "
                  "that is waiting for you to type is left where it is and "
                  "this exits at once"),
-        ("abort", "quit — shows what stays and what's discarded first; a "
-                  "second /abort confirms."),
         ("resume", "pick up a circle whose close was interrupted; bare "
                    "'resume' takes the one just reported"),
         ("status", "parts, every prompt block's size IN TOKENS as the "
@@ -1546,10 +1552,12 @@ class CircleEngine:
                 if c["path"].parent.resolve() == root.resolve()]
 
     def submit_command(self, text: str) -> str | None:
-        """The command-pane verbs hand-wired so far — 'quit', 'abort',
-        'help', 'status', 'resume', 'dev' — ahead of the full merged
-        verb surface (stages 5/6, docs/dual_pane_integration.md §3,
-        still deferred). Anything else is JUNK and is answered with the help
+        """The command-pane verbs hand-wired so far — 'quit', 'help',
+        'status', 'resume', 'dev' ('abort' until 2026-08-31, when it moved
+        to the circle pane beside /close: R414) — ahead of
+        the full merged verb surface (stages 5/6,
+        docs/dual_pane_integration.md §3, still deferred). Anything else is
+        JUNK and is answered with the help
         listing for the current dev state (R285, 2026-08-21 — it said
         'not understood, see help' until then), decided here now
         instead of unconditionally in AppState._submit.
@@ -1632,57 +1640,16 @@ class CircleEngine:
         # a pane-local verb, and /help renders circle.py's COMMANDS table,
         # which cannot contain one. the operator ended their first live lab session
         # with Ctrl-C because nothing on screen said this existed.
-        if word == "abort":
-            # Same queue submit_circle() writes to — whatever real
-            # read_line() call is currently blocked (almost always the
-            # Self> prompt) receives it exactly as if typed in the
-            # circle pane. RULED 2026-08-15 (R173, B41): circle.py's own
-            # /abort handling is NO LONGER unconditional — the first
-            # /abort prints what will and will not be undone and waits;
-            # a SECOND /abort confirms. No special handling needed here
-            # for that: circle.py's consequences text lands on this same
-            # "command" channel via its own emit() calls (the normal
-            # drain path, not this queued line), and typing "abort" here
-            # a second time re-enters this exact branch and forwards a
-            # second "/abort" — which is what the confirmation is
-            # waiting for. This message only confirms the SEND, not that
-            # anything was undone yet.
-            # NOT FORWARDED INTO A DEAD ENGINE (2026-08-20). This branch
-            # queued "/abort" and printed the same optimistic line
-            # UNCONDITIONALLY, with no _running() check — asymmetric with
-            # the `dev` branch a few lines below, which has one. On
-            # 2026-08-20 the CircleEngine crashed mid-close
-            # (APIConnectionError); nothing drains circle_in once the
-            # background thread is gone, so the operator's two /aborts went onto
-            # a queue with no reader while the pane repeated its one
-            # canned reply, and the session could only be ended with
-            # Ctrl-C.
-            if phase == "idle":
-                self.out_queue.put(("command",
-                    "  no circle is running — there is nothing to abort. "
-                    "The circle "
-                    + ("ENDED" if self._thread is not None else
-                       "was never started")
-                    + "; type 'quit' to close this window."))
-                return None
-            # NOR INTO A CIRCLE THAT HAS NOT OPENED, 2026-08-21. Forwarded
-            # before the Self> loop, "/abort" would be consumed as the
-            # working set (or the topic), exactly as every other command
-            # was that day. There is no transcript yet and nothing to
-            # discard; the window closes with 'quit'.
-            if phase in ("opening-q", "opening"):
-                asking = (f" — it is asking '{self.pending_prompt}' in the "
-                          f"circle pane" if self.pending_prompt else "")
-                self.out_queue.put(("command",
-                    f"  the circle has not opened yet{asking}; nothing to "
-                    f"abort — answer it there, or type 'quit' to close "
-                    f"this window."))
-                return None
-            self.submit_circle("/abort")
-            self.out_queue.put(("command",
-                "  /abort sent — read the circle's reply below; it will "
-                "ask you to send /abort again to actually abort"))
-            return None
+        # NO 'abort' BRANCH SINCE 2026-08-31 (R414). It sat
+        # here from the day this dispatcher was written — forwarding
+        # "/abort" onto the circle lane, with idle/opening/dead-engine
+        # guards accreted on 2026-08-20 and 2026-08-21 — and the operator
+        # then separated the two lifecycles: quit ends the WINDOW and is
+        # this pane's; /abort ends the CIRCLE and is the room's, beside
+        # /close. PANE_OF classes it "circle" now, so the merged surface
+        # below refuses it here exactly as it refuses /close, and the
+        # circle pane's own guard lets it through to circle.py's loop,
+        # whose R173 two-step confirmation is unchanged.
         if word == "help":
             # Pure function of the (hot-reloaded) TOML tables — no circle
             # needs to have started. Returns "help" (not None) so
@@ -1877,8 +1844,12 @@ class CircleEngine:
                 f"  {head} needs a circle open — nothing running to act on"))
             return None
         if pane == "circle":
+            # the list is read off PANE_OF, never written here — /abort
+            # joined it 2026-08-31 and a hand list would have said three
+            room = ", ".join(h for h, p in self._CS.PANE_OF.items()
+                             if p == "circle")
             self.out_queue.put(("command",
-                f"  {head} is circle-pane speech (/round, /pass, /close) — "
+                f"  {head} is circle-pane speech ({room}) — "
                 "not reachable from the command pane"))
             return None
         # JUNK -> help (R285, 2026-08-21). This
@@ -1953,6 +1924,19 @@ class CircleEngine:
         C, S = self._C, self._S
         self._orig_emit, self._orig_read_line = S.emit, S.read_line
         S.emit, S.read_line = self._emit, self._read_line
+        # THE PROCESS-WIDE ACCUMULATORS, ZEROED BEFORE EVERY CIRCLE. Ruled by
+        # the operator 2026-08-30 — *"support multiple circles in one app
+        # context. In fact, assume the ticker will be running permanently"* —
+        # until
+        # that day one process was one circle and neither of these had a
+        # caller. Both aggregate by key and both are reported PER CIRCLE at
+        # the close, so a second circle in one window would print the first
+        # one's tokens and the first one's phase times added to its own.
+        # Neither would look wrong; a cumulative total reads as a large one.
+        # Here rather than in the bridge because THIS is the seam that runs
+        # main() more than once — the TUI path resets nothing that has
+        # anything in it yet, so it is unaffected.
+        _reset_process_accumulators()
 
         argv = ["circle.py"] + (["--live"] if live else ["--dry-run"])
         for a in (extra_argv or []):
@@ -2032,7 +2016,16 @@ CLR_LINE = "\x1b[2K"
 # as before. Applied at WRITE time, after width slicing, so no escape code
 # ever enters the layout or cursor math.
 COLOR = False
-C_PROMPT, C_ERR, C_CHROME, C_OFF = "\x1b[32m", "\x1b[31m", "\x1b[36m", "\x1b[0m"
+# FROM ui/palette.py SINCE 2026-08-30, and STILL 4-BIT — ruled that day,
+# "keep 4-bit ansi". These are the same four escape codes this line held
+# before, byte for byte; what changed is that green, red and cyan now have
+# the same NAMES here as the roles they mean in the Ticker's CSS and in the
+# issue-graph drawing. The values stay 4-bit deliberately: a terminal's
+# sixteen colours are the theme its owner chose, and emitting 24-bit would
+# make this room match the palette file and stop matching them. So this is
+# the one surface where the palette shares the meaning and not the number.
+C_PROMPT, C_ERR = PALETTE.ansi("GREEN"), PALETTE.ansi("RED")
+C_CHROME, C_OFF = PALETTE.ansi("TEAL"), PALETTE.ansi("OFF")
 
 
 def _tint(code: str, s: str) -> str:
@@ -3489,11 +3482,17 @@ def self_test() -> int:
     # /issue-list", "/status", "/dev", "/help, object_classes"). Busy first:
     check("running but not yet at the Self> loop, nothing pending: the "
           "phase reads 'opening'", eng._phase() == "opening")
+    # 'abort' IS THE ROOM'S VERB SINCE 2026-08-31 (R414):
+    # it ends the CIRCLE, so it sits beside /close, and cmd> refuses it in
+    # EVERY phase the way it refuses /close — the idle, opening and
+    # dead-engine guards its own local branch carried went with the branch.
     eng.submit_command("abort")
-    check("'abort' while the circle is still OPENING forwards nothing",
+    check("'abort' at cmd> while the circle is still OPENING forwards nothing",
           eng.circle_in.empty())
-    check("...and says the circle has not opened, naming 'quit'",
-          "has not opened" in eng.out_queue.get_nowait()[1])
+    _t = eng.out_queue.get_nowait()[1]
+    check("...and is refused as circle-pane speech, the list naming /abort "
+          "beside /close", "circle-pane speech" in _t and "/abort" in _t
+          and "/close" in _t)
     # Parked on the working-set question: refusals name it, and the verbs
     # that need no transcript RUN there.
     eng.waiting_for_input, eng.waiting_for_channel = True, "circle"
@@ -3503,8 +3502,8 @@ def self_test() -> int:
     eng.submit_command("abort")
     check("'abort' parked on the working-set question forwards nothing "
           "either", eng.circle_in.empty())
-    check("...and names the question the circle is actually asking",
-          "CIRCLE issues" in eng.out_queue.get_nowait()[1])
+    check("...and is the same circle-pane refusal, not a phase message",
+          "circle-pane speech" in eng.out_queue.get_nowait()[1])
     if _nodes():
         eng.submit_command("issue-list")
         check("a no-transcript verb (issue-list) typed while parked on the "
@@ -3528,39 +3527,46 @@ def self_test() -> int:
     eng.loop_reached = True
     check("once the Self> loop has been reached the phase is 'loop'",
           eng._phase() == "loop")
+    eng.line_taken.set()
     eng.submit_command("abort")
-    check("'abort' forwards through submit_circle, so the handshake covers "
-          "it too", not eng.line_taken.is_set())
-    check("'abort' forwards /abort to circle_in, unblocking read_line",
-          eng.circle_in.get_nowait() == "/abort")
-    check("'abort' also acknowledges on the command channel",
-          eng.out_queue.get_nowait() == ("command",
-              "  /abort sent — read the circle's reply below; it will "
-              "ask you to send /abort again to actually abort"))
+    check("'abort' at cmd> with the Self> loop reached forwards NOTHING — "
+          "the room owns the circle's end (R414)",
+          eng.circle_in.empty() and eng.line_taken.is_set())
+    check("...and is refused as circle-pane speech there too",
+          "circle-pane speech" in eng.out_queue.get_nowait()[1])
+    check("/abort typed in the CIRCLE pane passes the pane guard to "
+          "circle.py's loop, whose two-step confirmation (R173) is unchanged",
+          eng._CS.pane_verb("/abort") is None
+          and eng._CS.verb_class("/abort") == "circle")
+    check("/quit typed in the circle pane is refused by name — the "
+          "window's verb, cmd> only",
+          eng._CS.pane_verb("/quit") == "/quit"
+          and eng._CS.verb_class("/quit") == "window")
+    check("a bare word is speech in the room — 'quit' and 'close' without "
+          "a slash classify as nothing",
+          eng._CS.verb_class("quit") is None
+          and eng._CS.verb_class("close") is None)
 
-    # THE CRASH CASE, 2026-08-20. This branch had NO _running() check —
-    # asymmetric with `dev` a few lines below it, which has one — so after
-    # the engine died mid-close, two /aborts went onto a queue with no
-    # reader while the pane repeated its one canned reply. The session
-    # could only be ended with Ctrl-C.
+    # THE CRASH CASE, 2026-08-20, kept for what it still proves: after the
+    # engine died, cmd> answers rather than queueing onto a lane nothing
+    # drains — the answer is now the same circle-pane refusal, and the verb
+    # that DOES end the window is named by the pane's own help.
     eng.finished.set()
     eng.out_queue.queue.clear()
     eng.submit_command("abort")
     check("'abort' after the engine ENDED forwards NOTHING — nothing drains "
           "circle_in once the thread is gone", eng.circle_in.empty())
     channel, text = eng.out_queue.get_nowait()
-    check("...and says so plainly instead of the optimistic line",
-          channel == "command" and "nothing to abort" in text)
-    check("...and names the verb that DOES end the window",
-          "quit" in text)
+    check("...and is answered, not queued into the void",
+          channel == "command" and "circle-pane speech" in text)
     eng.finished.clear()
     eng._thread = None
     eng.out_queue.queue.clear()
     eng.submit_command("abort")
     check("'abort' before any circle was started forwards nothing either",
           eng.circle_in.empty())
-    check("...and says the circle was never started, not that it ended",
-          "never started" in eng.out_queue.get_nowait()[1])
+    check("...with the same refusal — one answer in every phase",
+          "circle-pane speech" in eng.out_queue.get_nowait()[1])
     eng.out_queue.queue.clear()
 
     # THE PANE'S OWN VERBS ARE NAMED SOMEWHERE A READER WILL FIND THEM.
@@ -3575,7 +3581,11 @@ def self_test() -> int:
     result = eng.submit_command("help")
     channel, text = eng.out_queue.get_nowait()
     check("'help' works before start() was ever called — no live circle needed",
-          channel == "command" and "/help" in text and "/abort" in text)
+          channel == "command" and "/help" in text and "quit" in text)
+    check("...and cmd> help lists no circle-pane verb — each pane's help "
+          "shows what that pane operates (R414)",
+          not any(f"  {v} " in text or f"  {v}\xa0" in text
+                  for v in ("/abort", "/close", "/round", "/pass")))
     check("'help' returns the 'help' signal (drives the pane resize)",
           result == "help")
 
@@ -4718,8 +4728,9 @@ def self_test() -> int:
     # PROBE 2: the answer forwards VERBATIM, ahead of every dispatch path.
     # "/StAtEmEnTs" must NOT become "/statements" (submit_command's normal
     # `head + rest_of_line` reconstruction), and "abort" must NOT be
-    # intercepted as the local verb — RULED: a pending question owns the
-    # pane, forward everything.
+    # intercepted — as the local verb it was, or as the circle-pane verb
+    # it is since 2026-08-31 — RULED: a pending question owns the pane,
+    # forward everything.
     check("a line typed at the command pane while a command read is "
           "pending forwards VERBATIM, not through the dispatcher",
           eng8.submit_command("/StAtEmEnTs") is None

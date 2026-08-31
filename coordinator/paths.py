@@ -41,6 +41,8 @@ SELF_DIR = ROOT / "self"
 PARTS_DIR = ROOT / "parts"
 ISSUES_DIR = ROOT / "issues"
 CIRCLES_DIR = ROOT / "circles"
+TICKING_DIR = ROOT / "ticking"          # the JOURNAL (R391/R396) — user
+                                        # record; pull-main keeps the lab's
 
 # self/best_practices.toml — RETURNED to self/ 2026-08-16 by Self's
 # ruling on the memory/ decomposition ("out of coordinator and into

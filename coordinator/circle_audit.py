@@ -649,20 +649,13 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
         run.warn(f"circle_{ot}: {part} spoke {n}x with no usable record")
     if dry:
         print(f"\n  --dry-run: {len(todo)} backfill(s) would be generated, "
-              f"~${len(todo) * 0.03:.2f}")
+              f"~${BF.estimate_cost(len(todo)):.2f} at today's rates")
         return 0
 
     import prompt_build as C   # the prompt construction (phase 2 stage 2;
                                # was circle) — same identity assembly as a circle
     import llm_client as LC                  # MODEL's owner (phase 2 stage 1)
-    from anthropic import Anthropic
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        try:
-            from dotenv import load_dotenv
-            load_dotenv(ROOT / ".env")
-        except ImportError:
-            pass
-    client = Anthropic()
+    client = LC.build_client()               # one builder, 2026-08-28 (stage 1)
     # PRE-EXISTING BREAK, fixed 2026-08-13 (found while removing the retired
     # OC register): load_shared() stopped returning a 3-tuple and
     # shared_block()'s third positional arg became `minimal`, some time
@@ -679,12 +672,14 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
         def _call(system_, user_, max_tokens):
             """circle_audit's own client, in the one shape backfill.py takes.
             inter_circle hands it `_call` instead — same function, two model
-            paths, so neither driver has to adopt the other's client."""
-            r = client.messages.create(model=LC.MODEL, max_tokens=max_tokens,
-                                       system=system_,
-                                       messages=[{"role": "user", "content": user_}])
-            body = "".join(b.text for b in r.content if b.type == "text")
-            return body, r.usage, r.stop_reason
+            paths, so neither driver has to adopt the other's client.
+
+            THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1). `system_` is a
+            LIST OF BLOCKS here, not a string — this is the one caller that
+            assembles a real part prompt — and call_once passes it through
+            untouched, as the transport always has."""
+            return LC.call_once(system_, user_, max_tokens,
+                                kind="backfill", client=client)
 
         text, err = BF.reconstruct(part, ot, C.PART_TAGS[part], system, _call)
         if err:

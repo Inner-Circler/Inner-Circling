@@ -87,7 +87,33 @@ data_max  = 40
 key       = "birth_year"
 ask       = "What year were you born"
 data_type = "NUMERIC_STRING"
+gate      = "BOUNDED"
+# RULED 2026-08-28: 1940 as the minimum, and the current year less fifteen as
+# the point past which this program says something.
+#
+# THE MAXIMUM IS A RULE, NOT A NUMBER, and has to be. `year_minus_15` is 2011
+# today and 2012 on the first of January; a literal here would be quietly
+# wrong within months, which is the shape of every stale number this project
+# has had to find twice.
+minimum   = 1940
 data_max  = 2100
+advisory_maximum = "year_minus_15"
+# ADVISORY, NOT A REFUSAL — ruled the same day. A limit that can only be
+# passed by lying protects nobody: refusing here would teach a fourteen-year-
+# old to enter a false year and then proceed on it, which is a corrupted
+# record AND the suggestion unheeded. So the true answer is kept, the true
+# thing is said once, and they decide.
+#
+# Deliberately clear of process_core.md's crisis line. Those are different
+# things, and being fourteen is not a crisis.
+advisory_note = """Circling on your own works best with a few more years behind you.
+
+  If you are under fifteen, what this program does alone is better done with
+  other people — a school counsellor, a therapist who works with young people,
+  or a family member you trust. Ask one of them about circles with real people
+  in them.
+
+  You are welcome to carry on here. This is a suggestion, not a door closing."""
 render    = "My human came into the world in {answer}."
 
 [[context.questions]]
@@ -116,7 +142,13 @@ key       = "preferred_name"
 ask       = "What do you prefer to be called"
 data_type = "STRING"
 data_max  = 40
-unique_in = "part_tags"        # it names the console; a part's Tag would collide (roster.verify)
+# THE ONE CONTEXT ANSWER THE MECHANISM READS — identity.user_name() takes it
+# for the console prompt, and roster.verify() treats it as Self's reserved
+# name. So it declares HOW it is kept valid, which every mechanism-facing
+# field must (2026-08-28). Every other question here reaches a model or
+# reaches nothing, and neither needs one.
+gate      = "UNIQUE_IN"
+unique_in = "part_tags"        # a part's Tag would collide (roster.verify)
 
 # >>> context.answers
 [context.answers]

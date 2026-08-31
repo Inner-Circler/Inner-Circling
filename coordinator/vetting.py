@@ -31,6 +31,7 @@ from __future__ import annotations
 
 import issue_commands as IC
 import issue_schema as S_
+import phase_clock as PC     # timed_read — a ruling prompt is human time
 import seam
 from markers import _propose_command_shape, _wrap58, _normalize_edge
 
@@ -75,8 +76,8 @@ def _practice_approve(row: dict, BPX) -> tuple[bool, str]:
     title = row.get("title", "")
     if row.get("op") == "revise" and not title:
         try:
-            title = seam.read_line("        revision text "
-                              "(candidates above)> ").strip()
+            title = PC.timed_read(seam.read_line, "        revision text "
+                                  "(candidates above)> ").strip()
         except (EOFError, KeyboardInterrupt):
             title = ""
         if not title:
@@ -417,7 +418,7 @@ def vet_pending_proposals(where: str, live: bool,
                    f"single asks, or Enter to keep pending ? ")
         while True:
             try:
-                ans = seam.read_line(gprompt).strip().lower()
+                ans = PC.timed_read(seam.read_line, gprompt).strip().lower()
             except (EOFError, KeyboardInterrupt):
                 seam.emit("command", "\n  (stopping here — the rest stay "
                           "pending, same as a skip)")
@@ -521,7 +522,7 @@ def vet_pending_proposals(where: str, live: bool,
                 prompt = f"  [{pid}] a)pprove, d)eny, s)kip ? "
             while True:
                 try:
-                    ans = seam.read_line(prompt).strip().lower()
+                    ans = PC.timed_read(seam.read_line, prompt).strip().lower()
                 except (EOFError, KeyboardInterrupt):
                     seam.emit("command", "\n  (stopping here — the rest stay "
                           "pending, same as a skip)")

@@ -43,6 +43,8 @@ This module is both, for **one** circle. The name is precise about it: this is w
 
 **A part that spoke never reaches dreaming as though it had been silent.** Before anything else on a live run, a backfill step repairs any speaking part whose note went missing, from the transcript. The order matters: repair first, then dream, or the file is fixed and the dream is not.
 
+**Every call this module makes that writes the record is on record itself — R412 (2026-08-30), R413 (2026-08-31).** Each dreaming request, the synthesis and its insisted re-ask, a safety-net reconstruction, and the mid_term refresh it triggers are written to the circle's own capture, `work/prompts/<OT>/`, as they are sent — the string system prompt, the one user message, the raw reply and its thinking — in the same per-request files the parts' own turns use, under the contract's second shape. The synthesis speaks for no one part, so its file is named by kind. The failure diagnostic is not recorded: it writes nothing. Under a live `/close` the capture is already open (circle.py's); a hand re-run opens it itself and closes it after. Those files land after the close commit took the directory, so the dream commit carries them — and is made for them even when no register moved.
+
 **Running twice is refused.** A completed run leaves a durable marker, and the guard consults it. There are two forms of that marker, and either one refuses a re-run: a file under `work/logs/`, written last by a successful run, and a git tag. The file exists because version control is optional here — a tree with no history has nowhere to keep a tag.
 
 The guard is careful in one specific direction: it must never answer "not processed" because the check itself failed, since that answer causes a circle to be dreamt twice. So where a history exists and git cannot answer, it raises rather than guessing. Where there is no history at all, no tag could exist, so the file is the whole record and its answer stands.
@@ -132,9 +134,14 @@ The one circle-wide call, over the five inputs named above. Returns the material
     Validate, render, stage.
     Gate the staged tree against the current one; any failure stops here with the
         tree untouched and the staging kept.
-    Commit, re-derive the distillate for the parts whose sources moved, and record
-        the marker.
+    Re-derive the distillate for the parts whose sources moved; commit the staged
+        files, the distillates, and every file in the circle's capture (the turns
+        recorded since the close commit took it — made even when nothing was
+        staged); record the marker.
     Return 0.
+    (Around all of it: a live run with no turn log open — the hand re-run — opens
+        the circle's own capture first and closes it after; under /close the log
+        is circle.py's and is left as found.)
 
 ## BUGS
 

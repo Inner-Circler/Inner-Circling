@@ -111,6 +111,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import self_schema as SS                                       # noqa: E402
+import settings as SET                                         # noqa: E402
 # paths.py is "the one home" these constants were re-derived beside
 # (2026-08-19, review tier 5 #41): this module carried its own ROOT and
 # SANDBOX with the R176 comment pasted in — the fossil of the 8-file
@@ -139,8 +140,10 @@ TABLE = "remember"
 ORDER = ("id", "date", "circle", "text", "chain", "class", "salience")
 
 RECORD_CAP = 600    # chars, a COORDINATOR-minted record (see the header)
-AUTHORED_WORD_CAP = 1000   # words, a PART's own [remember: ...] (R255)
-BUDGET = 24000      # chars, projected per part per block (see the header)
+AUTHORED_WORD_CAP = SET.value("remember_word_cap", 1000)   # words, a PART's
+                    # own [remember: ...] (R255)
+BUDGET = SET.value("remember_budget", 24000)   # chars, projected per part per
+                    # block (see the header)
 
 # ------------------------------------------------------- salience (DESIGN_V2)
 # "DREAMING extension -- salience-aware promotion/demotion",
@@ -159,7 +162,7 @@ SALIENCE_WEIGHT = {"passing": 0, "notable": 1, "charged": 1, "resolved": 2}
 # a genuinely charged/resolved memory to clear a couple of merely-newer
 # passing ones without a short, deeply-chained thread jumping the whole
 # window. Flagged for Self, not a ruling.
-SALIENCE_K = 3
+SALIENCE_K = SET.value("salience_lift", 3)
 
 # THE GATE'S CEILING, and it is deliberately NOT a third budget. Added
 # 2026-08-20, after it refused a real live close.
@@ -189,7 +192,7 @@ SALIENCE_K = 3
 # remember row said 600 and went on saying it after R255 raised the
 # authored ceiling. The identical defect, one row up, unnoticed because
 # nothing had written a long memory yet.
-GATE_CHAR_CEILING = 12000
+GATE_CHAR_CEILING = SET.value("remember_gate_ceiling", 12000)
 
 
 def _now() -> str:
@@ -463,8 +466,13 @@ def project(part: str) -> tuple[str, dict]:
     omitted). The one thing that could pull a record back is the bounded
     salience/chain reorder above — capped at SALIENCE_K positions, and a
     no-op on every record in this tree today, 0 of 25 carrying either
-    field. So the only lever a part actually has is to write the thing
-    again, which is what the standing guidance tells it to do."""
+    field. So the only lever a part actually had was to write the thing
+    again, which is what the standing guidance tells it to do — TRUE AS
+    MEASURED UNTIL 2026-08-29, when remember_expand.py (tier A recall)
+    gave eviction a topic-conditional return path: a seed matching the
+    day's topic or focus issues re-enters BLOCK 4 quoted above its minting
+    circle's excerpt, trial arm permitting. The standing view this
+    function renders is unchanged either way."""
     es = sorted(entries(part), key=lambda r: r.get("date", ""), reverse=True)
     if not es:
         return "", {"part": part, "total": 0, "shown": 0, "omitted": 0,

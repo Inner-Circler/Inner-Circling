@@ -17,19 +17,53 @@
 required = ["seq", "part", "kind", "time", "dry_run", "request", "response"]
 optional = ["error"]
 closed   = true
-kinds    = ["prewarm", "statement", "short_term"]
+# `kinds` LEFT THIS TABLE 2026-08-31 (R412/R413): the legal kinds are the union of
+# the two [shape.*] tables below, so a kind is declared in exactly one place.
 time_re  = '^\d{4}-\d{2}-\d{2}_\d{6}$'
 # a null response is legal ONLY for a turn that also records an error
 null_response_needs_error = true
-# the filename carries part, time and seq — it must agree with the body
+# the filename carries part, time and seq — it must agree with the body. `{part}` is
+# the ACTOR: the part's directory name, or, for a turn with no part (part = null —
+# the synthesis, the coalesce pass), the KIND: Per_turn_synthesis_<time>_<seq>.json.
 filename = "Per_turn_{part}_{time}_{seq:03d}.json"
-types    = { seq = "int", part = "str", kind = "str", time = "str", dry_run = "bool" }
+# `part` is typed by the shape: a str for a PART's turn, str-or-null for a processing one
+types    = { seq = "int", kind = "str", time = "str", dry_run = "bool" }
+
+# THE TWO TURN SHAPES, keyed on kind — 2026-08-31, R412 ("Yes, capture") and R413
+# ("Yes on D74"). A PART's turn carries the four-block system prompt and the rendered
+# transcript. A PROCESSING turn is a call the coordinator makes for itself at a live
+# /close — dreaming (per part), the synthesis, the mid_term refresh (per part), the
+# coalesce pass — with ONE plain-string system prompt, inline, and exactly one user
+# message carrying the material. Until R412 only the first shape was on record: every
+# processing call sends a string and `system = "list"` would have refused it, which is
+# why the capture hook sat unused from stage 1 of the provider socket (2026-08-28).
+# NOT HERE, by ruling: the failure diagnostic (it writes nothing) and dream_fold.
+[shape.part]
+kinds  = ["prewarm", "statement", "short_term", "backfill"]
+system = "list"
+part   = "str"
+
+[shape.processing]
+kinds  = ["dreaming", "synthesis", "mid_term", "coalesce"]
+system = "str"
+part   = "str|null"
+messages_exactly = 1
 
 [request]
 required = ["model", "max_tokens", "system", "messages"]
-optional = ["messages_omitted"]
+# `output_config` ADMITTED 2026-08-28 (R382 stage 4). It carries the provider's
+# translation of a declared knob — today `{effort = "..."}` — and is OPTIONAL
+# because the mapping returns nothing at the default, so a request at default
+# effort is byte-identical to one from before the tuning table existed.
+#
+# ADMITTED BY NAME, and the contract STAYS CLOSED. That is the whole reason
+# the tuning table is declared rather than opaque: an opaque blob passed
+# through verbatim would have forced `closed = false` here, and a request body
+# that admits arbitrary keys is one this file no longer checks.
+optional = ["messages_omitted", "output_config"]
 closed   = true
-types    = { model = "str", max_tokens = "int", system = "list", messages = "list" }
+# `system` is typed by the turn's SHAPE (a list of blocks, or one string) — see [shape.*]
+types    = { model = "str", max_tokens = "int", messages = "list", output_config = "dict" }
 # NOT a literal: the model is asserted against the code's own constant, read
 # from the source text rather than imported, so the two cannot drift apart.
 model_from = "coordinator/llm_client.py::MODEL"
@@ -44,7 +78,8 @@ entry_required = ["type", "block"]
 entry_one_of   = [["file", "sha256"], ["text"]]
 # THE CACHED-PREFIX CLAIM, asserted per request rather than assumed: blocks 1-3
 # carry cache_control and BLOCK 4 never does. It is what makes the cached prefix
-# 42,464 characters rather than 6,976.
+# 42,464 characters rather than 6,976. This table binds the PART shape only — a
+# processing turn's system is one string and has no blocks to order.
 cached         = ["circle_identity", "circle_objectives", "part_identity"]
 uncached       = ["part_objectives"]
 
@@ -60,9 +95,23 @@ alternates     = true
 # THE LIVE SHAPE. A dry run is a different and equally legal one — see
 # [response_dry_run] below; llm_client records "what WOULD have been sent"
 # with a canned text and no service reply at all.
+# `thinking` ADMITTED, AND THE SECTION CLOSED — 2026-08-29. The model reasons
+# on every statement and that reasoning was discarded; the operator ruled it
+# kept, behind llm_client.RECORD_THINKING. OPTIONAL because the setting can be
+# off and because every capture written before this date has no such key.
+#
+# CLOSING IT IS THE OTHER HALF, and is overdue rather than new. This body is
+# composed by _response_record() — OUR code, exactly like `request`, which this
+# file's own header calls strict for that reason. It was open, so the one place
+# a new response key could appear unannounced was the one place nothing would
+# have said so. `usage` stays open inside its own section: those members are the
+# provider's and arrive without notice, which is a different situation and is
+# already written down there.
 [response]
 required     = ["id", "model", "stop_reason", "text", "usage"]
-types        = { id = "str", model = "str", stop_reason = "str", text = "str", usage = "dict" }
+optional     = ["thinking", "thinking_redacted_blocks"]
+closed       = true
+types        = { id = "str", model = "str", stop_reason = "str", text = "str", usage = "dict", thinking = "str", thinking_redacted_blocks = "int" }
 stop_reasons = ["end_turn", "max_tokens", "stop_sequence", "tool_use", "refusal"]
 
 [response.usage]

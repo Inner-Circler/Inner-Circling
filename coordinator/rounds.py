@@ -131,9 +131,17 @@ def for_display(text: str) -> str:
 def ask_statement(client, part: str, blocks: list[dict], transcript: list[dict],
                   dry: bool) -> tuple[str | None, str | None]:
     """Returns (statement, to_whom) or (None, None) for a pass."""
+    # POPPED ONCE, REUSED FOR THE RETRY (B82, 2026-08-31). recall_index's own
+    # docstring already promised a SINGLE delivery ("the latest
+    # <recall_result>... appended to the tail"); nothing enforced it before
+    # this, and the same reply rode along, unexpired, on every later turn of
+    # a circle. Capturing it here — rather than re-reading RC.pending_text()
+    # at each call site — clears it from the pending slot immediately while
+    # still giving the truncation-retry below the SAME value: a retry is the
+    # same turn asked again, not a second delivery.
+    recall = RC.pop_pending(part)
     text, stop = call(client, part, blocks,
-                      render_messages(part, transcript,
-                                      recall=RC.pending_text(part)),
+                      render_messages(part, transcript, recall=recall),
                       MAX_TOKENS, dry)
     if stop == "max_tokens":
         # Truncation is a failure, not a statement. One retry, then give up.
@@ -146,7 +154,7 @@ def ask_statement(client, part: str, blocks: list[dict], transcript: list[dict],
             part, transcript,
             f"(the circle comes to you — speak in UNDER {LENGTH_MAX_WORDS} "
             f"words and finish your sentence, or reply [pass])",
-            recall=RC.pending_text(part),
+            recall=recall,
         )
         text, stop = call(client, part, blocks, msgs, MAX_TOKENS, dry)
         if stop == "max_tokens":

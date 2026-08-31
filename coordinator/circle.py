@@ -54,6 +54,7 @@ from __future__ import annotations
 
 import argparse
 import atexit
+import concurrent.futures
 import datetime
 # `os` went with the client construction at stage 2 (R382) — its only readers
 # here were the ANTHROPIC_API_KEY check and the .env fallback, both of which
@@ -775,31 +776,77 @@ def _interrupted_closes(base: pathlib.Path) -> list[tuple[str, list[str]]]:
         missing = sorted(p for p in spoke
                          if not (ROOT / "parts" / p /
                                  f"short_term_{ot_i}.md").is_file())
-        # ALL of them missing is an OPEN circle or an /abort, not an
-        # interrupted close — collect_short_terms writes in roster order,
-        # so a genuine interrupt leaves SOME written. circle_state's own
-        # warning above is what speaks to that case.
+        # ALL of them missing usually means an OPEN circle or an /abort, not
+        # an interrupted close — nobody has started closing yet, so nothing
+        # has been written. circle_state's own warning above is what speaks
+        # to that ordinary case.
         #
-        # UNLESS A CLOSE ACTUALLY BEGAN, 2026-08-23. mark_close_started()
-        # settles the ambiguity this exemption was built around: with the
-        # marker on disk the circle is neither open nor aborted, so
-        # all-missing is a real interrupted close and the last case nothing
-        # reported is reported. Without one — every circle closed before the
-        # marker existed — the exemption stands exactly as it did.
+        # THE REAL SIGNAL IS mark_close_started(), NOT COMPLETION ORDER.
+        # This comment used to read "collect_short_terms writes in roster
+        # order, so a genuine interrupt leaves SOME written" — true once,
+        # false since B89 (2026-08-31, R420) parallelized short_terms
+        # collection, where an interrupt can just as easily leave ALL of
+        # them missing. It was already unnecessary the day it stopped being
+        # true: mark_close_started(), written 2026-08-23 the instant a close
+        # BEGINS — before any short_term is collected, serial or not — settles
+        # the ambiguity on its own. With the marker on disk the circle is
+        # neither open nor aborted, so all-missing is a real interrupted
+        # close and is reported; without one — every circle closed before
+        # the marker existed — the exemption stands exactly as it always did.
+        # `missing` itself was always a plain per-part file-existence check,
+        # never order-dependent to begin with.
         if missing and (len(missing) < len(spoke) or _close_began(ot_i)):
             out.append((ot_i, [PART_TAGS[p] for p in missing]))
     return out
 
 
+def _dest_for(part: str, ot: str, guard) -> pathlib.Path:
+    return (SANDBOX / "parts" / part / f"short_term_{ot}.md") if not guard.live \
+        else (ROOT / "parts" / part / f"short_term_{ot}.md")
+
+
+def _short_term_call(part: str, sysblocks, transcript, dry: bool):
+    """Runs on a WORKER THREAD (B77's own discipline, R420): the Messages
+    API call only, own client per worker (R170's rule — costs nothing,
+    answers no thread-safety question). Returns (text, stop, missing,
+    notes) — `notes` are lines the caller emits once this part's future
+    completes, so no two parts' console lines can interleave.
+
+    One loop, two attempts (2026-08-19, review tier 5 #47): the retry used
+    to be a verbatim copy-paste of the first call four lines apart, so any
+    change to the request — budget, prompt, a stop-reason check — had to
+    land twice or the retry silently issued the old one. Semantics
+    unchanged: attempt 1 retries on a missing section OR truncation; the
+    retry's own result is judged on sections alone, exactly as before."""
+    notes: list[str] = []
+    worker_client = build_client()
+    text, stop, missing = "", None, SHORT_TERM_SECTIONS
+    for attempt in (1, 2):
+        # SHORT_TERM_MAX_TOKENS, not a literal here — see its own comment
+        # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
+        text, stop = call(
+            worker_client, part, sysblocks[part],
+            render_messages(part, transcript, SHORT_TERM_PROMPT),
+            SHORT_TERM_MAX_TOKENS, dry,
+            kind="short_term",
+        )
+        missing = [h for h in SHORT_TERM_SECTIONS if h not in text]
+        if not (missing or stop == "max_tokens") or attempt == 2:
+            break
+        notes.append(f"  {part:<12} FAILED "
+                    f"({'truncated' if stop == 'max_tokens' else 'missing ' + missing[0]}) "
+                    f"— retrying")
+    return text, stop, missing, notes
+
+
 def collect_short_terms(client, parts, sysblocks, transcript, ot, guard, dry) -> list[str]:
     spoke = {e["speaker"] for e in transcript}
-    written, failed = [], []
+    written, failed, todo = [], [], []
     for part in parts:
         if part not in spoke:
             emit("command", f"  {part:<12} did not speak — no short_term")
             continue
-        dest = (SANDBOX / "parts" / part / f"short_term_{ot}.md") if not guard.live \
-            else (ROOT / "parts" / part / f"short_term_{ot}.md")
+        dest = _dest_for(part, ot, guard)
         if dest.is_file():
             # An interrupted close already wrote this one — the resume
             # gate let the circle back in for exactly this case. The
@@ -810,68 +857,86 @@ def collect_short_terms(client, parts, sysblocks, transcript, ot, guard, dry) ->
             emit("command", f"  {part:<12} kept — written before the interrupt")
             written.append(part)
             continue
-        # One loop, two attempts (2026-08-19, review tier 5 #47): the
-        # retry used to be a verbatim copy-paste of the first call four
-        # lines apart, so any change to the request — budget, prompt,
-        # a stop-reason check — had to land twice or the retry silently
-        # issued the old one. Semantics unchanged: attempt 1 retries on
-        # a missing section OR truncation; the retry's own result is
-        # judged on sections alone, exactly as before.
-        for attempt in (1, 2):
-            # SHORT_TERM_MAX_TOKENS, not a literal here — see its own comment
-            # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
-            text, stop = call(
-                client, part, sysblocks[part],
-                render_messages(part, transcript, SHORT_TERM_PROMPT),
-                SHORT_TERM_MAX_TOKENS, dry,
-                kind="short_term",
-            )
-            missing = [h for h in SHORT_TERM_SECTIONS if h not in text]
-            if not (missing or stop == "max_tokens") or attempt == 2:
-                break
-            emit("command", f"  {part:<12} FAILED ({'truncated' if stop == 'max_tokens' else 'missing ' + missing[0]}) — retrying")
-        if missing:
-            failed.append(part)
-            emit("command", f"  {part:<12} FAILED — not written")
-            continue
+        todo.append(part)
+    if not todo:
+        return written
 
-        # THE REMEMBER COMES OUT BEFORE THE FILE IS WRITTEN (R255). A
-        # short_term is read by dreaming and by circle_audit; a remember
-        # reaches only this part's own BLOCK 4. Leaving the bracket in the
-        # .md would put a private note into the one document another
-        # process reads on the part's behalf.
-        #
-        # FALLBACK ON A LOST SECTION. split_close_remember() takes
-        # everything after the opener, which is what makes a "]" inside a
-        # long memory safe; if a part wrote the bracket mid-reply instead
-        # of last, that would swallow a heading. So the split is checked,
-        # not trusted: if any of the four went missing, the strict ASK_RE
-        # path (apply_remember) runs instead — it keeps the sections and
-        # gives up only the lenience.
-        #
-        # THE CHECK RUNS BEFORE ANY WRITE, and that ordering is the whole
-        # correctness of the fallback. split_close_remember() is PURE, so
-        # it can be consulted first. Deciding afterwards — writing the
-        # lenient record, then noticing a heading had gone — would leave
-        # the swallowed-heading version on file AND have the strict retry
-        # refuse itself as a second use this circle, since has_remembered()
-        # would already be True. One cap, read once, spent once.
-        if [h for h in SHORT_TERM_SECTIONS
-                if h not in MK.split_close_remember(text)[0]]:
-            text, recorded = apply_remember(
-                guard, part, PART_TAGS[part], text)
-        else:
-            text, recorded = MK.apply_close_remember(
-                guard, part, PART_TAGS[part], text)
-        if recorded:
-            emit("command", f"  {part:<12} remember written")
-        header = (f"# Short-term — {PART_TAGS[part]} — "
-                  f"{ot[:10]} {ot[11:]}\n\n*(Written by the local coordinator.)*\n\n")
-        guard.check(dest)
-        dest.parent.mkdir(parents=True, exist_ok=True)
-        write_lf(dest, header + text.strip() + "\n")
-        written.append(part)
-        emit("command", f"  {part:<12} wrote {dest}")
+    # THE CALLS RUN IN PARALLEL — B89/R420, 2026-08-31, on mid_term.refresh()'s
+    # own proven pattern (B77): ONLY _short_term_call() (the API request, its
+    # own client) runs on a worker thread. Every write — apply_remember /
+    # apply_close_remember (both touch `guard`), the file write, and every
+    # emit() — happens back HERE, on this thread, one finished part at a
+    # time via as_completed(), so nothing mutates a file or prints a line
+    # from a worker and no two parts' output can interleave.
+    #
+    # CTRL-C: deliberately NOT special-cased. `with ... as ex:` shuts down
+    # with its default wait=True, so an interrupt here lets in-flight calls
+    # (each already the sole cost — nothing is written until this thread
+    # sees the result) finish before propagating to the KeyboardInterrupt
+    # handler at the call site, same as dreaming's and mid_term.refresh()'s
+    # own pools. Slower to actually stop than the old serial code; no
+    # half-written file or discarded-but-unaccounted spend either way.
+    #
+    # THE ORDER GUARANTEE THIS REPLACES IS GONE ON PURPOSE. Until this
+    # change, _interrupted_closes() could infer a genuine interrupt from
+    # "some but not all" written, because collect_short_terms() wrote in
+    # roster order. It no longer does — see that function's own comment,
+    # corrected alongside this one — and does not need to: mark_close_started()
+    # (2026-08-23) already marks a close as begun independently of order,
+    # and the missing-set test there was always a plain per-part file check,
+    # never order-dependent to begin with.
+    emit("command", f"  {len(todo)} part(s) to write, in parallel:")
+    with concurrent.futures.ThreadPoolExecutor(len(todo)) as ex:
+        futs = {ex.submit(_short_term_call, p, sysblocks, transcript, dry): p
+               for p in todo}
+        for f in concurrent.futures.as_completed(futs):
+            part = futs[f]
+            text, stop, missing, notes = f.result()
+            for n in notes:
+                emit("command", n)
+            if missing:
+                failed.append(part)
+                emit("command", f"  {part:<12} FAILED — not written")
+                continue
+
+            # THE REMEMBER COMES OUT BEFORE THE FILE IS WRITTEN (R255). A
+            # short_term is read by dreaming and by circle_audit; a remember
+            # reaches only this part's own BLOCK 4. Leaving the bracket in the
+            # .md would put a private note into the one document another
+            # process reads on the part's behalf.
+            #
+            # FALLBACK ON A LOST SECTION. split_close_remember() takes
+            # everything after the opener, which is what makes a "]" inside a
+            # long memory safe; if a part wrote the bracket mid-reply instead
+            # of last, that would swallow a heading. So the split is checked,
+            # not trusted: if any of the four went missing, the strict ASK_RE
+            # path (apply_remember) runs instead — it keeps the sections and
+            # gives up only the lenience.
+            #
+            # THE CHECK RUNS BEFORE ANY WRITE, and that ordering is the whole
+            # correctness of the fallback. split_close_remember() is PURE, so
+            # it can be consulted first. Deciding afterwards — writing the
+            # lenient record, then noticing a heading had gone — would leave
+            # the swallowed-heading version on file AND have the strict retry
+            # refuse itself as a second use this circle, since has_remembered()
+            # would already be True. One cap, read once, spent once.
+            if [h for h in SHORT_TERM_SECTIONS
+                    if h not in MK.split_close_remember(text)[0]]:
+                text, recorded = apply_remember(
+                    guard, part, PART_TAGS[part], text)
+            else:
+                text, recorded = MK.apply_close_remember(
+                    guard, part, PART_TAGS[part], text)
+            if recorded:
+                emit("command", f"  {part:<12} remember written")
+            header = (f"# Short-term — {PART_TAGS[part]} — "
+                      f"{ot[:10]} {ot[11:]}\n\n*(Written by the local coordinator.)*\n\n")
+            dest = _dest_for(part, ot, guard)
+            guard.check(dest)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            write_lf(dest, header + text.strip() + "\n")
+            written.append(part)
+            emit("command", f"  {part:<12} wrote {dest}")
     if failed:
         fail(f"short_term NOT WRITTEN for: {', '.join(failed)} — these parts spoke "
              f"but have no record; the nightly transcript safety net will have to "

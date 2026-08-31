@@ -219,14 +219,24 @@ def classify_circle_paths(paths: list[str], ot: str) -> list[str]:
     return out
 
 
-def classify_dream_paths(paths: list[str]) -> list[str]:
-    """Paths in the dream commit outside inter_circle's own write set."""
+def classify_dream_paths(paths: list[str], ot: str) -> list[str]:
+    """Paths in the dream commit outside inter_circle's own write set.
+
+    `work/prompts/<ot>/` ADDED 2026-08-31 (B86) — R412/R413 (2026-08-30/31)
+    made the dream commit carry the circle's own prompt capture (every
+    dreaming/synthesis/mid_term-refresh turn file, and the manifest they
+    rewrote), the same allowance classify_circle_paths() already had for
+    its own commit. Until this, every live close reported its OWN designed
+    capture files as UNEXPECTED — confirmed against circle 2026-08-31_1013,
+    where the operator read the "what is this?" line as an alarm rather
+    than the designed record it was."""
     out = []
     for p in paths:
         p = p.replace("\\", "/")
         parts_hit = (p.startswith("parts/")
                      and p.split("/")[-1] in DREAM_PART_FILES)
-        if not (parts_hit or p in DREAM_SELF_FILES):
+        if not (parts_hit or p in DREAM_SELF_FILES
+                or p.startswith(f"work/prompts/{ot}")):
             out.append(p)
     return out
 
@@ -412,7 +422,7 @@ def collect(ot: str) -> dict:
         unexpected["dream_commit"] = (
             ["(merge commit under the tag — not classified)"]
             if _is_merge(dream_sha) else
-            classify_dream_paths(dream_files))
+            classify_dream_paths(dream_files, ot))
 
     return {
         "ot": ot,

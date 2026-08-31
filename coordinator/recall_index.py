@@ -142,12 +142,38 @@ def _norm(text: str) -> str:
     return text.translate(_TRANSLATE).casefold()
 
 
+def _is_quoted(text: str, start: int, end: int) -> bool:
+    """True when text[start:end] (a RECALL_RE match) sits inside a pair of
+    backticks — a part QUOTING the syntax to describe it, never a part
+    ISSUING it. Confirmed 2026-08-31_1013 (B82): Philosopher answered "can
+    you see a recall operation?" with `` `[recall: ...]` `` — illustrative,
+    not a request — and the old code ran it as a real (meaningless) query
+    anyway, then stripped the bracket from what the other six parts saw
+    that round, breaking the sentence live in their own context. Every
+    GENUINE invocation this circle was unwrapped; this is the cheap,
+    evidenced signal that tells the two apart."""
+    return (start > 0 and text[start - 1] == "`"
+            and end < len(text) and text[end] == "`")
+
+
+def _executable_matches(text: str) -> list[re.Match]:
+    """Every RECALL_RE match in `text` that is NOT backtick-quoted — the
+    ones apply_recall() may actually run."""
+    return [m for m in RECALL_RE.finditer(text)
+           if not _is_quoted(text, m.start(), m.end())]
+
+
 def strip_recall(text: str) -> str:
-    """Remove every recall bracket, valid or malformed alike, and tidy the
-    whitespace the removal left behind — the same three tidy operations as
-    markers.strip_remember(), for the same reason: the live path and the
-    resume path must produce byte-identical room text."""
-    cleaned = RECALL_RE.sub("", text)
+    """Remove every EXECUTABLE recall bracket, valid or malformed alike,
+    and tidy the whitespace the removal left behind — the same three tidy
+    operations as markers.strip_remember(), for the same reason: the live
+    path and the resume path must produce byte-identical room text. A
+    backtick-quoted bracket is prose ABOUT the syntax, not a use of it, and
+    is left exactly as written (B82) — nothing here is stripped from a
+    part's own description of the feature."""
+    def _sub(m: re.Match) -> str:
+        return m.group(0) if _is_quoted(text, m.start(), m.end()) else ""
+    cleaned = RECALL_RE.sub(_sub, text)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
     return cleaned.strip()
@@ -434,21 +460,39 @@ def set_arm(arm: str) -> None:
 
 
 def pending_text(part: str) -> str | None:
+    """A PEEK — does not consume. Tests and diagnostics read this; the room
+    prompt uses pop_pending() instead, so a reply is never delivered twice
+    (B82)."""
     return _PENDING.get(part)
+
+
+def pop_pending(part: str) -> str | None:
+    """Read AND CLEAR this part's private reply in one step — the one call
+    render_messages() actually reaches for. Its own docstring already said
+    the delivery is singular ("the latest <recall_result>... appended to
+    the tail"); until B82 (2026-08-31) nothing enforced that, and a reply
+    rode along unexpired on every one of a part's later turns for the rest
+    of the circle. A retry within the SAME turn (rounds.ask_statement's
+    truncation path) captures the popped value once and reuses it for both
+    attempts — it is one delivery, not two, even though the API is called
+    twice."""
+    return _PENDING.pop(part, None)
 
 
 def apply_recall(part: str, display: str, text: str, *,
                  live: bool) -> tuple[str, bool]:
-    """Recognize, execute, and silently remove every RECALL annotation in
-    ONE statement before it can reach the ROOM. Returns (stripped_text,
+    """Recognize, execute, and silently remove every EXECUTABLE RECALL
+    annotation in ONE statement before it can reach the ROOM — a
+    backtick-quoted one (`` `[recall: ...]` ``) is left untouched, prose
+    about the syntax rather than a use of it (B82). Returns (stripped_text,
     asked). The returned text is the ROOM's; the caller keeps its own raw
     text for the transcript FILE, bracket intact — apply_remember()'s own
     contract, kept exactly (docs/BNF.md, RECALL).
 
     NEVER RAISES: a recall failure is a private error reply and a loud
     command-pane line, and the statement proceeds unharmed."""
-    brackets = RECALL_RE.findall(text)
-    if not brackets:
+    matches = _executable_matches(text)
+    if not matches:
         return text, False
     room = strip_recall(text)
     try:
@@ -462,7 +506,7 @@ def apply_recall(part: str, display: str, text: str, *,
             reply = ("<recall_result>\none recall per round — this one was "
                      "not run; ask again next round.\n</recall_result>")
         else:
-            body = brackets[-1]         # latest wins, same as the slot
+            body = matches[-1].group(0)  # latest EXECUTABLE bracket wins
             body = body[body.index(":") + 1:-1]
             q = parse(body)
             if q["errors"]:

@@ -38,10 +38,12 @@ WHY THIS IS A GATE AND NOT A REPORT
                                      so one corrupt file poisons every prompt at once
                                      and the cached prefix holds it for the whole
                                      circle rather than for one turn.
-      work/manifests/*.json          The retired batch nightly's manifests — dead
-                                     records since 2026-08-19 (circle_audit.py reads
-                                     dream/<OT> git tags instead). Still swept:
-                                     corruption under work/ should never hide.
+      work/manifests/*.json          NOT product runtime data — this repo's own
+                                     .claude/skills/workflow dev-tooling writes its
+                                     own task manifests here (verified 2026-08-31:
+                                     no coordinator/*.py reads or writes this
+                                     schema). Real engineering work-logs, still
+                                     swept: corruption under work/ should never hide.
       circles/*.md                   The single canonical record. parts_that_spoke()
                                      parses it, and the close report, --reconcile and
                                      the transcript safety net all read it. A part

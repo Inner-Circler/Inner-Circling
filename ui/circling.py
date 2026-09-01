@@ -265,6 +265,13 @@ class Pane:
         # of the same text instead of less text.
         self.logical: list[str] = []
         self.width: int | None = None    # None = no wrapping (see wrap_line)
+        # THE REDACTED VIEW (2026-08-31) — set_redact()'s own flag. Off by
+        # construction for BOTH panes; only main_loop ever calls
+        # set_redact(), and only on state.circle — the command pane simply
+        # never has it flipped on, which is what "never in any lower tab"
+        # means at this level: no per-pane-kind check needed, because
+        # nothing ever calls the setter on this pane.
+        self.redact_view = False
         self.input_buf = ""
         self.input_cursor = 0          # index into input_buf; 0..len(input_buf)
         self.scroll_top: int | None = None
@@ -303,7 +310,18 @@ class Pane:
         # match reality: one row in, one row out.
         for one in (line.split("\n") if "\n" in line else [line]):
             self.logical.append(one)
-            self.lines.extend(wrap_line(one, self.width))
+            self.lines.extend(wrap_line(self._display_line(one), self.width))
+
+    def _display_line(self, one: str) -> str:
+        """The rendered form of one LOGICAL line — redacted when this
+        pane's redact_view is on, verbatim otherwise. Presentation only:
+        `self.logical` (and everything the transcript file holds) is
+        never touched, only what THIS pane derives from it for the
+        screen."""
+        if not self.redact_view:
+            return one
+        import redaction as RDX
+        return RDX.redact(one)
 
     def body_needs_repaint(self, input_rows: int = 1) -> bool:
         """Whether the BODY rows are stale — i.e. whether `visible()` has
@@ -402,28 +420,46 @@ class Pane:
         self.scroll_top = max(0, index)
         self._painted = None
 
+    def _rebuild(self) -> None:
+        """Re-derive `.lines` from `.logical` under whatever is currently
+        true of this pane — width, and (2026-08-31) redact_view. Shared by
+        set_width() and set_redact(): TOGGLING REDACTION IS
+        ARCHITECTURALLY A RESIZE — both are "the same source lines render
+        differently now" — so one rebuild body serves both rather than
+        two copies of the same loop drifting apart.
+
+        SCROLL POSITION IS CLAMPED, NOT PRESERVED, for either caller.
+        Re-deriving changes how many rows the same text occupies, so an
+        absolute row index means something different afterwards — see
+        set_width()'s own long-standing reasoning, which now covers both."""
+        rows: list[str] = []
+        for one in self.logical:
+            rows.extend(wrap_line(self._display_line(one), self.width))
+        self.lines = rows
+        if self.scroll_top is not None:
+            self.scroll_top = max(0, min(self.scroll_top, self._max_top()))
+        self._painted = None
+
     def set_width(self, width: int | None) -> None:
         """Adopt a display width and RE-WRAP everything already held.
 
         Called by render_pane_body on every paint, so a terminal resize
         reflows the whole scrollback instead of re-slicing it. Cheap and
-        idempotent: it returns at once unless the width actually moved.
-
-        SCROLL POSITION IS CLAMPED, NOT PRESERVED. Re-wrapping changes how
-        many rows the same text occupies, so an absolute row index means
-        something different afterwards. A real terminal does the same thing
-        on resize; pinning the anchor to a logical line instead would be a
-        second scroll model, and the pane already has one."""
+        idempotent: it returns at once unless the width actually moved."""
         if width == self.width:
             return
         self.width = width
-        rows: list[str] = []
-        for one in self.logical:
-            rows.extend(wrap_line(one, width))
-        self.lines = rows
-        if self.scroll_top is not None:
-            self.scroll_top = max(0, min(self.scroll_top, self._max_top()))
-        self._painted = None
+        self._rebuild()
+
+    def set_redact(self, flag: bool) -> None:
+        """Flip the redacted view and re-render everything already held —
+        toggling mid-circle changes what is ALREADY on screen, not only
+        what arrives after, matching how Ticker's own redact toggle
+        behaves (2026-08-31). Idempotent, same discipline as set_width()."""
+        if flag == self.redact_view:
+            return
+        self.redact_view = flag
+        self._rebuild()
 
     def resize(self, height: int) -> None:
         """Change how many lines this pane shows, e.g. after the terminal
@@ -2971,6 +3007,13 @@ def main_loop(engine: "CircleEngine | None" = None,
     # typing lands.
     state = AppState(*_pane_heights(rows, "circle"), backend=engine)
     assert state.focus == "circle", "opening split must match opening focus"
+    # THE REDACTED VIEW'S OWN DEFAULT (2026-08-31) — seeded here, not in
+    # AppState.__init__, which self_test() and test_circling.py's stub
+    # engine both exercise headless with zero coordinator imports. Only
+    # the CIRCLE pane is seeded; state.command's redact_view stays False
+    # for the life of the window.
+    import redaction as RDX
+    state.circle.set_redact(RDX.REDACT_VIEW_DEFAULT)
     extra_argv = list(extra_argv or [])
 
     # `engine is None` (the default) is byte-for-byte the demo path this
@@ -3086,6 +3129,21 @@ def main_loop(engine: "CircleEngine | None" = None,
                             # over, in order with the lines around it.
                             if state.on_state(line) == "focus":
                                 refocus = True
+                            drained = True
+                            continue
+                        if channel == "redact_view":
+                            # NOT CONTENT EITHER (2026-08-31): the
+                            # redact_view setting's own live-toggle signal
+                            # (cmd_settings_update/_clear, via
+                            # coordinator/seam.py). Applies ONLY to the
+                            # CIRCLE pane, by name — never state.command,
+                            # which is the whole of "never in any lower
+                            # tab" at this level. Position matters: this
+                            # must be handled before the `target = ...`
+                            # line below, or an unhandled item here would
+                            # fall into state.command by default and
+                            # print the literal word "on"/"off" there.
+                            state.circle.set_redact(line == "on")
                             drained = True
                             continue
                         target = state.circle if channel == "circle" else state.command
@@ -4886,6 +4944,60 @@ def self_test() -> int:
     check("narrowing reflows back", len(pw.lines) == wide)
     check("set_width is idempotent — the same width does not rebuild",
           (pw.set_width(20), pw.lines == pw.lines)[1])
+
+    # --- set_redact: toggling is architecturally a resize (2026-08-31) --
+    sys.path.insert(0, str(COORD_DIR))   # _command_surface()'s own pattern
+    import redaction as _RDX
+    import tempfile as _tempfile
+    _live_alias, _live_map = _RDX.ALIAS_PATH, _RDX.MAP_PATH
+    with _tempfile.TemporaryDirectory() as _td:
+        _RDX.ALIAS_PATH = pathlib.Path(_td) / "redaction.toml"
+        _RDX.MAP_PATH = pathlib.Path(_td) / "redaction_map.toml"
+        _RDX._alias_cache.update(mtime="unread", re=None, form_to_row={})
+        _RDX.add_alias("Alice Smith", "person", ["Alice"])
+
+        pr = Pane("c", "> ", 10)
+        pr.set_width(40)
+        pr.append("Alice Smith walked in.")
+        before = list(pr.lines)
+        check("redact_view starts off", not pr.redact_view)
+        check("unredacted by default", "Alice Smith" in before[0])
+
+        pr.set_redact(True)
+        check("toggling ON redacts an ALREADY-SHOWN line, not only future "
+              "ones — the whole point of sharing _rebuild() with resize",
+              "Alice Smith" not in pr.lines[0] and "P1" in pr.lines[0])
+        check(".logical (the record) is untouched by redaction",
+              pr.logical == ["Alice Smith walked in."])
+
+        pr.set_redact(True)
+        check("set_redact is idempotent — the same flag does not rebuild",
+              pr.lines == pr.lines)
+
+        pr.set_redact(False)
+        check("toggling OFF restores the original rendering",
+              pr.lines == before)
+
+        for n in range(8):
+            pr.append(f"Alice Smith line {n}, long enough to wrap at 40")
+        pr.height = 3
+        pr.scroll_top = pr._max_top()   # pin to the current bottom-most top
+        wide_lines, wide_top = len(pr.lines), pr.scroll_top
+        pr.set_redact(True)             # "P1" is shorter -> fewer rows
+        check("redacting shrank the row count (shorter token, same lines)",
+              len(pr.lines) < wide_lines)
+        check("an out-of-range scroll_top clamps under set_redact exactly "
+              "as it does under set_width/resize — same _rebuild(), same "
+              "clamp, never left pointing past the new end",
+              pr.scroll_top <= pr._max_top())
+        check("...and it actually WOULD have been out of range unclamped "
+              "— the test is real, not vacuously true",
+              wide_top > pr._max_top())
+        pr.set_redact(False)
+        check("toggling back restores the wider row count",
+              len(pr.lines) == wide_lines)
+    _RDX.ALIAS_PATH, _RDX.MAP_PATH = _live_alias, _live_map
+    _RDX._alias_cache.update(mtime="unread", re=None, form_to_row={})
 
     # --- Scrolling: Pane-level, direct (no AppState involved) -----------
     p = Pane("T", "t> ", height=4)

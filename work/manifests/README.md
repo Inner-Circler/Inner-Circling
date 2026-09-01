@@ -5,13 +5,16 @@ ships the directory with nothing in it; git does not track empty
 directories, so this README is what keeps the directory present in a
 clone.
 
-**Nothing writes or reads this directory today.** It held dreaming-run
-manifests, `*.json` and `*-dreaming.json`, written by the batch nightly.
-That path is gone: batch processing was removed (one run is one circle,
-processed synchronously at `/close`), and `coordinator/circle_audit.py`
-— which this file named as `nightly.py` until 2026-08-19 — says so in
-its own docstring: *"the dreaming manifests under work/manifests/ are
-dead records; nothing here reads them any more."*
+**No coordinator/*.py reads or writes this directory.** It was long
+described here as the retired batch nightly's dead manifest output;
+that attribution was wrong, corrected 2026-08-31 alongside the same
+error in `coordinator/check_integrity.py` and `coordinator/circle_audit.py`.
+The real project's own `work/manifests/*.json` files are written by
+this repo's development tooling — `.claude/skills/workflow`, a Claude
+Code skill that tracks its own multi-step engineering tasks there. That
+is repo-development infrastructure, not shipped product code, so a
+fresh install's own `work/manifests/` never gets populated by anything
+the product itself does.
 
 The directory still ships because the exceptions entry still names it,
 and an empty delegate is cheaper than a special case. If that entry ever

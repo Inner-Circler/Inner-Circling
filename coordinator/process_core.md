@@ -5,42 +5,8 @@ Version: 2026-08-19 · public delegate, derived 2026-08-07
 HAND-EDITING THIS FILE: never a markdown-aware editor. No automated
 check exists for this file right now — verify by hand after every save:
 diff against the last committed version, confirm every [pass] [To:
-[propose [request marker survived, confirm headings and order are
+[remember: [proposed: marker survived, confirm headings and order are
 unchanged. See docs/editingExport.md.
-
-2026-08-12: applied the SAME two changes as the live coordinator/
-process_core.md's own 2026-08-12 edit — [hold] retired to [propose
-mark] (ruled: "lose the [n]" / "skip references to other statements
-for now"), and "Your objectives" now names [remember: ...] rather than
-the retired ask-fragments mechanism (retired one day earlier,
-2026-08-11's asks/acts retirement, which this delegate had also missed).
-Diffed against the version committed 2026-08-07; not a full re-review
-of everything that moved since — see docs/editingExport.md's own
-"When the original changes" procedure for what a full one would need.
-
-2026-08-14: applied the SAME sync as the live coordinator/
-process_core.md's own 2026-08-14 edit — MARK, and PROPOSE MARK with
-it, RETIRED WHOLESALE, code included (docs/BNF.md). "Asking for
-something" drops from three markers to two; the [propose mark] bullet
-is gone, not replaced.
-
-2026-08-19 (R254/R255): "Asking for something" is REPLACED by the
-ANNOTATIONS section, lifted VERBATIM from the live coordinator/
-process_core.md rather than paraphrased — it is the one section a
-parser has to agree with, and this copy had drifted far enough to
-teach two forms the code no longer accepts: `[request ...]`, retired
-2026-08-16 into `[propose]` (R202), and the bare
-`[propose nNNNN leads-to nMMMM]` relation form, which is now
-`[propose /issue-relationship-add nNNNN <type> nMMMM]`. Both had
-been shipped teaching a delegate to type brackets that would have been
-reported malformed. The close section gains the remember instruction
-for the same reason.
-
-THIS SECTION IS NOW COVERED BY A PROBE, and the header note above ("no
-automated check exists for this file") is no longer true of it:
-coordinator/tests/test_annotation_exemplars.py parses the LIVE rulebook's
-exemplars, and a divergence between that file and this one is a diff
-away. The rest of this document is still hand-verified.
 -->
 
 ## What you are
@@ -303,18 +269,7 @@ with reverence.
 **It is present in every circle and it does speak** — rarely, and on its own
 terrain.
 
-If you are the Soul:
-
-- **Default to `[pass]`.** Silence is your normal state and costs you nothing. You
-  are not obliged to fill it.
-- **Speak when the foundational ground itself is in question** — the things the
-  named parts formed *around*, rather than the things they do — or when Self
-  addresses you directly. What that ground is for this circle is yours to know,
-  and it is written in your own identity, not here.
-- **Stay quiet when the circle is working on constructed mechanism** that belongs
-  to the named parts. Trust the room to route what is underneath to you if it is
-  needed.
-- When you do speak, answer as one thing, not layer by layer.
+How the Soul speaks is the Soul's own to know, and reaches that part alone.
 
 ---
 

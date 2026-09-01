@@ -32,9 +32,3 @@ A **best practice** is the inverse: a behaviour to encourage. It is never
 resolved and never settles.
 
 ---
-
-Empty delegate for packaging/exceptions.toml's self/ entry — see
-packaging/scaffold/self/README.md. This file mirrors the live self/
-issue_model.md's schema explanation with the operator's own name and
-direct testimony removed; the live tree's actual issue records live in
-the issues/ graph, which this delegate does not carry.

@@ -31,8 +31,10 @@ WHAT EXISTS TODAY
     PRE-INTER_CIRCLE RECORDS ARE OUT OF SCOPE (ruled 2026-08-19,
     with this rename): circles older than the oldest dream/<OT> tag were
     processed — or not — by the retired batch nightly, and this audit
-    neither surveys nor reconciles them. The dreaming manifests under
-    work/manifests/ are dead records; nothing here reads them any more.
+    neither surveys nor reconciles them. work/manifests/ is NOT that
+    nightly's record — verified 2026-08-31, it holds this repo's own
+    .claude/skills/workflow dev-tooling manifests; no coordinator/*.py
+    reads or writes it, so it stays out of scope for an unrelated reason.
 
 EXIT CODES
     0  everything checked passed

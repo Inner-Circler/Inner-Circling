@@ -454,6 +454,96 @@ def cmd_practice_add(text: str, record=None) -> tuple[bool, str]:
 # the /issue command forms; imported at the top of this file.
 
 
+# --------------------------------------------------------- /redact-alias-*
+REDACT_ADD_USAGE = '/redact-alias-add "<canonical>" [<kind>] ["<form>" ...]'
+REDACT_UPDATE_USAGE = ('/redact-alias-update <n> "<canonical>" '
+                       '["<form>" ...]  — kind is not editable; delete and '
+                       're-add to change it')
+
+
+def _redact_alias_args(rest: str) -> tuple[str, str, list[str]]:
+    """`"<canonical>" [<kind>] ["<form>" ...]` -> (canonical, kind, forms).
+    kind defaults to "" (caller decides "other") when no bare word sits
+    between the first quoted string and the next. THE FIRST CHARACTER
+    DECIDES, the same rule _issue_add_args uses: a canonical must be
+    quoted, or nothing here parses. Straight or curly quotes, same as
+    that parser — Self types straight, a part (if it ever reaches this
+    grammar) would type curly."""
+    s = " ".join(rest.split()).strip()
+    if not s or s[0] not in ('"', "“"):
+        return "", "", []
+    matches = list(_ISSUE_ADD_ARG_RE.finditer(s))
+    if not matches:
+        return "", "", []
+
+    def _text(m) -> str:
+        return (m.group(1) if m.group(1) is not None
+                else m.group(2) or "").replace('\\"', '"').strip()
+
+    canonical = _text(matches[0])
+    between_end = matches[1].start() if len(matches) > 1 else len(s)
+    between = s[matches[0].end():between_end].strip()
+    kind = between.split()[0].lower() if between else ""
+    forms = [_text(m) for m in matches[1:]]
+    return canonical, kind, forms
+
+
+def cmd_redact_alias_add(text: str, record=None) -> tuple[bool, str]:
+    import redaction as RDX
+    canonical, kind, forms = _redact_alias_args(text)
+    if not canonical:
+        msg = f"usage: {REDACT_ADD_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    ok, msg = RDX.add_alias(canonical, kind or "other", forms)
+    seam.emit("command", f"  {msg}")
+    if ok and record is not None:
+        record()
+    return ok, msg
+
+
+def cmd_redact_alias_update(text: str, record=None) -> tuple[bool, str]:
+    import redaction as RDX
+    toks = (text or "").split(None, 1)
+    n_str = toks[0] if toks else ""
+    rest = toks[1] if len(toks) > 1 else ""
+    if not n_str.isdigit():
+        msg = f"usage: {REDACT_UPDATE_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    # kind (the second return value) is discarded here on purpose — kind
+    # is not editable via update, so a bare word after the canonical is
+    # silently ignored rather than mistaken for a form.
+    canonical, _kind, forms = _redact_alias_args(rest)
+    if not canonical:
+        msg = f"usage: {REDACT_UPDATE_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    ok, msg = RDX.update_alias(int(n_str), canonical, forms)
+    seam.emit("command", f"  {msg}")
+    if ok and record is not None:
+        record()
+    return ok, msg
+
+
+def cmd_redact_alias_delete(arg: str, record=None) -> None:
+    import redaction as RDX
+    a = arg.strip()
+    if not a.isdigit():
+        seam.emit("command", "  usage: /redact-alias-delete <n>  — the "
+                             "number /redact-alias-list showed")
+        return
+    ok, msg = RDX.delete_alias(int(a))
+    seam.emit("command", f"  {msg}")
+    if ok and record is not None:
+        record()
+
+
+def cmd_redact_alias_list() -> None:
+    import redaction as RDX
+    seam.emit("command", RDX.listing())
+
+
 def _run_captured(argv: list[str]) -> tuple[str, int]:
     r = subprocess.run([sys.executable] + argv, cwd=str(ROOT),
                        capture_output=True, text=True, encoding="utf-8")
@@ -698,6 +788,8 @@ def cmd_settings_update(rest_text: str, *, interactive: bool = True) -> None:
     if value:
         ok, msg = SET.write(spec.key, value, now=_no_circle_open())
         seam.emit("command", ("  " + msg) if ok else f"  not changed — {msg}")
+        if ok:
+            _signal_redact_view_write(spec, value)
         seam.emit("command", "")
         return
     if not interactive:
@@ -711,7 +803,39 @@ def cmd_settings_update(rest_text: str, *, interactive: bool = True) -> None:
         return
     ok, msg = SET.write(spec.key, answer, now=_no_circle_open())
     seam.emit("command", ("  " + msg) if ok else f"  not changed — {msg}")
+    if ok:
+        _signal_redact_view_write(spec, answer)
     seam.emit("command", "")
+
+
+def _signal_redact_view_write(spec, raw) -> None:
+    """redact_view's own live-toggle wiring (2026-08-31): the one setting
+    a Pane already on screen needs told about directly, because a running
+    circle never re-reads its saved setting on its own. Fires only while
+    a circle IS open — with none running there is no pane to flip, and
+    SET.write()'s own "takes effect now" is already the whole truth in
+    that case. seam.py silences the "redact_view" channel for a headless
+    run, so this costs nothing there."""
+    if spec.key != "redact_view" or _no_circle_open():
+        return
+    import settings as SET
+    ok, parsed, _why = SET.coerce(spec, raw)
+    if not ok:
+        return
+    seam.emit("redact_view", "on" if parsed else "off")
+    seam.emit("command", "  the view has changed now; the saved default "
+                        "takes effect from the next circle")
+
+
+def _signal_redact_view_clear() -> None:
+    """clear()'s own counterpart: back to REDACT_VIEW_DEFAULT, same
+    live-while-a-circle-runs rule as the write path above."""
+    if _no_circle_open():
+        return
+    import redaction as RDX
+    seam.emit("redact_view", "on" if RDX.REDACT_VIEW_DEFAULT else "off")
+    seam.emit("command", "  the view has changed now; the saved default "
+                        "takes effect from the next circle")
 
 
 def cmd_settings_clear(rest_text: str) -> None:
@@ -725,6 +849,8 @@ def cmd_settings_clear(rest_text: str) -> None:
         return
     ok, msg = SET.clear(key)
     seam.emit("command", "  " + msg)
+    if ok and key == "redact_view":
+        _signal_redact_view_clear()
 
 
 def _no_circle_open() -> bool:
@@ -821,6 +947,17 @@ def dispatch_dev_cmd(head: str, rest_text: str, *, record=None,
         cmd_settings_update(rest_text, interactive=interactive)
     elif head == "/settings-clear":
         cmd_settings_clear(rest_text)
+    elif head == "/redact-alias-add":
+        # No `record`/`guard` — same reasoning as /settings-*: this writes
+        # self/redaction.toml directly, never the transcript, and needs no
+        # live/sandbox split.
+        cmd_redact_alias_add(rest_text)
+    elif head == "/redact-alias-list":
+        cmd_redact_alias_list()
+    elif head == "/redact-alias-update":
+        cmd_redact_alias_update(rest_text)
+    elif head == "/redact-alias-delete":
+        cmd_redact_alias_delete(rest_text)
     elif head == "/practice-add":
         cmd_practice_add(rest_text, record=record)
     elif head == "/practice-list":

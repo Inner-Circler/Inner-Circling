@@ -147,6 +147,11 @@ transcript; your own short_term for it, if you spoke; and — if one exists — 
 recent memory in your own chain (a note your dreaming pass left for you last time,
 including how charged it was, if you said so).
 
+The transcript is the WHOLE circle — every part's lines, each tagged with who said
+it, not only yours. Write only about what YOU said or experienced. If no short_term
+for you appears above, you did not speak this circle; nothing in the transcript is
+yours to claim in your own voice, however vivid, and MEMORY should be empty.
+
 Write AT MOST ONE memory to carry forward to your own next circle. This is not a
 summary of the circle — it is a note from you, to your future self, in your own voice,
 about what to hold going into the next one. If a prior memory exists below, either

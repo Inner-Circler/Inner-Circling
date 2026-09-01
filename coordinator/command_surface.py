@@ -279,6 +279,31 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "waits for the next one to open", "command"),
     ("/settings-clear <name>",
      "put one setting back to what the code decides", "command"),
+    # THE REDACTION REGISTRY — 2026-08-31, the operator: "a raw/redacted
+    # switch can be on the settings page, support CRUD of target strings,
+    # offer stable reversable opaque ids." USER table beside /settings-*
+    # for the same reason: curating what YOUR OWN redacted view hides is
+    # a tool for yourself, not a dev surface. NOT IN PROPOSE_SUBSET_COMMANDS
+    # and NEVER should be — the same ruling settings.py's own rows cite: a
+    # part has no legitimate path to naming what its own operator wants
+    # hidden. test_settings.py asserts the exclusion against all three
+    # sets a proposal could travel through, same as /settings-*.
+    ('/redact-alias-add "<canonical>" [<kind>] ["<form>" ...]',
+     "curate a name/place/org to hide in the redacted CIRCLE-pane\n"
+     "view — kind is one of: person, place, org, other (default).\n"
+     "Extra quoted forms are matched alongside the canonical one,\n"
+     "longest-first. Part names are refused outright — they are\n"
+     "never redacted, in circles or consults", "command"),
+    ("/redact-alias-list",
+     "the alias registry, numbered — id, kind, canonical label\n"
+     "and every form, one row each", "command"),
+    ('/redact-alias-update <n> "<canonical>" ["<form>" ...]',
+     "edit one alias's canonical/forms in place — same id, same\n"
+     "kind. Kind is not editable here: delete and re-add to\n"
+     "change it, rather than leave an id's prefix meaning\n"
+     "something its own row no longer says", "command"),
+    ("/redact-alias-delete <n>",
+     "remove one, by the number /redact-alias-list showed", "command"),
     ("/help",
      "this list", "command"),
     ("/close",
@@ -432,6 +457,11 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
     # settings.visible(dev) decides what it shows — R266's "dev adds, never
     # takes away", one level down from the verb to the field.
     "/settings-list", "/settings-update", "/settings-clear",
+    # THE REDACTION-REGISTRY VERBS RIDE THE USER TABLE for the same reason
+    # /settings-* does — curating what your own redacted view hides is a
+    # tool for yourself. 2026-08-31.
+    "/redact-alias-add", "/redact-alias-list", "/redact-alias-update",
+    "/redact-alias-delete",
     # /abort LEFT this table 2026-08-31 with its reclassification to the
     # circle pane (R414) — like /close, /round and /pass it
     # is no command-pane verb, and these tables are the command pane's.

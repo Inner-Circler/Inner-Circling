@@ -276,6 +276,25 @@ SPEC: tuple[Setting, ...] = (
        "Whether a circle's close prints and files its delta report",
        "BOOL", 1, "user", "immediate",
        "coordinator/circle_delta.py::CIRCLE_STATS", gate="ONE_OF"),
+    # THE REDACTED VIEW — the operator, 2026-08-31: "a raw/redacted switch
+    # can be on the settings page ... applied: only in the top pane, never
+    # in any lower tab." `user`, same reasoning as circle_stats: this is
+    # ui/circling.py's own CIRCLE-pane toggle, not a dev tool. `immediate`
+    # for the same reason too — it shapes no prompt and spends nothing, it
+    # only changes what the pane RENDERS. One nuance worth knowing rather
+    # than assuming away: `SET.write()` still defers the SAVED value to
+    # `[pending]` while a circle is open, same as every other setting, even
+    # though the LIVE pane view flips at once through its own signal
+    # (ui/circling.py's Pane.set_redact(), wired from cmd_settings_update) —
+    # so toggling mid-circle changes what you see now, and the saved
+    # default for the NEXT circle, on two different clocks. Worth saying
+    # both halves in the reply text rather than letting it read as if it
+    # behaved like every other immediate setting.
+    _s("redact_view",
+       "Whether the CIRCLE pane shows names/emails/phones as opaque "
+       "tokens instead of the real text",
+       "BOOL", 1, "user", "immediate",
+       "coordinator/redaction.py::REDACT_VIEW_DEFAULT", gate="ONE_OF"),
     # THE CLOSE'S OWN CLOCK — ruled 2026-08-30: "After circle /close, I want
     # to aim for no more than 5 minutes, and progress must be being reported
     # in the command pane at least every 10 seconds, even if its just a

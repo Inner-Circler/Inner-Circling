@@ -17,6 +17,8 @@ A record's addressee is one of "All parts" (broadcasts to BLOCK 1, `circle_ident
 
 The simple resolution paths and every read go through `propose_class.ProposeClass`, the shared PROPOSE-class base (docs/HELP_DESIGN.md §6, built 2026-08-16), instantiated at module level as `_PC` with this register's own table name, field order, staging-only fields, id format (`BP-NNNN`), author field (`origin`), clock (`_now()`, UTC) and a post-mutate hook (`_sync_tally`) that keeps the file header's `**Entries: N**` claim true on every save. The lambdas it is built from re-read this module's globals on each call, so the test harnesses' practice of swapping `BP` and `_doc` as module attributes keeps working. Only `approve()`'s op dispatch (add/revise/delete) stays this module's own.
 
+**`kind` gained an enforced half of its correlation with `addressee` on 2026-08-31 (R421/B90).** R136 (2026-08-11) left `kind` free-text, populated on rows descended from the pre-merge `better_options.toml` and empty on most others, with nothing checking the correlation. A debate over whether to merge the best-practices/better-options split away entirely (R421) surfaced that gap as one of the split's weaker points — decided to keep the split, but to stop leaving `kind` unenforced. `_kind_check()` now fails a row whose `kind` is non-empty and whose `addressee` is anything but `"Self"`. It is deliberately one-directional: every row carrying a `kind` today is addressed to Self, but plenty of `addressee = "Self"` rows (migrated wholesale from `self.md`'s Active threads, 2026-08-15) still carry `kind = ""`, so the reverse implication does not hold and is not checked.
+
 ## MAIN
     main():
         if (self/best_practices.toml does not exist) then {
@@ -61,6 +63,7 @@ The simple resolution paths and every read go through `propose_class.ProposeClas
                 if (title is blank) then { record a failure — nothing
                     would project }
             }
+        append every failure _kind_check() reports
         append every failure _routing_check() reports
         print a summary: settled count by addressee; the pending count if
         any; block 1's projected size; each part's block 3 size if
@@ -245,6 +248,16 @@ The `title` override is for an op=revise row whose proposed wording was non-unan
       twin's is an ACCEPTED DETECTION HOLE: text matching cannot tell the
       two lines apart, so such a twin is exempted from the leak check. }
 
+### `_kind_check()`
+    for each record:
+        if (kind is a non-empty string, after stripping) then {
+            if (addressee is not "Self") then { record a failure — kind
+                is a better-option-only field }
+        }
+    return every recorded failure
+
+One-directional (R421/B90): a non-empty `kind` off `addressee = "Self"` fails; an `addressee = "Self"` row with `kind = ""` does not, because the live register carries both.
+
 ### `_routing_check()`
     b = broadcast_block(); snapshot narrowcast_block() and narrowcast()
     once per roster tag; bcast = broadcast(); proj = _projecting_titles()
@@ -277,4 +290,4 @@ The `title` override is for an op=revise row whose proposed wording was non-unan
 This runs the real `broadcast_block()`/`narrowcast_block()`/`broadcast()`/`narrowcast()` functions against the real roster, not a model of either — the discipline traces to a prior real leak (E09) that a model-based check would not have caught, since the leak was in the actual filtering code, not in an assumption about it. Each real function runs ONCE per tag and its output is reused (2026-08-19, tier 5 #53); a snapshot of a real result is not a model. The non-projecting pass deliberately re-derives "non-projecting" rather than calling `eligible()`, so that a leak in `eligible()` itself is still caught (`test_routing_check_catches_a_leaked_proposed_row()` monkeypatches it to prove this).
 
 ## BUGS
-None known. The O(parts × proposals) re-render recorded here until 2026-08-19 is resolved (tier 5 #53, above). This page was regenerated 2026-08-20 after B60 deleted `stage()` and gave `add()` its `addressee` parameter; the previous rendering still documented both as they were.
+None known. The O(parts × proposals) re-render recorded here until 2026-08-19 is resolved (tier 5 #53, above). This page was regenerated 2026-08-31 after R421/B90 added `_kind_check()`; the previous rendering (2026-08-20, after B60 deleted `stage()` and gave `add()` its `addressee` parameter) did not yet have it.

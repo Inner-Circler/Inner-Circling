@@ -148,3 +148,18 @@ running waits for the next one to open, and says so when you make it.
 # allusion to a view he keeps as an easter egg is a leak, not a courtesy.
 # The listing simply shows what this person may see, and says nothing about
 # there being more.
+
+# ADDED 2026-08-31 (R422), the same reason settings joined above:
+# test_help_system.py's "every USER verb is reachable through its class"
+# caught the four /redact-alias-* verbs' absence the moment they joined
+# USER_SUBSET_COMMANDS. Named "redact-alias", not "redact", so
+# _class_of_head's longest-prefix match cannot later confuse it with some
+# other redact-* verb this class was never meant to cover.
+[[class]]
+name = "redact-alias"
+description = '''
+A name, place or org you have chosen to hide in the CIRCLE pane's redacted
+view — never a part's own name, which this cannot touch. `add`/`update`
+take a canonical label and optional extra forms in quotes; `list`/`delete`
+number the same way every other register here does.
+'''

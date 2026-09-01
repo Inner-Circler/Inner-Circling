@@ -42,7 +42,13 @@ def emit(channel: str, text: str = "", **kwargs) -> None:
     # hand the window over at the right moment and disable cmd> meanwhile.
     # A standalone terminal has no panes to inform: the default prints
     # nothing for it, and every other channel prints exactly as before.
-    if channel == "state":
+    #
+    # "redact_view" JOINED IT 2026-08-31 — the redact_view setting's live
+    # toggle signal (ui/circling.py's Pane.set_redact()). A second UI-signal
+    # channel rather than folding this into "state": CircleEngine._emit()
+    # stores close_state = text for every "state" emission, and routing
+    # "on"/"off" through it would corrupt close-state tracking.
+    if channel in ("state", "redact_view"):
         return
     _real_print(text, **kwargs)
 

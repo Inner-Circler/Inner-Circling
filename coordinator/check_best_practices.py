@@ -30,8 +30,10 @@ Two things changed that:
            further: three projected pieces down to one.
     R136   `<practice>` is one production, not two shapes. Every record
            carries the same fields; `kind` is `""` on most circle-behavior
-           entries and populated on those descended from better_options,
-           and nothing in the schema requires that correlation.
+           entries and populated on those descended from better_options.
+           R421/B90 (2026-08-31) added the one-directional check that
+           enforces the half of that correlation the data actually
+           supports: see `_kind_check()`.
     R137   crisis safety content (988/741741/findahelpline.com) moved OUT
            of this register entirely, into `coordinator/process_core.md` as
            static text every part reads unconditionally — found live
@@ -73,6 +75,9 @@ WHAT IS ASSERTED
     TALLY       header states N entries; N matches the live count.
     SHAPE       every id is `BP-` + 4 digits, unique, below next_id; every
                 addressee is a known one; every title is non-empty.
+    KIND        (R421/B90) a non-empty `kind` never appears on a row whose
+                addressee is not "Self" — one-directional; plenty of
+                `addressee = "Self"` rows still carry `kind = ""`.
     ROUTING     the actual functions circle.py's prompt assembly calls
                 (broadcast_block / narrowcast_block, below) are run and
                 checked directly: a part's own narrowcast entries reach
@@ -485,6 +490,25 @@ def _projecting_titles() -> set[str]:
     return out
 
 
+def _kind_check() -> list[str]:
+    """R421/B90: `kind` is the better-option sub-taxonomy (invitation, lens,
+    diagnostic, ...) inherited from the pre-2026-08-11 better_options.toml
+    merge — free-text, and read by nobody but a human revising or citing an
+    entry (never projected). Every row that carries one is addressed to
+    Self today; the reverse does not hold (plenty of `addressee = "Self"`
+    rows still carry `kind = ""`), so this is ONE-DIRECTIONAL: a non-empty
+    `kind` on a broadcast-to-all or narrowcast row is a hand-edit slip, not
+    a valid combination, and is the only thing this checks."""
+    fails: list[str] = []
+    for p in practices():
+        kind = p.get("kind", "")
+        if isinstance(kind, str) and kind.strip() and p.get("addressee") != "Self":
+            fails.append(f"{p.get('id', '?')}: kind={kind.strip()[:40]!r} is "
+                         f"set but addressee is {p.get('addressee')!r}, not "
+                         f"'Self' — kind is a better-option-only field")
+    return fails
+
+
 def _routing_check() -> list[str]:
     """Run the REAL functions above against the REAL roster, not a model
     of either. A part must receive its own narrowcast entries and no
@@ -657,6 +681,7 @@ def main() -> int:
             if not p.get("title", "").strip():
                 fails.append(f"{pid}: title is empty — nothing would project")
 
+    fails += _kind_check()
     fails += _routing_check()
 
     settled = [p for p in ps if p.get("state") != "proposed"]

@@ -54,6 +54,15 @@ TICKING_DIR = ROOT / "ticking"          # the JOURNAL (R391/R396) — user
 # made the move one edit here instead of a sweep.
 BEST_PRACTICES = SELF_DIR / "best_practices.toml"
 
+# self/redaction.toml — the user-curated alias registry (canonical name,
+# kind, extra forms, a stable opaque id) circling.py's redacted CIRCLE-pane
+# view matches against. self/redaction_map.toml — the reverse map for
+# auto-detected structured identifiers (email/url/phone/handle), keeping
+# their opaque ids stable across restarts. The map's own `literal` field is
+# raw PII and the file never ships — packaging/runtime_only.txt names it.
+REDACTION = SELF_DIR / "redaction.toml"
+REDACTION_MAP = SELF_DIR / "redaction_map.toml"
+
 # parts/<dir> -> transcript tag. B29: derived from roster.py, the one
 # roster every reader shares — was a hand-typed copy, kept in sync with
 # circle_close.py's TAG_TO_DIR (and the other seven) only by discipline.

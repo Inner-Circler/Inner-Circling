@@ -295,7 +295,7 @@ No input is read from stdin. Output is extensive and printed throughout every ph
       across an entire invocation without any one phase needing to stop
       the others. }
 
-### `git(*args)`
+### `circle_audit_git_run(*args)` (`git()` before the B99 re-homing, 2026-09-03)
 
     { A thin shell over gitrepo.system_git_run(*args, read_only=True) since
       2026-08-19 (review, tier 5 #45) — the subprocess mechanics were a
@@ -387,7 +387,7 @@ Verifies git preconditions, but only enforces them as hard failures when the run
 
 ### `circle_audit_dream_tags_read()`
 
-    { List the dream/<OT> git tags via the read-only git() helper. On a
+    { List the dream/<OT> git tags via the read-only circle_audit_git_run() helper. On a
       git failure, return ([], the error text) rather than a bare empty
       list -- an empty answer read as "nothing processed" would report
       every circle unprocessed because git hiccuped (the same lesson

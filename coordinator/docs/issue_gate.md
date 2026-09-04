@@ -189,7 +189,7 @@ Stdout only, no stdin. Prints a node/live-count summary, verification counts, ad
         undecodable bytes rather than raising.
     }
 
-### `speaker_spans(text)`
+### `issue_speaker_spans_read(text)` (`speaker_spans()` before the B99 re-homing, 2026-09-03)
     {
         find every regex match of a speaker marker in the text; if none,
         return no spans (the whole transcript is unattributable). Assign

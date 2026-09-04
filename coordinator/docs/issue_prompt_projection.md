@@ -75,7 +75,7 @@ Stdout only, from `main()`: the live-node count and ruled/unruled split, then ei
         visibly marked as such wherever it is cited.
     }
 
-### `block(p)`
+### `issue_block_render(p, d=None)` (`block()` before the B99 re-homing, 2026-09-03)
     load node p via issue_schema
     if (the node has no Label) then { record "no Label — nothing to
         project" as a failure }
@@ -105,25 +105,25 @@ Stdout only, from `main()`: the live-node count and ruled/unruled split, then ei
     Nothing called it (issue_index.py and ui/issue_draw.py each carry
     their own argv parser). working_set_parse() stays.
 
-### `live_edges(d)`
+### `issue_live_edges_read(d)` (`live_edges()` before the B99 re-homing, 2026-09-03)
     {
         Return a node's edges as (type, target) pairs, excluding any whose
         status is "retired".
     }
 
-### `graph()`
+### `issue_graph_read()` (`graph()` before the B99 re-homing, 2026-09-03)
     {
         Load every node file under issues/ into a dict keyed by node id,
         each entry holding its file path, the full parsed document, its
-        status, and its live edges (via live_edges()).
+        status, and its live edges (via issue_live_edges_read()).
     }
 
-### `resolve(chosen, g=None)`
-    `g` reuses a caller's already-built graph() (2026-08-19, tier 5 #58 —
+### `issue_resolve(chosen, g=None)` (`resolve()` before the B99 re-homing, 2026-09-03)
+    `g` reuses a caller's already-built issue_graph_read() (2026-08-19, tier 5 #58 —
     one parse of issues/ per working-set projection instead of two);
     omitted, it builds its own, so every existing caller is unchanged.
     split `chosen` into:
-      focus   = every id in `chosen` that exists in graph()
+      focus   = every id in `chosen` that exists in issue_graph_read()
       unknown = every id in `chosen` that does not
     periphery = every node reachable at depth 1 from a focus node via a
     live edge, in EITHER direction — a node that PROTECTS a focus node
@@ -137,7 +137,7 @@ Stdout only, from `main()`: the live-node count and ruled/unruled split, then ei
         full description, absence clause, and — if any live edges exist —
         a one-line summary of them. Deliberately excludes the node's Memo
         and evidence quotes, which are record rather than something a room
-        needs to discuss directly. `d` reuses a doc graph() already parsed
+        needs to discuss directly. `d` reuses a doc issue_graph_read() already parsed
         (tier 5 #58); omitted, the node is loaded here as before.
     }
 
@@ -175,7 +175,7 @@ Stdout only, from `main()`: the live-node count and ruled/unruled split, then ei
         return the assembled "## Issues" section (heading, PREAMBLE, every
         node's block) as (text, an empty unknown-ids list)
     } else {
-        g = graph(), built ONCE (tier 5 #58 — this branch used to parse
+        g = issue_graph_read(), built ONCE (tier 5 #58 — this branch used to parse
         every issues/*.toml twice up front and once more per rendered
         node)
         root_ids = every id in g whose doc has the root flag set
@@ -217,7 +217,7 @@ within the two branches this function itself handles.
     }
 
 ### `issue_relationship_brief(chosen=None)`  (named `relations_brief` until R219, 2026-08-17)
-    g = graph(); live = every (node id, edge type, target) triple across
+    g = issue_graph_read(); live = every (node id, edge type, target) triple across
     the whole graph, sorted
     emit static prose: what an edge is, that no part statement creates or
     retires one, what a proposal must state, how to dispute a live edge
@@ -258,8 +258,8 @@ within the two branches this function itself handles.
         holds.
     }
 
-### `project_working_set_flat(chosen)`
-    g = graph()
+### `project_working_set_flat(chosen)` — RETIRED, R360, 2026-08-27
+    g = issue_graph_read()
     if (chosen is given) then { (focus, periphery, unknown) = resolve(chosen) }
     else {
         focus = every live node's id, periphery = [], unknown = [] — blank

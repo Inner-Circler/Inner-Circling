@@ -14,7 +14,7 @@ Three things explicitly do NOT change with the move: the file prefix (`L_`, `S_`
 
 **ROOT IS A FLAG, NOT A STATUS (R429, 2026-09-01, correcting R089/B23 of 2026-08-05).** `STATUSES` holds five values (`live`, `settled`, `declined`, `retired`, `lead`) — `"root"` is no longer one of them. A root node's own `status` is `"live"`; a separate OPTIONAL boolean field, `root`, marks it permanent (never retired or demoted — enforced by `issue_status.py`, not here) and always shown in full at circle open (`issue_prompt_projection.py`). Its filename still carries `R_`, but that prefix is now derived from the `root` flag rather than from `status` — see `prefix_for(doc)`.
 
-The module also renders a node back to the old Markdown view on demand (`render()`), partly for a reader who wants it and partly because rendering every migrated node and diffing against the original bytes is how the TOML migration proved it lost nothing.
+The module also renders a node back to the old Markdown view on demand (`issue_render()`, `render()` before the B99 re-homing, 2026-09-03), partly for a reader who wants it and partly because rendering every migrated node and diffing against the original bytes is how the TOML migration proved it lost nothing.
 
 ## MAIN
 This script has no `main()` naming convention deviation — its entry point is `main()`, called from `if __name__ == "__main__"`.
@@ -22,7 +22,7 @@ This script has no `main()` naming convention deviation — its entry point is `
     if "--render" appears anywhere in argv then {
         take the argument immediately following "--render" as a node id;
         find the first node file (via issue_nodes_read()) whose bare id matches it;
-        load and render() it to Markdown; print it; return 0
+        load and issue_render() it to Markdown; print it; return 0
     } else {
         for every node file (issue_nodes_read(), sorted) {
             try to issue_read() it as TOML;
@@ -60,7 +60,7 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
 
 ## OPERATION
 
-### `prefix_for(doc)`
+### `issue_prefix_read(doc)` (`prefix_for()` before the B99 re-homing, 2026-09-03)
     {
         return "R_" if doc's root flag is set; otherwise PREFIX[doc's status].
         The one place status and the root flag combine into a filename
@@ -153,7 +153,7 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
         write issue_dumps(doc) to path p as UTF-8 text with LF-only line endings.
     }
 
-### `render(doc)`
+### `issue_render(doc)` (`render()` before the B99 re-homing, 2026-09-03)
     {
         build a Markdown document from a loaded node's dict: an H1 of its
         id; Description, Label, (optional) Label ruled, (optional)

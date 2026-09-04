@@ -202,7 +202,7 @@ No stdin. `part_mid_term_refresh()` reports per-part state listings, per-part de
 
 ## OPERATION
 
-### path(part)
+### part_mid_term_locate(part) (`path()` before the B99 re-homing, 2026-09-03)
 `parts/<part>/mid_term.md`.
 
 ### part_mid_term_dreamt_read(part)
@@ -257,7 +257,7 @@ sha256 of the sources' text plus `"|<MODEL>/<PROMPT>"`, truncated to 16 hex char
 }
 ```
 
-### refresh_cutoff(part)
+### part_mid_term_cutoff_read(part) (`refresh_cutoff()` before the B99 re-homing, 2026-09-03)
 ```
 {
     Return _front(part)'s "when" field — the timestamp this part's

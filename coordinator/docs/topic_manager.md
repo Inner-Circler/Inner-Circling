@@ -26,9 +26,9 @@ What makes this register unusual is that it is a **direct write with no vetting 
 
 **Closing is immediate and always writes the live register.** It shares the contract that adding a practice has: written the moment Self rules it, not undone by `/abort`, and a `/topic-close` typed during a harness circle still writes the real register — the ruling is Self's regardless of which tree the circle's transcript is going to.
 
-**The projection is a recency window.** `block()` renders open topics newest first up to a 2,400-character budget, under a header that states how many are open, how many are shown and how many are older and out of view — so the room can see when something has aged out rather than silently missing it. The window stops at the first topic that does not fit rather than skipping it to pack a smaller older one in: recency is the only priority lever here.
+**The projection is a recency window.** `topic_block_render()` (`block()` before it moved to coordinator/topic_prompt_projection.py, 2026-09-03) renders open topics newest first up to a 2,400-character budget, under a header that states how many are open, how many are shown and how many are older and out of view — so the room can see when something has aged out rather than silently missing it. The window stops at the first topic that does not fit rather than skipping it to pack a smaller older one in: recency is the only priority lever here.
 
-**An empty register changes nothing.** `block()` returns an empty string when nothing is open, so the objectives block is byte-identical to what it would have been without this register at all.
+**An empty register changes nothing.** `topic_block_render()` returns an empty string when nothing is open, so the objectives block is byte-identical to what it would have been without this register at all.
 
 ## MAIN
 
@@ -84,7 +84,7 @@ The register from disk, or a fresh in-memory one when the file is absent; and th
 ### topic_read() / topic_open_read()
 Every topic, open and tombstoned alike, in file order; and the open ones sorted newest first, which is the projection order.
 
-### render_new(doc, circle, text)
+### topic_new_render(doc, circle, text) (`render_new()` before the B99 re-homing, 2026-09-03)
     Work on a deep COPY of the register.
     Mint "TP-" plus next_id, four digits; stamp the circle and the UTC time;
         truncate the text to CAP at a word boundary; set state to "open".
@@ -102,7 +102,7 @@ Render one open topic and write the register. The coordinator calls this once pe
     Set state to "closed by Self <utc timestamp>", save, and return
         (true, "<id> closed — kept as a tombstone").
 
-### block()
+### topic_prompt_projection.topic_block_render() (`block()` here before it moved, 2026-09-03)
     if (no topic is open) then { return "" — the objectives block is unchanged. }
     Walk the open topics newest first, rendering each as one bullet naming its
         id and the circle it came from.
@@ -110,7 +110,7 @@ Render one open topic and write the register. The coordinator calls this once pe
     Return a header stating the open count, the shown count and the omitted
         count, followed by the bullets.
 
-### listing()
+### topic_list() (`listing()` before the B99 re-homing, 2026-09-03)
 The human view: the open and closed counts, then each open topic's id and circle with its text wrapped and indented.
 
 ## BUGS

@@ -163,13 +163,15 @@ Reads the transcript and counts statements per part by matching each line's spea
     otherwise return (true, "").
 Empty counts since B96: a heading with nothing under it is the record B54 exists for.
 
-### file_digest(path)
+### record_file_digest(path)
+(`file_digest()` before the B99 re-homing, 2026-09-03.)
 Size and sha256, or nothing at all if the file is absent or unreadable.
 
-### write_close_report(root, ot, transcript, records, missing)
+### circle_close_report_write(root, ot, transcript, records, missing)
+(`write_close_report()` before the B99 re-homing, 2026-09-03.)
 Writes the manifest: the open time, when it was checked, the transcript it verified against, pass or fail, the parts that were missing, one record per speaking part, and a note stating plainly that the hashes are the close-time on-disk view and that the later reconcile re-reads the durable store.
 
-### resolve_transcript(circles, open_time)
+### circle_transcript_resolve(circles, open_time) (`resolve_transcript()` before the B99 re-homing, 2026-09-03)
     if (an open time was given) then { return that transcript if it exists. }
     otherwise look for today's transcripts.
     if (there is exactly one) then { use it. }

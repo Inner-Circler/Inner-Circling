@@ -89,7 +89,8 @@ Prints to stdout through a `say` parameter (default `print`), so a caller can ca
 ### corpus(doc) / histories(doc) / latest_history(doc)
 The `section = "dream"` rows, sorted by date then id; the `section = "history"` rows in file order; and the last of those, which is the current DREAM_HISTORY.
 
-### covered_ids(doc) / unfolded(doc)
+### dream_history_covered_read(doc) / dream_history_unfolded_read(doc)
+(`covered_ids()`/`unfolded()` before the B99 re-homing, 2026-09-03.)
 Every dream id named as a source by any history record; and the corpus rows not among them — the work `--fold` has left to do.
 
 ### truncate_words(text, cap) — MOVED
@@ -97,7 +98,7 @@ Every dream id named as a source by any history record; and the corpus rows not 
     on whitespace, the same (text, cut) answer, beside every other read of a
     reply. _derive() calls it on the Reply's text.
 
-### render_history(doc, content, sources, title)
+### dream_history_render(doc, content, sources, title) (`render_history()` before the B99 re-homing, 2026-09-03)
     Work on a deep COPY of the register.
     Mint "SD-" plus the register's next_id, four digits.
     Record today's UTC date, the title, section "history", the sorted source ids,
@@ -120,7 +121,7 @@ Sends the system prompt and one user message, returns the reply text and the sto
     Truncate to the word cap; if that cut anything, say so.
     Return the text.
 
-### bootstrap(client, say)
+### dream_history_bootstrap(client, say) (`bootstrap()` before the B99 re-homing, 2026-09-03)
     if (any history record exists) then { say REFUSED — the bootstrap runs once —
         and return 2. }
     if (the corpus is empty) then { say there is nothing to bootstrap; return 1. }
@@ -129,7 +130,7 @@ Sends the system prompt and one user message, returns the reply text and the sto
     Render and save it, naming every corpus id as a source.
     Say what was written, with its word count and source count; return 0.
 
-### fold(client, say)
+### dream_history_fold(client, say) (`fold()` before the B99 re-homing, 2026-09-03)
     if (no history record exists) then { say REFUSED — bootstrap first — and
         return 2. }
     if (nothing is unfolded) then { say the history is current; return 0. }

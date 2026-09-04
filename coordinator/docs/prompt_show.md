@@ -107,7 +107,7 @@ Formats a block header: position, name, character count, and an optional note li
 }
 ```
 
-### render(target)
+### prompt_show_render(target) (`render()` before the B99 re-homing, 2026-09-03)
 ```
 {
     Determine the block order for this mode via circle.block_order().

@@ -103,7 +103,7 @@ Tombstones the row. Never touches the graph — there is nothing to undo, becaus
 
 For a pending row Self has already ruled directly, in the circle, by speaking the command. Tombstoned like a denial and never touching the graph, because the direct ruling already did whatever the row was asking for.
 
-### listing()
+### proposal_list() (`listing()` before the B99 re-homing, 2026-09-03)
     if (there are no rows) then { return "  no proposals". }
     Print PENDING first — what needs a ruling — then SETTLED, each row as its
     id, its kind or state, and the first 60 characters of its text.

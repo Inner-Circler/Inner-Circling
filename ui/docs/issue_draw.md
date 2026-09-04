@@ -40,7 +40,7 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
             use the NAMED output directory OUT_DIR = <repo>/work/graph/
             (never inside issues/ itself), creating it if absent, and
             print the source summary UNLESS --if-stale was passed (at a
-            close there is only one possible source, and the describe()
+            close there is only one possible source, and the issue_draw_describe()
             line below opens with the same node count)
         } else {
             parse it as a JSON graph.json snapshot and use its parent
@@ -57,8 +57,8 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
             targets
         }
         compute inbound-edge counts and evidence-depth for every node;
-        lay the (possibly trimmed) graph out (layout()) and render it to
-        SVG (build_svg());
+        lay the (possibly trimmed) graph out (issue_draw_layout()) and render it to
+        SVG (issue_svg_build());
         if (no working set was named) then {
             compute the subset of nodes whose status is "live";
             if (there is a live subset smaller than the whole graph) then {
@@ -70,7 +70,7 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
         write issue_graph.svg and issue_graph.html into the output
         directory, embedding both SVGs (one hidden) in the HTML when a
         live view was built;
-        print one describe() line naming what the picture shows, one line
+        print one issue_draw_describe() line naming what the picture shows, one line
         naming the files and the SVG's size, and one line carrying the
         HTML's file:// address (html_path.as_uri()); return 0
     }
@@ -95,7 +95,7 @@ Written: `issue_graph.svg` and `issue_graph.html` in the output directory — th
 None. The generated HTML is deliberately self-contained (SVG inlined) so it needs no network access to view either.
 
 ## HUMAN I/O
-Stdout only, no stdin. Prints the node-source summary, any unknown-id or working-set-pulled-node notices, then three closing lines: what the picture shows (`describe()`), the output paths with the SVG's byte size and canvas dimensions, and the HTML's `file://` address. `coordinator/circle.py` captures this stdout and echoes it verbatim onto the command channel, so these lines are read by a person at a shell and by a person at a close, and are written once for both. The one exception is the leading `source:` line, suppressed under `--if-stale`: a close has only one possible source and `describe()` already opens with the same node count. Exit codes: 2 if no path argument is given; 0 on a normal run (no other failure path returns non-zero — `_check_vocabulary()` calls `raise SystemExit` directly, at import time, if the edge-type legend and schema disagree, which is effectively a distinct failure exit before `main()` runs).
+Stdout only, no stdin. Prints the node-source summary, any unknown-id or working-set-pulled-node notices, then three closing lines: what the picture shows (`issue_draw_describe()`), the output paths with the SVG's byte size and canvas dimensions, and the HTML's `file://` address. `coordinator/circle.py` captures this stdout and echoes it verbatim onto the command channel, so these lines are read by a person at a shell and by a person at a close, and are written once for both. The one exception is the leading `source:` line, suppressed under `--if-stale`: a close has only one possible source and `issue_draw_describe()` already opens with the same node count. Exit codes: 2 if no path argument is given; 0 on a normal run (no other failure path returns non-zero — `_check_vocabulary()` calls `raise SystemExit` directly, at import time, if the edge-type legend and schema disagree, which is effectively a distinct failure exit before `main()` runs).
 
 ## OPERATION
 
@@ -118,14 +118,14 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
     }
     Run once at import time, immediately after being defined.
 
-### `tier(depth)`
+### `issue_tier_read(depth)` (`tier()` before the B99 re-homing, 2026-09-03)
     {
         walk the TIERS table (spine >=8 circles, thread >=3, else thin)
         and return the first (name, colour) whose threshold the given
         depth meets.
     }
 
-### `communities(g)`
+### `issue_communities_read(g)` (`communities()` before the B99 re-homing, 2026-09-03)
     {
         build a weighted adjacency count over live edges (attested edges
         weighted 2x proposed), then run greedy modularity agglomeration:
@@ -154,7 +154,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         truncated 22 of 32 labels.
     }
 
-### `separate(g, pos, rounds=600)`
+### `issue_draw_separate(g, pos, rounds=600)` (`separate()` before the B99 re-homing, 2026-09-03)
     {
         hard overlap removal after force-directed layout: repeatedly
         checks every node pair's bounding boxes and pushes overlapping
@@ -162,7 +162,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         early once a pass makes no move.
     }
 
-### `layout(g, seed=7)`
+### `issue_draw_layout(g, seed=7, two_row=False)` (`layout()` before the B99 re-homing, 2026-09-03)
     {
         compute communities; lay each community out independently with
         its own force-directed pass and hard separation, normalise it
@@ -170,13 +170,15 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         shelf-pack the community boxes (tallest first) into a canvas
         whose target aspect approximates 1.7:1 regardless of node count,
         so clusters never move relative to their own members and never
-        overlap each other. Returns (positions, community map).
+        overlap each other. Returns (positions, community map). `two_row` (added 2026-08-17) shelf-packs the
+        unfiltered "all" view across two rows instead of one; the "--working-set"
+        (filtered) view always passes False.
     }
 
-### `esc(s)`
+### `issue_draw_escape(s)` (`esc()` before the B99 re-homing, 2026-09-03)
     { HTML/XML-escape ampersand, angle brackets and double quotes. }
 
-### `build_svg(g, pos, inbound, comm)`
+### `issue_svg_build(g, pos, inbound, comm)` (`build_svg()` before the B99 re-homing, 2026-09-03)
     {
         compute each node's evidence depth, fit the SVG viewBox tightly
         to the actual drawn extent (clamped to a reasonable aspect ratio)
@@ -191,7 +193,8 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         and the circle-size/leaf/centre encodings.
     }
 
-### `build_html(g, svg, order, inbound, g_live, svg_live)`
+### `issue_html_build(g, svg, order, inbound, g_live, svg_live)`
+(`build_html()` before the B99 re-homing, 2026-09-03.)
     {
         build one HTML page embedding the given SVG (and, if a live-only
         variant was computed, a second hidden SVG plus a view-toggle
@@ -235,7 +238,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         that set (so no edge is left pointing at a node that was cut).
     }
 
-### `newest_source(d)`
+### `issue_newest_source_read(d)` (`newest_source()` before the B99 re-homing, 2026-09-03)
     {
         stat every issues/*nNNNN.toml file under d and return the largest
         mtime found; return 0.0 when the directory holds no node files at
@@ -264,7 +267,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
       question asked is about the FILES and not about that circle. A hand
       edit in a text editor is caught the same way. }
 
-### `describe(g)`
+### `issue_draw_describe(g)` (`describe()` before the B99 re-homing, 2026-09-03)
     {
         count the loaded nodes by their status field, and count every
         non-retired edge across the graph; return one line reading

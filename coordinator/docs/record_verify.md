@@ -119,7 +119,7 @@ Prints to stdout; reads no input. Standard output is reconfigured to UTF-8 with 
     else if (the suffix is .toml) then { the same, for TOML. }
     return nothing — the file is clean.
 
-### check_process(root)
+### record_process_verify(root) (`check_process()` before the B99 re-homing, 2026-09-03)
     FOR EACH of the two rulebooks, with its own anchor list:
         if (the file is missing) then { record a finding and move on. }
         Run the byte and parse checks; if one fails, record it and move on.
@@ -129,10 +129,10 @@ Prints to stdout; reads no input. Standard output is reconfigured to UTF-8 with 
 
 The anchors are a truncation guard, not a style rule. They carry a correction from 2026-08-07: a rulebook renamed one of its sections, the stale anchor made the guard fail on a correct file, and it told the reader not to open a circle. A truncation guard that fires on a rename is worse than none, because the one thing it must mean is "this file was cut short".
 
-### lab_tags_reaching_master(tags, is_ancestor)
+### record_lab_tags_read(tags, is_ancestor) (`lab_tags_reaching_master()` before the B99 re-homing, 2026-09-03)
 Pure, so the decision can be probed with fabricated inputs: returns the tags for which `is_ancestor` answers yes.
 
-### check_lab_never_merged_back(root)
+### record_lab_merge_verify(root) (`check_lab_never_merged_back()` before the B99 re-homing, 2026-09-03)
     Ask git for every tag matching */lab/*.
     if (git errors, or there are none) then { return no findings. }
     FOR EACH tag: ask whether it is an ancestor of master.

@@ -101,7 +101,7 @@ Per part it reports the character counts of what it was given, what it produced,
 
 ## OPERATION
 
-### already_processed(ot)
+### circle_is_processed(ot) (`already_processed()` before the B99 re-homing, 2026-09-03)
     if (the marker file for this circle exists) then { return processed. }
     if (there is no version-control history in this tree at all) then {
         return not processed — the file was the whole record, and it said no.
@@ -112,7 +112,7 @@ Per part it reports the character counts of what it was given, what it produced,
         dreams the same circle twice. }
     return whether the tag exists.
 
-### backfill_step(ot, say)
+### short_term_backfill_step(ot, say) (`backfill_step()` before the B99 re-homing, 2026-09-03)
 Step 0 of every live run: any part that spoke but has no well-formed note is rebuilt from the transcript, so it reaches dreaming as a part that participated rather than one that had nothing to say.
 
 ### part_dream(part, ot, transcript) — MOVED to part_dreaming.py, 2026-09-03 (stage 11)
@@ -121,7 +121,7 @@ One part's dreaming call. Returns a payload describing at most one memory — wi
 ### circle_synthesise(ot, transcript, payloads, ...) — MOVED to circle_synthesis.py, 2026-09-03 (stage 11)
 The one circle-wide call, over the five inputs named above. Returns the material for the circle-level registers; like dreaming, it writes nothing.
 
-### process_circle(ot, live, confirmed, say)
+### circle_process(ot, live, confirmed, say) (`process_circle()` before the B99 re-homing, 2026-09-03)
     if (this circle was already processed) then {
         say so, name the marker, and return 1 — re-running would double-dream it.
     }

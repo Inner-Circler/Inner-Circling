@@ -91,7 +91,7 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
         self_retired_tags_read(), and either the given `current` name or the live user_name_read().
     }
 
-### `is_self_tag(tag, current=None)`
+### `self_is_tag(tag, current=None)` (`is_self_tag()` before the B99 re-homing, 2026-09-03)
     {
         Return True only if `tag` is literally in self_tags(current) — an explicit membership test, not a "not a known part" fallback. An unrecognized tag is neither a part nor Self, and the docstring is explicit that callers must refuse it rather than silently treating it as Self.
     }

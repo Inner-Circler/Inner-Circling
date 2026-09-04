@@ -30,7 +30,7 @@ THREE THINGS, ONE MODULE:
                       dreaming pool's workers must not push onto it —
                       the "inter.dreaming" span wraps the whole pool).
     close_begin()     starts the close stopwatch. snapshot() carries the
-                      elapsed, circle.write_spend_report() files it, and
+                      elapsed, circle.circle_spend_report_write() files it, and
                       report_close() says whether the aim was met.
     heartbeat         a daemon thread that reports the open span's name
                       and age at a fixed interval, through `notify`, while
@@ -218,7 +218,7 @@ class PhaseClock:
 PHASES = PhaseClock()
 
 
-def timed_read(fn, *args, **kwargs):
+def stream_timed_read(fn, *args, **kwargs):
     """Route one console read through the WAITING span — the wrapper
     circle.py's read_line() and vetting.py's direct seam reads share, so
     every second spent at a prompt lands under one name."""

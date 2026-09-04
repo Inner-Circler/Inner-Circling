@@ -17,12 +17,12 @@ and /better-option-add (B62) each run their own cmd_* directly and read
 its (ok, msg); dispatch_dev_cmd()'s only channel was "did I recognise
 this head", which could not tell a real register refusal from success.
 
-graph_now() moves WITH the vetting loop — Self's explicit ruling on
+issue_graph_now_read() moves WITH the vetting loop — Self's explicit ruling on
 the phase-2 plan's open decision — because _propose_approve is its one
 consumer: a command-shaped proposal is re-classified and re-parsed
 fresh at approval time against the live graph, never trusted from a
-staging-time snapshot. test_proposals patches vetting.graph_now (and
-IC.precheck/IC.apply on their own module) to isolate this loop from
+staging-time snapshot. test_proposal_manager patches vetting.graph_now (and
+IC.issue_precheck/IC.issue_command_apply on their own module) to isolate this loop from
 the real tree — module-attribute patching against the OWNER, the same
 late-binding contract seam.py documents.
 """
@@ -33,7 +33,8 @@ import issue_commands as IC
 import issue_schema as S_
 import phase_clock as PC     # timed_read — a ruling prompt is human time
 import seam
-from markers import _propose_command_shape, _wrap58, _normalize_edge
+from annotations import _propose_command_shape
+from propose_lifecycle import _wrap58, _normalize_edge   # stage 8, 2026-09-03
 
 
 def _today() -> str:
@@ -41,18 +42,18 @@ def _today() -> str:
     return datetime.now(timezone.utc).isoformat(timespec="seconds")
 
 
-def graph_now() -> dict:
+def issue_graph_now_read() -> dict:
     """The live issue graph, freshly loaded. Module-level (promoted out of
     main()'s own local closure 2026-08-13, #32) because _propose_approve()
     below needs it too, from a context with no access to main()'s locals —
     it is a pure function of issue_schema, nothing closed over."""
-    return {d["id"]: d for d in (S_.load(q) for q in S_.nodes())}
+    return {d["id"]: d for d in (S_.issue_read(q) for q in S_.issue_nodes_read())}
 
-def _practice_describe(row: dict, BPX) -> tuple[str, list[str]]:
+def _practice_describe(row: dict, PM) -> tuple[str, list[str]]:
     pid, op = row["id"], row.get("op", "?")
     sources = ", ".join(row.get("sources", [])) or "unknown source"
     header = f"[{pid}] {op} — {sources} · {row.get('circle', '?')}"
-    target = BPX.by_id(row.get("target_id", "")) if op != "add" else None
+    target = PM.practice_read_by_id(row.get("target_id", "")) if op != "add" else None
     detail = []
     if op == "add":
         detail.append(row.get("title", ""))
@@ -69,20 +70,20 @@ def _practice_describe(row: dict, BPX) -> tuple[str, list[str]]:
     return header, detail
 
 
-def _practice_approve(row: dict, BPX) -> tuple[bool, str]:
+def _practice_approve(row: dict, PM) -> tuple[bool, str]:
     """The one propose-class kind whose approval can itself prompt
     further — a non-unanimous revise has no single candidate text, so
     Self authors the final wording here rather than accepting a blank."""
     title = row.get("title", "")
     if row.get("op") == "revise" and not title:
         try:
-            title = PC.timed_read(seam.read_line, "        revision text "
+            title = PC.stream_timed_read(seam.read_line, "        revision text "
                                   "(candidates above)> ").strip()
         except (EOFError, KeyboardInterrupt):
             title = ""
         if not title:
             return False, "no text given — leaving this one pending"
-    return BPX.approve(row["id"], title=title)
+    return PM.practice_approve(row["id"], title=title)
 
 
 # The circle_/sandbox_ normalization that used to sit here
@@ -111,16 +112,16 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
     snapshot: a proposal can sit pending across circles, and the graph
     an issue-relationship-add targets may have moved (an endpoint retired,
     settled, declined) in the meantime — exactly the reason
-    `_relation_approve()` always re-derived against `graph_now()`
+    `_relation_approve()` always re-derived against `issue_graph_now_read()`
     rather than a cached edge, generalized here to every command shape.
     A precheck/apply/dispatch failure — or the shape no longer
     classifying as a command at all — leaves the row pending with a
-    clear reason; it is never silently dropped, and proposals.approve()
+    clear reason; it is never silently dropped, and proposal_manager.proposal_approve()
     (the register's own state-flip) is only ever called after whatever
     the row actually needed to succeed already has."""
-    import proposals as PR
+    import proposal_manager as PR
     if row.get("kind") != "command":
-        return PR.approve(row["id"])
+        return PR.proposal_approve(row["id"])
     shape = _propose_command_shape(row.get("text", ""))
     if shape is None:
         return False, "not applied — no longer classifies as a command (stays pending)"
@@ -128,27 +129,27 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
         return False, f"not applied — {shape['why']} (stays pending)"
     if shape["shape"] in ("issue-relationship-add", "issue_command"):
         # ONE BRANCH FOR EVERY PARSED ISSUE RULING, 2026-08-20 (R267).
-        # `issue_command` is the generic shape markers gives an issue verb
+        # `issue_command` is the generic shape annotations gives an issue verb
         # that parses whole and is not the edge add — today
         # issue-label-update. Nothing below is edge-specific: it prechecks
-        # and applies whatever issue_commands.parse() produced, which is
+        # and applies whatever issue_commands.issue_command_parse() produced, which is
         # the same code path a direct-typed ruling takes.
         #
         # Normalized (PR.circle_ref — the pre-R243 bare-row guard), not
         # verified: whether the ref names a real transcript is the GATE's
         # question (issue_gate checks the file before the quote), asked
-        # when IC.apply runs the batch. Checking it here too would couple
+        # when IC.issue_command_apply runs the batch. Checking it here too would couple
         # this deliberately tree-isolated loop to the live circles/
-        # directory — the isolation test_proposals' fixtures (placeholder
+        # directory — the isolation test_proposal_manager' fixtures (placeholder
         # circle values, everything mocked) exist to keep.
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
-        why = IC.precheck(cmd, graph_now())
+        why = IC.issue_precheck(cmd, issue_graph_now_read())
         if why:
             return False, f"not applied — {why} (stays pending)"
-        ok, msg = IC.apply([cmd])
+        ok, msg = IC.issue_command_apply([cmd])
         if not ok:
             return False, f"not applied — {msg} (stays pending)"
-        PR.approve(row["id"])
+        PR.proposal_approve(row["id"])
         return True, msg
     # AN `issue_status` BRANCH STOOD HERE UNTIL 2026-08-21. It ran
     # cmd_issue_property() and approved the row only when the command
@@ -180,7 +181,7 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
             if out != "completed":
                 return False, ("not applied — the issue dialog recorded "
                                "nothing (stays pending)")
-            PR.approve(row["id"])
+            PR.proposal_approve(row["id"])
             return True, "/issue-add executed"
         if shape["head"] == "/part-add":
             # THE SAME RULING'S OTHER HALF — a part proposing a part is the
@@ -200,33 +201,33 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
             if out != "completed":
                 return False, ("not applied — the part dialog recorded "
                                "nothing (stays pending)")
-            PR.approve(row["id"])
+            PR.proposal_approve(row["id"])
             return True, "/part-add executed"
         # /practice-add, /better-option-add — the only other dev_cmd heads
-        # PROPOSE_SUBSET_COMMANDS admits (markers._propose_command_shape).
+        # PROPOSE_SUBSET_COMMANDS admits (annotations._propose_command_shape).
         # B62, 2026-08-23: this used to run dispatch_dev_cmd(shape["head"],
         # shape["rest"]) and read only whether the HEAD was recognised —
         # the same "did I recognise this head" channel the retired
-        # issue_status branch above paid to get past. cmd_practice_add()/
-        # cmd_better_option_add() now return their own (ok, msg) straight
-        # from check_best_practices.add(), the same contract /issue-add got
+        # issue_status branch above paid to get past. command_practice_add()/
+        # command_better_option_add() now return their own (ok, msg) straight
+        # from practice_manager.practice_add(), the same contract /issue-add got
         # at R290, so a register refusal (e.g. an empty add, no longer
-        # caught at classification — see markers.py) reports its own
+        # caught at classification — see annotations.py) reports its own
         # reason and the row stays pending instead of resolving on a no-op.
-        from commands import cmd_practice_add, cmd_better_option_add
-        fn = (cmd_practice_add if shape["head"] == "/practice-add"
-              else cmd_better_option_add)
+        from commands import command_practice_add, command_better_option_add
+        fn = (command_practice_add if shape["head"] == "/practice-add"
+              else command_better_option_add)
         ok, msg = fn(shape["rest"])
         if not ok:
             return False, f"not applied — {msg} (stays pending)"
-        PR.approve(row["id"])
+        PR.proposal_approve(row["id"])
         return True, msg
     return False, "not applied — unrecognized command shape (stays pending)"
 
 
 def _propose_deny(row: dict) -> tuple[bool, str]:
-    import proposals as PR
-    return PR.deny(row["id"])
+    import proposal_manager as PR
+    return PR.proposal_deny(row["id"])
 
 
 def _superseded_by(row: dict, ruled: list[dict]) -> str:
@@ -262,8 +263,8 @@ def _propose_validate(row: dict) -> str:
     NEXT.md D14, 2026-08-17: report what a command-shaped proposal WOULD
     do, without calling approve()/apply()/dispatch — for SANDBOX
     reporting. `issue-relationship-add` is the one shape that reaches
-    IC.apply(), which writes issues/*.toml directly (never sandboxed,
-    unlike remember.toml/short_term_*.md — see issue_schema.ISSUES);
+    IC.issue_command_apply(), which writes issues/*.toml directly (never sandboxed,
+    unlike remember.toml/short_term_*.toml — see issue_schema.ISSUES);
     running that for real from a sandbox circle would mutate the one
     real graph exactly the way COMMANDS' own sandbox path (`commands_
     <ot>.toml`, never auto-applied) is built not to."""
@@ -275,15 +276,15 @@ def _propose_validate(row: dict) -> str:
     if not shape.get("ok"):
         return f"would fail — {shape['why']}"
     if shape["shape"] in ("issue-relationship-add", "issue_command"):
-        import proposals as PR
+        import proposal_manager as PR
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
-        why = IC.precheck(cmd, graph_now())
+        why = IC.issue_precheck(cmd, issue_graph_now_read())
         return (f"would fail — {why}" if why
                 else f"would apply cleanly ({cmd['verb']})")
     return f"would apply cleanly ({shape['shape']})"
 
 
-def vet_pending_proposals(where: str, live: bool,
+def proposal_vet(where: str, live: bool,
                           ruled: list[dict] | None = None) -> list[dict]:
     """a)pprove / d)eny / s)kip over EVERY currently pending propose-class
     proposal, across every register — practice/better_option and (RULED
@@ -299,13 +300,13 @@ def vet_pending_proposals(where: str, live: bool,
 
     `live` — NEXT.md D14, 2026-08-17: this used to run ONLY when
     `args.live`, so a sandbox circle never validated a pending proposal
-    at all — asymmetric with COMMANDS, whose own IC.precheck() already
-    ran unconditionally in both modes (only IC.apply() was live-gated).
+    at all — asymmetric with COMMANDS, whose own IC.issue_precheck() already
+    ran unconditionally in both modes (only IC.issue_command_apply() was live-gated).
     `live=False` still DESCRIBES every pending row and, for a
     command-shaped propose, VALIDATES it via `_propose_validate()` — but
     never approves, denies, or applies anything. Every row stays
     pending, no console prompt is read. Deliberately blanket rather than
-    per-branch-safe: `_practice_approve()`/`PR.approve()`/`PR.deny()`
+    per-branch-safe: `_practice_approve()`/`PR.proposal_approve()`/`PR.proposal_deny()`
     are themselves safe to call in sandbox (self/best_practices.toml and
     self/proposals.toml were never sandboxed to begin with — see this
     function's own WRITTEN IMMEDIATELY note below), but `dispatch_dev_cmd()`
@@ -329,14 +330,14 @@ def vet_pending_proposals(where: str, live: bool,
     part said.
 
     WRITTEN IMMEDIATELY: each approve/deny calls its own register's
-    SS.save() as it happens, one row at a time. Neither
+    SS.register_write() as it happens, one row at a time. Neither
     self/best_practices.toml nor self/proposals.toml is ever in
     commit_circle()'s path list — nothing here commits either, at any
     checkpoint — so a ruling made here is a real, valid file on disk the
     moment it is made, sitting uncommitted until a human commits it,
     same as any direct /practice-add. A COMMAND-kind propose IS NOT AN
     EXCEPTION TO THIS, though its approve_fn may ALSO write issues/*.toml
-    (via issue_commands.apply(), for an issue-relationship-add shape) or run some
+    (via issue_commands.issue_command_apply(), for an issue-relationship-add shape) or run some
     other command's own effect — issues/ is not in commit_circle()'s path
     list either, the same as every other register here, and neither is a
     direct-typed `/issue-relationship-add`'s own edge write: a graph ruling
@@ -359,16 +360,16 @@ def vet_pending_proposals(where: str, live: bool,
     # in-process capture at the checkpoint is the ONLY clean record of
     # what was confirmed this run. Checkpoint-2 approvals (next priming)
     # reach no synthesis — recorded in docs/INTER_CIRCLE_DESIGN.md.
-    import check_best_practices as BPX
-    import proposals as PR
-    import coalesce as CG
+    import practice_manager as PM
+    import proposal_manager as PR
+    import proposal_group_manager as CG
 
     approved: list[dict] = []
 
     # THE COALESCE, R356 (B69) — PRESENTATION ONLY. This function never
     # makes the model call: the hash-guarded refresh lives at circle.py's
     # two checkpoints, the only places a real circle vets. It CANNOT live
-    # here — coordinator/tests/test_proposals.py drives this loop live=True
+    # here — coordinator/tests/test_proposal_manager.py drives this loop live=True
     # against temp registers ("no mocks below circle.py"), and a refresh
     # here sent a REAL model call from a test suite and wrote
     # self/coalesce.toml into the main tree (E22, 2026-08-26, the day this
@@ -376,7 +377,7 @@ def vet_pending_proposals(where: str, live: bool,
     # sandbox; a stale or absent doc presents nothing. FAILS OPEN — vetting
     # is how circles open, and a suggestion layer must never block it.
     try:
-        cg_groups, cg_refs = CG.live_groups()
+        cg_groups, cg_refs = CG.proposal_group_live_read()
     except Exception as e:
         seam.emit("command", f"  coalesce: unreadable ({e}) — vetting "
                              f"ungrouped")
@@ -384,9 +385,9 @@ def vet_pending_proposals(where: str, live: bool,
 
     if cg_groups:
         rows_by_ref: dict[str, dict] = {}
-        for r in BPX.pending():
+        for r in PM.practice_pending_list():
             rows_by_ref[f"practice:{r['id']}"] = r
-        for r in PR.pending():
+        for r in PR.proposal_pending_list():
             rows_by_ref[f"propose:{r['id']}"] = r
         seam.emit("command", f"\n  {len(cg_groups)} coalesced group(s) — one "
                              f"ask in several wordings ({where}). Accepting "
@@ -418,7 +419,7 @@ def vet_pending_proposals(where: str, live: bool,
                    f"single asks, or Enter to keep pending ? ")
         while True:
             try:
-                ans = PC.timed_read(seam.read_line, gprompt).strip().lower()
+                ans = PC.stream_timed_read(seam.read_line, gprompt).strip().lower()
             except (EOFError, KeyboardInterrupt):
                 seam.emit("command", "\n  (stopping here — the rest stay "
                           "pending, same as a skip)")
@@ -426,7 +427,7 @@ def vet_pending_proposals(where: str, live: bool,
             if ans in ("a", "accept", "approve"):
                 kind = primary_ref.split(":", 1)[0]
                 if kind == "practice":
-                    ok, msg = _practice_approve(primary_row, BPX)
+                    ok, msg = _practice_approve(primary_row, PM)
                 else:
                     ok, msg = _propose_approve(primary_row)
                 seam.emit("command", f"        {msg}")
@@ -442,12 +443,12 @@ def vet_pending_proposals(where: str, live: bool,
                     if row is None:
                         continue
                     mk = m.split(":", 1)[0]
-                    ok2, msg2 = (BPX.deny(row["id"]) if mk == "practice"
+                    ok2, msg2 = (PM.practice_deny(row["id"]) if mk == "practice"
                                  else _propose_deny(row))
                     seam.emit("command", f"        {m}: {msg2}")
                     if ok2:
                         resolved.append(m)
-                CG.mark(g["id"], f"accepted {primary_ref} {_today()}"
+                CG.proposal_group_mark(g["id"], f"accepted {primary_ref} {_today()}"
                                  + (f"; denied: {', '.join(resolved)}"
                                     if resolved else ""))
                 cg_refs -= {primary_ref, *others}
@@ -458,14 +459,14 @@ def vet_pending_proposals(where: str, live: bool,
                     if row is None:
                         continue
                     mk = m.split(":", 1)[0]
-                    _ok, msg2 = (BPX.deny(row["id"]) if mk == "practice"
+                    _ok, msg2 = (PM.practice_deny(row["id"]) if mk == "practice"
                                  else _propose_deny(row))
                     seam.emit("command", f"        {m}: {msg2}")
-                CG.mark(g["id"], f"denied {_today()}")
+                CG.proposal_group_mark(g["id"], f"denied {_today()}")
                 cg_refs -= set(g["members"])
                 break
             if ans in ("s", "split"):
-                CG.mark(g["id"], f"split {_today()}")
+                CG.proposal_group_mark(g["id"], f"split {_today()}")
                 cg_refs -= set(g["members"])
                 seam.emit("command", "        split — each member is asked on "
                                      "its own below")
@@ -477,11 +478,11 @@ def vet_pending_proposals(where: str, live: bool,
             seam.emit("command", "        " + gprompt.strip())
 
     kinds = (
-        ("practice", BPX.pending,
-         lambda row: _practice_describe(row, BPX),
-         lambda row: _practice_approve(row, BPX),
-         lambda row: BPX.deny(row["id"])),
-        ("propose", PR.pending, _propose_describe, _propose_approve,
+        ("practice", PM.practice_pending_list,
+         lambda row: _practice_describe(row, PM),
+         lambda row: _practice_approve(row, PM),
+         lambda row: PM.practice_deny(row["id"])),
+        ("propose", PR.proposal_pending_list, _propose_describe, _propose_approve,
          _propose_deny),
     )
 
@@ -522,16 +523,16 @@ def vet_pending_proposals(where: str, live: bool,
                 prompt = f"  [{pid}] a)pprove, d)eny, s)kip ? "
             while True:
                 try:
-                    ans = PC.timed_read(seam.read_line, prompt).strip().lower()
+                    ans = PC.stream_timed_read(seam.read_line, prompt).strip().lower()
                 except (EOFError, KeyboardInterrupt):
                     seam.emit("command", "\n  (stopping here — the rest stay "
                           "pending, same as a skip)")
                     return approved
                 if sup and ans in ("", "s", "skip", "drop"):
-                    import proposals as PR
+                    import proposal_manager as PR
                     by = next((c.get("circle", "") for c in (ruled or [])
                                if c.get("circle")), "this circle")
-                    ok, msg = PR.supersede(pid, by)
+                    ok, msg = PR.proposal_supersede(pid, by)
                     seam.emit("command", f"        {msg}")
                     break
                 if sup and ans in ("k", "keep"):

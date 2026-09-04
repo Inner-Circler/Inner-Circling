@@ -20,7 +20,7 @@ checks that say a run was sound.
 
 THE RUN, in order:
 
-    1 SURVEY    mid_term.py -> which parts are
+    1 SURVEY    part_mid_term_manager.py -> which parts are
                 stale, absent, legacy or locked,
                 and how many source chars each
                 has. A `locked` part is Self's
@@ -34,8 +34,8 @@ THE RUN, in order:
                 a source 2026-08-22 (mid_term.py
                 PROMPT v7).
     3 DERIVE    one call per stale part, with
-                SYSTEM from mid_term.py.
-    4 WRITE     mid_term.write() stamps the
+                SYSTEM from part_mid_term_manager.py.
+    4 WRITE     part_mid_term_manager.part_mid_term_write() stamps the
                 source hash, model and prompt
                 version into the front matter.
     5 VERIFY    every part reads `fresh`; block 3
@@ -93,7 +93,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 #     "I do not want to lose the semantics of prior
 #      relationships or dreaming."
 #
-# That pair is the whole specification. `mid_term.SYSTEM` is it, expanded into
+# That pair is the whole specification. `part_mid_term_manager.SYSTEM` is it, expanded into
 # the operational form the derivation actually runs.
 SELF_PROMPT = """\
 summarize actionable semantic content (as defined by suitability for usefulness
@@ -118,23 +118,23 @@ def _improvements() -> list[tuple[str, str, str]]:
     return [(e["status"], e["title"], e["why"]) for e in doc["improvement"]]
 
 
-def survey() -> list[tuple[str, str, int, int]]:
-    import mid_term as MT
+def part_mid_term_survey() -> list[tuple[str, str, int, int]]:
+    import part_mid_term_manager as MT
     import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
     out = []
     for p in C.PART_TAGS:
-        st, info = MT.state(p)
+        st, info = MT.part_mid_term_state_read(p)
         out.append((p, st, info["chars"], info["dreamt"]))
     return out
 
 
-def pack(part: str) -> str:
+def part_mid_term_pack(part: str) -> str:
     """Exactly the bytes the hash covers, ready to paste into a call."""
-    import mid_term as MT
-    return MT.sources(part)["text"]
+    import part_mid_term_manager as MT
+    return MT.part_mid_term_sources_read(part)["text"]
 
 
-def verify() -> int:
+def part_mid_term_project_verify() -> int:
     """Was the run sound? Reads the tree, asserts nothing about intent.
 
     STALE IS NOT A FAILURE — it is a queue. The first version reported seven
@@ -142,22 +142,33 @@ def verify() -> int:
     healthy tree look broken every time a prompt version was bumped. What
     fails is STRUCTURAL: an empty identity block, or raw corpus reaching a
     prompt. Those cannot be intended."""
-    import mid_term as MT
+    import part_mid_term_manager as MT
     import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
+    # role_context.py, IMPORTED DIRECTLY, until 2026-09-02: asked directly
+    # to make prompt_build.py the one executor of all four sole assemblers.
+    # C.part_context_block_render is that module's own re-export of role_context.
+    # block, added the same day.
     # PRE-EXISTING BREAK, fixed 2026-08-12: load_shared() stopped returning a
     # 3-tuple (concerns/briefing both retired from it, see its own docstring)
     # some time before this file's own last edit; nothing had executed
-    # verify() since, so check_lint.py's compile-only pass never caught it.
-    core = C.load_shared()
-    briefing, _ = C.build_briefing([], False)
-    order = C.block_order()
+    # part_mid_term_project_verify() since, so system_lint_verify.py's compile-only pass never caught it.
+    #
+    # BROKE AGAIN, fixed 2026-09-01 (audit-register.md Tier 1 #2, mirrors the
+    # identical fix in circle_audit.py:668): R360 dropped build_briefing()'s
+    # trailing `minimal` parameter; this call's trailing `False` was not
+    # updated to match.
+    #
+    # BROKE A THIRD TIME, fixed 2026-09-02: shared_block()/system_blocks()'s
+    # old two-step dance retired the same day (docs/CIRCLE_TYPES_DESIGN.md) —
+    # role_context.part_context_block_render(p) IS Block 3's identity text directly now, the
+    # first element of its own (identity, cutoff, narrowcast_chars) return.
+    # core/briefing/order existed here only to feed the retired call.
     fails, pending = [], []
     for p in C.PART_TAGS:
-        st, _i = MT.state(p)
+        st, _i = MT.part_mid_term_state_read(p)
         if st in ("stale", "absent", "legacy"):
             pending.append(f"{p} ({st})")
-        sh, _n = C.shared_block(p, briefing)
-        idt = C.system_blocks(p, core, sh)[order.index("part_identity")]["text"]
+        idt, _cutoff, _mine_len = C.part_context_block_render(p)
         if not idt.strip():
             fails.append(f"{p}: EMPTY part_identity")
         import ifs_model as IFS          # IDENTITY_END — the long_term.md boundary
@@ -177,10 +188,10 @@ def verify() -> int:
 def main() -> int:
     a = sys.argv[1:]
     if a and a[0] == "--prompt":
-        import mid_term as MT
+        import part_mid_term_manager as MT
         print("SELF PROMPT, verbatim\n" + "-" * 58)
         print(SELF_PROMPT)
-        print("\nAS RUN (mid_term.SYSTEM, prompt version "
+        print("\nAS RUN (part_mid_term_manager.SYSTEM, prompt version "
               f"{MT.PROMPT})\n" + "-" * 58)
         print(MT.SYSTEM.replace("{budget}", str(MT.BUDGET)))
         print("\nSUGGESTED IMPROVEMENTS\n" + "-" * 58)
@@ -191,13 +202,13 @@ def main() -> int:
                 print(f"    {l}")
         return 0
     if a and a[0] == "--pack":
-        print(pack(a[1]))
+        print(part_mid_term_pack(a[1]))
         return 0
     if a and a[0] == "--verify":
-        return verify()
+        return part_mid_term_project_verify()
 
-    import mid_term as MT
-    rows = survey()
+    import part_mid_term_manager as MT
+    rows = part_mid_term_survey()
     print(f"  {'part':<14}{'state':<9}{'sources':>9}{'dreams':>8}")
     for p, st, c, d in rows:
         print(f"  {p:<14}{st:<9}{c:>9,}{d:>8}")

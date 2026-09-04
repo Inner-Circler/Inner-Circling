@@ -10,7 +10,9 @@ issue_schema.py — the one reader and writer for an issue node: TOML load/save,
 ## DESCRIPTION
 `issue_schema.py` is the sole reader and writer of `issues/*.toml`, the files that make up the project's issue graph. The module's docstring frames why the format is TOML rather than the Markdown it replaced (ruled 2026-08-03): every parsing defect the project had recorded was Markdown ambiguity that failed *silently* — an indentation error hid an evidence entry, an edge type with an underscore fell outside a regex, a `## ` line inside a code fence ended a section early, and a markdown-aware editor once "normalised" a file and made most of its entries unparseable while it still looked fine to a human. TOML has a real grammar, so a malformed file now fails loudly at parse time instead. JSON was rejected because it has no multi-line strings, and hand-editable prose is half the point of the format.
 
-Three things explicitly do NOT change with the move: the file prefix (`L_`, `S_`, `D_`, `X_`, `R_`, or none) remains presentation — the id is identity, and the gate cross-checks prefix against the `status` field; prose fields (`description`, `memo`, `description_history`, evidence `why`) remain Markdown text, just now living inside TOML strings, so what changed is the surrounding shape, not the writing; and prose is stored hard-wrapped with a single newline treated as soft (a paragraph break is a blank line) — exactly Markdown's own convention, decided once in this module's `wrap()`/`unwrap()` pair rather than scattered across every consumer.
+Three things explicitly do NOT change with the move: the file prefix (`L_`, `S_`, `D_`, `X_`, `R_`, or none) remains presentation — the id is identity, and the gate cross-checks prefix against the `status` field; prose fields (`description`, `memo`, `description_history`, evidence `why`) remain Markdown text, just now living inside TOML strings, so what changed is the surrounding shape, not the writing; and prose is stored hard-wrapped with a single newline treated as soft (a paragraph break is a blank line) — exactly Markdown's own convention, decided once in this module's `issue_wrap()`/`issue_unwrap()` pair rather than scattered across every consumer.
+
+**ROOT IS A FLAG, NOT A STATUS (R429, 2026-09-01, correcting R089/B23 of 2026-08-05).** `STATUSES` holds five values (`live`, `settled`, `declined`, `retired`, `lead`) — `"root"` is no longer one of them. A root node's own `status` is `"live"`; a separate OPTIONAL boolean field, `root`, marks it permanent (never retired or demoted — enforced by `issue_status.py`, not here) and always shown in full at circle open (`issue_prompt_projection.py`). Its filename still carries `R_`, but that prefix is now derived from the `root` flag rather than from `status` — see `prefix_for(doc)`.
 
 The module also renders a node back to the old Markdown view on demand (`render()`), partly for a reader who wants it and partly because rendering every migrated node and diffing against the original bytes is how the TOML migration proved it lost nothing.
 
@@ -19,11 +21,11 @@ This script has no `main()` naming convention deviation — its entry point is `
 
     if "--render" appears anywhere in argv then {
         take the argument immediately following "--render" as a node id;
-        find the first node file (via nodes()) whose bare id matches it;
+        find the first node file (via issue_nodes_read()) whose bare id matches it;
         load and render() it to Markdown; print it; return 0
     } else {
-        for every node file (nodes(), sorted) {
-            try to load() it as TOML;
+        for every node file (issue_nodes_read(), sorted) {
+            try to issue_read() it as TOML;
             if loading raises any exception then {
                 record "<file>: will not parse — <error>" as a failure and
                 continue to the next file
@@ -40,15 +42,15 @@ This script has no `main()` naming convention deviation — its entry point is `
 
 ## COMMAND-LINE ARGUMENTS
 - (no arguments): validates every node file under `issues/` and reports parse/shape failures.
-- `--render nNNNN`: required following argument is a node id (any of the accepted spellings `nid_of()` handles via the caller, though here it is matched via `nid_of(nid)` against `nid_of(q.stem)`). Prints that one node rendered to Markdown and exits 0. If the argument is missing, or no node file matches it, prints one line naming the problem and exits 2 (see BUGS).
+- `--render nNNNN`: required following argument is a node id (any of the accepted spellings `issue_id_read()` handles via the caller, though here it is matched via `issue_id_read(nid)` against `issue_id_read(q.stem)`). Prints that one node rendered to Markdown and exits 0. If the argument is missing, or no node file matches it, prints one line naming the problem and exits 2 (see BUGS).
 
 ## DEPENDENCIES
 Standard library: `pathlib`, `re`, `sys`, `textwrap`, `__future__.annotations`. TOML: `tomllib` (Python 3.11+) with a fallback import of `tomli` (identical parser) for older interpreters; `tomli_w` for writing. No sibling coordinator modules are imported — this module sits at the base of the issue-graph dependency chain, and other `issue_*.py` files import it, not the reverse.
 
 ## EXTERNAL FILES
-Read: every `issues/*nNNNN.toml` node file, via `nodes()` (all statuses) or `live_nodes()` (only files with no status prefix). `path_for()` computes a node's expected path from its id and status but is not itself invoked by anything in this file's `main()`.
+Read: every `issues/*nNNNN.toml` node file, via `issue_nodes_read()` (all statuses) or `issue_live_read()` (files with no status prefix, UNION files prefixed `R_` — a root is live too, since 2026-09-01). `issue_locate()` computes a node's expected path from its id, status and (optionally) its root flag, but is not itself invoked by anything in this file's `main()`.
 
-Written: nothing by `main()` in either mode described above. `save(p, doc)` is provided as a library function (writes `dumps(doc)` to `p` with LF newlines) but is only called by other modules that import this one (e.g. a migration or edit tool), not by this script's own CLI paths.
+Written: nothing by `main()` in either mode described above. `issue_write(p, doc)` is provided as a library function (writes `issue_dumps(doc)` to `p` with LF newlines) but is only called by other modules that import this one (e.g. a migration or edit tool), not by this script's own CLI paths.
 
 ## NETWORK ACCESS
 None.
@@ -58,9 +60,18 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
 
 ## OPERATION
 
-### `path_for(nid, status)`
+### `prefix_for(doc)`
     {
-        build issues/<prefix-for-status><nid>.toml from the PREFIX table.
+        return "R_" if doc's root flag is set; otherwise PREFIX[doc's status].
+        The one place status and the root flag combine into a filename
+        prefix — issue_verify() and issue_locate() both call it rather than
+        re-deriving the same rule twice.
+    }
+
+### `issue_locate(nid, status, root=False)`
+    {
+        build issues/<prefix><nid>.toml, where prefix is "R_" if root is
+        True, else PREFIX[status].
     }
 
 ### `circle_transcript(ref)`  (with the `CIRCLES`/`SANDBOX_CIRCLES` roots; added 2026-08-19)
@@ -68,32 +79,35 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
         circle_<OT> -> circles/<ref>.md; sandbox_<OT> ->
         work/sandbox/circles/circle_<OT>.md; anything else -> None. The
         ONE copy of the ref-to-transcript mapping (review, tier 5 #44):
-        issue_gate.source_of() wraps it (keeping its own self/ session
-        arm), issue_projection._transcript() and check_budget's
+        issue_gate.issue_source_read() wraps it (keeping its own self/ session
+        arm), issue_prompt_projection._transcript() and quote_verify's
         constants derive from it — previously three lockstep clones the
         R176 sweep had to edit together.
     }
 
-### `nid_of(stem)`
+### `issue_id_read(stem)`
     {
         strip a two-character status prefix ("X_", "L_", etc.) from a
         filename stem if the second character is an underscore; otherwise
         the stem is already the bare id.
     }
 
-### `nodes()` / `live_nodes()`
+### `issue_nodes_read()` / `issue_live_read()`
     {
-        glob issues/ for every *nNNNN.toml file (nodes(), any status
-        prefix) or only the unprefixed nNNNN.toml files (live_nodes()),
-        sorted.
+        glob issues/ for every *nNNNN.toml file (issue_nodes_read(), any status
+        prefix), or the unprefixed nNNNN.toml files UNION the R_-prefixed
+        ones (issue_live_read() — a root is live too, since 2026-09-01), sorted.
+        Two filename globs rather than a parse-and-filter of issue_nodes_read(): this
+        stays the same fast, filename-only check every caller already
+        relies on.
     }
 
-### `load(p)`
+### `issue_read(p)`
     {
         open the file in binary mode and parse it with tomllib/tomli.
     }
 
-### `unwrap(s)`
+### `issue_unwrap(s)`
     {
         split the string on blank-line paragraph breaks, collapse all
         internal whitespace runs (including single newlines) to single
@@ -102,7 +116,7 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
         paragraph for consumption.
     }
 
-### `wrap(s, width=74)`
+### `issue_wrap(s, width=74)`
     for each paragraph (blocks split on blank lines) {
         collapse runs of spaces/tabs to one space;
         if (the collapsed block starts with a list marker "- ", "* ",
@@ -118,10 +132,10 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
     }
     join the resulting blocks with blank lines between them.
 
-### `dumps(doc)`
+### `issue_dumps(doc)`
     {
         copy the scalar (non-repeating-table) fields named in ORDER that
-        are present in doc; wrap() every prose field among them
+        are present in doc; issue_wrap() every prose field among them
         (description, absence, description_history, memo, memo_original,
         edges_note); emit them via tomli_w with multiline strings enabled.
         Then, for `proposals` (an array of tables, deliberately excluded
@@ -134,9 +148,9 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
         character-for-character verification issue_gate.py performs.
     }
 
-### `save(p, doc)`
+### `issue_write(p, doc)`
     {
-        write dumps(doc) to path p as UTF-8 text with LF-only line endings.
+        write issue_dumps(doc) to path p as UTF-8 text with LF-only line endings.
     }
 
 ### `render(doc)`
@@ -166,10 +180,13 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
     }
     if (doc's status is not one of the known STATUSES) then {
         record a bad-status failure
-    } else if (the filename does not match PREFIX[status]+id+".toml") then {
-        record a prefix/status mismatch failure
+    } else if (doc's root flag is set and status is not "live") then {
+        record a "root but not live" failure — a root is always live,
+        never any other status
+    } else if (the filename does not match prefix_for(doc)+id+".toml") then {
+        record a prefix mismatch failure (against status AND the root flag)
     }
-    if (doc's id does not match nid_of(filename)) then {
+    if (doc's id does not match issue_id_read(filename)) then {
         record an id/filename mismatch failure
     }
     for each proposal (on the node itself, or on any of its edges) {
@@ -205,7 +222,7 @@ unguarded lines:
 
 ```
 nid = sys.argv[sys.argv.index("--render") + 1]
-p = next(q for q in nodes() if nid_of(q.stem) == nid_of(nid))
+p = next(q for q in issue_nodes_read() if issue_id_read(q.stem) == issue_id_read(nid))
 ```
 
 Neither has a default or a surrounding try/except, so there are two failure shapes, not one:

@@ -3,7 +3,7 @@
 roster.py — ONE roster, READ FROM `parts/`. B29 2026-08-07, R123 2026-08-08.
 
 WHAT THIS REPLACES. A14 counted thirteen hardcoded copies of the part list
-across eight files; coordinator/circle_close.py makes it nine files, ten copies.
+across eight files; coordinator/circle_close_verify.py makes it nine files, ten copies.
 Each copy was a place a part could be silently absent — adding a part meant
 finding and editing all ten, and a miss does not error, it just leaves that
 reader blind to the new part. B29 collapsed those ten into one list here.
@@ -67,7 +67,7 @@ asserts it. A shuffled enumeration would rewrite those bytes every run.
 are now the same list, and keeping the name means `ifs_model` and
 `check_best_practices` do not move for a rename that changes nothing.
 
-`verify()` IS THE CHECK, AND IT IS CALLED. It used to compare a list against
+`part_verify()` IS THE CHECK, AND IT IS CALLED. It used to compare a list against
 the tree; the list is now the tree, so that comparison can never fail and
 keeping it under the same name would be a check that quietly stopped
 checking. What it refuses instead is below, and `circle.py` runs it before
@@ -96,7 +96,7 @@ MARKER = "part.toml"
 SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv"})
 
 # `[Tag]:` is the transcript grammar (circle.py, circle_audit.py,
-# circle_close.py all parse on it), so a Tag carrying either bracket or a
+# circle_close_verify.py all parse on it), so a Tag carrying either bracket or a
 # newline would write a transcript its own readers cannot parse.
 BAD_IN_TAG = ("[", "]", "\n", "\r")
 
@@ -132,7 +132,7 @@ BAD_IN_TAG = ("[", "]", "\n", "\r")
 # of a string, not a flag the code has to remember to check.
 #
 # THIS MODULE STAYS THE ONE READER OF part.toml's FORMAT, and gains the one
-# writer. write_context() replaces exactly the bytes between the two markers
+# writer. part_context_write() replaces exactly the bytes between the two markers
 # above — never re-serialises the file, whose comment prose is history (a
 # tomli_w round-trip would flatten it) — and re-reads the result before it
 # returns.
@@ -171,7 +171,7 @@ GATES = ("ONE_OF", "BOUNDED", "UNIQUE_IN", "CHECK_AT_USE")
 BOUND_RULES = {"year_minus_15": lambda today: today.year - 15}
 
 
-def resolve_bound(spec, today=None):
+def part_bound_resolve(spec, today=None):
     """A declared bound as a number, or None when there is none."""
     if isinstance(spec, bool):
         return None
@@ -184,21 +184,21 @@ def resolve_bound(spec, today=None):
     return rule(today or datetime.date.today())
 
 
-def check_value(q: dict, answer: str) -> "str | None":
+def part_context_value_verify(q: dict, answer: str) -> "str | None":
     """THE ONE VALUE CHECK, shared by every editor — None when `answer` is
     acceptable for the declaration `q`, else the line to print before asking
     again.
 
     IT LIVES IN THE LEAF SO THERE IS ONLY ONE. Before 2026-08-28 there were
-    three: initialization.validate() for a part's context questions,
-    settings.coerce() for the settings register, and — added the same week and
+    three: initialization.initialization_validate() for a part's context questions,
+    setting_manager.setting_coerce() for the settings register, and — added the same week and
     the reason this consolidation happened at all — an inline `not in
-    knob.choices` in settings.write_tuning() for provider tuning, which
+    knob.choices` in setting_manager.setting_tuning_write() for provider tuning, which
     bypassed both. Three vocabularies for one idea is how they drift.
 
     PURE, DELIBERATELY. Everything here is decidable from the declaration and
     the answer alone. The checks that need live data — uniqueness against the
-    roster or the issue graph — stay in initialization.validate(), which calls
+    roster or the issue graph — stay in initialization.initialization_validate(), which calls
     this first and then adds its own.
 
     Empty is always valid: unset, take the default. That is R332's rule and it
@@ -216,12 +216,12 @@ def check_value(q: dict, answer: str) -> "str | None":
 
     dm = q.get("data_max")
     if dt == "NUMERIC_STRING":
-        lo = resolve_bound(q.get("minimum", 0))
+        lo = part_bound_resolve(q.get("minimum", 0))
         lo = 0 if lo is None else lo
-        hi = resolve_bound(q.get("maximum"))
+        hi = part_bound_resolve(q.get("maximum"))
         if hi is None:
             hi = dm if isinstance(dm, int) and not isinstance(dm, bool) else None
-        if not is_whole_number(answer.strip()):
+        if not part_context_is_whole_number(answer.strip()):
             shape = "whole" if lo < 0 else "whole, positive"
             return f"  a number is needed here — {shape}, numerals only"
         n = int(answer.strip())
@@ -238,7 +238,7 @@ def check_value(q: dict, answer: str) -> "str | None":
     return None
 
 
-def is_whole_number(t: str) -> bool:
+def part_context_is_whole_number(t: str) -> bool:
     """Whole, optionally negative. NEGATIVES ARE NEW, 2026-08-28 (minimum
     defaults to 0 but may go below it) — the old test was `answer.isdigit()`,
     which refuses a leading minus outright, and the line it printed said
@@ -247,7 +247,7 @@ def is_whole_number(t: str) -> bool:
     return bool(body) and body.isdigit() and body.isascii()
 
 
-def canonical(q: dict, answer: str) -> str:
+def part_canonical_read(q: dict, answer: str) -> str:
     """What to STORE for an accepted answer. A ONE_OF match is
     case-insensitive, so the declared spelling is what lands in the file and
     the register stays canonical however it was typed."""
@@ -264,7 +264,7 @@ def _mechanism_keys() -> tuple:
     Late import: identity is a leaf this one is imported BY."""
     try:
         import identity as _ID
-        return tuple(_ID.consumed_keys())
+        return tuple(_ID.self_consumed_keys_read())
     except Exception:                                          # noqa: BLE001
         return ()
 
@@ -279,13 +279,13 @@ def _gate_faults(where: str, k: str, q: dict) -> list:
     and the gender and religion answers ruled recorded-but-never-spoken) has
     nothing acting on it, so there is nothing to keep valid.
 
-    Which is why the requirement is keyed on identity.consumed_keys() rather
+    Which is why the requirement is keyed on identity.self_consumed_keys_read() rather
     than on anything in the declaration: whether the mechanism reads an answer
     is a fact about the READER, and only the reader can state it."""
     out = []
     if k in _mechanism_keys() and not q.get("gate"):
         out.append(f"{where} {k}: the mechanism reads this answer "
-                   f"(identity.consumed_keys), so it must declare a `gate` — "
+                   f"(identity.self_consumed_keys_read), so it must declare a `gate` — "
                    f"one of {', '.join(GATES)}")
     gate = q.get("gate")
     if gate is not None and gate not in GATES:
@@ -340,12 +340,12 @@ def _gate_faults(where: str, k: str, q: dict) -> list:
 # detected and rejected, echo error and loop at the prompt."* A question may
 # say which unique space its answer must not collide with; the validator in
 # initialization.py checks it. The Soul's preferred_name declares "part_tags":
-# it becomes the console's reserved name (identity.user_name()), which
+# it becomes the console's reserved name (identity.user_name_read()), which
 # roster.verify() refuses any part to wear.
 UNIQUE_SPACES = ("part_tags", "issue_ids", "issue_labels")
 
 
-def context_problems(dir_name: str, doc: dict) -> list[str]:
+def part_context_problems_read(dir_name: str, doc: dict) -> list[str]:
     """Everything wrong with a loaded part.toml's [context] table, as
     human-readable lines; [] for a clean table and for no table at all
     (absent is the normal case — five of seven parts here declare none)."""
@@ -392,13 +392,13 @@ def context_problems(dir_name: str, doc: dict) -> list[str]:
     return out
 
 
-def read_context(dir_name: str, base: pathlib.Path | None = None
+def part_context_read(dir_name: str, base: pathlib.Path | None = None
                  ) -> dict | None:
     """The part's [context] as declared RIGHT NOW — purpose, questions (each
     with key/ask/data_type/data_max and render when declared), answers (a
     key->string dict over every declared key, "" where unanswered). None
     when the part declares no context, or its file cannot be read or has a
-    problem context_problems() would report — so a caller never sees a
+    problem part_context_problems_read() would report — so a caller never sees a
     half-shaped table. Reads the file every call, deliberately
     (R332: a hand-tuned data_max is active at once)."""
     f = (base or PARTS_DIR) / dir_name / MARKER
@@ -407,7 +407,7 @@ def read_context(dir_name: str, base: pathlib.Path | None = None
     except Exception:                                          # noqa: BLE001
         return None
     ctx = doc.get("context")
-    if ctx is None or context_problems(dir_name, doc):
+    if ctx is None or part_context_problems_read(dir_name, doc):
         return None
     qs = []
     for q in ctx.get("questions", []):
@@ -431,7 +431,7 @@ def _toml_str(s: str) -> str:
                   .replace("\n", "\\n").replace("\t", "\\t")) + '"'
 
 
-def write_context(dir_name: str, answers: dict[str, str],
+def part_context_write(dir_name: str, answers: dict[str, str],
                   base: pathlib.Path | None = None) -> None:
     """Record answers: replace the bytes between CONTEXT_OPEN and
     CONTEXT_CLOSE in parts/<dir>/part.toml with a fresh [context.answers]
@@ -444,8 +444,8 @@ def write_context(dir_name: str, answers: dict[str, str],
     The rest of the file is NOT re-serialised: its comment prose is the
     part's history and tomli_w would flatten it. Bytes outside the markers
     are preserved exactly."""
-    from atomic_write import atomic_write
-    ctx = read_context(dir_name, base)
+    from atomic_write import record_atomic_write
+    ctx = part_context_read(dir_name, base)
     if ctx is None:
         raise ValueError(f"parts/{dir_name}/{MARKER} declares no usable "
                          f"[context]; nothing to record answers against")
@@ -480,17 +480,17 @@ def write_context(dir_name: str, answers: dict[str, str],
     except Exception as e:                                      # noqa: BLE001
         raise ValueError(f"parts/{dir_name}/{MARKER}: the rewrite would not "
                          f"load ({e}); nothing written") from e
-    probs = context_problems(dir_name, doc)
+    probs = part_context_problems_read(dir_name, doc)
     if probs:
         raise ValueError(f"parts/{dir_name}/{MARKER}: the rewrite would not "
                          f"verify ({probs[0]}); nothing written")
-    atomic_write(f, new)
-    if read_context(dir_name, base) is None:              # belt and braces
+    record_atomic_write(f, new)
+    if part_context_read(dir_name, base) is None:              # belt and braces
         raise RuntimeError(f"parts/{dir_name}/{MARKER}: written, but does "
                            f"not read back — restore it from git")
 
 
-def scan(base: pathlib.Path | None = None
+def part_scan(base: pathlib.Path | None = None
          ) -> tuple[list[tuple[str, str]], dict[str, str],
                     dict[str, str], list[str]]:
     """Read parts/ and return (roster, alt_tags, identity_tails, problems).
@@ -503,7 +503,7 @@ def scan(base: pathlib.Path | None = None
     NEVER RAISES. Nine modules import this at load; a malformed part.toml
     must not take down a probe run or a `--status`. A part with any problem
     of its own is EXCLUDED from the roster and NAMED in problems — excluded
-    and loud beats included and malformed, but only because `verify()` is
+    and loud beats included and malformed, but only because `part_verify()` is
     wired into the one path where the difference is destructive.
 
     `identity_tails` ARRIVED WITH R246, 2026-08-19 as `minimal_tails` ("put it in a part.toml
@@ -575,8 +575,8 @@ def scan(base: pathlib.Path | None = None
         # excluding: a malformed context is one dialog that cannot be asked,
         # and dropping the part for it would be the absence-reads-as-silence
         # failure this scan exists to prevent (the identity_tail precedent
-        # above). verify() refuses the open on any problem, so it is loud.
-        problems += context_problems(d.name, doc)
+        # above). part_verify() refuses the open on any problem, so it is loud.
+        problems += part_context_problems_read(d.name, doc)
 
         alts = doc.get("alt_tags", [])
         if not isinstance(alts, list) or any(not isinstance(a, str)
@@ -601,7 +601,7 @@ def scan(base: pathlib.Path | None = None
     return roster, alt, tails, problems
 
 
-ROSTER, ALT_TAGS, IDENTITY_TAILS, PROBLEMS = scan()
+ROSTER, ALT_TAGS, IDENTITY_TAILS, PROBLEMS = part_scan()
 
 DIR_NAMES: list[str] = [d for d, _t in ROSTER]               # alphabetical
 ALPHA_DIR_NAMES: list[str] = DIR_NAMES                       # alias, see above
@@ -616,7 +616,7 @@ def statement_re(tags):
     exactly what the writer produces (transcript_store.statement_line):
     "[Tag]: text" or "[Tag] [To: X]: text", one space, [To: ...] the only
     legal second bracket. One builder since 2026-08-19 (review, tier 3
-    #35): circle_close.py and circle_audit.py (then nightly.py) each
+    #35): circle_close_verify.py and circle_audit.py (then nightly.py) each
     hand-rolled their own and the two had drifted — close accepted ANY
     second bracket, the audit accepted arbitrary spacing — so the close's
     who-owes-a-short_term set and the audit's backfill set could disagree
@@ -624,7 +624,7 @@ def statement_re(tags):
     Measured before converging: across all 47 transcripts on 2026-08-19,
     neither divergence matched a single real line, so the writer's
     grammar is the corpus's whole truth. The TAG SET stays the caller's
-    parameter — circle_close walks historical transcripts and passes
+    parameter — circle_close_verify walks historical transcripts and passes
     DIR_BY_TAG_ALL; the audit processes only its own recent circles and
     passes TAGS — that difference is documented intent, not drift.
 
@@ -658,8 +658,8 @@ def statement_re(tags):
 # said the test was.
 
 
-def verify(base: pathlib.Path | None = None) -> list[str]:
-    """Everything scan() refused, plus the checks that need the wider tree.
+def part_verify(base: pathlib.Path | None = None) -> list[str]:
+    """Everything part_scan() refused, plus the checks that need the wider tree.
 
     Returns problems; empty is clean. Re-scans rather than reading PROBLEMS
     so a caller can point it at a fixture, and so a tree edited since import
@@ -675,7 +675,7 @@ def verify(base: pathlib.Path | None = None) -> list[str]:
         zero parts
         tag colliding with Self's display name
     """
-    _roster, _alt, _tails, problems = scan(base)
+    _roster, _alt, _tails, problems = part_scan(base)
 
     # Self is not a part but shares the transcript's `[Tag]:` grammar, so a
     # part tagged with Self's display name would make every statement
@@ -683,7 +683,7 @@ def verify(base: pathlib.Path | None = None) -> list[str]:
     # identity.py reads .env, and nine modules import this file.
     try:
         import identity as ID
-        reserved = {ID.user_name(), ID.DEFAULT_NAME, ID.SELF_ID}
+        reserved = {ID.user_name_read(), ID.DEFAULT_NAME, ID.SELF_ID}
     except Exception:                    # no dotenv, no .env — not this file's
         reserved = {"Self", "self"}
     for d, t in _roster:
@@ -694,7 +694,7 @@ def verify(base: pathlib.Path | None = None) -> list[str]:
 
 
 if __name__ == "__main__":
-    probs = verify()
+    probs = part_verify()
     print(f"  {len(DIR_NAMES)} part(s): {', '.join(DIR_NAMES) or '(none)'}")
     if probs:
         for p in probs:

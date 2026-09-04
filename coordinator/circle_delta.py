@@ -23,7 +23,7 @@ attributed to its own segment:
 
 READ-ONLY OVER THE RECORD, with one deliberate exception: when the
 `circle_stats` setting is on, a run also files its payload as
-work/logs/delta_<OT>.json (write_report(), through atomic_write). That file
+work/logs/delta_<OT>.json (circle_delta_report_write(), through atomic_write). That file
 is a MEMO, not a record — re-derivable from the registers, git and the close
 report at any time — so it is gitignored beside dream_<OT>.json, whose
 reasoning it shares. Nothing else is written, ever: no register moves, no
@@ -41,7 +41,7 @@ work/logs/close_<OT>.json rather than reading a transcript that may still be
 growing. That is deliberately stricter than circle_state's 45-minute
 quiet rule and never wrong in the direction that matters: a close report
 exists only after the verifier ran, so the transcript it names is finished
-bytes. At a live /close the report is written (run_verifier) before at_close()
+bytes. At a live /close the report is written (run_verifier) before circle_delta_at_close()
 fires, so the gate passes exactly when the record is complete.
 
 DREAM EVIDENCE IS ONE-DIRECTIONAL, same as already_processed(): a dream/<OT>
@@ -86,23 +86,23 @@ except ModuleNotFoundError:                                  # 3.10 and older
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-# memory/ too — markers.py (reached through transcript_store's own
+# memory/ too — annotations.py (reached through transcript_store's own
 # _split_remember) imports issue_commands from there, same hop circle.py makes.
 sys.path.insert(0, str(ROOT / "memory"))
 
 LOGS = ROOT / "work" / "logs"
 
 # The default behind the `circle_stats` setting — see the module docstring.
-# The register overrides it; enabled() is the one read, at use time rather
+# The register overrides it; circle_delta_is_enabled() is the one read, at use time rather
 # than import, so a value changed in the UI's long-lived process is honoured
 # at the very next close.
 CIRCLE_STATS = True
 
 
-def enabled() -> bool:
+def circle_delta_is_enabled() -> bool:
     """Is the close-time report (and its memo file) on for this tree?"""
-    import settings as SET
-    return bool(SET.value("circle_stats", CIRCLE_STATS))
+    import setting_manager as SET
+    return bool(SET.setting_value_read("circle_stats", CIRCLE_STATS))
 
 
 class DeltaUnavailable(RuntimeError):
@@ -125,11 +125,11 @@ def _git(args: list[str]) -> str | None:
 
 
 def _tag_name(kind: str, ot: str) -> str:
-    """The tag this tree would have written — gitrepo.tag_name() knows the
+    """The tag this tree would have written — gitrepo.system_git_tag_name_read() knows the
     lab stamp (R245); the literal is only the no-gitrepo fallback."""
     try:
         import gitrepo as G
-        return G.tag_name(kind, ot)
+        return G.system_git_tag_name_read(kind, ot)
     except Exception:                                          # noqa: BLE001
         return f"{kind}/{ot}"
 
@@ -196,13 +196,13 @@ DREAM_SELF_FILES = ("self/circle_history.toml", "self/self_observation_log.toml"
 DREAM_PART_FILES = ("remember.toml", "mid_term.md")
 
 
-def silent(statements: int, present: bool, status: str) -> bool:
+def circle_delta_is_silent(statements: int, present: bool, status: str) -> bool:
     """B54's shape: the part spoke, and its short_term is absent or unwell.
     A genuinely silent part (0 statements) writes nothing and is exempt."""
     return statements > 0 and (not present or status != "ok")
 
 
-def classify_circle_paths(paths: list[str], ot: str) -> list[str]:
+def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
     """Paths in the circle commit that circle_commit_paths() would not have
     staged for this OT. Empty means the commit is exactly its own shape."""
     out = []
@@ -212,20 +212,21 @@ def classify_circle_paths(paths: list[str], ot: str) -> list[str]:
               or p == f"circles/commands_{ot}.toml"
               or p == f"work/logs/close_{ot}.json"
               or p.startswith(f"work/prompts/{ot}")
-              or (p.startswith("parts/") and p.endswith(f"/short_term_{ot}.md"))
+              or (p.startswith("parts/")
+                  and p.endswith((f"/short_term_{ot}.toml", f"/short_term_{ot}.md")))
               or p in ("self/working_sets.toml", "self/proposals.toml"))
         if not ok:
             out.append(p)
     return out
 
 
-def classify_dream_paths(paths: list[str], ot: str) -> list[str]:
+def circle_delta_dream_paths_classify(paths: list[str], ot: str) -> list[str]:
     """Paths in the dream commit outside inter_circle's own write set.
 
     `work/prompts/<ot>/` ADDED 2026-08-31 (B86) — R412/R413 (2026-08-30/31)
     made the dream commit carry the circle's own prompt capture (every
     dreaming/synthesis/mid_term-refresh turn file, and the manifest they
-    rewrote), the same allowance classify_circle_paths() already had for
+    rewrote), the same allowance circle_delta_paths_classify() already had for
     its own commit. Until this, every live close reported its OWN designed
     capture files as UNEXPECTED — confirmed against circle 2026-08-31_1013,
     where the operator read the "what is this?" line as an alarm rather
@@ -259,7 +260,7 @@ def _statement_counts(ot: str) -> tuple[str, int, dict, str]:
     try:
         import transcript_store as TS
         raw = (ROOT / "circles" / f"circle_{ot}.md").read_text(encoding="utf-8")
-        _ot, topic, transcript = TS.parse_transcript(raw)
+        _ot, topic, transcript = TS.circle_transcript_parse(raw)
     except Exception:                                          # noqa: BLE001
         return "", 0, {}, ""
     import identity as ID
@@ -267,8 +268,8 @@ def _statement_counts(ot: str) -> tuple[str, int, dict, str]:
     self_n = 0
     for e in transcript:
         # cmd lines are echoed graph rulings (R079's record-not-room echo),
-        # not spoken statements; the Scribe's notes are the coordinator's.
-        if e.get("is_topic") or e.get("cmd") or e.get("speaker") == "__scribe__":
+        # not spoken statements; a Coordinator note is not either.
+        if e.get("is_topic") or e.get("cmd") or e.get("speaker") == "__coordinator__":
             continue
         if e.get("speaker") == ID.SELF_ID:
             self_n += 1
@@ -279,7 +280,7 @@ def _statement_counts(ot: str) -> tuple[str, int, dict, str]:
 
 def _annotations(raw: str) -> dict:
     try:
-        import markers as MK
+        import annotations as MK
         import recall_index as RC
         return {"remember": len(MK.REMEMBER_RE.findall(raw)),
                 "ask": sum(1 for _ in MK.ASK_RE.finditer(raw)),
@@ -296,8 +297,8 @@ def _issue_commands(ot: str) -> list[dict]:
 
 def _proposals(ot: str) -> dict:
     try:
-        import proposals as PR
-        rows = [r for r in PR.entries() if _cites(r, ot)]
+        import proposal_manager as PR
+        rows = [r for r in PR.proposal_read() if _cites(r, ot)]
     except Exception:                                          # noqa: BLE001
         rows = []
     states: dict[str, int] = {}
@@ -321,7 +322,7 @@ def _spend(ot: str) -> dict | None:
 def _part_rows(ot: str, close: dict, dream_sha: str | None,
                dream_files: list[str]) -> list[dict]:
     import roster as R
-    import remember as RM
+    import remember_manager as RM
     by_part = {p.get("part"): p for p in close.get("parts", [])}
     out = []
     for d in R.DIR_NAMES:
@@ -332,7 +333,7 @@ def _part_rows(ot: str, close: dict, dream_sha: str | None,
         row = {"part": d, "tag": R.TAG_BY_DIR.get(d, d), "statements": stmts,
                "short_term_bytes": cp.get("bytes"),
                "short_term_status": status if cp else "absent",
-               "silent": silent(stmts, present, status)}
+               "silent": circle_delta_is_silent(stmts, present, status)}
         try:
             recs = _rows(RM._real_path(d), RM.TABLE)
         except Exception:                                      # noqa: BLE001
@@ -345,7 +346,7 @@ def _part_rows(ot: str, close: dict, dream_sha: str | None,
         if dre is not None:
             row["salience"] = dre.get("salience")
             try:
-                row["chain_len"] = len(RM.chain_of({RM.TABLE: recs}, dre["id"]))
+                row["chain_len"] = len(RM.remember_chain_read({RM.TABLE: recs}, dre["id"]))
             except Exception:                                  # noqa: BLE001
                 row["chain_len"] = 1
         rel = f"parts/{d}/mid_term.md"
@@ -388,8 +389,8 @@ def _processing(ot: str, dream_sha: str | None,
     return out
 
 
-def collect(ot: str) -> dict:
-    """The whole delta for one closed circle, as the payload write_report()
+def circle_delta_collect(ot: str) -> dict:
+    """The whole delta for one closed circle, as the payload circle_delta_report_write()
     files. Raises DeltaUnavailable when the circle has no close report."""
     import datetime
     close = _load_close(ot)
@@ -417,12 +418,12 @@ def collect(ot: str) -> dict:
         unexpected["circle_commit"] = (
             ["(merge commit under the tag — not classified)"]
             if _is_merge(circle_sha) else
-            classify_circle_paths(circle_files, ot))
+            circle_delta_paths_classify(circle_files, ot))
     if dream_sha:
         unexpected["dream_commit"] = (
             ["(merge commit under the tag — not classified)"]
             if _is_merge(dream_sha) else
-            classify_dream_paths(dream_files, ot))
+            circle_delta_dream_paths_classify(dream_files, ot))
 
     return {
         "ot": ot,
@@ -449,7 +450,7 @@ def _b(n) -> str:
     return f"{n:,}" if isinstance(n, int) else "?"
 
 
-def render(delta: dict) -> list[str]:
+def circle_delta_render(delta: dict) -> list[str]:
     """The report, one string per line, every line within 116 characters."""
     ot = delta.get("ot", "?")
     an = delta.get("anchors", {})
@@ -559,7 +560,7 @@ def render(delta: dict) -> list[str]:
     return out
 
 
-def render_series(deltas: list[dict]) -> list[str]:
+def circle_delta_series_render(deltas: list[dict]) -> list[str]:
     out = [f"circle_delta --series — {len(deltas)} closed circle(s)", ""]
     out.append(f"  {'circle':<17} {'part':<13} {'spoke':>5} "
                f"{'short_term':>11} {'dreamt':<9} {'chain':>5}  mid_term")
@@ -585,40 +586,40 @@ def render_series(deltas: list[dict]) -> list[str]:
 
 
 # --------------------------------------------------------------------- write
-def write_report(ot: str, delta: dict) -> pathlib.Path:
-    """work/logs/delta_<OT>.json — the memo. Callers gate on enabled();
+def circle_delta_report_write(ot: str, delta: dict) -> pathlib.Path:
+    """work/logs/delta_<OT>.json — the memo. Callers gate on circle_delta_is_enabled();
     this function only writes what it is handed."""
-    from atomic_write import atomic_write
+    from atomic_write import record_atomic_write
     LOGS.mkdir(parents=True, exist_ok=True)
     dest = LOGS / f"delta_{ot}.json"
-    atomic_write(dest, json.dumps(delta, indent=2) + "\n")
+    record_atomic_write(dest, json.dumps(delta, indent=2) + "\n")
     return dest
 
 
-def at_close(ot: str, emit) -> None:
+def circle_delta_at_close(ot: str, emit) -> None:
     """The /close hook — print the report and file the memo, both behind the
     circle_stats setting. FAILS OPEN: the circle's record is the transcript
     and the short_terms; a reporting fault must never fail a close."""
     try:
-        if not enabled():
+        if not circle_delta_is_enabled():
             return
-        delta = collect(ot)
+        delta = circle_delta_collect(ot)
         emit("")
-        for line in render(delta):
+        for line in circle_delta_render(delta):
             emit(line)
-        dest = write_report(ot, delta)
+        dest = circle_delta_report_write(ot, delta)
         emit(f"  delta recorded: {dest.name}")
     except Exception as e:                                     # noqa: BLE001
         emit(f"  circle_delta skipped ({type(e).__name__}: {e})")
 
 
 # ---------------------------------------------------------------------- main
-def series() -> list[dict]:
+def circle_delta_series_read() -> list[dict]:
     out = []
     for p in sorted(LOGS.glob("close_*.json")):
         ot = p.stem[len("close_"):]
         try:
-            out.append(collect(ot))
+            out.append(circle_delta_collect(ot))
         except Exception as e:                                 # noqa: BLE001
             out.append({"ot": ot, "error": f"{type(e).__name__}: {e}"})
     return out
@@ -642,9 +643,9 @@ def main(argv: list[str]) -> int:
     args = ap.parse_args(argv)
 
     if args.series:
-        deltas = series()
+        deltas = circle_delta_series_read()
         print(json.dumps(deltas, indent=2) if args.json
-              else "\n".join(render_series(deltas)))
+              else "\n".join(circle_delta_series_render(deltas)))
         return 0
 
     ot = args.ot or _newest_ot()
@@ -652,14 +653,14 @@ def main(argv: list[str]) -> int:
         print("no close report under work/logs/ — nothing to report on")
         return 1
     try:
-        delta = collect(ot)
+        delta = circle_delta_collect(ot)
     except DeltaUnavailable as e:
         print(f"  {e}")
         return 1
     print(json.dumps(delta, indent=2) if args.json
-          else "\n".join(render(delta)))
-    if enabled():
-        dest = write_report(ot, delta)
+          else "\n".join(circle_delta_render(delta)))
+    if circle_delta_is_enabled():
+        dest = circle_delta_report_write(ot, delta)
         print(f"\n  delta recorded: {dest.relative_to(ROOT).as_posix()}")
     return 0
 

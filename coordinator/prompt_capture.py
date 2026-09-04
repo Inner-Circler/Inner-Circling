@@ -110,10 +110,10 @@ THE PER-TURN RECORD is the Messages-API request body as sent, plus the reply:
     trimmed and the sha256 of their JSON so a reconstruction can be checked.
     A part that has not yet spoken has no anchor and its messages are
     recorded whole. THE REQUEST ITSELF IS NOT TRIMMED — what a part is sent
-    is prompt_build.render_messages()'s business, and this module only
+    is prompt_build.prompt_messages_render()'s business, and this module only
     records it.
 
-    `response.text` is the RAW reply — before rounds.ask_statement() strips a
+    `response.text` is the RAW reply — before circle_rounds.part_statement_ask() strips a
     sign-off, a `[To: ...]` prefix or a bracket, and before "[pass]" becomes
     silence. The transcript holds the cleaned text; this is the only record
     of what the model SAID. `usage` is the SDK's usage object as a dict, so
@@ -169,10 +169,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import roster as R                                            # noqa: E402
 # One home for the roots (2026-08-19, review tier 5 #41) — see
-# remember.py's note beside its own import: this was the third private
+# remember_manager.py's note beside its own import: this was the third private
 # ROOT/SANDBOX derivation, each a place the next relocation could miss.
-from paths import ROOT, SANDBOX                               # noqa: E402
-from atomic_write import atomic_write                         # noqa: E402
+from record_paths import ROOT, SANDBOX                               # noqa: E402
+from atomic_write import record_atomic_write                         # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -203,7 +203,7 @@ def _roots() -> list[pathlib.Path]:
 # intent but not the mechanism.
 #
 # LAZILY, which is this file's established way of reaching a coordinator
-# module (see the `import remember as RM` inside record_projection). It
+# module (see the `import remember_manager as RM` inside record_projection). It
 # matters here: prompt_build pulls the transport and the provider behind it,
 # and this module is a VERIFIER the pre-commit hook runs — the same reason
 # _source_constant greps a constant out of source text rather than importing
@@ -221,9 +221,12 @@ IDENTITY_BLOCKS = ("part_identity", "part_objectives")   # the per-part pair
 MANIFEST = "manifest.json"
 PROJECTION_PREFIX = 96      # chars of the newest record recorded as the probe
 
-# B29: derived from roster.py — were hand-typed copies.
+# B29: derived from roster.py — was a hand-typed copy.
 PART_TAGS = tuple(R.TAGS)
-PART_TAGS_BY_DIR = R.TAG_BY_DIR
+# PART_TAGS_BY_DIR (= R.TAG_BY_DIR) DELETED 2026-09-01 -- audit-register.md
+# #30 found it a zero-reference symbol; two docs cited it as this module's
+# own surface, but nothing anywhere imports or reads it. Use
+# roster.TAG_BY_DIR directly.
 
 
 def _sha(b: bytes) -> str:
@@ -249,8 +252,8 @@ def _remember_expectation(part: str) -> dict:
     question. So the bytes to look for travel WITH the capture.
 
     TWO INDEPENDENT PATHS, which is the whole point: prompt_build assembles
-    Block 3/4 through remember.block_settled()/block_tail(), and this reads
-    remember.entries() directly. A check that reads the same object twice
+    Block 3/4 through remember_prompt_projection.remember_settled_render()/block_tail(), and this reads
+    remember_manager.remember_read() directly. A check that reads the same object twice
     checks nothing.
 
     THE WINDOW IS RESPECTED, NOT ASSUMED AWAY. The projection shows records
@@ -263,8 +266,8 @@ def _remember_expectation(part: str) -> dict:
     IT NEVER COSTS A CAPTURE. Any failure is recorded as `error` and skipped
     at verify time, the same degrade block_items() takes."""
     try:
-        import remember as RM
-        es = sorted(RM.entries(part), key=lambda r: r.get("date", ""),
+        import remember_manager as RM
+        es = sorted(RM.remember_read(part), key=lambda r: r.get("date", ""),
                     reverse=True)
         if not es:
             return {"records": 0}
@@ -293,7 +296,7 @@ def block_filename(index: int, name: str, part: str) -> str:
 
 
 # ------------------------------------------------------------------ the blocks
-def write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
+def prompt_capture_write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
           live: bool,
           names: "tuple[str, ...] | None" = None) -> pathlib.Path | None:
     """Write <root>/<OT>/: the Block files and manifest.json. Returns the
@@ -343,7 +346,7 @@ def write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
     def _emit(fname: str, b: dict, i: int, nm: str, part: "str | None") -> None:
         text = b["text"]
         f = d / fname
-        atomic_write(f, text)
+        record_atomic_write(f, text)
         raw = f.read_bytes()
         if raw != text.encode("utf-8"):
             raise RuntimeError(
@@ -391,19 +394,19 @@ def write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[str, str],
             "by sha256), BLOCK 4 inline, messages from the part's own last "
             "statement through the closing line, plus the raw reply. R277."),
     }
-    atomic_write(d / MANIFEST, json.dumps(manifest, indent=1,
+    record_atomic_write(d / MANIFEST, json.dumps(manifest, indent=1,
                                           ensure_ascii=False) + "\n")
     return d
 
 
-def read_manifest(d: pathlib.Path) -> dict:
+def prompt_manifest_read(d: pathlib.Path) -> dict:
     return json.loads((d / MANIFEST).read_text(encoding="utf-8"))
 
 
 def block_shas(manifest: dict) -> dict[str, list[str]]:
     """{part: [sha256 of each of its blocks, in block order]} — what a
     resume compares to decide whether the emitted program moved between
-    sittings (circle.py::_prompt_blocks_changed). Per part, not per file:
+    sittings (circle_close.py::_prompt_blocks_changed). Per part, not per file:
     the shared files count for every part that carries them."""
     out: dict[str, list[str]] = {}
     for p, rec in manifest.get("parts", {}).items():
@@ -414,27 +417,27 @@ def block_shas(manifest: dict) -> dict[str, list[str]]:
 
 # ------------------------------------------------------------------ the turns
 # ONE CIRCLE PER PROCESS, so one open turn log. circle.py opens it right
-# after write() and before the pre-warm; everything llm_client sends on a
+# after prompt_capture_write() and before the pre-warm; everything llm_client sends on a
 # part's behalf is then recorded here. A second open (a later circle in the
 # same process — the UI suites do this) replaces the first.
 _LOG: dict = {"dir": None, "ot": None, "manifest": None, "seq": 0,
               "lock": threading.Lock()}
 
 
-def open_turn_log(d: "pathlib.Path | None", ot: "str | None" = None) -> None:
+def prompt_turn_log_open(d: "pathlib.Path | None", ot: "str | None" = None) -> None:
     """Point record_turn() at <d>. None closes it: record_turn() then writes
-    nothing — the plain-sandbox case, where write() returned None too."""
+    nothing — the plain-sandbox case, where prompt_capture_write() returned None too."""
     with _LOG["lock"]:
         _LOG["dir"], _LOG["ot"], _LOG["manifest"], _LOG["seq"] = None, ot, None, 0
         if d is None:
             return
-        man = read_manifest(d)
+        man = prompt_manifest_read(d)
         man.setdefault("turns", [])
         _LOG["dir"], _LOG["manifest"] = d, man
         _LOG["seq"] = max((t.get("seq", 0) for t in man["turns"]), default=0)
 
 
-def turn_log_dir() -> "pathlib.Path | None":
+def prompt_turn_log_locate() -> "pathlib.Path | None":
     return _LOG["dir"]
 
 
@@ -499,7 +502,7 @@ def record_turn(part: "str | None", kind: str, request: dict,
     untouched (a string has no Block file to point at), and `part` may be
     None: the synthesis and the coalesce pass speak for no one part. The file
     then takes the KIND in the part slot — Per_turn_synthesis_<time>_<seq>
-    — and the body says `"part": null`. check_contract() makes the same
+    — and the body says `"part": null`. prompt_capture_contract_verify() makes the same
     substitution when it checks the name, so writer and checker agree.
 
     Thread-safe: the blind round asks seven parts in parallel, so the
@@ -535,19 +538,19 @@ def record_turn(part: "str | None", kind: str, request: dict,
         fname = f"Per_turn_{actor}_{now}_{seq:03d}.json"
         f = d / fname
         text = json.dumps(body, indent=1, ensure_ascii=False) + "\n"
-        atomic_write(f, text)
+        record_atomic_write(f, text)
         raw = f.read_bytes()
         man["turns"].append({"file": fname, "seq": seq, "part": part,
                              "kind": kind, "time": now, "bytes": len(raw),
                              "sha256": _sha(raw), "dry_run": bool(dry_run),
                              "error": bool(error)})
         man["turn_bytes"] = sum(t["bytes"] for t in man["turns"])
-        atomic_write(d / MANIFEST, json.dumps(man, indent=1,
+        record_atomic_write(d / MANIFEST, json.dumps(man, indent=1,
                                               ensure_ascii=False) + "\n")
         return f
 
 
-def discard(d: "pathlib.Path | None") -> int:
+def prompt_capture_discard(d: "pathlib.Path | None") -> int:
     """Remove a capture that belongs to a circle which left no trace — the
     pre-warm failed, nothing was ever said, the transcript was withdrawn.
     EXACTLY the files the manifest lists, by name, then the manifest, then
@@ -556,7 +559,7 @@ def discard(d: "pathlib.Path | None") -> int:
     if d is None or not (d / MANIFEST).is_file():
         return 0
     try:
-        man = read_manifest(d)
+        man = prompt_manifest_read(d)
     except Exception:                                      # noqa: BLE001
         return 0
     names = list(man.get("files", {})) + [t["file"] for t in man.get("turns", [])]
@@ -579,7 +582,7 @@ def discard(d: "pathlib.Path | None") -> int:
 # -------------------------------------------------------------- item stats
 # Per-item character counts WITHIN a block — ruled 2026-08-16: "per single
 # item add (topics, part-relationships, issues, etc.)". PARSES THE EMITTED
-# TEXT, never a generator (build_briefing, topics.block(), etc.) — the same
+# TEXT, never a generator (build_briefing, topic_manager.block(), etc.) — the same
 # rule this whole module exists to enforce (see the docstring above, E09/
 # E12): stats threaded out of a generator would describe its INTENT; stats
 # parsed from the captured block describe what was actually sent, and drift
@@ -589,13 +592,13 @@ def discard(d: "pathlib.Path | None") -> int:
 # `## ` headings (e.g. "## Relationships — current stances", prose, not a
 # relationship record) INSIDE circle_identity's "## Your identity" span —
 # treating every `## `/`### ` line as an item boundary would count those.
-# Only the LITERAL marker strings circle.py / issue_projection.py / topics.py /
-# check_best_practices.py / remember.py / part_relationships.py already
+# Only the LITERAL marker strings circle.py / issue_prompt_projection.py / topic_manager.py /
+# practice_manager.py / remember_manager.py / part_relationships.py already
 # hardcode start a new item; everything else is that item's body.
 #
-# NEVER COSTS A CAPTURE. write() calls block_items() inside a try/except
+# NEVER COSTS A CAPTURE. prompt_capture_write() calls block_items() inside a try/except
 # that degrades to a single "(item extraction failed)" entry — a parser bug
-# here must not be able to trip write()'s byte re-read refusal, which
+# here must not be able to trip prompt_capture_write()'s byte re-read refusal, which
 # guards the verbatim capture itself (ruled 2026-08-01).
 
 _ISSUE_ITEM = re.compile(r"(?m)^### (n\d{4} — .*)$")
@@ -781,7 +784,7 @@ _TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict,
           "str|null": (str, type(None))}
 
 
-def shape_of(kind: "str | None", contract: dict) -> tuple["str | None", dict]:
+def prompt_shape_read(kind: "str | None", contract: dict) -> tuple["str | None", dict]:
     """(name, spec) of the [shape.*] table that declares `kind`; (None, {})
     when none does. R412/R413, 2026-08-31: a PART's turn and a PROCESSING
     turn are two wire shapes under one file format, and the shape is what
@@ -792,7 +795,7 @@ def shape_of(kind: "str | None", contract: dict) -> tuple["str | None", dict]:
     return None, {}
 
 
-def all_kinds(contract: dict) -> list[str]:
+def prompt_capture_kinds_read(contract: dict) -> list[str]:
     """Every kind any shape declares — the ONE list, derived, never copied.
     Falls back to a pre-shape contract's `[turn] kinds` so an old TOML still
     checks something rather than nothing."""
@@ -802,7 +805,7 @@ def all_kinds(contract: dict) -> list[str]:
     return out or list((contract.get("turn") or {}).get("kinds") or [])
 
 
-def load_contract() -> dict:
+def prompt_capture_contract_read() -> dict:
     """turn_contract.toml, or {} when it is absent or unreadable. A MISSING
     CONTRACT IS A NOTE, NOT A PASS — _verify_dir says so out loud, because a
     check that quietly stops checking is the defect this whole file exists
@@ -835,7 +838,7 @@ def _source_constant(spec: str) -> "str | None":
     if m:
         return m.group(1)
     # THE CONSTANT MAY NOW BE OVERRIDABLE, 2026-08-28 (R379).
-    # llm_client.MODEL became `SET.value("model", "claude-sonnet-5")`, and the
+    # llm_client.MODEL became `SET.setting_value_read("model", "claude-sonnet-5")`, and the
     # literal-only pattern above stopped matching it — which did not fail the
     # check, it SKIPPED it (`if want_model and ...` below), turning the one
     # assertion that a request carries the code's own model into a gate that
@@ -849,14 +852,14 @@ def _source_constant(spec: str) -> "str | None":
     # check into a verifier the pre-commit hook runs. That is the same reason
     # this function greps rather than imports in the first place.
     m = re.search(r'^' + re.escape(name)
-                  + r'\s*=\s*(?:\w+\.)?value\(\s*["\'](\w+)["\']\s*,\s*'
+                  + r'\s*=\s*(?:\w+\.)?setting_value_read\(\s*["\'](\w+)["\']\s*,\s*'
                     r'["\']([^"\']+)["\']\s*\)', src, re.M)
     if not m:
         return None
     key, default = m.group(1), m.group(2)
     try:
-        import settings as SET
-        return SET.value(key, default)
+        import setting_manager as SET
+        return SET.setting_value_read(key, default)
     except Exception:                                          # noqa: BLE001
         return default
 
@@ -888,7 +891,7 @@ def _keys(where: str, obj: dict, spec: dict, out: list) -> None:
     _typed(where, obj, spec.get("types", {}), out)
 
 
-def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
+def prompt_capture_contract_verify(fname: str, body: dict, contract: dict) -> list[str]:
     """Every rule in turn_contract.toml against ONE captured turn. Returns
     the failures; empty when the turn honours the contract."""
     out: list[str] = []
@@ -898,13 +901,13 @@ def check_contract(fname: str, body: dict, contract: dict) -> list[str]:
     t = contract.get("turn", {})
     _keys(fname, body, t, out)
     kind = body.get("kind")
-    kinds = all_kinds(contract)
+    kinds = prompt_capture_kinds_read(contract)
     if kinds and kind not in kinds:
         out.append(fname + ": kind " + repr(kind)
                    + " is not one of " + repr(kinds))
     # THE SHAPE TYPES `part` — a str for a part's turn, str-or-null for a
     # processing one, where null means the synthesis or the coalesce pass.
-    _shape_name, shape = shape_of(kind, contract)
+    _shape_name, shape = prompt_shape_read(kind, contract)
     if "part" in shape:
         _typed(fname, body, {"part": shape["part"]}, out)
     if t.get("time_re") and isinstance(body.get("time"), str) \
@@ -1041,7 +1044,7 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
                 notes: "list[str] | None" = None) -> tuple[int, int]:
     """Returns (block files checked, turn files checked)."""
     try:
-        man = read_manifest(d)
+        man = prompt_manifest_read(d)
     except Exception as e:                                   # noqa: BLE001
         fails.append(f"{d.name}/{MANIFEST}: unreadable — {e}")
         return 0, 0
@@ -1060,7 +1063,7 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
             f"old per-part captures were retired 2026-08-21)")
         return 0, 0
     files = man.get("files", {})
-    contract = load_contract()
+    contract = prompt_capture_contract_read()
     if not contract:
         # R368: a checker that quietly stops checking is worse than none.
         (notes if notes is not None else fails).append(
@@ -1140,7 +1143,7 @@ def _verify_dir(d: pathlib.Path, fails: list[str],
         # prove the file has not been altered since it was written;
         # this proves what was written was the shape the code is
         # supposed to send.
-        for bad in check_contract(t["file"], body, contract):
+        for bad in prompt_capture_contract_verify(t["file"], body, contract):
             fails.append(f"{d.name}/{bad}")
         part = body.get("part")
         for b in (body.get("request") or {}).get("system") or []:
@@ -1176,7 +1179,7 @@ def _dirs(ot: "str | None") -> list[pathlib.Path]:
     return [d for d in dirs if (d / MANIFEST).is_file()]
 
 
-def verify(ot: "str | None" = None) -> int:
+def prompt_capture_verify(ot: "str | None" = None) -> int:
     """Re-hash every Block file and every turn file against the manifest,
     assert no SHARED block carries an addressed marker, and assert every
     turn file's block references resolve to the Block files by sha."""
@@ -1209,7 +1212,7 @@ def verify(ot: "str | None" = None) -> int:
     return 0
 
 
-def stats(ot: "str | None" = None) -> int:
+def prompt_stats_read(ot: "str | None" = None) -> int:
     """Per-block, per-item character breakdown of the captured part-context
     prompt (Blocks 1-4) for one circle, or every circle if `ot` is None,
     read from manifest.json's own "items" — what was captured at open."""
@@ -1220,7 +1223,7 @@ def stats(ot: "str | None" = None) -> int:
                             for r in (PROMPTS, SANDBOX_PROMPTS)))
         return 1
     for d in dirs:
-        man = read_manifest(d)
+        man = prompt_manifest_read(d)
         files = man.get("files", {})
         print(f"\n{d.relative_to(ROOT).as_posix()}:")
         for part, rec in man.get("parts", {}).items():
@@ -1254,6 +1257,6 @@ if __name__ == "__main__":
     argv = sys.argv[1:]
     if "--stats" in argv:
         i = argv.index("--stats")
-        sys.exit(stats(argv[i + 1] if i + 1 < len(argv) else None))
+        sys.exit(prompt_stats_read(argv[i + 1] if i + 1 < len(argv) else None))
     args = [a for a in argv if a != "--verify"]
-    sys.exit(verify(args[0] if args else None))
+    sys.exit(prompt_capture_verify(args[0] if args else None))

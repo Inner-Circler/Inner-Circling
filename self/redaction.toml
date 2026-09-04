@@ -7,8 +7,8 @@ alias = []
 
 [doc]
 preamble = """
-The operator's own curated redaction targets -- names, places, orgs to hide in ui/circling.py's redacted CIRCLE-pane view. Ruled 2026-08-31: CRUD, stable reversible opaque ids, per D:\\Projects\\Ticker\\anonymization-design.md. Part names are never eligible, in either circles or consults -- redaction.py refuses one at add/update time and filters it out of the compiled pattern besides.
+The operator's own curated redaction targets -- names, places, orgs to hide in ui/circling.py's redacted CIRCLE-pane view. Ruled 2026-08-31: CRUD, stable reversible opaque ids, adapted from a design used in a separate personal project (see coordinator/redaction_manager.py's own docstring). Part names are never eligible, in either circles or consults -- redaction_manager.py refuses one at add/update time and filters it out of the compiled pattern besides.
 
-SHIPPED EMPTY. This installation has curated no redaction targets yet; they are added one at a time with /redact-alias-add. `next_person`/`next_place`/`next_org`/`next_other` all at 1 and an empty table are exactly what coordinator/redaction.py builds when the file is absent, so a fresh install reads the same document either way. The file exists so it is there, valid and loadable, rather than conjured on first write.
+SHIPPED EMPTY. This installation has curated no redaction targets yet; they are added one at a time with /redact-alias-add. `next_person`/`next_place`/`next_org`/`next_other` all at 1 and an empty table are exactly what coordinator/redaction_manager.py builds when the file is absent, so a fresh install reads the same document either way. The file exists so it is there, valid and loadable, rather than conjured on first write.
 
 self/redaction_map.toml -- the reverse map for auto-detected structured identifiers (email/url/phone/handle), a SEPARATE file -- never ships at all, empty or otherwise: its `literal` field IS the raw PII a redacted view exists to hide. packaging/runtime_only.txt names it."""

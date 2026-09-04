@@ -9,11 +9,11 @@ issue_commands.py — parse, record and apply Self's in-circle graph rulings.
 
 `issue-evidence-add` differs from the first two in one way that matters: its quote
 is NOT Self's own words, typed fresh into the command line — it is a PRIOR
-statement, by any part or Self, already in this circle's transcript. `parse()`
+statement, by any part or Self, already in this circle's transcript. `issue_command_parse()`
 stays pure (it only knows the statement NUMBER); circle.py resolves `<stmt#>`
 against the live transcript (same numbering `/issue-evidence-list` shows) and fills in
 `part`/`quote`/`source` before this module ever sees the command, exactly the
-way it already resolves `precheck()` against the live graph. R160/B40,
+way it already resolves `issue_precheck()` against the live graph. R160/B40,
 2026-08-13, docs/HELP_DESIGN.md §4 item 2 — docs/operations.md row 10 named
 this gap 2026-08-04 and it was done by hand 8 times since.
 
@@ -21,7 +21,7 @@ The fourth form (internally `verb == "issue-relationship-update"`) reads
 OBJECT-CLASS shaped, R161, 2026-08-13 — a node id right after `/issue`,
 matching how `/issue-status nNNNN = <value>` already reads for a node —
 but a NODE id right after `/issue` is also exactly what `circle.py`'s
-bare node-status form starts with. `parse()` tells the two apart the only
+bare node-status form starts with. `issue_command_parse()` tells the two apart the only
 way it can: the THIRD token. A node op (`status`) is never an edge type,
 so `a[1] ==` a node id `and a[2] in S.EDGE_TYPES` is unambiguous. Scoped
 to `status = retired` only for now — moving an edge TO
@@ -57,7 +57,7 @@ reaches the room, or reaches it by rebuilding seven prompts and discarding
 the cache for all of them. Immediate costs real money and shows the room
 nothing.
 
-VALIDATION IS ALL-OR-NOTHING. `apply()` copies `issues/` to a temp graph,
+VALIDATION IS ALL-OR-NOTHING. `issue_command_apply()` copies `issues/` to a temp graph,
 applies every command there, and runs the real gate over the copy. The live
 tree is written only if the whole batch passes. `issue_gate.py` has taken a
 directory argument for exactly this since it was written.
@@ -77,7 +77,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # paths/atomic_write et al.
 import issue_schema as S
-from atomic_write import atomic_write                                       # noqa: E402
+from atomic_write import record_atomic_write                                       # noqa: E402
+import seam                                                                # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -87,7 +88,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-ROOT = S.ROOT
+from record_paths import ROOT                                  # noqa: E402  (stage 14: was S.ROOT)
 NODE_RE = re.compile(r"^n\d{4}$")
 # "quoted, with \" escapes" | bare-word
 ARG_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|(\S+)')
@@ -104,7 +105,7 @@ def _parse_update_relation(a: list[str], circle: str,
     `/issue-relationship-status nNNNN <type> nMMMM ["="] retired "why"`.
 
     `a` IS THE ARGUMENT LIST, starting at the node — the verb is the slash
-    head now and parse() has already consumed it. It read `/issue nNNNN
+    head now and issue_command_parse() has already consumed it. It read `/issue nNNNN
     <type> ...`, a two-token verb whose first argument was the object, until
     R261 made the whole verb the head.
 
@@ -182,7 +183,7 @@ HEADS: dict[str, str] = {
 }
 
 
-def parse(line: str, circle: str) -> tuple[dict | None, str]:
+def issue_command_parse(line: str, circle: str) -> tuple[dict | None, str]:
     """(command, "") or (None, why not). Pure — touches no file.
 
     Refuses on anything it does not fully understand. A command that half
@@ -258,14 +259,14 @@ def parse(line: str, circle: str) -> tuple[dict | None, str]:
             return None, f"too many arguments ({len(args) - 3} extra)"
         # part/quote/source are NOT set here — circle.py resolves them
         # against the live transcript right after this call, and adds
-        # them to this same dict before precheck()/apply() ever see it.
+        # them to this same dict before issue_precheck()/issue_command_apply() ever see it.
         return {"verb": verb, "node": node, "stmt": stmt, "why": args[2],
                 "circle": circle, "line": line.strip()}, ""
 
     return None, f"unknown issue verb {verb!r}"
 
 
-def all_edges(graph: dict[str, dict] | None = None) -> list[dict]:
+def issue_edges_read(graph: dict[str, dict] | None = None) -> list[dict]:
     """Every edge on a live node, flattened out — HELP_DESIGN.md §4 item
     3. Before this, "list all edges" meant "read every issue node and
     collect its edges array" inline wherever it was needed; this is
@@ -274,13 +275,13 @@ def all_edges(graph: dict[str, dict] | None = None) -> list[dict]:
     (src, type, target) is the closest thing to one (docs/HELP_DESIGN.md
     §3: relationship's id is `<src> <type> <tgt>`)."""
     if graph is None:
-        graph = {d["id"]: d for d in (S.load(p) for p in S.live_nodes())}
+        graph = {d["id"]: d for d in (S.issue_read(p) for p in S.issue_live_read())}
     return [{"src": nid, **e}
             for nid in sorted(graph)
             for e in graph[nid].get("edges", [])]
 
 
-def precheck(cmd: dict, graph: dict[str, dict]) -> str:
+def issue_precheck(cmd: dict, graph: dict[str, dict]) -> str:
     """What can be known before the circle ends. Returns "" or a reason.
 
     Deliberately partial: the authoritative answer is the gate, run over the
@@ -324,7 +325,7 @@ def precheck(cmd: dict, graph: dict[str, dict]) -> str:
     return ""
 
 
-def describe(cmd: dict) -> str:
+def issue_describe(cmd: dict) -> str:
     if cmd["verb"] == "issue-label-update":
         return f'{cmd["node"]} label -> "{cmd["label"]}"'
     if cmd["verb"] == "issue-evidence-add":
@@ -348,7 +349,7 @@ def _q(s: str) -> str:
             .replace("\n", "\\n").replace("\r", "\\r") + '"')
 
 
-def dump(cmds: list[dict], circle: str) -> str:
+def issue_dump(cmds: list[dict], circle: str) -> str:
     out = [f'circle = "{circle}"',
            f'written = "{_dt.datetime.now().isoformat(timespec="seconds")}"',
            ""]
@@ -383,11 +384,11 @@ def _history(cmd: dict, today: str) -> str:
             f'added by Self in `{cmd["circle"]}`.{c}')
 
 
-def apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None:
+def issue_command_apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None:
     """Mutate ONE node file inside `issues`, which may be a temp copy."""
     path = next(p for p in issues.glob("*.toml")
                 if p.name.endswith(f"{cmd['node']}.toml"))
-    doc = S.load(path)
+    doc = S.issue_read(path)
 
     if cmd["verb"] == "issue-label-update":
         old = doc["label"]
@@ -409,9 +410,9 @@ def apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None:
             hb.append(cmd["part"])
         doc["held_by"] = hb
     elif cmd["verb"] == "issue-relationship-update":
-        # precheck() already found exactly this edge and confirmed the
+        # issue_precheck() already found exactly this edge and confirmed the
         # value differs from its current status — re-finding it here
-        # (rather than passing an index through) keeps apply_one()'s
+        # (rather than passing an index through) keeps issue_command_apply_one()'s
         # only input the cmd dict, same as every other verb.
         e = next(x for x in doc.get("edges", [])
                  if x.get("type") == cmd["type"]
@@ -424,7 +425,7 @@ def apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None:
         # The quote is the COMMENT if he gave one, else the whole command
         # line. Either is verbatim in the transcript, because the coordinator
         # wrote both — the comment is a substring of the line it sits in.
-        # .get, not [ ]: dump() omits empty fields and the __main__ TOML
+        # .get, not [ ]: issue_dump() omits empty fields and the __main__ TOML
         # loader restores no defaults, so a comment-less ruling re-applied
         # from its commands_<ot>.toml arrives with no `comment` key at all
         # — bare indexing broke the documented sandbox-promotion path for
@@ -440,10 +441,10 @@ def apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None:
 
     hist = doc.get("description_history", "").rstrip("\n")
     doc["description_history"] = f"{hist}\n\n{_history(cmd, today)}\n"
-    S.save(path, doc)
+    S.issue_write(path, doc)
 
 
-def apply(cmds: list[dict], issues: pathlib.Path | None = None,
+def issue_command_apply(cmds: list[dict], issues: pathlib.Path | None = None,
           dry_run: bool = False) -> tuple[bool, str]:
     """Validate the WHOLE batch against a copy, then promote it or nothing."""
     issues = issues or S.ISSUES
@@ -457,12 +458,12 @@ def apply(cmds: list[dict], issues: pathlib.Path | None = None,
         cur = cmds[0]
         try:
             for cur in cmds:
-                apply_one(cur, tmp, today)
+                issue_command_apply_one(cur, tmp, today)
         except Exception as e:                          # noqa: BLE001
             # `cur`, not cmds[0] — the error used to always describe the
             # FIRST command, sending the operator to debug the wrong ruling
             # whenever a later one raised.
-            return False, f"could not apply {describe(cur)}: {e}"
+            return False, f"could not apply {issue_describe(cur)}: {e}"
         r = subprocess.run([sys.executable, "memory/issue_gate.py",
                             str(tmp)], cwd=str(ROOT),
                            capture_output=True, text=True, encoding="utf-8")
@@ -499,7 +500,7 @@ def apply(cmds: list[dict], issues: pathlib.Path | None = None,
 
 
 def _promote(tmp: pathlib.Path, issues: pathlib.Path, n: int) -> str:
-    """Copy the VALIDATED tree over the real one. See apply()'s own note."""
+    """Copy the VALIDATED tree over the real one. See issue_command_apply()'s own note."""
     src = {f.name: f for f in tmp.iterdir() if f.is_file()}
     dst = {f.name: f for f in issues.iterdir() if f.is_file()}
     written = 0
@@ -507,7 +508,7 @@ def _promote(tmp: pathlib.Path, issues: pathlib.Path, n: int) -> str:
         data = f.read_bytes()
         if name in dst and dst[name].read_bytes() == data:
             continue
-        atomic_write(issues / name, data.decode("utf-8"))
+        record_atomic_write(issues / name, data.decode("utf-8"))
         written += 1
     removed = 0
     for name, f in dst.items():
@@ -520,6 +521,127 @@ def _promote(tmp: pathlib.Path, issues: pathlib.Path, n: int) -> str:
     return (f"{n} command(s) applied — {written} file(s) written"
             + (f", {removed} renamed away" if removed else ""))
 
+
+# ------------------------------------------------------------- /issue-add's body
+# MOVED FROM coordinator/commands.py, 2026-09-03 (cohesion re-homing, stage 6).
+# The verb cmd_issue_add stays there and delegates here once its arguments are
+# parsed; the write is still issue_schema.issue_write, so issues/ keeps one writer.
+# _run_captured came with it: it runs THIS directory's scripts (issue_gate,
+# issue_index, issue_status, and this file) as subprocesses, which is why the
+# static commands -> issue_commands edge now exists and no cycle does.
+def _run_captured(argv: list[str]) -> tuple[str, int]:
+    r = subprocess.run([sys.executable] + argv, cwd=str(ROOT),
+                       capture_output=True, text=True, encoding="utf-8")
+    return (r.stdout + r.stderr).rstrip("\n"), r.returncode
+
+
+def _next_issue_id() -> str:
+    """The next nNNNN — one past the largest on file, every status counted
+    (a retired or settled issue keeps its id; R143's never-reuse rule, which
+    the graph has always followed by filename)."""
+    top = 0
+    for p in S.issue_nodes_read():
+        try:
+            top = max(top, int(S.issue_id_read(p.stem)[1:]))
+        except ValueError:
+            continue
+    return f"n{top + 1:04d}"
+
+
+ISSUE_ADD_USAGE = ('/issue-add "label" ["description" ["absence"]]')
+
+
+def issue_add(label: str, desc: str, absence: str, *, guard=None,
+              interactive: bool = True) -> bool:
+    """Open a NEW issue by hand from its three strings, already parsed — the
+    body of `/issue-add` (its contract, the LIVE/LEAD rule and `interactive`,
+    is in commands.command_issue_add's docstring). Returns True only when a file
+    was written."""
+    import datetime
+    import shutil
+    import tempfile
+
+    if not label:
+        seam.emit("command", f"  usage: {ISSUE_ADD_USAGE}  — the label is "
+                             f"required; a missing description or absence is "
+                             f"asked for at cmd>, and an issue missing either "
+                             f"is written as a LEAD")
+        return False
+    if interactive and not desc:
+        desc = seam.read_line("  description (what the issue IS; Enter to "
+                              "leave it for later): ").strip()
+    if interactive and not absence:
+        absence = seam.read_line("  absence (what its ABSENCE looks like; Enter "
+                                 "to leave it for later): ").strip()
+    complete = bool(desc and absence)
+    status = "live" if complete else "lead"
+    nid = _next_issue_id()
+    today = datetime.date.today().isoformat()
+    if guard is not None and getattr(guard, "ot", ""):
+        ref = f"{'circle' if guard.live else 'sandbox'}_{guard.ot}"
+        opened = f"{ref} (Self, /issue-add)"
+        where = f"in {ref}"
+    else:
+        opened, where = today, f"on {today} (no circle open)"
+    missing = [k for k, v in (("description", desc), ("absence", absence)) if not v]
+    doc = {
+        "id": nid, "label": label, "status": status, "opened": opened,
+        "held_by": [], "description": desc, "absence": absence,
+        "description_history": (
+            f"- **{today}** — opened by Self via /issue-add {where}; "
+            + ("first formulation, above. Live from the start (R290): nobody "
+               "holds it yet, and a circle may attach evidence."
+               if complete else
+               f"a LEAD until its {' and '.join(missing)} "
+               f"{'is' if len(missing) == 1 else 'are'} written.")),
+    }
+    target = S.issue_locate(nid, status)
+    fails = S.issue_verify(doc, target)
+    if fails:
+        seam.emit("command", "  refused — the schema: " + "; ".join(fails))
+        return False
+    # THE GATE, ON A COPY. issue_gate.py takes the issues directory as its
+    # one argument (argv[1]); the candidate is written beside a copy of the
+    # graph and the gate reads both. Nothing touches issues/ until it says
+    # PASS.
+    tmp = pathlib.Path(tempfile.mkdtemp(prefix="issue_add_"))
+    try:
+        for p in S.ISSUES.glob("*.toml"):
+            shutil.copy2(p, tmp / p.name)
+        S.issue_write(tmp / target.name, doc)
+        out, rc = _run_captured(["memory/issue_gate.py", str(tmp)])
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    if rc != 0:
+        bad = [l for l in out.splitlines() if "FAIL" in l or target.name in l]
+        seam.emit("command", "  refused by the gate — nothing written:")
+        for l in bad[:12]:
+            seam.emit("command", f"    {l.strip()}")
+        return False
+    S.issue_write(target, doc)
+    if complete:
+        seam.emit("command", f"  wrote issues/{target.name} — {nid} is LIVE "
+                             f"(nobody holds it yet)")
+    else:
+        seam.emit("command", f"  wrote issues/{target.name} — {nid} is a LEAD: "
+                             f"its {' and '.join(missing)} "
+                             f"{'is' if len(missing) == 1 else 'are'} still "
+                             f"to be written. The complete form: "
+                             f"{ISSUE_ADD_USAGE}")
+    # The index, as issue_status.py's own regen chain does after a write —
+    # ONLY against the real issues/: issue_index.py reads the schema's own
+    # ISSUES, not an argument, so with S.ISSUES re-pointed (a probe on a
+    # temp copy) it would rebuild the real index over a copy's write.
+    if S.ISSUES.resolve() != (ROOT / "issues").resolve():
+        return True
+    out2, rc2 = _run_captured(["memory/issue_index.py"])
+    tail = out2.strip().splitlines()[-1:] if out2.strip() else []
+    for l in tail:
+        seam.emit("command", f"  {l.strip()}")
+    if rc2 != 0:
+        seam.emit("command", "  (issue_index.py FAILED — the issue is on disk; "
+                             "`git checkout issues/INDEX.md` reverts the index)")
+    return True
 
 if __name__ == "__main__":
     import argparse
@@ -535,7 +657,7 @@ if __name__ == "__main__":
     cmds = [dict(c, circle=rec["circle"]) for c in rec.get("command", [])]
     print(f"  {rec['circle']} — {len(cmds)} command(s)")
     for c in cmds:
-        print(f"    {describe(c)}")
-    ok, msg = apply(cmds, dry_run=a.dry_run)
+        print(f"    {issue_describe(c)}")
+    ok, msg = issue_command_apply(cmds, dry_run=a.dry_run)
     print(f"  {msg}")
     raise SystemExit(0 if ok else 1)

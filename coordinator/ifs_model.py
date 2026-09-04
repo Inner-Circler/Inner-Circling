@@ -1,12 +1,15 @@
 #!/usr/bin/env python3
 """
-ifs_model.py — structural model of the IFS memory files, and the invariant gate.
+ifs_model.py — structural model of the IFS memory files (the invariant gate that
+judges with it is register_gate.py's, since 2026-09-03).
 
 WHAT THIS IS
     Phase 6 of NIGHTLY_DESIGN.md, built first and on purpose. It parses
-    long_term.md / relationships.md / the self/ files into a structured model and
-    compares a CANDIDATE tree against a BASELINE tree, reporting every structural
-    change and failing on the ones that are not allowed.
+    long_term.md / the self/ files (and relationships.md, until R185's 2026-08-15
+    TOML conversion; the register itself retired 2026-08-22) into a structured model and
+    supplies the per-file comparisons register_gate.record_tree_compare() runs over
+    a CANDIDATE tree against a BASELINE tree, reporting every structural change
+    and failing on the ones that are not allowed.
 
     It writes nothing, anywhere, ever. Read-only by construction.
 
@@ -17,20 +20,25 @@ WHY THIS FIRST
     notices.
 
     Invariants are derived from the baseline rather than hardcoded. The files are
-    not uniform — a part's relationships.md can carry sections another part's
-    doesn't, self.md accumulates one "## Dream synthesis <date>" heading
+    not uniform — one part's file can carry sections another part's doesn't
+    (relationships.md, retired 2026-08-22, was the original example here),
+    self.md accumulates one "## Dream synthesis <date>" heading
     per night, settled headers come in two shapes ("was review 15", "was
     review") — so any hardcoded schema would be wrong on contact. Comparing
     against what is actually there is both stricter and more honest.
 
 USE
-    from ifs_model import compare_trees
-    findings = compare_trees(baseline_dir, candidate_dir)
+    import ifs_model as M
+    text, findings = M.check_file(rel, data)
+
+THE GATE MOVED OUT, 2026-09-03 (cohesion re-homing stage 9): record_tree_compare,
+record_tree_verify, REGISTERS and the register checks are register_gate.py's, and
+read this module as M. What stays here is the model — Finding, the primitives,
+the entries, and the three comparisons the gate composes.
 """
 
 from __future__ import annotations
 
-import datetime
 import hashlib
 import pathlib
 import re
@@ -39,8 +47,6 @@ import unicodedata
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import roster as R                                            # noqa: E402
-import proposals as PR                                        # noqa: E402
-import check_best_practices as BPX                            # noqa: E402
 
 PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 
@@ -69,7 +75,7 @@ PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 # Nothing writes it, nothing reads it, and it reaches no prompt block
 # (docs/INTER_CIRCLE_DESIGN.md §1202 says so; prompt_build.py never opens
 # it). This entry was the only thing left asserting it must exist — so
-# selfcheck_tree() FAILED "MISSING" on every fresh install, for a file
+# record_tree_verify() FAILED "MISSING" on every fresh install, for a file
 # the project had already ruled it does not ship. A gate outliving its
 # subject reports a defect that is its own.
 #
@@ -112,7 +118,7 @@ SHORT_TERM_SECTIONS = ("## What I said", "## What I observed in others",
 RECONSTRUCTED_MARK = "*(RECONSTRUCTED from the transcript after the fact"
 
 
-def is_reconstructed(text: str | None) -> bool:
+def record_is_reconstructed(text: str | None) -> bool:
     """Was this short_term written again afterwards, rather than at close?
 
     Substring, not a line match: the mark opens a header line that also names
@@ -126,8 +132,8 @@ MUTABLE_FIELDS = {"last mentioned", "review flagged", "settled"}
 
 # THE IDENTITY/HISTORY BOUNDARY IN long_term.md. Everything ABOVE it is the
 # part's identity -- editable, and the only part of the file a prompt ever sees
-# (prompt_build.strip_to_identity cuts here). Everything BELOW is append-only
-# history, which compare_long_term() verifies was not rewritten.
+# (prompt_build.part_identity_strip cuts here). Everything BELOW is append-only
+# history, which record_long_term_compare() verifies was not rewritten.
 #
 # IT USED TO BE `## Dream entries`, and Self ruled that out 2026-08-22:
 # *"do not restore the obsolete ## Dream entries heading as a delimiter; add a
@@ -137,11 +143,14 @@ MUTABLE_FIELDS = {"last mentioned", "review flagged", "settled"}
 # over a one-line tombstone and ZERO entries beneath it. A delimiter whose name
 # is a lie is one a writer deletes in good faith, which is exactly what happened
 # when the Soul's long_term.md was rewritten: the heading went, and with it the
-# boundary compare_long_term() needs, which then failed closed.
+# boundary record_long_term_compare() needs, which then failed closed.
 IDENTITY_END = "## required end"
 
 # CONTENT, NOT BOUNDARY, since the rename above. Parsed if present so a legacy
-# file still yields its entries; no part has any today.
+# file still yields its entries; no part has any today. Also the ONE HOME for
+# these two heading strings — record_long_term_compare()'s own FAIL/OK/WARN messages
+# below quote them by reference, not as separately hand-typed literals
+# (audit-register.md #30 found four that had drifted into duplicates).
 DREAM_SECTION = "## Dream entries"
 SETTLED_SECTION = "## Settled"
 
@@ -173,7 +182,9 @@ _MARKER_RE = re.compile(r"\[([^\]]*)\]")
 _FIELD_RE = re.compile(
     r"^\*(?P<name>[^:*]+):(?P<lead>\*?)\s*(?P<value>.*?)\s*(?P<trail>\*?)\s*$")
 _HEADING_RE = re.compile(r"^(?P<hashes>#{1,6})\s+(?P<text>.+?)\s*$")
-_SYNTH_RE = re.compile(r"^## Dream synthesis (\d{4}-\d{2}-\d{2})\s*$")
+# _SYNTH_RE (a generic, date-wildcard variant of this pattern) DELETED
+# 2026-09-01 -- audit-register.md #30 found it a zero-reference symbol; the
+# one call site (below) builds its own date-pinned pattern inline instead.
 
 
 # ---------------------------------------------------------------- findings
@@ -192,18 +203,18 @@ def _f(level, code, path, message):
 
 
 # ---------------------------------------------------------------- primitives
-def sha(data: bytes) -> str:
+def record_sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
 
 
-def read_bytes(p: pathlib.Path) -> bytes | None:
+def record_bytes_read(p: pathlib.Path) -> bytes | None:
     try:
         return p.read_bytes()
     except OSError:
         return None
 
 
-def decode(data: bytes) -> tuple[str | None, str | None]:
+def record_decode(data: bytes) -> tuple[str | None, str | None]:
     """(text, error). Deliberately strict -- errors='replace' is how corruption
     becomes invisible."""
     nul = data.find(b"\x00")
@@ -215,7 +226,7 @@ def decode(data: bytes) -> tuple[str | None, str | None]:
         return None, f"not valid UTF-8 ({e})"
 
 
-def line_endings(data: bytes) -> str:
+def record_line_endings_read(data: bytes) -> str:
     """'lf' | 'crlf' | 'mixed' | 'none'. Line endings are load-bearing here: the
     close-report sha256s, the byte-identical checks below, and git-as-rollback all
     assume the bytes of an untouched file do not move. A file that changes ending
@@ -230,11 +241,11 @@ def line_endings(data: bytes) -> str:
     return "lf" if lf else "none"
 
 
-def suspicious_chars(text: str) -> list[str]:
+def record_suspicious_chars_read(text: str) -> list[str]:
     """Stray characters from a model's output that are valid UTF-8 and therefore
     invisible to every encoding check. Real example, this session: a Chinese
     character mid-sentence in an English short_term ('felt like<CJK>ly seeing
-    her'). check_integrity.py would have passed it."""
+    her'). record_verify.py would have passed it."""
     bad = []
     for ch in set(text):
         if ord(ch) < 0x80 or ch in "—–‘’“”… ":
@@ -246,7 +257,7 @@ def suspicious_chars(text: str) -> list[str]:
     return sorted(bad)
 
 
-def headings(text: str, level: int = 2) -> list[str]:
+def record_headings_read(text: str, level: int = 2) -> list[str]:
     out = []
     for line in text.splitlines():
         m = _HEADING_RE.match(line)
@@ -255,7 +266,7 @@ def headings(text: str, level: int = 2) -> list[str]:
     return out
 
 
-def split_sections(text: str, level: int = 2) -> dict[str, str]:
+def record_sections_split(text: str, level: int = 2) -> dict[str, str]:
     """heading text -> section body (heading line excluded). Later duplicates
     win; duplicates are themselves reported separately."""
     lines = text.splitlines(keepends=True)
@@ -267,7 +278,7 @@ def split_sections(text: str, level: int = 2) -> dict[str, str]:
     return out
 
 
-def preamble(text: str, marker: str) -> str | None:
+def record_preamble_read(text: str, marker: str) -> str | None:
     """Everything above `marker`. None if the marker is absent."""
     i = text.find(marker)
     return None if i < 0 else text[:i]
@@ -331,7 +342,7 @@ class Entry:
         return next((m for m in self.markers if m.isdigit()), None)
 
 
-def parse_entries(section_body: str, section: str) -> list[Entry]:
+def record_entries_parse(section_body: str, section: str) -> list[Entry]:
     lines = section_body.splitlines(keepends=True)
     starts = [i for i, l in enumerate(lines) if _ENTRY_RE.match(l)]
     out = []
@@ -359,11 +370,11 @@ def parse_entries(section_body: str, section: str) -> list[Entry]:
 class LongTerm:
     def __init__(self, text: str):
         self.text = text
-        self.headings = headings(text, 2)
-        secs = split_sections(text, 2)
-        self.preamble = preamble(text, IDENTITY_END)
-        self.dreams = parse_entries(secs.get("Dream entries", ""), "dream")
-        self.settled = parse_entries(secs.get("Settled", ""), "settled")
+        self.headings = record_headings_read(text, 2)
+        secs = record_sections_split(text, 2)
+        self.preamble = record_preamble_read(text, IDENTITY_END)
+        self.dreams = record_entries_parse(secs.get("Dream entries", ""), "dream")
+        self.settled = record_entries_parse(secs.get("Settled", ""), "settled")
         # Every '### ' line in these two sections MUST parse as an entry. If one
         # does not, it has been silently dropped from every count, every
         # comparison and every recency decision -- the entry is still visible to a
@@ -391,70 +402,27 @@ class LongTerm:
 
 
 # ---------------------------------------------------------------- file checks
-def check_file(path: str, data: bytes | None) -> tuple[str | None, list[Finding]]:
+def record_file_verify(path: str, data: bytes | None) -> tuple[str | None, list[Finding]]:
     """§4.1 -- every file. Returns (text_or_None, findings)."""
     out: list[Finding] = []
     if data is None:
         return None, [_f("FAIL", "MISSING", path, "file absent or unreadable")]
     if not data.strip():
         return None, [_f("FAIL", "EMPTY", path, "file is empty")]
-    text, err = decode(data)
+    text, err = record_decode(data)
     if text is None:
         return None, [_f("FAIL", "ENCODING", path, err)]
     if not text.endswith("\n"):
         out.append(_f("FAIL", "NO-EOL", path, "does not end with a newline"))
     elif text.endswith("\n\n"):
         out.append(_f("WARN", "TRAILING-BLANK", path, "ends with blank line(s)"))
-    for c in suspicious_chars(text):
+    for c in record_suspicious_chars_read(text):
         out.append(_f("FAIL", "STRAY-CHAR", path,
                       f"unexpected script character {c} in English prose"))
     return text, out
 
 
-def check_short_term(path: str, data: bytes | None, part: str,
-                     open_time: str) -> list[Finding]:
-    """A short_term is well-formed: readable, four sections in order, each with
-    something under it, and headed for the right part and circle.
-
-    Empty sections matter. A backfill that emits the headings and nothing beneath
-    them passes a naive 'are the sections present' test and tells the nightly
-    nothing — which is indistinguishable, downstream, from the loss it was meant
-    to repair."""
-    text, out = check_file(path, data)
-    if text is None:
-        return out
-    idx = []
-    for h in SHORT_TERM_SECTIONS:
-        i = text.find(h)
-        if i < 0:
-            out.append(_f("FAIL", "MISSING-SECTION", path, f"no '{h}'"))
-        idx.append(i)
-    if any(i < 0 for i in idx):
-        return out
-    if idx != sorted(idx):
-        out.append(_f("FAIL", "SECTION-ORDER", path,
-                      "the four sections are not in the canonical order"))
-    bounds = sorted(idx) + [len(text)]
-    for h, a, b in zip(SHORT_TERM_SECTIONS, bounds, bounds[1:]):
-        body = text[a + len(h):b].strip()
-        if len(body.split()) < 8:
-            out.append(_f("FAIL", "EMPTY-SECTION", path,
-                          f"'{h}' has {len(body.split())} word(s) under it"))
-    head = text.splitlines()[0] if text.splitlines() else ""
-    if not head.startswith("# Short-term"):
-        out.append(_f("FAIL", "BAD-HEADER", path, f"first line is {head[:50]!r}"))
-    elif PARTS and part in PARTS:
-        tag = part.replace("_", " ").title().replace("Soul", "Soul")
-        if tag.lower() not in head.lower():
-            out.append(_f("WARN", "HEADER-PART", path,
-                          f"header names neither {part} nor {tag}: {head[:60]!r}"))
-    if open_time and open_time[:10] not in text[:200]:
-        out.append(_f("WARN", "HEADER-DATE", path,
-                      f"header does not carry the circle date {open_time[:10]}"))
-    return out
-
-
-def check_size(path, base: bytes, cand: bytes, allow_shrink: bool) -> list[Finding]:
+def record_size_verify(path, base: bytes, cand: bytes, allow_shrink: bool) -> list[Finding]:
     if len(base) == 0:
         return []
     delta = (len(cand) - len(base)) / len(base)
@@ -468,7 +436,7 @@ def check_size(path, base: bytes, cand: bytes, allow_shrink: bool) -> list[Findi
 
 
 # ---------------------------------------------------------------- long_term
-def compare_long_term(path: str, base_text: str, cand_text: str) -> list[Finding]:
+def record_long_term_compare(path: str, base_text: str, cand_text: str) -> list[Finding]:
     """§4.2. The strict one: history is append-only and immutable except in the
     named fields."""
     out: list[Finding] = []
@@ -495,10 +463,10 @@ def compare_long_term(path: str, base_text: str, cand_text: str) -> list[Finding
         lvl = "OK" if g == "Settled" else "FAIL"
         out.append(_f(lvl, "SECTION-ADDED", path, f"new '## {g}' section"))
 
-    # -- everything above '## Dream entries' is frozen
+    # -- everything above DREAM_SECTION is frozen
     if b.preamble != c.preamble:
         out.append(_f("FAIL", "PREAMBLE-CHANGED", path,
-                      "content above '## Dream entries' was modified; the "
+                      f"content above {DREAM_SECTION!r} was modified; the "
                       "foundational identity sections are not the nightly's to touch"))
 
     # -- append-only
@@ -530,7 +498,7 @@ def compare_long_term(path: str, base_text: str, cand_text: str) -> list[Finding
                           f"'{eid}' *{name}*: {bv!r} -> {cv!r}"))
         if be.section != ce.section:
             if (be.section, ce.section) == ("dream", "settled"):
-                out.append(_f("OK", "SETTLED", path, f"'{eid}' moved to ## Settled"))
+                out.append(_f("OK", "SETTLED", path, f"'{eid}' moved to {SETTLED_SECTION}"))
             else:
                 out.append(_f("FAIL", "UNSETTLED", path,
                               f"'{eid}' moved {be.section} -> {ce.section}"))
@@ -548,7 +516,7 @@ def compare_long_term(path: str, base_text: str, cand_text: str) -> list[Finding
         out.append(_f("OK", "ENTRY-NEW", path, f"new entry '{eid}'"))
         if ce.section != "dream":
             out.append(_f("FAIL", "NEW-IN-SETTLED", path,
-                          f"new entry '{eid}' was written straight into ## Settled"))
+                          f"new entry '{eid}' was written straight into {SETTLED_SECTION}"))
         if ce.weight:
             out.append(_f("FAIL", "NEW-HAS-WEIGHT", path,
                           f"new entry '{eid}' carries weight [{ce.weight}]; "
@@ -563,18 +531,18 @@ def compare_long_term(path: str, base_text: str, cand_text: str) -> list[Finding
     if c.dreams and ci and (nid := next((e.id for e in c.dreams if e.id not in bi), None)):
         if c.dreams[0].id != nid:
             out.append(_f("WARN", "NEW-NOT-FIRST", path,
-                          f"new entry '{nid}' is not at the top of ## Dream entries"))
+                          f"new entry '{nid}' is not at the top of {DREAM_SECTION}"))
     return out
 
 
 # ---------------------------------------------------------------- others
-def compare_headed(path: str, base_text: str, cand_text: str,
+def record_headed_compare(path: str, base_text: str, cand_text: str,
                    allow_new: re.Pattern | None = None) -> list[Finding]:
     """self.md (and relationships.md until its 2026-08-15 TOML conversion):
     the '## ' heading set is the contract, and unchanged sections must be
     byte-identical."""
     out: list[Finding] = []
-    bh, ch = headings(base_text), headings(cand_text)
+    bh, ch = record_headings_read(base_text), record_headings_read(cand_text)
     for h in bh:
         if h not in ch:
             out.append(_f("FAIL", "SECTION-LOST", path, f"section '## {h}' removed"))
@@ -584,7 +552,7 @@ def compare_headed(path: str, base_text: str, cand_text: str,
         ok = allow_new and allow_new.match(f"## {h}")
         out.append(_f("OK" if ok else "FAIL", "SECTION-ADDED", path,
                       f"new section '## {h}'"))
-    bs, cs = split_sections(base_text), split_sections(cand_text)
+    bs, cs = record_sections_split(base_text), record_sections_split(cand_text)
     for h in bh:
         if h in cs and bs[h] != cs[h]:
             out.append(_f("OK", "SECTION-REWRITTEN", path,
@@ -592,7 +560,7 @@ def compare_headed(path: str, base_text: str, cand_text: str,
     return out
 
 
-def compare_append_only(path: str, base_text: str, cand_text: str) -> list[Finding]:
+def record_append_only_compare(path: str, base_text: str, cand_text: str) -> list[Finding]:
     """§4.4. The prior content must be a byte prefix of the new content."""
     if cand_text.startswith(base_text):
         added = len(cand_text) - len(base_text)
@@ -606,628 +574,7 @@ def compare_append_only(path: str, base_text: str, cand_text: str) -> list[Findi
                f"char {n:,} of {len(base_text):,} -- this file is append-only")]
 
 
-# ---------------------------------------------------------------- tree compare
-def _tree_files(root: pathlib.Path) -> list[pathlib.Path]:
-    # relationships.md REMOVED 2026-08-15: converted to per-part
-    # part_relationships.toml (coordinator/part_relationships.py, renamed
-    # from relationships.py/.toml 2026-08-17, R220) and retired.
-    # The gate does not cover the TOML successor — that is B37's already
-    # open "no gate exists for any TOML register today", now one file
-    # wider, not a new gap invented here.
-    out = [root / "parts" / p / "long_term.md" for p in PARTS]
-    out += [root / "self" / f for f in SELF_FILES]
-    return out
-
-
-def compare_trees(baseline: pathlib.Path, candidate: pathlib.Path,
-                  today: str | None = None,
-                  first_synthesis: bool = False) -> list[Finding]:
-    """Every invariant in NIGHTLY_DESIGN §4, baseline vs candidate.
-
-    `first_synthesis` — R348, the operator's
-    "(a)" (2026-08-25): when NOTHING has ever been processed in this tree
-    (inter_circle.first_synthesis_here() is the one caller and the one
-    test), self.md's shrink tolerance is waived — what the first synthesis
-    replaces is the shipped seed, not a record this gate is protecting.
-    Seen in the fresh install Inner-Circling-2026-08-25_1309, circle
-    _1414: a valid same-headings replacement, 1,742 -> 1,115 bytes,
-    refused the whole staged batch. The waiver is REPORTED (an OK
-    FIRST-SYNTHESIS finding), never silent, and every later run keeps the
-    full tolerance. Default False, so every other caller is unchanged."""
-    today = today or datetime.date.today().isoformat()
-    synth_ok = re.compile(rf"^## Dream synthesis {re.escape(today)}$")
-    out: list[Finding] = []
-
-    for bp in _tree_files(baseline):
-        rel = bp.relative_to(baseline).as_posix()
-        cp = candidate / rel
-        bdata, cdata = read_bytes(bp), read_bytes(cp)
-        if bdata is None:
-            out.append(_f("WARN", "NO-BASELINE", rel, "not in the baseline; skipped"))
-            continue
-        if cdata is None:
-            out.append(_f("FAIL", "MISSING", rel, "in baseline, absent from candidate"))
-            continue
-        ctext, cf = check_file(rel, cdata)
-        out += cf
-        btext, _ = check_file(rel, bdata)
-        if ctext is None or btext is None:
-            continue
-        be, ce = line_endings(bdata), line_endings(cdata)
-        if be != ce:
-            out.append(_f("FAIL", "LINE-ENDINGS", rel,
-                          f"line endings changed {be} -> {ce}. Nothing in this "
-                          f"pipeline rewrites line endings on purpose; the usual "
-                          f"cause is git core.autocrlf converting on checkout, "
-                          f"which breaks every sha256 and byte-identical check. "
-                          f"See .gitattributes."))
-        elif ce == "mixed":
-            out.append(_f("WARN", "LINE-ENDINGS", rel, "mixed CRLF and LF"))
-        if bdata == cdata:
-            out.append(_f("OK", "UNCHANGED", rel, "byte-identical"))
-            continue
-
-        name = bp.name
-        if name == "long_term.md":
-            settling = any(f.code == "SETTLED" for f in
-                           compare_long_term(rel, btext, ctext))
-            out += check_size(rel, bdata, cdata, allow_shrink=settling)
-            out += compare_long_term(rel, btext, ctext)
-        else:
-            # SELF_FILES holds ONE member today: self.md, "structured".
-            # "rewritten" went with circle_briefing.md (2026-08-11) and
-            # "append_only" with narrative_arc.md (2026-08-24, the phantom
-            # -- see SELF_FILES above). The append_only arm is KEPT rather
-            # than deleted: it is the byte-prefix rule itself, the cheapest
-            # guard this file has against a rewrite-instead-of-append, and
-            # the next self/ document to need it should find it here rather
-            # than re-derive it. It is UNREACHED while SELF_FILES has one
-            # member, and no probe exercises compare_append_only() today --
-            # so a future member must not assume this arm still works
-            # without checking it.
-            kind = SELF_FILES[name]
-            out += check_size(rel, bdata, cdata, allow_shrink=first_synthesis)
-            if (first_synthesis and len(bdata)
-                    and (len(cdata) - len(bdata)) / len(bdata)
-                    < -SHRINK_TOLERANCE):
-                out.append(_f("OK", "FIRST-SYNTHESIS", rel,
-                              "shrink past tolerance ACCEPTED — nothing has "
-                              "ever been processed in this tree, so what this "
-                              "replaces is the shipped seed, not a record "
-                              "(R348)"))
-            if kind == "append_only":
-                out += compare_append_only(rel, btext, ctext)
-            else:
-                out += compare_headed(rel, btext, ctext, allow_new=synth_ok)
-
-    # TOML registers — the PAIRED half of the register gate
-    # (docs/REGISTER_GATE_DESIGN.md, R188). Iterated over BOTH trees so a
-    # register staged into existence (circle_history's first run) is judged
-    # with an empty baseline rather than skipped; a register absent from the
-    # candidate was not part of the run and is skipped by compare_register.
-    seen: set[str] = set()
-    for tree in (baseline, candidate):
-        for p, spec in _register_paths(tree):
-            rel = p.relative_to(tree).as_posix()
-            if rel in seen:
-                continue
-            seen.add(rel)
-            out += compare_register(rel, read_bytes(baseline / rel),
-                                    read_bytes(candidate / rel), spec)
-
-    # narrative_<date>.md must be new, never an overwrite. Judge that on what the
-    # run actually WRITES, not on what happens to exist: a run that stages no
-    # narrative is unaffected by one already being there, and flagging it turns a
-    # second look at an already-dreamed day into a phantom failure.
-    nd = f"narrative_{today}.md"
-    bn, cn = baseline / "self" / nd, candidate / "self" / nd
-    bdata, cdata = read_bytes(bn), read_bytes(cn)
-    if cdata is None:
-        pass                                   # this run writes no narrative
-    elif bdata is None:
-        t, cf = check_file(f"self/{nd}", cdata)
-        out += cf or [_f("OK", "NARRATIVE-NEW", f"self/{nd}", "written")]
-    elif bdata != cdata:
-        out.append(_f("FAIL", "NARRATIVE-OVERWRITE", f"self/{nd}",
-                      f"already exists ({len(bdata):,} B) and this run would "
-                      f"replace it ({len(cdata):,} B). One narrative per day; a "
-                      f"second nightly for the same date must not clobber the "
-                      f"first."))
-    return out
-
-
-def selfcheck_tree(root: pathlib.Path) -> list[Finding]:
-    """No baseline: prove the parser understands the real files, and that they
-    satisfy the invariants that do not need a comparison. Run this first."""
-    out: list[Finding] = []
-    # TOML registers — the single-tree half of the register gate
-    # (docs/REGISTER_GATE_DESIGN.md, R188).
-    for p, spec in _register_paths(root):
-        out += check_register_file(p.relative_to(root).as_posix(),
-                                   read_bytes(p), spec)
-    for p in _tree_files(root):
-        rel = p.relative_to(root).as_posix()
-        data = read_bytes(p)
-        text, cf = check_file(rel, data)
-        out += cf
-        if text is None:
-            continue
-        if (le := line_endings(data)) == "mixed":
-            out.append(_f("WARN", "LINE-ENDINGS", rel,
-                          "mixed CRLF and LF in one file"))
-        elif le == "crlf":
-            out.append(_f("WARN", "LINE-ENDINGS", rel,
-                          "CRLF; the rest of the tree is LF"))
-        if p.name == "long_term.md":
-            lt = LongTerm(text)
-            if lt.preamble is None:
-                out.append(_f("FAIL", "NO-DREAM-SECTION", rel,
-                              f"no '{IDENTITY_END}' delimiter"))
-                continue
-            for line in lt.unparsed:
-                out.append(_f("FAIL", "UNPARSED-ENTRY", rel,
-                              f"'### ' line does not match the entry template and "
-                              f"is invisible to every count and comparison: "
-                              f"{line[:90]!r}"))
-            dupes = [e.id for e in lt.dreams + lt.settled
-                     if [x.id for x in lt.dreams + lt.settled].count(e.id) > 1]
-            if dupes:
-                out.append(_f("FAIL", "DUPLICATE-ENTRY", rel,
-                              f"entry id(s) appear twice: {sorted(set(dupes))}"))
-            for e in lt.dreams:
-                if e.is_tombstone:
-                    out.append(_f("WARN", "TOMBSTONE", rel,
-                                  f"'{e.id}' has a header but no body -- the entry "
-                                  f"itself was lost; only the marker remains"))
-                    continue
-                anchor, src = e.recency
-                if src == "entry-date":
-                    out.append(_f("OK", "RECENCY-DERIVED", rel,
-                                  f"'{e.id}' has no *Last mentioned:*; recency "
-                                  f"anchored to its own dream date {anchor}"))
-                if e.is_review and "review flagged" not in e.fields:
-                    out.append(_f("WARN", "NO-FIELD", rel,
-                                  f"'{e.id}' is [review] but has no *Review flagged:*"))
-            for e in lt.settled:
-                if "settled" not in e.fields:
-                    out.append(_f("WARN", "NO-FIELD", rel,
-                                  f"settled '{e.id}' has no *Settled:* field"))
-            out.append(_f("OK", "PARSED", rel,
-                          f"{len(lt.headings)} sections, {len(lt.dreams)} dream + "
-                          f"{len(lt.settled)} settled entries, "
-                          f"{len([e for e in lt.dreams if e.is_review])} [review]"))
-        else:
-            out.append(_f("OK", "PARSED", rel, f"{len(headings(text))} sections"))
-    return out
-
-
-# ---------------------------------------------------------- register gate
-# docs/REGISTER_GATE_DESIGN.md, approved R188. The TOML arm of the ONE gate:
-# compare_trees() gains register rows, selfcheck_tree() gains their
-# single-tree half. "Append-only, mutable-fields-only" for a TOML register
-# is defined HERE, as data, not as a regex:
-#
-#   PAIRED (baseline vs candidate — the phase-2 transaction gate)
-#     ZERO mutations, every register: candidate records[:len(baseline)]
-#     must equal baseline's records exactly (value equality), the [doc]
-#     preamble and every non-table scalar except a declared monotonic
-#     counter must be untouched, and both sides must be dumps()
-#     FIXED-POINTS — a baseline that does not re-render byte-identically
-#     was hand-edited without a re-save, and that is a FINDING, never a
-#     silent fallback to value comparison. The tail is then judged:
-#     count, cap, id sequence, date order, chain target, state vocabulary.
-#   SINGLE-TREE (selfcheck — no baseline, no intent)
-#     parse, id uniqueness and prefix, ids below next_id, date order,
-#     state vocabulary, caps. FIELD-CONDITIONAL: a check activates only
-#     where the field exists (today's remember.toml has no id/chain;
-#     circle_history may not exist yet). Fixed-point failures are WARN
-#     here (a hand-edit indicator) and FAIL in paired mode (the
-#     precondition). FROZEN is paired-only — no reference bytes exist
-#     single-tree, and git already watches the file.
-#
-# The driver side (intent validation, writer-scope matrix) lives with the
-# phase-2 driver; this arm never trusts intents — it judges the trees.
-def _ch_cap() -> int:
-    """circle_history.CAP, imported rather than duplicated. Late import: this
-    module is imported by circle_history's own dependency chain, so a
-    top-level import would be circular. Falls back to the ruled value only if
-    the module cannot be loaded at all, and says so rather than guessing
-    silently."""
-    try:
-        import circle_history as _CH
-        return _CH.CAP
-    except Exception:
-        return 8000        # R191's ruled value; see circle_history.CAP
-
-
-def _tp_cap() -> int:
-    """topics.CAP, IMPORTED NOT COPIED — the last row in REGISTERS that still
-    held a literal, while the dict's own comments prescribe the opposite twice
-    (see _ch_cap below, whose row said 600 for weeks after R191 made it 8000,
-    and the gate then enforced the stale number against correct records).
-
-    Late import for the same reason _ch_cap is late: that module imports
-    self_schema."""
-    import topics as _TP
-    return _TP.CAP
-
-
-def _mem_cap() -> int:
-    """remember.GATE_CHAR_CEILING, imported rather than duplicated — the rule
-    _ch_cap() below already writes down, applied to the register that needed
-    it and did not have it.
-
-    THIS ROW SAID 600 AND WAS WRONG FROM R255 (2026-08-19). 600 is
-    RECORD_CAP, the COORDINATOR's ceiling; a PART's own authored memory may
-    run to 1000 WORDS, and this gate measures characters. It refused the
-    first live close that produced one — 2026-08-20, all seven parts, after
-    dreaming had already written the live tree — which is exactly the
-    failure the circle_history row was rewritten to prevent.
-
-    Late import for the same reason _ch_cap() is late."""
-    try:
-        import remember as _RM
-        return _RM.GATE_CHAR_CEILING
-    except Exception:
-        return 12000       # see remember.GATE_CHAR_CEILING for the reasoning
-
-
-def _so_order() -> tuple[str, ...]:
-    """self_observation_log.ORDER, imported rather than duplicated. Late for
-    the same reason _ch_cap() is late — that module imports self_schema,
-    which this module's own dependency chain already pulls in."""
-    try:
-        import self_observation_log as _SO
-        return _SO.ORDER
-    except Exception:
-        return ("id", "date", "circle", "text", "note")
-
-
-REGISTERS: dict[str, dict] = {
-    "parts/*/remember.toml": {
-        "table": "remember",
-        # "salience" ADDED 2026-08-22 (DESIGN_V2 DREAMING extension) — MUST
-        # equal remember.ORDER exactly: _fixed_point() re-renders a
-        # candidate with THIS tuple, and a mismatch here would fail every
-        # staged DREAMING record as NOT-FIXED-POINT the moment one carried
-        # a salience field the gate did not know to render back.
-        "order": ("id", "date", "circle", "text", "chain", "class",
-                  "salience"),
-        # CAP IS IMPORTED, NOT COPIED — see _mem_cap() and the
-        # circle_history row below, which learned this first.
-        "id_prefix": "MEM-", "cap": _mem_cap(), "per_run_max": 1,
-        "preamble": False, "chain": True,
-    },
-    # "parts/*/part_relationships.toml" RETIRED 2026-08-22 — the register,
-    # its module (coordinator/part_relationships.py) and the seven files are
-    # deleted (RULINGS.md, after R308). It was the only register with
-    # cap_exempt_first=True; that flag stays generic (see
-    # check_register_file()'s `start = 1 if spec.get("cap_exempt_first")`)
-    # for any future register to opt into, even with no current user.
-    "self/topics.toml": {
-        "table": "topic",
-        "order": ("id", "circle", "date", "text", "state"),
-        "id_prefix": "TP-", "cap": _tp_cap(), "per_run_max": None,
-        "preamble": True,
-        "state_values": ("open",), "state_prefixes": ("closed by Self ",),
-        "new_state": "open",
-    },
-    "self/proposals.toml": {
-        "table": "proposal",
-        # ORDER IS IMPORTED, NOT COPIED — see the circle_history entry
-        # below for why a literal here would be a second source of truth.
-        "order": PR.ORDER,
-        # No file exists yet — no [propose ...] has ever converged to a
-        # real row (R202, 2026-08-16). preamble=False: proposals.py's
-        # _doc() writes {register, next_id, proposal}, no [doc] block —
-        # unlike best_practices.toml, this register never had one.
-        "id_prefix": "P-", "cap": None, "per_run_max": None,
-        "preamble": False, "new_state": "proposed",
-        # Same state shape as best_practices.toml (propose_class.py is
-        # the shared base for both): state_values/state_prefixes omitted
-        # for the same reason that entry omits them — accepted/denied
-        # carry free-form ISO timestamps, not a fixed vocabulary.
-    },
-    # self/ since 2026-08-16 — Self's memory/ ruling returned the
-    # register to the user-owned record (it was coordinator/ from
-    # 2026-08-11).
-    "self/best_practices.toml": {
-        "table": "practice",
-        # ORDER IS IMPORTED, NOT COPIED — the same rule this dict already
-        # wrote down for circle_history's cap, applied to itself
-        # (2026-08-16, the phase-2 review's finding #2): a literal here
-        # was a second source of truth for a tuple check_best_practices
-        # owns, and the proposals entry below had already shown the
-        # correct form.
-        "order": BPX.ORDER,
-        # A phase-2 write may STAGE a proposal, never rule on one — every
-        # new row arrives state="proposed". No cap: a practice row's title
-        # is Self's or a part's own words, ruled unlimited (R023).
-        "id_prefix": "BP-", "cap": None, "per_run_max": None,
-        "preamble": True, "new_state": "proposed",
-        # _sync_tally keeps an "**Entries: N**" count inside this file's
-        # own preamble — the one register whose [doc] legitimately moves
-        # when a row lands. Everything else about it stays immutable;
-        # the tally is that module's own truth-keeping, not an edit.
-        "preamble_tally": True,
-        # single-tree state sanity intentionally omitted: accepted/denied
-        # states carry free-form timestamps and R-prose; parse + ids only.
-    },
-    "self/circle_history.toml": {
-        "table": "history",
-        "order": ("id", "date", "circle", "text", "chain"),
-        # CAP IS IMPORTED, NOT COPIED. This row said 600 until 2026-08-15 and
-        # went on saying it after R191 raised circle_history.CAP to 8000 —
-        # two places asserting the same number, one of them stale, which the
-        # gate then enforced against real records that were correct. A
-        # literal here is a second source of truth for a value that already
-        # has an owner.
-        "id_prefix": "CH-", "cap": _ch_cap(), "per_run_max": 1,
-        "preamble": True, "chain": True,
-    },
-    "self/self_observation_log.toml": {
-        "table": "observation",
-        # ORDER IS IMPORTED, NOT COPIED — the rule this dict already wrote
-        # down for circle_history's cap and best_practices' order.
-        "order": _so_order(),
-        # NO CAP: nothing upstream bounds an OBSERVATION section, so a cap
-        # here would fail on legitimate output rather than enforce a
-        # contract. See self_observation_log.py's own note.
-        "id_prefix": "SO-", "cap": None, "per_run_max": 1,
-        "preamble": True,
-    },
-    "parts/*/dreams.toml": {
-        # READ-ONLY since R178 — nothing writes it. Any paired delta is a
-        # defect. Excluded from single-tree checks: its schema predates
-        # this gate and recency.py/mid_term.py are its readers of record.
-        "frozen": True,
-    },
-}
-
-
-def _register_paths(root: pathlib.Path) -> list[tuple[pathlib.Path, dict]]:
-    """(path, spec) for every register file matching REGISTERS under root —
-    existing files only; an absent register (circle_history before its
-    first run) is simply not iterated."""
-    out = []
-    for pat, spec in REGISTERS.items():
-        for p in sorted(root.glob(pat)):
-            if p.is_file():
-                out.append((p, spec))
-    return out
-
-
-def _load_register(data: bytes) -> tuple[dict | None, str | None]:
-    try:
-        import tomllib
-    except ModuleNotFoundError:                                # 3.10
-        import tomli as tomllib                                # type: ignore
-    try:
-        return tomllib.loads(data.decode("utf-8")), None
-    except Exception as e:                                     # parse = gate
-        return None, f"{type(e).__name__}: {e}"
-
-
-def _fixed_point(data: bytes, spec: dict) -> bool:
-    """dumps(load(bytes)) == bytes — true only for files self_schema wrote."""
-    import self_schema as SS
-    doc, err = _load_register(data)
-    if doc is None:
-        return False
-    try:
-        return SS.dumps(doc, spec["table"], spec["order"]).encode("utf-8") \
-            == data
-    except Exception:
-        return False
-
-
-def _idnum(rec: dict, prefix: str) -> int | None:
-    v = rec.get("id", "")
-    if isinstance(v, str) and v.startswith(prefix) and v[len(prefix):].isdigit():
-        return int(v[len(prefix):])
-    return None
-
-
-def check_register_file(rel: str, data: bytes | None,
-                        spec: dict) -> list[Finding]:
-    """The SINGLE-TREE half. Field-conditional; must be 0 FAIL on the tree
-    as it stands at merge (the design's own acceptance test)."""
-    if spec.get("frozen"):
-        return []
-    if data is None:
-        return [_f("WARN", "NO-FILE", rel, "register absent")]
-    out: list[Finding] = []
-    doc, err = _load_register(data)
-    if doc is None:
-        return [_f("FAIL", "UNPARSEABLE", rel, f"does not load: {err}")]
-    # A hand edit can leave `doc` a scalar (`doc = 1` still parses as
-    # TOML); .get on it crashed the whole gate with a traceback instead
-    # of a finding (2026-08-18 review, tier 3 #30). Same for a non-int
-    # next_id and a table of non-dict rows below — this gate exists to
-    # catch hand-edit damage, so hand-edit damage must never crash it.
-    dtab = doc.get("doc")
-    if dtab is not None and not isinstance(dtab, dict):
-        out.append(_f("FAIL", "BAD-DOC", rel,
-                      f"[doc] is {type(dtab).__name__}, not a table"))
-        dtab = {}
-    if spec.get("preamble") and not (dtab or {}).get("preamble"):
-        out.append(_f("WARN", "NO-PREAMBLE", rel, "no [doc] preamble"))
-    recs = doc.get(spec["table"], [])
-    if not isinstance(recs, list):
-        return out + [_f("FAIL", "BAD-TABLE", rel,
-                         f"{spec['table']!r} is not an array of tables")]
-    if any(not isinstance(r, dict) for r in recs):
-        return out + [_f("FAIL", "BAD-TABLE", rel,
-                         f"{spec['table']!r} holds non-table entries")]
-    pre = spec.get("id_prefix")
-    if pre:
-        ids = [r.get("id") for r in recs if "id" in r]
-        dupes = sorted({i for i in ids if ids.count(i) > 1})
-        if dupes:
-            out.append(_f("FAIL", "DUPLICATE-ID", rel, f"reused: {dupes}"))
-        bad = [i for i in ids if not (isinstance(i, str) and i.startswith(pre)
-                                      and i[len(pre):].isdigit())]
-        if bad:
-            out.append(_f("FAIL", "BAD-ID", rel,
-                          f"not {pre}NNNN-shaped: {bad[:4]}"))
-        if "next_id" in doc and not isinstance(doc["next_id"], int):
-            out.append(_f("FAIL", "BAD-NEXT-ID", rel,
-                          f"next_id is {type(doc['next_id']).__name__} "
-                          f"({doc['next_id']!r}), not an int"))
-        elif "next_id" in doc and ids and not bad:
-            top = max(int(i[len(pre):]) for i in ids)
-            if top >= doc["next_id"]:
-                out.append(_f("FAIL", "NEXT-ID-BEHIND", rel,
-                              f"max id {top} >= next_id {doc['next_id']} — "
-                              f"the high-water counter has fallen behind"))
-    dates = [r.get("date", "") for r in recs if r.get("date")]
-    if any(a > b for a, b in zip(dates, dates[1:])):
-        out.append(_f("WARN", "DATE-ORDER", rel,
-                      "record dates are not nondecreasing in file order"))
-    cap = spec.get("cap")
-    if cap:
-        start = 1 if spec.get("cap_exempt_first") else 0
-        over = [i for i, r in enumerate(recs[start:], start)
-                if len(r.get("text", "")) > cap]
-        if over:
-            out.append(_f("FAIL", "OVER-CAP", rel,
-                          f"record(s) {over} exceed the {cap:,}-char cap"))
-    sv = spec.get("state_values")
-    if sv:
-        okpre = spec.get("state_prefixes", ())
-        bad = [r.get("id", "?") for r in recs
-               if not (r.get("state") in sv
-                       or any(str(r.get("state", "")).startswith(x)
-                              for x in okpre))]
-        if bad:
-            out.append(_f("FAIL", "BAD-STATE", rel,
-                          f"state outside vocabulary: {bad}"))
-    if not _fixed_point(data, spec):
-        out.append(_f("WARN", "NOT-FIXED-POINT", rel,
-                      "does not re-render byte-identically — hand-edited "
-                      "without a re-save? Paired mode will refuse this "
-                      "baseline"))
-    if not out:
-        out.append(_f("OK", "PARSED", rel, f"{len(recs)} record(s)"))
-    return out
-
-
-def compare_register(rel: str, base: bytes | None, cand: bytes | None,
-                     spec: dict) -> list[Finding]:
-    """The PAIRED half — the phase-2 transaction gate for one register."""
-    out: list[Finding] = []
-    if cand is None:
-        return []                       # not part of this run; nothing staged
-    if spec.get("frozen"):
-        if base != cand:
-            return [_f("FAIL", "FROZEN", rel,
-                       "read-only register changed — nothing may write it "
-                       "(R178)")]
-        return [_f("OK", "UNCHANGED", rel, "frozen and byte-identical")]
-    if base is not None and not _fixed_point(base, spec):
-        return [_f("FAIL", "NOT-FIXED-POINT", rel,
-                   "baseline does not re-render byte-identically — "
-                   "hand-edited without a re-save; normalize before phase 2 "
-                   "(the design's named precondition)")]
-    bdoc = ({spec["table"]: []} if base is None
-            else _load_register(base)[0])
-    cdoc, err = _load_register(cand)
-    if bdoc is None or cdoc is None:
-        return [_f("FAIL", "UNPARSEABLE", rel, f"does not load: {err}")]
-    if not _fixed_point(cand, spec):
-        return [_f("FAIL", "NOT-FIXED-POINT", rel,
-                   "candidate is not a dumps() render — phase 2 stages "
-                   "module-rendered bytes and nothing else")]
-    if base is not None:
-        # A register CREATED this run (base None) introduces its preamble
-        # and scalars legitimately; an existing one may touch neither —
-        # except best_practices' own "**Entries: N**" tally
-        # (preamble_tally), which its module keeps true on every append.
-        if bdoc.get("doc") != cdoc.get("doc"):
-            # scalar-[doc] guard, same class as check_register_file's
-            # BAD-DOC (tier 3 #30): a hand-edited candidate must FAIL
-            # here as PREAMBLE-CHANGED, never crash the paired gate.
-            bd = bdoc.get("doc") if isinstance(bdoc.get("doc"), dict) else {}
-            cd = cdoc.get("doc") if isinstance(cdoc.get("doc"), dict) else {}
-            bpre = str(bd.get("preamble", ""))
-            cpre = str(cd.get("preamble", ""))
-            _tly = re.compile(r"\*\*Entries: \d+\*\*")
-            tally_only = (spec.get("preamble_tally")
-                          and dict(bd, preamble="") == dict(cd, preamble="")
-                          and _tly.sub("#", bpre) == _tly.sub("#", cpre))
-            if not tally_only:
-                out.append(_f("FAIL", "PREAMBLE-CHANGED", rel,
-                              "[doc] differs — the preamble is immutable"))
-        for k in set(bdoc) | set(cdoc):
-            if k in (spec["table"], "doc", "next_id"):
-                continue
-            if bdoc.get(k) != cdoc.get(k):
-                out.append(_f("FAIL", "SCALAR-CHANGED", rel,
-                              f"top-level {k!r} changed"))
-    brecs = bdoc.get(spec["table"], [])
-    crecs = cdoc.get(spec["table"], [])
-    if crecs[:len(brecs)] != brecs:
-        n = next((i for i, (a, b) in enumerate(zip(crecs, brecs)) if a != b),
-                 min(len(crecs), len(brecs)))
-        out.append(_f("FAIL", "NOT-APPEND-ONLY", rel,
-                      f"prior records are not a prefix of the candidate; "
-                      f"first divergence at record {n}"))
-        return out
-    tail = crecs[len(brecs):]
-    mx = spec.get("per_run_max")
-    if mx is not None and len(tail) > mx:
-        out.append(_f("FAIL", "TOO-MANY", rel,
-                      f"{len(tail)} new record(s); this register takes at "
-                      f"most {mx} per run"))
-    pre = spec.get("id_prefix")
-    if pre:
-        base_n = bdoc.get("next_id", 1)
-        want = cdoc.get("next_id")
-        # The counter may be ABSENT on both sides of an id-less register
-        # (today's remember.toml, before its first dreamt write) — that is
-        # the one shape where no expectation exists. Everywhere else —
-        # a tail, or a counter on either side — the arithmetic is exact.
-        if tail or "next_id" in bdoc or want is not None:
-            if want != base_n + len(tail):
-                out.append(_f("FAIL", "NEXT-ID", rel,
-                              f"next_id {want!r}; expected "
-                              f"{base_n + len(tail)} "
-                              f"(baseline {base_n} + {len(tail)} new)"))
-        for i, r in enumerate(tail):
-            if _idnum(r, pre) != base_n + i:
-                out.append(_f("FAIL", "ID-SEQUENCE", rel,
-                              f"new record {i} has id {r.get('id')!r}; "
-                              f"expected {pre}{base_n + i:04d}"))
-    cap = spec.get("cap")
-    newest_base = max((r.get("date", "") for r in brecs), default="")
-    base_ids = {r.get("id") for r in brecs if "id" in r}
-    for i, r in enumerate(tail):
-        if cap and len(r.get("text", "")) > cap:
-            out.append(_f("FAIL", "OVER-CAP", rel,
-                          f"new record {i}: {len(r.get('text', '')):,} chars "
-                          f"over the {cap:,} cap — refuse upstream, never "
-                          f"truncate here"))
-        if r.get("date", "") < newest_base:
-            out.append(_f("FAIL", "DATE-REGRESSION", rel,
-                          f"new record {i} predates the baseline's newest"))
-        ns = spec.get("new_state")
-        if ns and r.get("state") != ns:
-            out.append(_f("FAIL", "BAD-NEW-STATE", rel,
-                          f"new record {i} arrives state={r.get('state')!r}; "
-                          f"a phase-2 write may only stage {ns!r}"))
-        if spec.get("chain") and r.get("chain") is not None \
-                and r["chain"] not in base_ids:
-            out.append(_f("FAIL", "CHAIN-TARGET", rel,
-                          f"new record {i} chains to {r['chain']!r}, which is "
-                          f"not an id in THIS register — a chain never leaves "
-                          f"its own file"))
-    if not out:
-        what = f"+{len(tail)} record(s)" if tail else "unchanged"
-        out.append(_f("OK", "REGISTER", rel, what))
-    return out
-
-
-def summarise(findings: list[Finding]) -> tuple[int, int, int]:
-    f = sum(1 for x in findings if x.level == "FAIL")
-    w = sum(1 for x in findings if x.level == "WARN")
-    return f, w, len(findings) - f - w
+# ---------------------------------------------------------------- the gate
+# record_tree_compare / record_tree_verify / _tree_files, REGISTERS with its cap readers,
+# register_verify / register_compare and summarise MOVED to register_gate.py,
+# 2026-09-03 (cohesion re-homing stage 9). This file is the model they judge with.

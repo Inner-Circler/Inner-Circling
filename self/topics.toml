@@ -7,4 +7,4 @@ preamble = """
 
 SYNTHESIS's unvetted BLOCK 2 topics -- R184, 2026-08-15: 'unvetted synthesis output can reach BLOCK 2 ... as a means of circle-review of the proposal.' Mechanism (TP- ids, cap 800, 2,400-char newest-first window, open-until-Self-closes) ratified by Self post-sweep the same day. Direct write, never vetted -- R172 still governs BLOCK 1. Closed rows are tombstones, never deleted.
 
-SHIPPED EMPTY. This installation has ruled no topics yet; they arrive as SYNTHESIS proposes them. `next_id = 1` and an empty table are exactly what coordinator/topics.py builds when the file is absent, so a fresh install reads the same document either way. The file exists so it is there, valid and loadable, rather than conjured on first write."""
+SHIPPED EMPTY. This installation has ruled no topics yet; they arrive as SYNTHESIS proposes them. `next_id = 1` and an empty table are exactly what coordinator/topic_manager.py builds when the file is absent, so a fresh install reads the same document either way. The file exists so it is there, valid and loadable, rather than conjured on first write."""

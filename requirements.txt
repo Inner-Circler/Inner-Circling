@@ -4,8 +4,8 @@ tomli==2.2.1; python_version < "3.11"
 tomli-w==1.2.0
 
 # pyflakes IS NOT HERE, and its absence is the decision. It is this
-# project's static gate, run by coordinator/check_lint.py from the
-# pre-commit hook -- and NEITHER OF THOSE SHIPS. check_lint.py is a
+# project's static gate, run by coordinator/system_lint_verify.py from the
+# pre-commit hook -- and NEITHER OF THOSE SHIPS. system_lint_verify.py is a
 # development tool, and the hook battery is not installed in a tree
 # without coordinator/tests/ (see coordinator/gitrepo.py). Requiring it
 # here would have you install a package nothing in this copy runs, under

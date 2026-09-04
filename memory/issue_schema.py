@@ -44,7 +44,7 @@ WHAT DOES NOT CHANGE
     the SHAPE — fields, edges, evidence — not the writing.
 
     SOFT WRAP. Prose is stored hard-wrapped for editing, and a single newline is
-    soft, exactly as in Markdown. `unwrap()` is the one place that is decided;
+    soft, exactly as in Markdown. `issue_unwrap()` is the one place that is decided;
     `check_issues` already did `re.sub(r"\\s+", " ", ...)` before this change.
 """
 
@@ -65,7 +65,7 @@ import tomli_w
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # atomic_write/identity et al.
-from atomic_write import atomic_write
+from atomic_write import record_atomic_write
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -80,8 +80,8 @@ ISSUES = ROOT / "issues"
 
 # The circle-transcript roots and the ref -> path mapping, ONE copy
 # (2026-08-19, review tier 5 #44). These lived as three lockstep
-# clones — issue_gate.source_of(), issue_projection._transcript(), and
-# check_budget's own constants — each carrying the identical "moved,
+# clones — issue_gate.issue_source_read(), issue_prompt_projection._transcript(), and
+# quote_verify's own constants — each carrying the identical "moved,
 # R176" comment from the sweep that already had to edit all three; the
 # next relocation that missed one would resolve provenance against the
 # old tree. issue_gate's SELF-DIR arm (a bare ref -> a session record
@@ -104,12 +104,16 @@ def circle_transcript(ref: str) -> "pathlib.Path | None":
 WRAP = 74
 
 # Status -> filename prefix. Unchanged from the Markdown era, deliberately.
-# ROOT, added 2026-08-05 (B23). A root is not a case being heard and not a
-# lead waiting to be: it is a source the live graph descends FROM, and edges
-# to it stay legal (see issue_gate's closure check). `R_` had meant `retired`
-# since the prefixes were written; retired moves to `X_` so `R_` can mean the
-# thing a reader would guess it means.
-PREFIX = {"live": "", "root": "R_", "settled": "S_", "declined": "D_",
+# ROOT WAS A STATUS from 2026-08-05 (B23) to 2026-09-01 (R429):
+# "they are a subset of alive, not a disjoint set... the unquestioned
+# alive nodes, nodes that ought never be removed and that ought always to be
+# graphed." A root's own `status` is now `"live"` — root is a FLAG (below),
+# not a fourth thing beside live/lead/settled/declined/retired. `R_` stays a
+# real, permanent filename marker (see `issue_prefix_read()`), kept because a
+# reader who sees `R_n0003.toml` in a directory listing should not have to
+# open the file to learn it is one. `R_` had meant `retired` before B23;
+# retired is `X_` so `R_` can mean the thing a reader would guess it means.
+PREFIX = {"live": "", "settled": "S_", "declined": "D_",
           "retired": "X_", "lead": "L_"}
 STATUSES = set(PREFIX)
 EDGE_TYPES = {"narrower-than", "related-to", "polarized-with",
@@ -118,7 +122,12 @@ EDGE_TYPES = {"narrower-than", "related-to", "polarized-with",
 # Every key the schema allows, and whether it must be present.
 REQUIRED = ("id", "label", "status", "opened", "description", "absence",
             "held_by")
-OPTIONAL = ("label_ruled", "aliases", "adopted", "description_history",
+# `root` — OPTIONAL, absent or false on every node but the two that carry it.
+# A root is a live node that is also permanent: `issue_status.py` refuses to
+# move one to any other status, and `issue_prompt_projection.py` shows it in full
+# detail in every circle regardless of the chosen working set. See
+# rulings/R429.toml.
+OPTIONAL = ("label_ruled", "aliases", "adopted", "root", "description_history",
             "memo", "memo_original", "proposals", "edges", "edges_note",
             "evidence")
 
@@ -151,7 +160,7 @@ PROPOSAL_STATUS = {"open", "taken-up", "declined"}
 # Field order in the emitted file. Not cosmetic: a stable order makes a diff
 # between two versions of a node readable, which is the whole reason the
 # Description history exists.
-ORDER = ("id", "label", "label_ruled", "aliases", "adopted", "status",
+ORDER = ("id", "label", "label_ruled", "aliases", "adopted", "status", "root",
          "opened", "held_by", "description", "absence",
          "description_history", "edges_note", "memo", "memo_original")
 # `proposals` is deliberately ABSENT from ORDER: it is an array of tables now
@@ -160,29 +169,46 @@ ORDER = ("id", "label", "label_ruled", "aliases", "adopted", "status",
 # duplicate was visible only in the projection.
 
 
-def path_for(nid: str, status: str) -> pathlib.Path:
-    return ISSUES / f"{PREFIX[status]}{nid}.toml"
+def issue_prefix_read(doc: dict) -> str:
+    """A node's expected filename prefix — `R_` for a root, else its
+    status's ordinary prefix. The ONE place that combines the two fields;
+    `issue_verify()` and `issue_locate()` both call this rather than re-deriving it."""
+    return "R_" if doc.get("root") else PREFIX[doc["status"]]
 
 
-def nid_of(stem: str) -> str:
+def issue_locate(nid: str, status: str, root: bool = False) -> pathlib.Path:
+    prefix = "R_" if root else PREFIX[status]
+    return ISSUES / f"{prefix}{nid}.toml"
+
+
+def issue_id_read(stem: str) -> str:
     """`L_n9999` -> `nPPPP`. The prefix is presentation."""
     return stem[2:] if stem[1:2] == "_" else stem
 
 
-def nodes() -> list[pathlib.Path]:
+def issue_nodes_read() -> list[pathlib.Path]:
     return sorted(ISSUES.glob("*n[0-9][0-9][0-9][0-9].toml"))
 
 
-def live_nodes() -> list[pathlib.Path]:
-    return sorted(ISSUES.glob("n[0-9][0-9][0-9][0-9].toml"))
+def issue_live_read() -> list[pathlib.Path]:
+    """Every node whose `status` is `"live"` — a root INCLUDED, since a root
+    is a live node (R429), not a disjoint status. Two
+    globs, not a parse-and-filter of `issue_nodes_read()`: this stays the fast,
+    filename-only check every caller already relies on (`circle.py`'s "is
+    there anything to ask a working set about", `quote_verify.py`'s citation
+    guard, `/help issue list`) — a root's `R_` prefix is the one exception to
+    "unprefixed means live", and it is listed explicitly rather than
+    inferred."""
+    return sorted(list(ISSUES.glob("n[0-9][0-9][0-9][0-9].toml"))
+                  + list(ISSUES.glob("R_n[0-9][0-9][0-9][0-9].toml")))
 
 
-def load(p: pathlib.Path) -> dict:
+def issue_read(p: pathlib.Path) -> dict:
     with open(p, "rb") as f:
         return tomllib.load(f)
 
 
-def unwrap(s: str) -> str:
+def issue_unwrap(s: str) -> str:
     """Hard-wrapped prose -> one line per paragraph.
 
     A single newline is SOFT (it was inserted so the file could be edited); a
@@ -192,7 +218,7 @@ def unwrap(s: str) -> str:
                        for b in re.split(r"\n\s*\n", s.strip()))
 
 
-def wrap(s: str, width: int = WRAP) -> str:
+def issue_wrap(s: str, width: int = WRAP) -> str:
     """One line per paragraph -> hard-wrapped, for storage.
 
     Lines that are already short, list items, code fences and blockquotes are
@@ -212,7 +238,7 @@ def wrap(s: str, width: int = WRAP) -> str:
     return "\n\n".join(out)
 
 
-def dumps(doc: dict) -> str:
+def issue_dumps(doc: dict) -> str:
     """TOML text for one node, fields in ORDER, tables last.
 
     `tomli_w` emits a multi-line string only when the value contains a newline,
@@ -223,7 +249,7 @@ def dumps(doc: dict) -> str:
     for k in ("description", "absence", "description_history",
               "memo", "memo_original", "edges_note"):
         if k in scalar and isinstance(scalar[k], str):
-            scalar[k] = wrap(scalar[k])
+            scalar[k] = issue_wrap(scalar[k])
     out = tomli_w.dumps(scalar, multiline_strings=True)
     for row in doc.get("proposals", []):
         out += "\n" + tomli_w.dumps({"proposals": [row]},
@@ -236,18 +262,18 @@ def dumps(doc: dict) -> str:
             # five nodes on the first migration run and is precisely the silent
             # alteration the verbatim rule exists to catch. Prose beside it may
             # wrap; the evidence may not.
-            row = {k: (wrap(v) if k in ("why", "basis")
+            row = {k: (issue_wrap(v) if k in ("why", "basis")
                        and isinstance(v, str) else v)
                    for k, v in row.items()}
             out += "\n" + tomli_w.dumps({name: [row]}, multiline_strings=True)
     return out
 
 
-def save(p: pathlib.Path, doc: dict) -> None:
+def issue_write(p: pathlib.Path, doc: dict) -> None:
     # Atomic since 2026-08-16 (docs/HELP_DESIGN.md §6): render, then
     # os.replace a same-directory temp over the real path, so a crash
     # mid-write can no longer corrupt the node that was there before.
-    atomic_write(p, dumps(doc))
+    record_atomic_write(p, issue_dumps(doc))
 
 
 # ------------------------------------------------------------------ rendering
@@ -257,9 +283,9 @@ def save(p: pathlib.Path, doc: dict) -> None:
 # the original bytes. Anything that does not survive that round trip is a real
 # loss, found before the Markdown is deleted rather than after.
 
-def render(doc: dict) -> str:
+def issue_render(doc: dict) -> str:
     L = [f"# {doc['id']}", "",
-         f"**Description:** {unwrap(doc['description'])}", "",
+         f"**Description:** {issue_unwrap(doc['description'])}", "",
          f"**Label:** {doc['label']}", ""]
     if doc.get("label_ruled"):
         L += [f"**Label ruled:** {doc['label_ruled']}", ""]
@@ -268,31 +294,36 @@ def render(doc: dict) -> str:
     if doc.get("adopted"):
         a = doc["adopted"]
         L += [f"**Adopted:** {a['part']} ({a['date']}, {a['where']})", ""]
-    L += [f"**Status:** {doc['status']}", "",
+    # `root` is a flag, not a status (R429) — said here
+    # too, or a root renders identically to any other live node and the
+    # one fact that distinguishes it (permanent, always shown in full)
+    # disappears from the one human-facing view this function exists for.
+    status_line = doc['status'] + (" (root)" if doc.get("root") else "")
+    L += [f"**Status:** {status_line}", "",
           f"**Opened:** {doc['opened']}", ""]
     L += ["**Held by:** " + " · ".join(f"{h} (live)" for h in doc["held_by"]),
           ""]
     L += ["## Description history", "", doc.get("description_history", ""), ""]
-    L += [f"**What its absence looks like:** {unwrap(doc['absence'])}", ""]
+    L += [f"**What its absence looks like:** {issue_unwrap(doc['absence'])}", ""]
     L += ["## Edges", ""]
     for e in doc.get("edges", []):
         L.append(f"- `{e['type']}` [[{e['target']}]]")
         L.append(f"  Status: {e['status']}"
                  + (f" ({e['dated']})" if e.get("dated") else "")
                  + (f" — {e['status_note']}" if e.get("status_note") else ""))
-        L.append(f"  Basis: {unwrap(e['basis'])}")
+        L.append(f"  Basis: {issue_unwrap(e['basis'])}")
         if e.get("why"):
-            L.append(f"  Why: {unwrap(e['why'])}")
+            L.append(f"  Why: {issue_unwrap(e['why'])}")
         for extra in e.get("notes", []):
-            L.append(f"  {unwrap(extra)}")
+            L.append(f"  {issue_unwrap(extra)}")
         if e.get("ask"):
             L.append("  Ask: " + ", ".join(e["ask"]))
         if e.get("quote"):
-            L.append("  > " + unwrap(e["quote"]))
+            L.append("  > " + issue_unwrap(e["quote"]))
         if e.get("retired"):
-            L.append(f"  Retired: {unwrap(e['retired'])}")
+            L.append(f"  Retired: {issue_unwrap(e['retired'])}")
     if doc.get("edges_note"):
-        L += ["", unwrap(doc["edges_note"])]
+        L += ["", issue_unwrap(doc["edges_note"])]
     L += ["", "## Evidence", ""]
     # FIRST-APPEARANCE order, not alphabetical. The order parts appear under
     # ## Evidence is the order they arrived, and sorting it silently reordered
@@ -306,19 +337,19 @@ def render(doc: dict) -> str:
         for e in doc["evidence"]:
             if e["part"] != part:
                 continue
-            L += [f"- {e['source']}", f"  > {unwrap(e['quote'])}"]
+            L += [f"- {e['source']}", f"  > {issue_unwrap(e['quote'])}"]
             # Said aloud in the rendered view, not only in the TOML: a reader
             # of `### self` is otherwise looking at a part's words with no
             # sign of it. RULED 2026-08-18.
             if e.get("adopted_from"):
                 L.append(f"  Adopted from: {e['adopted_from']}")
-            L += [f"  Why: {unwrap(e['why'])}", ""]
+            L += [f"  Why: {issue_unwrap(e['why'])}", ""]
     # PROPOSALS BECAME AN ARRAY OF TABLES (M1, 2026-08-04) AND THIS LINE DID
     # NOT FOLLOW IT — until 2026-08-18 it put the LIST itself into `L`, and
     # `--render <id>` raised TypeError on every node carrying one. Found while
     # checking that the `Adopted from:` line above renders; unrelated to it,
     # pre-existing, and invisible because nothing but a human at a terminal
-    # calls this path. dumps() (line ~199) is the emitter that DID follow the
+    # calls this path. issue_dumps() (line ~199) is the emitter that DID follow the
     # change; this is the read-side view catching up.
     L += ["## Proposals", ""]
     for pr in doc.get("proposals", []):
@@ -326,9 +357,9 @@ def render(doc: dict) -> str:
                if pr.get("type") else "")
         L += [f"- **{pr.get('status', '?')}**{rel} · asked by "
               f"{pr.get('asked_by', '?')} ({pr.get('source', '?')})",
-              f"  {unwrap(pr.get('question', ''))}"]
+              f"  {issue_unwrap(pr.get('question', ''))}"]
         if pr.get("ruled"):
-            L.append(f"  Ruled: {unwrap(pr['ruled'])}")
+            L.append(f"  Ruled: {issue_unwrap(pr['ruled'])}")
         L.append("")
     L += ["## Memo", "", doc.get("memo", ""), ""]
     # One node carries a `## Memo — original`, kept when its memo was rewritten.
@@ -339,7 +370,7 @@ def render(doc: dict) -> str:
     return "\n".join(L)
 
 
-def check(doc: dict, p: pathlib.Path) -> list[str]:
+def issue_verify(doc: dict, p: pathlib.Path) -> list[str]:
     """Schema-level failures. NOT the invariant gate — that is issue_gate.py,
     which checks claims about the world (quotes verbatim, targets exist). This
     checks only that the document is the shape it says it is, which under TOML
@@ -354,11 +385,16 @@ def check(doc: dict, p: pathlib.Path) -> list[str]:
     if doc.get("status") not in STATUSES:
         f.append(f"{p.name}: status {doc.get('status')!r} is not one of "
                  f"{'/'.join(sorted(STATUSES))}")
-    elif p.name != f"{PREFIX[doc['status']]}{doc['id']}.toml":
-        f.append(f"{p.name}: status is `{doc['status']}` so the file must be "
-                 f"named {PREFIX[doc['status']]}{doc['id']}.toml — prefix and "
-                 f"status must agree")
-    if doc.get("id") != nid_of(p.stem):
+    elif doc.get("root") and doc["status"] != "live":
+        f.append(f"{p.name}: `root = true` but status is `{doc['status']}` — "
+                 f"a root is a permanent LIVE node; it cannot carry any other "
+                 f"status")
+    elif p.name != f"{issue_prefix_read(doc)}{doc['id']}.toml":
+        why = "is a root" if doc.get("root") else f"status is `{doc['status']}`"
+        f.append(f"{p.name}: {why} so the file must be named "
+                 f"{issue_prefix_read(doc)}{doc['id']}.toml — prefix must agree "
+                 f"with status and the `root` flag")
+    if doc.get("id") != issue_id_read(p.stem):
         f.append(f"{p.name}: id {doc.get('id')!r} does not match its filename")
     for pr in (list(doc.get("proposals", []))
                + [q for e in doc.get("edges", []) for q in e.get("proposals", [])]):
@@ -426,22 +462,22 @@ def main() -> int:
                   "python memory/issue_schema.py --render nNNNN")
             return 2
         nid = sys.argv[i]
-        q = next((x for x in nodes() if nid_of(x.stem) == nid_of(nid)), None)
+        q = next((x for x in issue_nodes_read() if issue_id_read(x.stem) == issue_id_read(nid)), None)
         if q is None:
             print(f"  no issue node matches {nid!r}. The id is the filename "
                   f"without its status prefix — try `ls issues/`.")
             return 2
-        print(render(load(q)))
+        print(issue_render(issue_read(q)))
         return 0
     fails, n = [], 0
-    for p in nodes():
+    for p in issue_nodes_read():
         try:
-            doc = load(p)
+            doc = issue_read(p)
         except Exception as e:                      # a parse error is now LOUD
             fails.append(f"{p.name}: will not parse — {e}")
             continue
         n += 1
-        fails += check(doc, p)
+        fails += issue_verify(doc, p)
     print(f"  {n} issue file(s) parsed")
     for x in fails:
         print(f"  FAIL  {x}")

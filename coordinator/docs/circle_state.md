@@ -7,7 +7,7 @@ circle_state.py — is a circle open right now? A conservative test for whether 
 ## SYNOPSIS
 
     python coordinator/circle_state.py
-    from circle_state import is_circle_in_progress
+    from circle_state import circle_is_in_progress
 
 ## DESCRIPTION
 
@@ -20,10 +20,10 @@ The module fails closed: anything it cannot determine — an unreadable director
 ## MAIN
 
     try {
-        Call open_circles() to get the list of transcripts that may still
+        Call circle_open_read() to get the list of transcripts that may still
         be mid-write.
     }
-    if (open_circles() raised any exception) then {
+    if (circle_open_read() raised any exception) then {
         print "COULD NOT TELL -- <the exception>" and a instruction to
         treat this as a circle in progress and ask Self.
         return exit code 1.
@@ -45,7 +45,7 @@ The module fails closed: anything it cannot determine — an unreadable director
 
 ## COMMAND-LINE ARGUMENTS
 
-None. The script takes no arguments; it is invoked bare either as a shell command (to get a pass/fail exit code and a human-readable report) or imported as a module (to call `is_circle_in_progress()` directly from other Python code).
+None. The script takes no arguments; it is invoked bare either as a shell command (to get a pass/fail exit code and a human-readable report) or imported as a module (to call `circle_is_in_progress()` directly from other Python code).
 
 ## DEPENDENCIES
 
@@ -106,7 +106,7 @@ No input is read from stdin; the script's only external input is the filesystem 
       the circle with that open-time id finished -- existence alone is
       checked, not the report's contents. }
 
-### `open_circles(now=None)`
+### `circle_open_read(now=None)`
 
 Returns every transcript that may still be being written; an empty list is the "safe to proceed" answer.
 
@@ -145,12 +145,12 @@ Returns every transcript that may still be being written; an empty list is the "
     Return the accumulated list of dicts, each carrying path, ot, quiet,
     and why.
 
-### `is_circle_in_progress()`
+### `circle_is_in_progress()`
 
-    { Public entry point for other modules. Attempt to call open_circles()
+    { Public entry point for other modules. Attempt to call circle_open_read()
       and return True if the resulting list is non-empty (some transcript
       may still be open), False if it is empty. }
-    if (calling open_circles() raises any exception at all) then {
+    if (calling circle_open_read() raises any exception at all) then {
         return True unconditionally -- this is the module's fail-closed
         guarantee: any failure to determine the answer is reported as "a
         circle may be open," never as "safe."
@@ -162,9 +162,9 @@ Returns every transcript that may still be being written; an empty list is the "
 correct in every case below; what is imprecise is a printed count and a caller's ability to read
 one boolean two ways.*
 
-- **CONFIRMED (cosmetic).** `main()`'s "safe to read" branch reports a transcript count computed independently of `open_circles()`'s own directory-existence checks: it calls `LIVE.glob(...)` and `SANDBOX.glob(...)` directly without first checking `is_dir()` on either. `pathlib.Path.glob()` on a non-existent directory simply yields nothing rather than raising, so this doesn't crash, but if one of the two directories doesn't exist, `open_circles()` silently skips it (per its own `if not d.is_dir(): continue`) while `main()`'s count line still reports as if both were considered — in practice harmless since the count is used only for the printed "safe to read" message, not for any decision. **Mitigation:** call `open_circles()`'s own directory list rather than re-globbing, or apply the same `is_dir()` guard. One line; no verdict changes either way.
+- **CONFIRMED (cosmetic).** `main()`'s "safe to read" branch reports a transcript count computed independently of `circle_open_read()`'s own directory-existence checks: it calls `LIVE.glob(...)` and `SANDBOX.glob(...)` directly without first checking `is_dir()` on either. `pathlib.Path.glob()` on a non-existent directory simply yields nothing rather than raising, so this doesn't crash, but if one of the two directories doesn't exist, `circle_open_read()` silently skips it (per its own `if not d.is_dir(): continue`) while `main()`'s count line still reports as if both were considered — in practice harmless since the count is used only for the printed "safe to read" message, not for any decision. **Mitigation:** call `circle_open_read()`'s own directory list rather than re-globbing, or apply the same `is_dir()` guard. One line; no verdict changes either way.
 
-- **CONFIRMED (design caveat, not a defect).** `is_circle_in_progress()`'s fail-closed guarantee is easy to lose silently in a caller that only checks the return value and doesn't distinguish it from a genuine "no circle open" case, since both are `False`/`True` with no way to tell an inconclusive check from a confident one from the boolean alone. `main()` avoids this by handling its own `try`/`except` separately with a distinct message, but any other caller of `is_circle_in_progress()` directly gets no such distinction — a caller who logs or acts on the boolean alone cannot tell "confirmed open" from "could not tell, so treated as open."
+- **CONFIRMED (design caveat, not a defect).** `circle_is_in_progress()`'s fail-closed guarantee is easy to lose silently in a caller that only checks the return value and doesn't distinguish it from a genuine "no circle open" case, since both are `False`/`True` with no way to tell an inconclusive check from a confident one from the boolean alone. `main()` avoids this by handling its own `try`/`except` separately with a distinct message, but any other caller of `circle_is_in_progress()` directly gets no such distinction — a caller who logs or acts on the boolean alone cannot tell "confirmed open" from "could not tell, so treated as open."
 
   The three callers outside this module were checked 2026-08-27 — `circle_audit.py` (twice: the
   snapshot guard and the survey's `circle_in_progress` field) and

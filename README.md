@@ -416,9 +416,11 @@ Optional free dry run — no network, no key needed
   .venv\Scripts\python ui\circling.py --circle
 ```
 
-**Dry run is the default** — you have to ask for `--live` by name.
-`--live` may sit anywhere on the command line; anything else after
-`--circle` is forwarded to the coordinator unchanged.
+**Dry run is the default HERE** — `--circle` passes `--dry-run` to the
+coordinator for you unless you ask for `--live` by name. (`coordinator/circle.py`
+run on its own REFUSES a bare invocation since R360: it wants `--live` or
+`--dry-run` spelled out.) `--live` may sit anywhere on the command line;
+anything else after `--circle` is forwarded to the coordinator unchanged.
 
 ## Run
 
@@ -612,9 +614,8 @@ Tag, a description, and the files a part needs to be spoken to.
 is never created without Self's explicit agreement**, and that rule is in
 the rulebook every part reads.
 
-Note that the shipped documents under `docs/` describe the original
-seven-part installation — `docs/overview.md`'s table of parts is that
-person's roster, not a set you are expected to reproduce.
+`docs/overview.md` covers the shape a circle takes and what happens when
+one closes, in plainer terms than this file.
 
 ## Where to read next
 
@@ -710,7 +711,7 @@ WITH CARE — machine-written, but hand-editable
 
 NEVER — the historical record, and what is derived from it
   circles/*.md                  transcripts
-  parts/*/short_term_<OT>.md    each part's record of a circle
+  parts/*/short_term_<OT>.toml  each part's record of a circle (.md before 2026-09-04)
   parts/*/mid_term.md           the distillate
   work/logs/*.json              close reports
   work/prompts/**               captured prompts
@@ -735,9 +736,9 @@ a mid_term is a cache, and more
     THOSE, not over the file itself. So a hand-edit is either silently
     overwritten the next time a source moves, or silently kept while
     nothing supports it. Edit the source instead:
-      .venv\Scripts\python coordinator\mid_term.py --refresh <part>
+      .venv\Scripts\python coordinator\part_mid_term_manager.py --refresh <part>
     and if you truly want to hold one by hand:
-      .venv\Scripts\python coordinator\mid_term.py --lock <part>
+      .venv\Scripts\python coordinator\part_mid_term_manager.py --lock <part>
 ```
 
 Three rules that apply to every hand-edit, including the sanctioned ones:
@@ -763,7 +764,7 @@ Then run the gate below for whatever you touched.
 
 ```
 anything at all
-  .venv\Scripts\python coordinator\check_integrity.py
+  .venv\Scripts\python coordinator\record_verify.py
       watch for   INTEGRITY PASS
       a failure prints INTEGRITY FAIL and, per file, the defect and the
       remedy, then exits non-zero. There is no --force.
@@ -779,13 +780,13 @@ issues/
       and the "quote(s) verified verbatim" count. It should not fall.
 
 self/best_practices.toml
-  .venv\Scripts\python coordinator\check_best_practices.py
+  .venv\Scripts\python coordinator\practice_verify.py
       watch for   PASS — tally, ids, addressees and routing all hold
 
 a part's identity sources
-  .venv\Scripts\python coordinator\mid_term.py
+  .venv\Scripts\python coordinator\part_mid_term_manager.py
       watch for   that part's row turning stale, then
-        .venv\Scripts\python coordinator\mid_term.py --refresh <part>
+        .venv\Scripts\python coordinator\part_mid_term_manager.py --refresh <part>
       This one exits 0 either way. Read the word, not the exit code.
 ```
 
@@ -800,7 +801,7 @@ The gates above are not decoration; each exists to watch for any fail.
 Two check automatically:
 
 ```
-check_integrity.py runs at every circle open
+record_verify.py runs at every circle open
     a corrupt file stops the circle before any model call is made, and
     before anything is written
 

@@ -9,7 +9,7 @@ python coordinator/prompt_capture.py --verify           # check every capture
 python coordinator/prompt_capture.py --verify <OT>       # check one circle's capture
 python coordinator/prompt_capture.py --stats [<OT>]      # per-block, per-item character counts
 ```
-(As a library: `write(ot, sysblocks, notes, live, names=None)` from `circle.py` at circle open; `open_turn_log(dir, ot)` right after it — and from `inter_circle.process_circle()` for a hand re-run, which opens the circle's own capture and closes it after; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request, `part` None for a call made for no one part; `discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `read_manifest(dir)` and `block_shas(manifest)` for the resume compare.)
+(As a library: `prompt_capture_write(ot, sysblocks, notes, live, names=None)` from `circle.py` at circle open; `prompt_turn_log_open(dir, ot)` right after it — and from `inter_circle.circle_process()` for a hand re-run, which opens the circle's own capture and closes it after; `record_turn(part, kind, request, response, dry_run, error)` from `llm_client.py` on every request, `part` None for a call made for no one part; `prompt_capture_discard(dir)` from `circle.py` when an unspoken circle is withdrawn; `prompt_manifest_read(dir)` and `block_shas(manifest)` for the resume compare.)
 
 ## DESCRIPTION
 The system prompt sent to a part is GENERATED CODE — `prompt_build.system_blocks()`
@@ -61,10 +61,10 @@ the tail of the transcript.. from the last statement of the part through
 current"*); what precedes it is the transcript as it stood, and `messages_omitted`
 records how many turns were trimmed and the sha256 of their JSON. A part that has
 not spoken has no anchor and its messages are recorded whole. THE REQUEST ITSELF IS
-NOT TRIMMED — what a part is sent is `prompt_build.render_messages()`'s business;
+NOT TRIMMED — what a part is sent is `prompt_build.prompt_messages_render()`'s business;
 this module only records it (D57 asked whether the sending should narrow too; R278 ruled
 no — the whole transcript is sent).
-`response.text` is the RAW reply, before `rounds.ask_statement()` strips a sign-off,
+`response.text` is the RAW reply, before `circle_rounds.part_statement_ask()` strips a sign-off,
 a `[To: ...]` or a bracket and before "[pass]" becomes silence, with the stop reason
 and the usage object as a dict. It is the text BLOCKS — this line called it "what the
 model actually returned" until 2026-08-29, which was overbroad: a reply also carries
@@ -95,7 +95,7 @@ is supposed to send: the four blocks in order, `cache_control` on 1-3 and never 
 `llm_client.MODEL` (grepped from the source, never imported, so this stays cheap
 enough for the pre-commit hook), a pre-warm asking for no output, and a response
 in either the live shape or the narrower dry-run one. A missing contract file is
-reported as a NOTE, never passed over in silence. `check_contract()` is the one
+reported as a NOTE, never passed over in silence. `prompt_capture_contract_verify()` is the one
 reader; `coordinator/tests/test_turn_contract.py` breaks one thing at a time and
 asserts each rule still refuses, so the walker cannot quietly stop walking.
 
@@ -107,12 +107,12 @@ per request; a content-addressed store is still deliberately not built.
 There is no `main()`; `__main__` dispatches directly:
 ```
 if ("--stats" is in argv) then {
-    call stats(the argument after it, if any, else None) and exit with its code.
+    call prompt_stats_read(the argument after it, if any, else None) and exit with its code.
 } else {
     strip "--verify" from argv;
-    if (an argument remains) then { call verify(that argument) }
-    else { call verify(None) — every capture under both roots };
-    exit with verify()'s code.
+    if (an argument remains) then { call prompt_capture_verify(that argument) }
+    else { call prompt_capture_verify(None) — every capture under both roots };
+    exit with prompt_capture_verify()'s code.
 }
 ```
 
@@ -126,38 +126,42 @@ if ("--stats" is in argv) then {
 
 ## DEPENDENCIES
 Standard library: `datetime`, `hashlib`, `json`, `pathlib`, `re`, `sys`,
-`threading`. Sibling modules: `roster` (as `R`, for `R.TAGS`/`R.TAG_BY_DIR` →
-`PART_TAGS`/`PART_TAGS_BY_DIR`), `paths` (`ROOT`, `SANDBOX`), `atomic_write`. No
-third-party packages, no external programs, no network access.
+`threading`. Sibling modules: `roster` (as `R`, for `R.TAGS` → `PART_TAGS`
+— `PART_TAGS_BY_DIR`, a matching alias for `R.TAG_BY_DIR`, was deleted
+2026-09-01, audit-register.md #30: nothing in this module read it), `record_paths`
+(`ROOT`, `SANDBOX`), `atomic_write` (`record_atomic_write`). No third-party packages, no external
+programs, no network access.
 
 ## EXTERNAL FILES
 Read: `work/prompts/<OT>/manifest.json` and `work/sandbox/prompts/<OT>/manifest.json`
-(by `verify()`, `stats()`, `open_turn_log()`, `discard()`, `read_manifest()`); every
-Block and turn file a manifest names (by `verify()`); the just-written Block and turn
-files (re-read by `write()` and `record_turn()` to prove the bytes).
+(by `prompt_capture_verify()`, `prompt_stats_read()`, `prompt_turn_log_open()`,
+`prompt_capture_discard()`, `prompt_manifest_read()`); every
+Block and turn file a manifest names (by `prompt_capture_verify()`); the just-written Block and turn
+files (re-read by `prompt_capture_write()` and `record_turn()` to prove the bytes).
 
 Written (all through `atomic_write`, LF only): under the capture directory —
 `Block1_circle_identity.md`, `Block2_circle_objectives.md`,
 `Block3_<part>_identity.md`, `Block4_<part>_objectives.md`, `manifest.json` (by
-`write()`); `Per_turn_<part>_<YYYY-MM-DD_HHMMSS>_<NNN>.json` and a rewritten
+`prompt_capture_write()`); `Per_turn_<part>_<YYYY-MM-DD_HHMMSS>_<NNN>.json` and a rewritten
 `manifest.json` (by `record_turn()`). Removed: exactly the files the manifest lists,
-the manifest, and the directory if emptied (by `discard()`). A non-live circle with
-no `sandbox_dir` writes nothing (`write()` returns `None`, and `open_turn_log(None)`
+the manifest, and the directory if emptied (by `prompt_capture_discard()`). A non-live circle with
+no `sandbox_dir` writes nothing (`prompt_capture_write()` returns `None`, and `prompt_turn_log_open(None)`
 makes `record_turn()` a no-op).
 
 ## NETWORK ACCESS
 None.
 
 ## HUMAN I/O
-No stdin. `verify()` prints how many circles, Block files and turn files were
+No stdin. `prompt_capture_verify()` prints how many circles, Block files and turn files were
 re-hashed, a `note` line for every pre-R277 capture directory it cannot read (a lab
 tree keeps its own; not a failure), then a PASS line or a numbered list of every
 failure (missing file, size or sha256 mismatch, a shared block bound to a part, a
 leak, a duplicate seq, a turn file that is not JSON, a block reference that does not
 resolve or whose sha differs, a BLOCK 4 text that is not the Block file's). Exit 0
-if no captures exist or all pass, 1 otherwise. `stats()` prints per part the four files
+if no captures exist or all pass, 1 otherwise. `prompt_stats_read()` prints per part the four files
 with their items and a reconciliation line when the items do not sum; exit 1 when no
-captures exist. `write()`, `record_turn()`, `discard()` print nothing; `write()`
+captures exist. `prompt_capture_write()`, `record_turn()`, `prompt_capture_discard()` print nothing;
+`prompt_capture_write()`
 raises `RuntimeError` on a byte mismatch or a shared-block mismatch.
 
 ## OPERATION
@@ -171,7 +175,7 @@ else {
 }
 ```
 
-### write(ot, sysblocks, notes, live, names=None)
+### prompt_capture_write(ot, sysblocks, notes, live, names=None)
 ```
 if (live) then { the directory is work/prompts/<ot> }
 else { return None — nothing is written. The sandbox_dir root left with
@@ -195,11 +199,11 @@ else { return None — nothing is written. The sandbox_dir root left with
         sha256, cached (whether the block carried cache_control), items.
     FOR EACH part, ask its OWN remember register what must be in its identity
         blocks (_remember_expectation): no records -> {records: 0}; a register
-        whose rendered records exceed remember.BUDGET -> {windowed: true},
+        whose rendered records exceed remember_manager.BUDGET -> {windowed: true},
         because the projection never promised to show any particular one; else
         the count, and the NEWEST record's chars, sha256 and first 96
         characters. Any exception becomes {error: ...}. It never costs a
-        capture, and verify() skips anything but the third case.
+        capture, and prompt_capture_verify() skips anything but the third case.
     write manifest.json: open_time, block_order, files, parts (briefing_filter
     note + block list + remember_projection each), block_bytes, turns = [],
     turn_bytes = 0, and a one-line turns_format.
@@ -211,16 +215,17 @@ capture is checked months after its circle, against a register that has moved
 on; a verifier reading today's register would be answering a different
 question. So the bytes to look for travel WITH the capture. The two paths stay
 independent — `prompt_build` assembles Block 3/4 through
-`remember.block_settled()`/`block_tail()`, this reads `remember.entries()` —
+`remember_prompt_projection.remember_settled_render()`/`remember_tail_render()`, this reads
+`remember_manager.remember_read()` —
 which is the point: a check that reads the same object twice checks nothing.
 
-### read_manifest(d) / block_shas(manifest)
+### prompt_manifest_read(d) / block_shas(manifest)
 `read_manifest` loads `<d>/manifest.json`. `block_shas` returns, per part, the sha256
 of each of its listed block files in order — the shared files counting for every
-part that lists them — which is what `circle.py::_prompt_blocks_changed` compares
+part that lists them — which is what `circle_close.py::_prompt_blocks_changed` compares
 across a resume.
 
-### open_turn_log(d, ot=None) / turn_log_dir()
+### prompt_turn_log_open(d, ot=None) / prompt_turn_log_locate()
 ```
 under the module lock {
     reset the log (no dir, no manifest, seq 0, remember ot);
@@ -279,7 +284,7 @@ under the module lock {
 The lock covers the sequence number, the file write and the manifest rewrite: the
 blind round asks seven parts in parallel.
 
-### discard(d)
+### prompt_capture_discard(d)
 ```
 if (d is None, or has no manifest) then { return 0 }
 try to read the manifest; if (it cannot be read) then { return 0 }
@@ -340,7 +345,7 @@ FOR EACH turn record:
 return (block files checked, turn files checked).
 ```
 
-### verify(ot=None)
+### prompt_capture_verify(ot=None)
 ```
 collect capture directories (one circle across both roots, or every directory
     with a manifest under both);
@@ -351,9 +356,9 @@ if (any failure) then { print them all; return 1 }
 else { print the PASS line; return 0 }
 ```
 
-### stats(ot=None)
+### prompt_stats_read(ot=None)
 ```
-collect directories as verify() does; if (none) then { print; return 1 }
+collect directories as prompt_capture_verify() does; if (none) then { print; return 1 }
 FOR EACH directory: FOR EACH part: print its total chars, then each of its four
     files with the block name, chars, file name, every item and its chars, and a
     reconciliation line if the items do not sum to the block; then the turn-file

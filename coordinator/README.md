@@ -1,9 +1,14 @@
-# coordinator — the local Scribe
+# coordinator — the local Coordinator
 
 A local Python coordinator that runs a circle as direct Messages API calls.
-Successor to `spike_asyncio/`. **The agent-teams mechanism is untouched and
-fully operational** — `/circle_close`, `.claude/agents/`, `process.md`,
-`scripts/*.py` are neither modified nor read for control flow by this path.
+Successor to `spike_asyncio/`. **The agent-teams mechanism is retired, not
+"untouched and fully operational"** as this line said for weeks — its
+team-teardown checks in `circle_close_verify.py` are vestigial (self-skipping when
+their subject is absent; "nothing schedules them and no live path runs
+them", per `coordinator/docs/circle_close_verify.md`), and `scripts/*.py` cannot be
+"neither modified nor read" because `scripts/` itself no longer exists
+(retired 2026-08-19). Nothing in this checkout still runs the agent-teams
+path.
 
 (The windowed way in is the Ticker flavor — `ui/ticker/`, manual at
 `ui/docs/bridge.md`; `ui/circling.py` remains the two-pane terminal. Both
@@ -28,18 +33,22 @@ Unchanged and still authoritative: `process_core.md`, each part's
 (circle_objectives' source — `self/circle_briefing.md` retired 2026-08-11 and
 `self/issues_narrative.md` at B46 2026-08-17, see `docs/BNF.md` BLOCK 2),
 the transcript format, the four-section short_term format,
-`coordinator/circle_close.py`, and the nightly dreaming/synthesis tasks.
+`coordinator/circle_close_verify.py`, and dreaming/synthesis — no longer nightly
+tasks (R228 removed the batch shape 2026-08-18 — this line said 2026-07-28, the
+date ifs-nightly last ran, until 2026-09-04); they run automatically,
+synchronously, inside every completing live `/close`, via
+`coordinator/inter_circle.py`.
 (`self/open_concerns.md`/`.toml`, the OC register, retired outright
 2026-08-13 — vestigial.)
 
 ## Interop with the existing pipeline
 
 - Transcript lines are written as `[Tag]:` / `[Tag] [To: X]:` — verified
-  against `circle_close.py::parts_that_spoke()`.
+  against `circle_close_verify.py::parts_that_spoke()`.
 - short_terms carry the four canonical sections — verified against
-  `circle_close.py::short_term_status()`.
+  `circle_close_verify.py::short_term_status()`.
 - At close, `--live` shells out to
-  `coordinator/circle_close.py --short-term-only --open-time <OT> --write-report`,
+  `coordinator/circle_close_verify.py --short-term-only --open-time <OT> --write-report`,
   so `work/logs/close_<OT>.json` is produced by **the same verifier as today**
   and the audit's `--reconcile` guard (`circle_audit.py` phase 2) keeps working
   with no changes.
@@ -54,7 +63,8 @@ the transcript format, the four-section short_term format,
   real calls with sandboxed writes, was the practice mode R250 deprecated;
   practice lives in the lab.)
 - **`--live`** — additionally permits exactly two shapes:
-  `circles/circle_<OT>.md` and `parts/<name>/short_term_<OT>.md`, where `<OT>`
+  `circles/circle_<OT>.md` and `parts/<name>/short_term_<OT>.toml` (`.md` before
+  2026-09-04, R434 — a resumed pre-B96 close still writes it), where `<OT>`
   is *this run's* open time. It cannot overwrite a prior circle, cannot touch
   `long_term.md` or any other per-part file, cannot write `self/`.
 
@@ -67,7 +77,7 @@ Identity files are opened read-only in both modes.
 `.venv` already has both dependencies (`anthropic 0.109.2`, `python-dotenv
 1.2.2`, pinned in `requirements.txt`) and `ANTHROPIC_API_KEY` is already in
 `.env`. Just use the venv's interpreter. Two equivalent ways, from
-`D:\Projects\Inner Circling`:
+this checkout's own root:
 
 **`.env` IS ONLY READ WHEN THE VARIABLE IS UNSET.** `load_dotenv` is
 reached only if `os.environ` has no `ANTHROPIC_API_KEY`, so a stale key in
@@ -137,10 +147,18 @@ interpreter.
 
 ## Commands at the `Self>` prompt
 
+These four (plus plain speech) are the whole circle-pane verb set —
+`command_surface.py`'s PANE_OF classifies every other verb (including
+`/status`, corrected out of this list) as command-pane only, reachable at
+`cmd>` in the dual-pane UI, not here. There are 52 verbs total across both
+panes (`len(command_surface.COMMANDS)`, 2026-09-04; 43 when this line was
+written); see `docs/BNF.md`'s USER_SUBSET_COMMANDS / DEV_SUBSET_COMMANDS for
+the rest.
+
 ```
 <text>    speak as Self — resets every part's since-Self counter, runs a round
 /round    let the parts take another round without a Self statement
-/status   since-Self counters and running cost
+/pass     an alias for /round, same operation
 /close    collect short_terms, verify, print the usage report
 /abort    end the circle without a close — no short_terms, transcript kept
 ```
@@ -172,12 +190,14 @@ Delete `work\sandbox\` freely — nothing there matters.
 
 # 2. Test round — real models, in the lab, ~$0.30
 
-Three parts, real API — run it in the LAB checkout, whose record is a full
-copy that never merges back (R249). The old way — a bare invocation here,
-real calls with sandboxed writes — refuses since R360.
+Three parts, real API — run it in a LAB checkout, a full copy kept
+specifically for churn like this whose record never merges back (R249). A
+lab is optional local infrastructure, not something this repository ships
+— set one up as a separate clone if you want one. The old way — a bare
+invocation here, real calls with sandboxed writes — refuses since R360.
 
 ```
-cd D:\Projects\InnerCircling-lab
+cd <your lab checkout>
 .venv\Scripts\python.exe coordinator\circle.py --live --parts philosopher,judge,mourner
 ```
 
@@ -239,16 +259,19 @@ python coordinator\circle.py --live
 **At close, in order**
 
 - one short_term call per part that spoke, written straight to
-  `parts\<name>\short_term_<OT>.md`. A part that never spoke writes nothing —
-  correct, and the nightly exempts it (`ifs-nightly-dreaming-SKILL.md` step 1).
+  `parts\<name>\short_term_<OT>.toml` (`.md` before 2026-09-04, R434; the
+  reply's four sections become four named keys, prose verbatim, and the
+  record is read back before it counts as written). A part that never spoke writes nothing —
+  correct, and dreaming (`coordinator/inter_circle.py`, run automatically at
+  close) exempts it as SILENT rather than treating it as no-engagement.
   For the Soul this will often be the case;
-- `coordinator/circle_close.py --short-term-only --open-time <OT> --write-report`
+- `coordinator/circle_close_verify.py --short-term-only --open-time <OT> --write-report`
   runs and prints its own verdict;
 - every `[proposed: <command>]` annotation — a practice is
   `[proposed: /practice-add ...]`, a better option
   `[proposed: /better-option-add ...]`, an edge
   `[proposed: /issue-relationship-add ...]` — is staged into
-  `self/proposals.toml` by stage_propose_proposals(), then an
+  `self/proposals.toml` by proposal_stage(), then an
   a)pprove/d)eny/s)kip screen shows every currently pending row — this
   circle's and any skipped earlier — and approving one RUNS the command;
   see `docs/BNF.md`'s PROPOSE LIFECYCLE. (The six practice bracket
@@ -258,15 +281,19 @@ python coordinator\circle.py --live
 
 **Verifier exit 0 is the success condition.** It writes
 `work\logs\close_<OT>.json` exactly as the agent-teams close does, so the
-nightly 1:11 AM run reconciles and dreams normally with no changes.
+automatic dreaming/synthesis pass that runs synchronously at the end of this
+same `/close` (`coordinator/inter_circle.py`) reconciles and dreams normally
+with no changes.
 
 If the verifier exits non-zero it will name the failing part(s) as
 `MISSING-SHORT-TERM`. Re-run just the close for that part by hand, or backfill
 from the transcript as today — the existing remedy applies unchanged.
 
-**Next morning:** check `self\narrative_<date>.md` and the part's `long_term.md`
-picked up the circle. That confirms the coordinator's output flows through the
-nightly pipeline end to end. That check is the real acceptance test.
+**Right after `/close` returns:** check `self\narrative_<date>.md` and the
+part's `long_term.md` picked up the circle — dreaming/synthesis already ran,
+synchronously, before the close command exited. That confirms the
+coordinator's output flows through `coordinator/inter_circle.py` end to end.
+That check is the real acceptance test.
 
 ---
 
@@ -274,8 +301,8 @@ nightly pipeline end to end. That check is the real acceptance test.
 
 **Neither run can desync THIS tree's durable records.** The dry run writes
 only under `work/sandbox/`; the lab test round writes the LAB's own record,
-which never merges back (R249). Here, `parts/*/long_term.md`, `part_relationships.toml` and
-`short_term_*.md` are unwritable and are opened read-only. The guard is
+which never merges back (R249). Here, `parts/*/long_term.md` and
+`short_term_*.toml` (`.md` before 2026-09-04, R434) are unwritable and are opened read-only. The guard is
 tested. What follows is everything that *is* live.
 
 **1. Self–part desync, not part–part.** The test round is a real experience
@@ -292,10 +319,12 @@ you. Because nothing is written, it surfaces again in the next real circle
 exactly as before. The failure mode is repetition, not loss — but do not
 treat an issue as engaged on the strength of a test round.
 
-**3. Do not run within ~15 minutes of 1:11 AM.** The coordinator reads each
-part's `long_term.md` and `part_relationships.toml` once at startup. The nightly task
-rewrites exactly those files. A read landing mid-write yields a part built from
-a torn file. Read-only, so nothing is corrupted — the run is just wrong.
+**3. RETIRED — there is no longer a 1:11 AM run to avoid.** R228
+(2026-07-28) removed the scheduled nightly task this risk was about; the
+coordinator reads each part's `long_term.md` once at circle open, and the
+only writer of that file — dreaming/synthesis — now runs synchronously
+inside the SAME live `/close` that produced the circle, never as an
+independent background process a later open could race against.
 
 **4. Do not run while an agent-teams circle is open.** Nothing collides on disk
 in sandbox mode, but the same part would be animated in two places, and the
@@ -372,12 +401,12 @@ the first.
 ## Exit codes
 
 `circle.py` exits **0 only when the circle produced a complete record.** Any of
-the following puts an entry in the failure ledger, prints a banner at the end of
+the following puts an entry in the failure record, prints a banner at the end of
 the run, and makes the exit code **1**:
 
-- a part truncated twice (`MAX_TOKENS`, now 600) — see below
+- a part truncated twice (`MAX_TOKENS` in `circle_rounds.py`, now 2500) — see below
 - a `short_term` that failed twice and was not written
-- `coordinator/circle_close.py` exiting non-zero at close
+- `coordinator/circle_close_verify.py` exiting non-zero at close
 
 **Exit 2 means the circle never opened** — a bad key, a failed pre-warm, a
 malformed `--resume`, a closed circle asked to reopen, a transcript already
@@ -389,30 +418,31 @@ them.
 
 **Truncation is never downgraded to a pass.** Before 2026-07-26 a part that
 overran twice was recorded as having passed. That was the one data-loss path in
-the pipeline with no net: the nightly's transcript safety net deliberately
+the pipeline with no net: the transcript safety net deliberately
 exempts genuinely silent parts, so a part that *tried* to speak and was cut off
 looked identical to one that chose silence, and nothing downstream would ever
 catch it. Now:
 
 - if any text came back, it is **kept** and marked in the transcript with a
   line-*trailing* `[statement truncated at the token ceiling -- incomplete]`.
-  The marker is trailing on purpose — `circle_close.py::parts_that_spoke()`
+  The marker is trailing on purpose — `circle_close_verify.py::parts_that_spoke()`
   anchors on the leading `[Tag]:`, so the part still counts as having spoken,
-  still writes a `short_term`, and the nightly still sees engagement.
-- if nothing came back, the statement is genuinely lost and the ledger says so
-  in those words. That part may read as silent to the nightly — check the
-  transcript before 1:11 AM.
+  still writes a `short_term`, and dreaming still sees engagement.
+- if nothing came back, the statement is genuinely lost and the record says so
+  in those words. That part may read as silent to dreaming — check the
+  transcript before the next circle.
 
-An interrupted run (`/abort`, Ctrl-C) prints an explicit reminder that no
-`short_term`s were collected and that the nightly will backfill from the
-transcript.
+An interrupted run (`/abort`) prints an explicit reminder that no
+`short_term`s were collected and that nothing backfills them
+automatically — `/abort` never reaches dreaming, unlike a completing close.
+The reminder names the repair: `circle_audit.py --backfill --commit`.
 
 ## Rollback
 
 Stop using it. `python coordinator\circle.py` writes nothing outside
 `coordinator\` unless `--live` is passed, and even then only this run's two
 file shapes. To revert a live circle: delete `circles\circle_<OT>.md`,
-`parts\*\short_term_<OT>.md`, and `work\logs\close_<OT>.json`. Nothing else
+`parts\*\short_term_<OT>.toml` (`.md` before 2026-09-04, R434), and `work\logs\close_<OT>.json`. Nothing else
 was touched. Run `/circle_close` and the agent-teams path as before.
 
 ## The briefing SPLIT — there is no file, and no filter, any more
@@ -425,10 +455,13 @@ over a rendered document:
 
 ```
 best practices / better options  self/best_practices.toml, read
-                                 directly by check_best_practices.py's
-                                 broadcast_block() (-> circle_identity) and
-                                 narrowcast_block(part) (-> part_identity),
-                                 by `addressee` field. R133-137, 2026-08-11.
+                                 directly by practice_manager.py's
+                                 practice_broadcast() (-> circle_identity) and
+                                 practice_narrowcast(part_tag) (-> part_identity),
+                                 by `addressee` field, rendered by the two
+                                 projections. R133-137, 2026-08-11; the
+                                 register left check_best_practices.py (now
+                                 practice_verify.py) 2026-09-03.
 circle_objectives                circle.py's build_briefing() — issue_model.md
                                  + the live issues/*.toml graph, constructed
                                  fresh at every circle open.
@@ -446,42 +479,80 @@ is the TOML's own `addressee` field now.
 `prompt_capture --verify` asserts that no SHARED block carries a
 practice addressed to one part alone. Since R277 (2026-08-21) blocks 1
 and 2 are captured ONCE per circle — `Block1_circle_identity.md`,
-`Block2_circle_objectives.md` — and `prompt_capture.write()` refuses a
+`Block2_circle_objectives.md` — and `prompt_capture.prompt_capture_write()` refuses a
 capture in which they differ between parts.
 
 ## Known cost levers
 
-Each part's cached prefix is ~17,000 tokens after the filter.
+Each part's cached prefix is ~18,000 tokens. (There is no filter any more —
+see "The briefing SPLIT" above; this matches the pre-warm figure quoted
+under "What to verify".)
 
 **Correction to an earlier estimate.** I previously said trimming the briefing
 would "roughly halve" per-circle cost. That was wrong. The briefing is 34% of
 the *prefix*, but the prefix is warmed once and re-read at 0.1x, so its true
-share of a 15-round circle is ~23%. A full trim (see
-`proposed_step6_briefing.md`) saves ~$0.20 of ~$1.20 — about **17%**. Worth
-doing for how it affects the parts' attention; not a cost emergency.
+share of a 15-round circle is ~23%. A full trim saves ~$0.20 of ~$1.20 —
+about **17%**. Worth doing for how it affects the parts' attention; not a
+cost emergency. (This paragraph used to cite `proposed_step6_briefing.md`
+for that trim; no such file exists anywhere in the tree.)
 
-The larger remaining lever is `long_term.md`, ~28 KB per part and growing
-nightly. Compacting entries older than ~30 days in the dreaming task would cut
-more than the briefing does. Neither is required to run.
+`long_term.md` is NOT a remaining lever — it no longer grows automatically
+at all (measured directly: 1,649-4,260 bytes per part, mean 2,796; this
+section previously said "~28 KB per part and growing", ~7x off, and
+self-contradicted "The three part files" section below, which correctly
+says "It no longer grows — dreams go to short_terms"). A resolved chain of
+3+ can reach `self/topics.toml` as a LONG_TERM CANDIDATE for Self to review,
+but nothing auto-writes `long_term.md` itself (`inter_circle.py`'s own
+comment says so directly).
 
 ## Flags
 
+Regenerated against `coordinator/circle.py`'s own argparse definitions
+(this section previously listed 6 of the real 12, with defaults stated for
+only one).
+
 ```
---live              write to circles/ and parts/, run the verifier at close
---dry-run           no network, no key, canned statements
---parts a,b,c       TESTING ONLY — see "Roster" below.
-                    default: all seven, incl. soul
-                    (see "The Soul" below — it IS a participant, and
-                     process_core.md line 105 disagrees with the record)
---no-prewarm        skip the max_tokens=0 warm-up
---seed N            see "Seed" below
---yes               skip the reduced-live-roster confirmation
+--live              write to circles/ and parts/<name>/short_term_<OT>.toml (R434),
+                    run circle_close_verify.py at close. Default: off.
+--dry-run           no network, no API key needed; every part passes.
+                    Default: off. A bare invocation with neither --live nor
+                    --dry-run REFUSES (R360) — one is required.
+--parts a,b,c       comma-separated part dirs — TESTING ONLY, see "Roster"
+                    below (a reduced roster leaves the omitted parts
+                    unaware of the circle). Default: every part in
+                    parts/, including the Soul (see "The Soul" below — it
+                    IS a participant; process_core.md's own §The Soul
+                    disagrees with the record, not this default).
+--recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
+                    expand topic-matched seeds into each part's BLOCK 4.
+                    ARM is off | delivered | withheld. Default: off.
+--no-prewarm        skip prewarm(), the sequential zero-output-token calls
+                    that write each part's cached prompt prefix before the
+                    opening round. Default: off (prewarm runs).
+--no-blind          run the PRIOR protocol: a sequential opening round,
+                    instead of the default BLIND round. Default: off.
+--seed N            see "Seed" below. Default: unset (a fresh shuffle
+                    every round).
+--yes               skip the reduced-live-roster confirmation prompt.
+                    Default: off.
+--resume OPEN_TIME  reopen an unclosed circle, e.g. --resume
+                    2026-08-02_1259; the transcript must round-trip
+                    byte-for-byte or the resume is refused. Default: unset.
+--dev[=BOOL]        open with dev mode on — DEV-table verbs, the help
+                    hierarchy, and progress lines all answer at this
+                    terminal's Self> prompt. Bare --dev means --dev=true.
+                    Default: off.
+--list-resumable    show circles that have a transcript but no close
+                    report, then exit. Default: off.
+--dev-cmd VERB ...  run ONE always-available command directly from the
+                    shell, no circle needed (the ic.py replacement).
+                    Bypasses dev_mode entirely. Default: unset.
 ```
 
 ## Seed
 
 `--seed N` calls `random.seed(N)`, which fixes the one place randomness is
-used: `random.shuffle(order)` in `run_round()` — the order parts are **polled**
+used: `random.shuffle(order)` in `circle_round_run()` — the order parts are **polled**
 within a round. Same seed, same polling order every run.
 
 It does **not** make the parts' statements deterministic. Model sampling is
@@ -498,49 +569,49 @@ sets the agenda.
 including the Soul** — the same roster the agent-teams path spawns.
 `--parts` exists for cheap test rounds.
 
-### The Soul — a doctrine discrepancy worth your attention
+### The Soul — a doctrine discrepancy that has since been resolved
 
-`process_core.md` §The Soul says it "does not speak directly in
-circles… may graduate to speech if a circle specifically calls for it — that
-should be a considered moment, not routine."
+This section quoted `process_core.md` §The Soul as saying it "does not speak
+directly in circles… may graduate to speech if a circle specifically calls
+for it" and described a `STANDING_OVERRIDE["injured_soul"]` symbol in
+`circle.py` as a workaround. Neither is accurate today: no such symbol
+exists anywhere in the tree, and `process_core.md` §The Soul now reads
+**"It is present in every circle and it does speak — rarely, and on its own
+terrain"** (R303, 2026-08-22) — already matching the empirical record below
+rather than contradicting it.
 
-The record says otherwise. It has spoken in **13 circles since 2026-06-24**,
-including this morning's `circle_2026-07-26_1112`, and it keeps its own
-short_term records of having done so (`2026-07-05_1308`: *"Spoke three times."*).
-Its participation is real, sparing, and disciplined — by its own account, it
-speaks "when the ground itself was directly addressed" and stays quiet "when
-the territory was constructed mechanism."
+The record: it has spoken in **22 circles since 2026-06-24** (measured
+directly against circles/*.md, matching every historical spelling — "Soul"
+and "Injured Soul"/"injured_soul", since the two are the same part across a
+rename), including this morning's `circle_2026-07-26_1112`, and it keeps its
+own short_term records of having done so (`2026-07-05_1308`: *"Spoke three
+times."*). It is a participant, in `DEFAULT_PARTS`, and excluding it would
+silently drop a part the live path includes.
 
-So it is a participant, and excluding it would silently drop a part the live
-path includes. It is in `DEFAULT_PARTS`.
-
-But a part reading only `process_core.md` would conclude it must not speak and
-pass every round. `STANDING_OVERRIDE["injured_soul"]` in `circle.py` therefore
-carries a short addendum describing the observed discipline — default to
-`[pass]`, speak when the ground itself is in question or when Self addresses it
-directly, stay quiet on constructed mechanism.
-
-**This is a workaround for a stale rule, not a decision.** `process_core.md` is
-read by the agent-teams path too and has not been touched. Either update line
-105 to match practice, or decide the practice drifted and rein it in — but the
-two should not stay in disagreement. Until then, watch the Soul's
-statement rate in the test round: roughly one statement per circle matches the
-recent pattern; several per round means the addendum is too permissive.
+**Where the per-part addendum mechanism actually lives:** `identity_tail`
+in `part.toml` (R246, R304) — per-part, per-installation, landing in BLOCK
+3. A stricter addendum ("default to `[pass]`...") sat in the Soul's
+`part.toml` for a few hours on 2026-08-22 before R304 deleted it outright,
+not as a workaround kept in place: it duplicated (and was stricter than)
+`parts/soul/long_term.md`'s own "My role in circles" section, and deleting
+it delivered a softening Self had separately asked for. No part declares an
+`identity_tail` today — the mechanism is built; nothing installs one yet.
 
 **Your inference is correct, and it matters.** An omitted part is not a quiet
 attendee — it is absent. Trace it through:
 
 - It never appears in the transcript, so it writes no short_term.
-- `ifs-nightly-dreaming-SKILL.md` step 3: *"If a part has no short_term file for
-  a given circle, treat it as no engagement for that circle."* Absent and
-  present-but-silent are recorded identically.
-- The transcript safety net (step 1) explicitly **exempts** a part that did not
-  speak — "absence for a non-speaking part is correct, not a loss" — so nothing
+- `coordinator/part_dreaming.py`'s `part_dream()` (inter_circle's until 2026-09-03) reads that with a bare
+  `is_file()`: no short_term file means treated as no engagement for that
+  circle. Absent and present-but-silent are recorded identically.
+- The transcript safety net (`backfill_step()`, run automatically before
+  dreaming at every live close) explicitly **exempts** a part that did not
+  speak — absence for a non-speaking part is correct, not a loss — so nothing
   alarms and nothing is backfilled.
-- Result: no dream entry, no `part_relationships.toml` update, no `long_term.md` change
+- Result: no dream entry, no `long_term.md` change
   from that circle. The part's memory has a hole it cannot detect.
 
-The one channel back in is Self. `ifs-nightly-synthesis` reads the **transcript**,
+The one channel back in is Self. SYNTHESIS reads the **transcript**,
 not the short_terms, so Self sees the whole circle regardless; whatever the
 circle changed in `issues/*.toml` reaches every part's `circle_objectives` at
 the next circle start. So an absent part learns of the circle secondhand, from
@@ -559,10 +630,15 @@ Two practical consequences:
 
 This is a difference from the agent-teams path, which always spawns all seven.
 
-Tunables at the top of `circle.py`: `MODEL`, `MAX_TOKENS`, `MAX_SINCE_SELF`,
-`CACHE_TTL`, and the four rate constants. **The rates are verified for
-2026-07-26 and rise on 2026-09-01** — update them then or the cost report will
-understate by ~50%.
+Tunables, none of them actually in `circle.py` (this line said "at the top of
+circle.py" until audit-register.md #21 found otherwise): `MODEL`, `CACHE_TTL`
+and the four rate constants live in `llm_client.py`; `MAX_SINCE_SELF` and
+`MAX_TOKENS` (2500, not the 600 an earlier line in this file also had wrong)
+live in `circle_rounds.py`. **The rates are still $2/$10 per MTok, verified
+2026-07-26 and re-verified 2026-09-01** (audit-register.md #27) — this line
+warned of a rise to $3/$15 on 2026-09-01 that Anthropic cancelled on
+2026-08-10/11, making the $2/$10 introductory rate permanent
+(platform.claude.com/docs/en/about-claude/pricing). Nothing to update.
 
 
 ## The three part files, and which one reaches a prompt
@@ -574,13 +650,15 @@ long_term.md      the RECORD. Identity plus the
                   historic dream corpus. It no
                   longer grows — dreams go to
                   short_terms.
-short_term_<OT>   one circle, and its `## Dreamt`
-                  section. Append-only.
+short_term_<OT>   one circle, and its dreams —
+                  `[[dreamt]]` in the .toml (since
+                  2026-09-04, R434), `## Dreamt` in
+                  a legacy .md. Append-only.
 mid_term.md       the DISTILLATE. The only
                   per-part file a prompt carries.
 ```
 
-`mid_term.py` derives the third from the first two plus every `## Dreamt`
+`part_mid_term_manager.py` derives the third from the first two plus every `## Dreamt`
 section, and `part_identity` reads it. A part with no distillate falls back to
 the raw record — losing an identity to a missing cache file is the worst
 failure available here.
@@ -592,7 +670,7 @@ costs nothing and makes no call.
 `midterms_project.py` is the runbook: survey, pack, derive, write, verify. It
 carries Self's prompt verbatim, the operational form actually run, and the
 improvements still proposed. It cannot be imported — the hyphen is deliberate,
-because everything importable belongs in `mid_term.py`.
+because everything importable belongs in `part_mid_term_manager.py`.
 
 Measured across seven parts on the first full run: **230,324 characters of raw
 `part_identity` became 46,515** — $0.230 of cache write per circle open became

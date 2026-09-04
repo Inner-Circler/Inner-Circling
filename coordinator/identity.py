@@ -21,7 +21,7 @@ THREE NAMES, AND CONFLATING THEM IS THE BUG THIS MODULE PREVENTS.
                             that names Self at all. Never reads
                             configuration — that is the point.
 
-    user_name() the Soul's   the CONSOLE-ONLY display name. Shown at
+    user_name_read() the Soul's   the CONSOLE-ONLY display name. Shown at
                 preferred_   the `Self> ` prompt and in `/help` and
                 name, else   `--identity`. Never written to a
                 $IFS_USER_   transcript, never sent to a model.
@@ -29,7 +29,7 @@ THREE NAMES, AND CONFLATING THEM IS THE BUG THIS MODULE PREVENTS.
                 "Self"       2026-08-23, R325; see
                              soul_preferred_name() below.)
 
-Before DISPLAY existed, `user_name()` was BOTH the comparison key and the
+Before DISPLAY existed, `user_name_read()` was BOTH the comparison key and the
 rendered tag, so personalising the tag would have silently changed every
 comparison — and, after the 2026-08-07 personalisation ruling, would have
 put a real name in front of a model on every circle. The reader below still
@@ -43,7 +43,7 @@ today, a fresh install writes `[Self]:`, and both parse. See
 `HISTORICAL_NAMES` for the parsing side of this — it is unaffected by
 today's ruling, which is about what gets WRITTEN, not what can be READ.
 
-`user_name()` READS `IFS_USER_NAME` FROM THE `.env` FILE ONLY, never from
+`user_name_read()` READS `IFS_USER_NAME` FROM THE `.env` FILE ONLY, never from
 the process environment. `ANTHROPIC_API_KEY` already demonstrated the
 failure mode a process-environment check invites (NEXT.md A16): a stale
 value set hours ago silently outlives the file that was supposed to
@@ -70,7 +70,7 @@ ENV_PROJECT = "IFS_USER_NAME"
 
 def _load_env() -> None:
     """Best-effort .env load into the process environment. Used only by
-    `retired_tags()`, which reads a different variable and is unaffected by
+    `self_retired_tags_read()`, which reads a different variable and is unaffected by
     today's ruling — it exists to recognise old transcripts, never to
     decide what gets written."""
     try:
@@ -97,7 +97,7 @@ def _env_file() -> dict[str, str]:
 # in parts/soul/part.toml [context.answers].preferred_name, and it names the
 # CONSOLE — the same console-only standing $IFS_USER_NAME has under R132:
 # never a transcript, never a model (R329). Read directly
-# with tomllib, the way installed_tags() reads self/identity.toml, because
+# with tomllib, the way self_installed_tags_read() reads self/identity.toml, because
 # this module must stay dependency-light (roster imports it); and read on
 # every call, so a change in the file is the next prompt's name. The Soul is
 # a RESERVED part (docs/BNF.md), which is why a shipped module may name its
@@ -106,7 +106,7 @@ SOUL_DIR = "soul"
 PREFERRED_NAME_KEY = "preferred_name"
 
 
-def consumed_keys() -> tuple:
+def self_consumed_keys_read() -> tuple:
     """The context answers THE MECHANISM READS — 2026-08-28, and the answer to
     a question the audience rule left open.
 
@@ -125,14 +125,14 @@ def consumed_keys() -> tuple:
 
     WHICH LEAVES THIS LIST, and it is declared HERE rather than inferred,
     because "the mechanism reads this" is not visible from the declaration
-    and roster.verify() would otherwise have to guess. Adding a reader of an
+    and roster.part_verify() would otherwise have to guess. Adding a reader of an
     answer means adding its key here, and the check then demands that answer
     declare how it is kept valid.
 
     NO FLAG ON THE QUESTION ITSELF. R329 made the ABSENCE of `render` the
     gate — "not a flag the code has to remember to check" — and a second
     marker saying the same thing from the other side would be one fact in two
-    places, which is the defect check_one_home.py exists for."""
+    places, which is the defect system_unique_home_verify.py exists for."""
     return (PREFERRED_NAME_KEY,)
 
 
@@ -158,7 +158,7 @@ def soul_preferred_name() -> str:
     return v.strip() if isinstance(v, str) else ""
 
 
-def user_name(explicit: str | None = None) -> str:
+def user_name_read(explicit: str | None = None) -> str:
     """The CONSOLE-ONLY display name. Never used as a comparison key, never
     written to a transcript, never sent to a model — see DISPLAY for that.
 
@@ -210,14 +210,14 @@ def user_name_source() -> tuple[str, str]:
 # 2026-08-11 widened the same ruling from "not in an export" to "not
 # written at all" — see the module docstring's DISPLAY. This function's job
 # is now RECOGNITION ONLY: `self_tags()`'s dynamic union still resolves
-# `user_name()` so a transcript carrying whatever name this install used to
+# `user_name_read()` so a transcript carrying whatever name this install used to
 # write (including from before today) still parses. Nothing here decides
 # what gets written any more.
 HISTORICAL_NAMES = ("Self",)
 ENV_RETIRED = "IFS_SELF_TAGS"
 
 
-def retired_tags() -> frozenset[str]:
+def self_retired_tags_read() -> frozenset[str]:
     """Names this installation used to write. Comma-separated, from the
     environment or .env. Empty is the normal case."""
     _load_env()
@@ -225,20 +225,20 @@ def retired_tags() -> frozenset[str]:
     return frozenset(t.strip() for t in raw.split(",") if t.strip())
 
 
-def installed_tags() -> frozenset[str]:
+def self_installed_tags_read() -> frozenset[str]:
     """Names this installation used to write, from the TRACKED file
     `self/identity.toml`. Empty when it is absent, which is the normal case
     for a fresh install and for the shipped bundle — the file never ships.
 
     RULED 2026-08-18 (R234): a historic Self tag must resolve in EVERY
-    environment. `retired_tags()` and `user_name()` both read `.env`, which
+    environment. `self_retired_tags_read()` and `user_name_read()` both read `.env`, which
     is gitignored — present in the main checkout, absent from every
     worktree — so `memory/issue_gate.py` resolved the same transcript line
     to Self in one place and to the part that spoke before it in another,
     and returned two different verdicts on one graph. A tracked file is
     checked out everywhere; that is the whole mechanism.
 
-    Read directly rather than through `self_schema`: this module is
+    Read directly rather than through `REGISTER_CLASS`: this module is
     imported by `roster`, `transcript_store` and `issue_gate`, and must
     stay dependency-light."""
     p = ROOT / "self" / "identity.toml"
@@ -266,14 +266,14 @@ def self_tags(current: str | None = None) -> frozenset[str]:
     """The tags that mean Self: the universal one, this installation's own
     recorded ones, any retired ones, and whatever it writes now.
 
-    `installed_tags()` is the only member that does not depend on the
+    `self_installed_tags_read()` is the only member that does not depend on the
     process environment or on `.env` — see R234, and `self/identity.toml`
     for why it is a tracked file."""
-    return (frozenset(HISTORICAL_NAMES) | installed_tags() | retired_tags()
-            | {current or user_name()})
+    return (frozenset(HISTORICAL_NAMES) | self_installed_tags_read() | self_retired_tags_read()
+            | {current or user_name_read()})
 
 
-def is_self_tag(tag: str, current: str | None = None) -> bool:
+def self_is_tag(tag: str, current: str | None = None) -> bool:
     """True only for a KNOWN Self tag. An unrecognised tag is neither a part
     nor Self, and the caller must refuse it rather than absorb it."""
     return tag in self_tags(current)

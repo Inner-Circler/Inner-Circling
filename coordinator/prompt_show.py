@@ -113,7 +113,7 @@ def _mode(target: str) -> str:
         "=" * 58])
 
 
-def render(target: str) -> str:
+def prompt_show_render(target: str) -> str:
     """The four blocks as `circle.py` would emit them, with placeholders.
 
     **BUILT FROM system_blocks(), NOT REIMPLEMENTED.** The first version
@@ -127,16 +127,15 @@ def render(target: str) -> str:
     if who not in C.PART_TAGS:
         return f"  no such part: {target}"
 
-    core = C.load_shared()
-    briefing, unknown = C.build_briefing([])
-    shared, note = C.shared_block(who, briefing)
+    core = C.group_shared_read()
+    briefing, unknown = C.circle_briefing_build([])
+    blocks, note = C.prompt_part_assemble(who, core, briefing)
     if target == "circle":
         # `note`'s block-4 figure is ONE part's, and this view has no part.
         # It read as a global until the roster went alphabetical (R123) and
         # the exemplar changed from a part with 120 per-part characters to
         # one with none — the number moved, nothing else did.
         note += f" (block-4 figure is {who}'s; shared figures are everyone's)"
-    blocks = C.system_blocks(who, core, shared)
 
     out: list[str] = [_mode(target)]
     for pos, (name, blk) in enumerate(zip(order, blocks), 1):
@@ -177,13 +176,18 @@ def _notes(name: str, note: str, part: str) -> list[str]:
             every circle."""))
     elif name == "part_identity":
         out.append(_box("TO BE SUPPLIED", "dream entries", """
-            Dreaming will condense short_term content
-            into parts/<part>/dreams.toml (2026-08-12
-            ruling) — NOT YET BUILT. NOTHING IS
-            RUNNING — the three scheduled tasks are
-            disabled, so long_term.md and mid_term.md
-            below are as of the last manual/refresh
-            run and will not change on their own."""))
+            audit-register.md #23: this box said
+            dreaming was "NOT YET BUILT... NOTHING IS
+            RUNNING" for weeks after it shipped.
+            Dreaming runs automatically at every live
+            /close (inter_circle.circle_process) and
+            writes this part's parts/<part>/remember.toml
+            (2026-08-12 ruling). mid_term.md below is
+            the DISTILLATE — cached, and re-derived only
+            when its source hash moves (step 8), so a
+            circle that just ran may have written a new
+            dream entry not yet reflected in the
+            mid_term.md this render shows."""))
     return out
 
 
@@ -198,7 +202,7 @@ def main() -> int:
         print(f"  no such part: {target}")
         print(f"  parts: {', '.join(C.PART_TAGS)}")
         return 2
-    print(render(target))
+    print(prompt_show_render(target))
     return 0
 
 

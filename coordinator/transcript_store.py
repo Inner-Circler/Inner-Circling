@@ -14,8 +14,9 @@ unspoken open, the statement line grammar and its exact inverse
 resume), replaying a transcript back into loop state, and the durable
 close records (commit_sandbox/commit_circle/run_verifier).
 
-WHAT DOES NOT. collect_short_terms stays in circle.py — it calls the
-Messages API per part, which makes it close ORCHESTRATION; a
+WHAT DOES NOT. short_term_collect is circle_close.py's (circle.py's until
+2026-09-03) — it calls the Messages API per part, which makes it close
+ORCHESTRATION; a
 persistence module that talks to the network would be the layering
 inversion this split exists to prevent (phase-1 review, 2026-08-16).
 """
@@ -30,11 +31,12 @@ import re
 import subprocess
 import sys
 
+import command_surface as CS
 import identity as ID              # SELF_ID + the display name
 import roster as R
 import seam
-import self_schema as SS
-from paths import ROOT, SANDBOX, SELF_DIR
+import working_set_manager as WS   # the working_sets register (stage 10; REGISTER_CLASS went with it)
+from record_paths import ROOT, SANDBOX
 from write_guard import WriteGuard
 
 # THIS IS A DISPLAY NAME ONLY (R132/R144 — see circle.py's config
@@ -42,33 +44,33 @@ from write_guard import WriteGuard
 # installation WRITES and is only consulted here to recognise what it
 # has written before (parse_transcript's is_self_tag call).
 SELF_DISPLAY = ID.DISPLAY
-CONSOLE_NAME = ID.user_name()
+CONSOLE_NAME = ID.user_name_read()
 
 
 # ------------------------------------------------------------------ transcript file
 # LF everywhere, explicitly. Python's text mode defaults to newline=None, which on
 # Windows translates every "\n" to "\r\n" -- so this script silently wrote CRLF
 # while every file reaching the tree through any other route was LF. That is not a
-# cosmetic split: circle_close.py records each short_term's sha256 at close and
-# re-verifies it at the nightly reconcile, ifs_model.py enforces byte-identical
+# cosmetic split: circle_close_verify.py records each short_term's sha256 at close and
+# re-verifies it at reconcile, ifs_model.py enforces byte-identical
 # dream bodies, and git is the rollback target. All three need bytes to be stable
 # and to mean one thing. (Fixed 2026-07-26; the eight CRLF files from
 # circle_2026-07-26_1910 are left as-is -- their hashes are already in
 # work/logs/close_2026-07-26_1910.json and rewriting them would fake a DRIFT.)
-def write_lf(path: pathlib.Path, text: str) -> None:
+def record_lf_write(path: pathlib.Path, text: str) -> None:
     path.write_text(text, encoding="utf-8", newline="\n")
 
 
-def open_transcript(guard: WriteGuard, path: pathlib.Path, ot: str, topic: str) -> None:
+def circle_transcript_open(guard: WriteGuard, path: pathlib.Path, ot: str, topic: str) -> None:
     guard.check(path)
     path.parent.mkdir(parents=True, exist_ok=True)
     head = f"# Circle — {topic or '(no topic)'} — {ot}\n\n"
     if topic:
         head += f"CIRCLE: {topic}\n"
-    write_lf(path, head)
+    record_lf_write(path, head)
 
 
-def append(guard: WriteGuard, path: pathlib.Path, line: str) -> None:
+def circle_transcript_append(guard: WriteGuard, path: pathlib.Path, line: str) -> None:
     guard.check(path)
     with open(path, "a", encoding="utf-8", newline="\n") as f:
         f.write("\n" + line + "\n")
@@ -85,66 +87,9 @@ def append(guard: WriteGuard, path: pathlib.Path, line: str) -> None:
 # records what was actually sent, so the working set stays recoverable from
 # the capture even years later.
 
-WORKING_SETS = SELF_DIR / "working_sets.toml"
-
-# NEXT.md B14, R210 (2026-08-17): working_sets.md -> .toml, the same
-# self_schema.py registers under self/ already use. No id, no next_id —
-# nothing cites an entry by id, only by its own `circle` field, and the
-# register-intake gate (bnf_conformance.py) binds only next_id-bearers.
-#
-# ONE PREAMBLE, defined once, used by both the lazy-create path below and
-# the one-off migration driver that moved the .md file's one row across
-# (not checked in — self_schema.py's own docstring names dropping a
-# preamble in a format migration as the failure this project keeps
-# finding). Wrapped via SS.wrap() at import time, same as every other
-# self/*.toml register's preamble — an unwrapped single line would be
-# unreadable in a diff and would trip the 116-char line limit.
-WORKING_SETS_PREAMBLE = SS.wrap(
-    "Which issues each circle was shown, chosen by Self at open. "
-    "chosen is \"none\" for no issues at all (the blank answer's meaning "
-    "since the default flipped, R301), [] for the whole live graph (all), "
-    "or the issue ids. Ruled 2026-08-03. Withdrawn in "
-    "the one case ruled 2026-08-09: a circle that died before its first "
-    "statement leaves no trace, so its transcript is removed and this "
-    "entry with it. An entry naming a transcript that does not exist is "
-    "a dangling reference, not a record of what a room was shown. "
-    "Nothing else is ever removed, and nothing is ever edited in place.")
-
-WORKING_SET_ORDER = ("circle", "chosen", "topic")
-
-
-def _working_sets_doc() -> dict:
-    if WORKING_SETS.is_file():
-        return SS.load(WORKING_SETS)
-    return {"register": "working_sets",
-            "doc": {"preamble": WORKING_SETS_PREAMBLE}, "working_set": []}
-
-
-def record_working_set(ot: str, chosen: "list[str] | None", topic: str,
-                       live: bool) -> None:
-    """Append to self/working_sets.toml. A history, so a later reading of a
-    transcript can ask what the room was shown, not only what it said.
-
-    `chosen` carries the working set's three states (ask_working_set):
-    None — no issues at all, recorded as the grammar's own word, "none",
-    because TOML has no null; [] — the whole live graph; a list — those
-    issues. `list(chosen)` unconditionally raised TypeError on None, which
-    was every live open whose blank answer took the default — the suites
-    never saw it because the sandbox returns before the append.
-
-    topic is stored whole — the truncate-to-100-chars-plus-ellipsis rule
-    the .md form used was a display convention for a flat file, not a
-    property of the data; the transcript always held the whole thing."""
-    if not live:
-        return
-    WORKING_SETS.parent.mkdir(parents=True, exist_ok=True)
-    doc = _working_sets_doc()
-    doc["working_set"].append(
-        {"circle": ot,
-         "chosen": "none" if chosen is None else list(chosen),
-         "topic": topic})
-    SS.save(WORKING_SETS, doc, "working_set", WORKING_SET_ORDER)
-
+# THE working_sets REGISTER — WORKING_SETS, its preamble and ORDER, working_set_record()
+# and _withdraw_working_set() — MOVED to working_set_manager.py, 2026-09-03 (cohesion
+# re-homing stage 10). circle_transcript_discard_empty() below still withdraws through it.
 
 # ------------------------------------------------- discarding an unspoken open
 # RULED 2026-08-09: a run that dies before its first statement leaves NO
@@ -158,30 +103,7 @@ def record_working_set(ot: str, chosen: "list[str] | None", topic: str,
 # a no-op — a partial transcript is a real record, crash-safe by design, and
 # resumable. That makes the discard safe to attempt from any exit path rather
 # than only from the ones someone remembered to cover.
-def _withdraw_working_set(ot: str, live: bool) -> None:
-    """Remove this circle's working-set entry. The register's own preamble
-    says appended-and-withdrawn: an entry naming a transcript that does not
-    exist is not a record of what a room was shown, it is a dangling
-    reference. Nothing else reads this file.
-
-    Removes every row matching `ot` rather than only the last (the .md form's
-    `rfind` found the LAST occurrence because entries were appended in file
-    order and never reordered) — `circle` is unique per open, so the two are
-    equivalent in practice; this is the simpler statement of the invariant,
-    not a behavior change. atomic_write is LF-only regardless of what wrote
-    the bytes it replaces — see its own docstring."""
-    if not live or not WORKING_SETS.is_file():
-        return
-    doc = _working_sets_doc()
-    rows = doc.get("working_set", [])
-    kept = [row for row in rows if row.get("circle") != ot]
-    if len(kept) == len(rows):
-        return
-    doc["working_set"] = kept
-    SS.save(WORKING_SETS, doc, "working_set", WORKING_SET_ORDER)
-
-
-def discard_empty_open(path: pathlib.Path, ot: str, head: bytes,
+def circle_transcript_discard_empty(path: pathlib.Path, ot: str, head: bytes,
                        live: bool) -> bool:
     """True if a transcript that was opened and never spoken in was removed."""
     try:
@@ -190,7 +112,7 @@ def discard_empty_open(path: pathlib.Path, ot: str, head: bytes,
     except OSError:
         return False
     path.unlink()
-    _withdraw_working_set(ot, live)
+    WS._withdraw_working_set(ot, live)
     return True
 
 
@@ -232,7 +154,7 @@ _HEAD_RE = re.compile(r"# Circle — (.*) — (\d{4}-\d{2}-\d{2}_\d{4})")
 # broke reading 56 lines carrying the earlier spelling — `unknown speaker
 # tag`, raised on a transcript this project wrote itself. The record is
 # never rewritten, so the reader has to carry the history. Same shape as
-# identity.HISTORICAL_NAMES for Self, and circle_close.TAG_TO_DIR for the
+# identity.HISTORICAL_NAMES for Self, and roster.DIR_BY_TAG_ALL for the
 # close verifier.
 #
 # WHERE THAT HISTORY LIVES IS NOW A PART'S OWN FILE (R123). It was a dict
@@ -244,7 +166,7 @@ _HEAD_RE = re.compile(r"# Circle — (.*) — (\d{4}-\d{2}-\d{2}_\d{4})")
 TAG_TO_PART = dict(R.DIR_BY_TAG_ALL)
 
 
-def render_line(e: dict) -> str:
+def circle_transcript_line_render(e: dict) -> str:
     """The exact line `append` was given for this entry.
 
     `raw` WINS OVER `text` WHEREVER IT IS PRESENT. Since 2026-08-18 the two
@@ -259,7 +181,7 @@ def render_line(e: dict) -> str:
     raw = e.get("raw")
     if raw is not None:
         e = {**e, "text": raw}
-    if e["speaker"] == "__scribe__":
+    if e["speaker"] == "__coordinator__":
         return e["text"]
     if e["speaker"] == ID.SELF_ID:
         # THE RECORD'S OWN DISPLAY, NOT THE CONFIGURED NAME. A resumed
@@ -271,10 +193,10 @@ def render_line(e: dict) -> str:
     return statement_line(e["display"], e.get("to"), e["text"])
 
 
-def render_transcript(ot: str, topic: str, transcript: list[dict]) -> str:
+def circle_transcript_render(ot: str, topic: str, transcript: list[dict]) -> str:
     """Rebuild the whole file from the in-memory transcript.
 
-    Mirrors open_transcript() + one append() per entry, and nothing else. If
+    Mirrors circle_transcript_open() + one circle_transcript_append() per entry, and nothing else. If
     this ever drifts from those two functions the round-trip check fails and
     resume stops working — which is the intended failure, loud and immediate."""
     # THE HEADER IS RE-EMITTED, NOT RE-DERIVED. A coordinator transcript
@@ -294,11 +216,11 @@ def render_transcript(ot: str, topic: str, transcript: list[dict]) -> str:
     for e in transcript:
         if e.get("is_topic"):
             continue                      # carried by the CIRCLE: line above
-        out += "\n" + render_line(e) + "\n"
+        out += "\n" + circle_transcript_line_render(e) + "\n"
     return out
 
 
-def withheld(e: dict) -> bool:
+def circle_transcript_is_withheld(e: dict) -> bool:
     """RECORDED, BUT NEVER IN THE ROOM. One predicate for the whole class,
     added 2026-08-18 when it gained its second member.
 
@@ -310,13 +232,13 @@ def withheld(e: dict) -> bool:
 
     FOUR READERS MUST AGREE, and until this existed they agreed by
     coincidence. render_messages() must not show it to a part;
-    rebuild_state() must not move a counter for it; statements() must not
-    let /issue-evidence-add address it; addressed_since() must count it as
+    circle_transcript_state_rebuild() must not move a counter for it; statements() must not
+    let /issue-evidence-add address it; part_addressed_since() must count it as
     neither a statement nor an address. Each was its own `e.get("cmd")`
     test or no test at all, so adding a second member meant finding all
     four — and the one that gets missed fails silently, in one direction
     only. The live/resume divergence rebuild_state's own comment records is
-    exactly that shape, and addressed_since() had no test whatsoever."""
+    exactly that shape, and part_addressed_since() had no test whatsoever."""
     # recall_only joined 2026-08-30 (R402), the THIRD member: a statement
     # that was ENTIRELY a [recall: ...] — the query reaches the file, the
     # room hears a pass, and the answer rides privately in that part's own
@@ -342,12 +264,12 @@ def _split_remember(e: dict) -> None:
     before the ruling, and `render_line`'s lookup falls through to `text`
     exactly as it always did.
 
-    Calls markers.strip_remember() — the one spelling of "strip and tidy",
+    Calls annotations.remember_strip() — the one spelling of "strip and tidy",
     shared with the live path, so a resumed circle's in-memory statement is
     byte-identical to what a live one held. The import is function-local:
-    markers.py reaches into the issue-graph modules, and this file is
+    annotations.py reaches into the issue-graph modules, and this file is
     imported by things that have no business pulling those in."""
-    import markers as MK
+    import annotations as MK
     import recall_index as RC
     has_rem = bool(MK.REMEMBER_RE.search(e["text"]))
     has_rec = bool(RC.RECALL_RE.search(e["text"]))
@@ -356,12 +278,12 @@ def _split_remember(e: dict) -> None:
     e["raw"] = e["text"]
     text = e["text"]
     if has_rem:
-        text = MK.strip_remember(text)
+        text = MK.remember_strip(text)
     if has_rec:
         # The recall bracket takes the identical resume treatment (R402):
         # strip_recall is spelled once, in recall_index, for the same
-        # byte-identity reason strip_remember is spelled once in markers.
-        text = RC.strip_recall(text)
+        # byte-identity reason strip_remember is spelled once in annotations.
+        text = RC.recall_strip(text)
     e["text"] = text
     # SELF-IDENTIFYING ON THE WAY BACK IN, the same discipline the `cmd`
     # flag follows ("a recorded Self line beginning `/` can only be an
@@ -371,11 +293,11 @@ def _split_remember(e: dict) -> None:
     # RESUMED circle from replaying it as a real turn and handing a part a
     # statement the live run never gave it.
     #
-    # SET OR CLEAR, never just set (2026-08-19). parse_transcript()'s
+    # SET OR CLEAR, never just set (2026-08-19). circle_transcript_parse()'s
     # continuation merge re-runs this on a statement it may have flagged a
     # block earlier: "[remember: x]\n\nMore text" parses as a bracket-only
     # block (flag set) plus a continuation (text re-derived as "More
-    # text"). Leaving the stale flag standing made withheld() hide the
+    # text"). Leaving the stale flag standing made circle_transcript_is_withheld() hide the
     # SPOKEN statement from the whole room on resume — the counters and
     # every part's view silently diverged from what the live loop held.
     if not e["text"]:
@@ -408,7 +330,7 @@ ANNOUNCED_RE = re.compile(
     r"transcript: (.+circle_\d{4}-\d{2}-\d{2}_\d{4}\.md)\s*$")
 
 
-def announced_path(emitted) -> pathlib.Path | None:
+def circle_transcript_announced_locate(emitted) -> pathlib.Path | None:
     """The transcript path circle.py announced, scraped from what it emitted.
 
     `emitted` is one emitted line or an iterable of them; the first match
@@ -427,7 +349,7 @@ def announced_path(emitted) -> pathlib.Path | None:
     return None
 
 
-def parse_transcript(raw: str) -> tuple[str, str, list[dict]]:
+def circle_transcript_parse(raw: str) -> tuple[str, str, list[dict]]:
     """(open_time, topic, transcript). Raises ValueError on anything unexpected.
 
     Deliberately strict. A transcript is the project's only literal record; a
@@ -473,28 +395,28 @@ def parse_transcript(raw: str) -> tuple[str, str, list[dict]]:
             if note:
                 # A statement whose LAST paragraph is only its
                 # [remember: ...] bracket writes bytes indistinguishable
-                # from a coordinator note — and render_messages() carries
-                # every Scribe line into every part's prompt, so reading
+                # from a Coordinator note — and render_messages() carries
+                # every Coordinator line into every part's prompt, so reading
                 # it as one handed the private annotation to the whole
                 # room on resume (found 2026-08-19; the round-trip check
-                # could not catch it, because a Scribe note re-renders
+                # could not catch it, because a Coordinator note re-renders
                 # byte-identically too). A bracket-shaped block that
-                # carries a remember marker and follows a real statement
+                # carries a remember annotation and follows a real statement
                 # is that statement's continuation, never a note: the
                 # coordinator's own notes carry no remember bracket, by
                 # construction. Function-local import for the same reason
                 # _split_remember's is.
-                import markers as MK
+                import annotations as MK
                 import recall_index as RC
                 if ((MK.REMEMBER_RE.search(body)
                      or RC.RECALL_RE.search(body)) and transcript
                         and not transcript[-1].get("is_topic")
-                        and transcript[-1].get("speaker") != "__scribe__"):
+                        and transcript[-1].get("speaker") != "__coordinator__"):
                     note = False        # fall through to the merge below
             if note:
                 # A note the coordinator wrote for readers — the blind-round
                 # marker and its kin. Parts never see a speaker for it.
-                transcript.append({"speaker": "__scribe__", "display": "Scribe",
+                transcript.append({"speaker": "__coordinator__", "display": "Coordinator",
                                    "text": body})
                 continue
             # A PARAGRAPH BREAK INSIDE A STATEMENT. `append` writes "\n" + line
@@ -528,7 +450,7 @@ def parse_transcript(raw: str) -> tuple[str, str, list[dict]]:
             if to:
                 e["to"] = to
             transcript.append(e)
-        elif ID.is_self_tag(display, CONSOLE_NAME):
+        elif ID.self_is_tag(display, CONSOLE_NAME):
             # A KNOWN SELF TAG — parts are matched first, then this. Before
             # 2026-08-07 the test compared against one hardcoded name, so a
             # transcript was readable only by the installation that wrote it.
@@ -561,17 +483,17 @@ def parse_transcript(raw: str) -> tuple[str, str, list[dict]]:
     return ot, topic, transcript
 
 
-def rebuild_state(transcript: list[dict], parts: list[str]) -> tuple[dict, dict, list]:
+def circle_transcript_state_rebuild(transcript: list[dict], parts: list[str]) -> tuple[dict, dict, list]:
     """Replay the transcript to recover exactly what the loop was holding.
 
-    Mirrors the two places the live loop mutates this state: run_round /
-    run_blind_round increment a part and set `last`; a Self statement resets
+    Mirrors the two places the live loop mutates this state: circle_round_run /
+    circle_blind_round_run increment a part and set `last`; a Self statement resets
     every count to 0 and clears `last`, per process_core."""
     since_self = {p: 0 for p in parts}
     state = {"last": None}
     absent = []
     for e in transcript:
-        if e.get("is_topic") or e["speaker"] == "__scribe__":
+        if e.get("is_topic") or e["speaker"] == "__coordinator__":
             continue
         # RULED 2026-08-04 (D16, "no"): a /command does NOT reset the
         # counters. The room never heard it — that is the whole of the
@@ -584,7 +506,7 @@ def rebuild_state(transcript: list[dict], parts: list[str]) -> tuple[dict, dict,
         # entry reset the counts. A circle resumed after a command would
         # have granted every part a fresh two statements that the original
         # run did not. Found by testing the ruling rather than the code.
-        if withheld(e):
+        if circle_transcript_is_withheld(e):
             continue
         if e["speaker"] == ID.SELF_ID:
             since_self = {p: 0 for p in parts}
@@ -598,16 +520,16 @@ def rebuild_state(transcript: list[dict], parts: list[str]) -> tuple[dict, dict,
     return since_self, state, sorted(set(absent))
 
 
-def load_for_resume(path: pathlib.Path, ot: str,
+def circle_transcript_resume_read(path: pathlib.Path, ot: str,
                     parts: list[str]) -> tuple[str, list[dict], dict, dict]:
     """Read a transcript back, PROVING the read is faithful before returning it."""
     if not path.is_file():
         raise ValueError(f"no transcript at {path}")
     raw = path.read_text(encoding="utf-8")
-    got_ot, topic, transcript = parse_transcript(raw)
+    got_ot, topic, transcript = circle_transcript_parse(raw)
     if got_ot != ot:
         raise ValueError(f"header says {got_ot}, filename says {ot}")
-    rendered = render_transcript(ot, topic, transcript)
+    rendered = circle_transcript_render(ot, topic, transcript)
     if rendered != raw:
         n = next((k for k in range(min(len(raw), len(rendered)))
                   if raw[k] != rendered[k]), min(len(raw), len(rendered)))
@@ -618,7 +540,7 @@ def load_for_resume(path: pathlib.Path, ot: str,
             f"     re-render:{rendered[n:n + 60]!r}\n"
             "     The parser and the writer disagree, so anything read from\n"
             "     here would be a guess. Nothing was modified.")
-    since_self, state, absent = rebuild_state(transcript, parts)
+    since_self, state, absent = circle_transcript_state_rebuild(transcript, parts)
     if absent:
         raise ValueError(
             f"transcript contains part(s) not in this roster: {', '.join(absent)}\n"
@@ -627,7 +549,7 @@ def load_for_resume(path: pathlib.Path, ot: str,
 
 
 # ------------------------------------------------------------------ close records
-def commit_sandbox(ot: str) -> None:
+def circle_sandbox_commit(ot: str) -> None:
     """B13, ruled 2026-08-03 (D10). A sandbox circle commits its OWN output
     and nothing else.
 
@@ -675,9 +597,9 @@ def commit_sandbox(ot: str) -> None:
         return
     marks_ = {"ok": "  ", "did": "  ", "warn": "  ", "note": "  ",
               "fail": "  !! "}
-    G.commit_paths(paths, f"sandbox circle {ot}",
+    G.system_git_paths_commit(paths, f"sandbox circle {ot}",
                    lambda k, m: seam.emit("command", f"{marks_[k]}{m}"),
-                   tag=G.tag_name("circle", "sandbox", ot))
+                   tag=G.system_git_tag_name_read("circle", "sandbox", ot))
 
 
 def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
@@ -696,7 +618,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
 
     The close's own order is what makes staging them here correct rather
     than hopeful: `vet_pending_proposals("at close", ...)` runs before
-    `mark_close_started()`, which runs before the short_terms, the verifier
+    `circle_close_mark()`, which runs before the short_terms, the verifier
     and this commit, so both files are final by the time it fires. And
     SYNTHESIS does not write either — it reads confirmed proposals — so the
     second commit has no later state of them to carry.
@@ -706,7 +628,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
 
     The two work/logs markers — `closing_<OT>.json` and `dream_<OT>.json` —
     are deliberately NOT here. They are memos, not records: the close
-    report supersedes the first (`mark_close_started`: "IT IS NEVER
+    report supersedes the first (`circle_close_mark`: "IT IS NEVER
     DELETED. A close report supersedes it") and the `dream/<OT>` tag is the
     authority for the second. `.gitignore` carries both, with that reason
     written beside them."""
@@ -718,7 +640,11 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     for pdir in sorted((ROOT / "work" / "prompts").glob(f"{ot}*")):
         if pdir.is_dir():
             paths += sorted(pdir.glob("*"))
-    paths += [ROOT / "parts" / p / f"short_term_{ot}.md" for p in written]
+    # THE REAL FILE, by suffix — .toml since R434 (B96, 2026-09-04), .md for a
+    # resumed pre-B96 close; the one locator decides, never a spelled suffix.
+    import short_term_manager as STM
+    paths += [STM.short_term_locate(ROOT / "parts" / p, ot)
+              or ROOT / "parts" / p / STM.short_term_name(ot) for p in written]
     # The graph-rulings record, when this circle wrote one. commit_sandbox
     # always staged its sandbox twin; the live path omitted it (2026-08-18
     # review, tier 2 #18), so the one file the gate's provenance greps
@@ -730,7 +656,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     return paths
 
 
-def commit_circle(ot: str, written: list[str]) -> None:
+def circle_commit(ot: str, written: list[str]) -> None:
     """Record this circle in git: the transcript, each short_term it wrote, and
     the close report. ONLY those paths — never `add -A`, so a file you were
     editing while the circle ran is not swept into a machine commit.
@@ -750,20 +676,28 @@ def commit_circle(ot: str, written: list[str]) -> None:
     marks_ = {"ok": "  ", "did": "  ", "warn": "  ", "note": "  ", "fail": "  !! "}
 
     def log(kind, msg):
-        seam.emit("command", f"{marks_[kind]}{msg}")
+        # GIT MECHANICS ARE TECHNICAL DETAIL (2026-09-01): "ok"/"did"/"warn"/
+        # "note" are routine narration, dev-gated same as everywhere else in
+        # the close. "fail" is the one kind that always reaches the pane —
+        # there is no OTHER signal for this commit's own failure (unlike
+        # circle_close_verifier_run()/process_circle(), which each have their own
+        # unconditional fail() at the call site), so hiding it here would be
+        # silent, not quiet.
+        if CS.dev_mode or kind == "fail":
+            seam.emit("command", f"{marks_[kind]}{msg}")
 
     paths = circle_commit_paths(ot, written)
-    seam.emit("command")
-    G.commit_paths(paths, f"circle {ot}: {len(written)} short_term(s)", log,
-                   tag=G.tag_name("circle", ot))
+    if CS.dev_mode:
+        seam.emit("command")
+    G.system_git_paths_commit(paths, f"circle {ot}: {len(written)} short_term(s)", log,
+                   tag=G.system_git_tag_name_read("circle", ot))
 
 
-def run_verifier(ot: str) -> int:
+def circle_close_verifier_run(ot: str) -> int:
     """Returns the verifier's exit code. A non-zero code means the close report
     records a missing short_term — the caller must NOT report a clean close."""
-    cmd = [sys.executable, str(ROOT / "coordinator" / "circle_close.py"),
+    cmd = [sys.executable, str(ROOT / "coordinator" / "circle_close_verify.py"),
            "--short-term-only", "--open-time", ot, "--write-report"]
-    seam.emit("command", f"\n  $ {' '.join(cmd)}")
     # CAPTURED, never inherited (the operator's lab close, 2026-08-30): a child
     # writing to the real stdout lands inside the Ticker bridge's NDJSON
     # protocol stream, and every report line arrives as a loud
@@ -773,13 +707,19 @@ def run_verifier(ot: str) -> int:
     env = dict(os.environ, PYTHONIOENCODING="utf-8")
     r = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, text=True,
                        encoding="utf-8", errors="replace", env=env)
-    for line in (r.stdout or "").splitlines():
-        seam.emit("command", line.rstrip())
-    for line in (r.stderr or "").splitlines():
-        seam.emit("command", f"  !! {line.rstrip()}")
-    seam.emit("command", f"  verifier exit {r.returncode}"
-              + ("" if r.returncode == 0 else "  <-- ACTION NEEDED"))
+    # THE SUBPROCESS INVOCATION + RELAY ARE TECHNICAL DETAIL (2026-09-01),
+    # shown in full whenever it actually matters — dev mode, or a non-zero
+    # exit, which is the ACTION-NEEDED case seam.fail() below announces
+    # unconditionally either way. A clean run says nothing beyond that.
+    if CS.dev_mode or r.returncode != 0:
+        seam.emit("command", f"\n  $ {' '.join(cmd)}")
+        for line in (r.stdout or "").splitlines():
+            seam.emit("command", line.rstrip())
+        for line in (r.stderr or "").splitlines():
+            seam.emit("command", f"  !! {line.rstrip()}")
+        seam.emit("command", f"  verifier exit {r.returncode}"
+                  + ("" if r.returncode == 0 else "  <-- ACTION NEEDED"))
     if r.returncode != 0:
-        seam.fail(f"circle_close.py exited {r.returncode} — the close report "
+        seam.fail(f"circle_close_verify.py exited {r.returncode} — the close report "
                   f"work/logs/close_{ot}.json records an unmet short_term")
     return r.returncode

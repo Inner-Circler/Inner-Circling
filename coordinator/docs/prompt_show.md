@@ -71,10 +71,10 @@ if (no arguments) then {
 - (`--minimal` retired with the practice mode, R360 2026-08-27 — the live rendering is the one rendering.)
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `sys`, `textwrap` (imported locally in `_box`). Sibling modules, imported locally where used: `circle` (as `C`, for `C.block_order()`, `C.PART_TAGS`, `C.load_shared()`, `C.build_briefing()`, `C.shared_block()`, `C.system_blocks()`). No third-party packages, no network access.
+Standard library: `pathlib`, `sys`, `textwrap` (imported locally in `_box`). Sibling modules, imported locally where used: `prompt_build` (as `C` — `circle` until phase 2 stage 2 — for `C.block_order()`, `C.PART_TAGS`, `C.group_shared_read()`, `C.circle_briefing_build()`, `C.prompt_part_assemble()`; the retired `shared_block`/`system_blocks` pair became that last call 2026-09-02). No third-party packages, no network access.
 
 ## EXTERNAL FILES
-Read: nothing directly. Everything this file reads is read indirectly through `circle.py`'s own loader/builder functions (`load_shared()` for `process_core.md`; `build_briefing()` for circle_objectives — `issues/issue_model.md` and the live `issues/*.toml` graph), which pull in the project's objectives/core sources. The OC/open-concerns register is retired outright, 2026-08-13, and `self/issues_narrative.md` at B46, 2026-08-17; no successor source stands in either's place.
+Read: nothing directly. Everything this file reads is read indirectly through `circle.py`'s own loader/builder functions (`group_shared_read()` for `process_core.md`; `circle_briefing_build()` for circle_objectives — `issues/issue_model.md` and the live `issues/*.toml` graph), which pull in the project's objectives/core sources. The OC/open-concerns register is retired outright, 2026-08-13, and `self/issues_narrative.md` at B46, 2026-08-17; no successor source stands in either's place.
 
 Written: none. This is a pure read-and-render tool.
 
@@ -118,11 +118,11 @@ Formats a block header: position, name, character count, and an optional note li
 if (target is a part name and not a known roster tag) then {
     return "no such part: <target>".
 } else {
-    load core (process_core.md, via load_shared()) and circle_objectives
-    (via build_briefing([]) — the same construction for every
+    load core (process_core.md, via group_shared_read()) and circle_objectives
+    (via circle_briefing_build([]) — the same construction for every
     circle, differing only in how richly `## Issues`
     renders and whether the relations brief/narrative are included); if
-    build the who's shared_block() and full system_blocks() exactly as
+    build the who's full system blocks — prompt_part_assemble() — exactly as
     circle.py would.
     start output with the mode banner.
     for each block position/name in order:
@@ -152,7 +152,7 @@ if (name == "circle_identity") then {
 } else if (name == "circle_objectives") then {
     emit a TO BE SUPPLIED box for the working set (embedding the note
     text passed in, and explaining that this block IS the working-set
-    issue projection and relations brief, built by build_briefing() —
+    issue projection and relations brief, built by circle_briefing_build() —
     the same construction for every circle).
 } else if (name == "part_identity") then {
     emit a TO BE SUPPLIED box for dream entries, noting dreaming

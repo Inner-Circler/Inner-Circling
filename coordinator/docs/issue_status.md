@@ -11,7 +11,7 @@ issue_status.py — change one or more nodes' status as a single atomic act: the
 
 Before writing anything, the script checks graph closure: since an edge is legal only when both of its ends are live, demoting a node out of `live` can invalidate an edge belonging to some other node this command was never pointed at, and any such break is refused outright rather than silently repaired — retiring the offending edge is treated as its own separate ruling, and inferring it here would be the program making a decision that belongs to a human.
 
-After a real (non-dry-run) status change, the script also re-runs a fixed chain of downstream generators — today two: `issue_index.py`, `issue_gate.py`. A third, `check_issues.py --project`, was removed from this chain 2026-08-11 alongside `self/circle_briefing.md`'s own retirement: that step used to regenerate the file circle_objectives was read from, and the docstring originally framed the whole chain as needed because "a demoted node would otherwise keep being presented to the room as live until the next scheduled nightly run." `circle.py::build_briefing()` now reads `issues/*.toml` directly at prompt-assembly time, so a status change is reflected the moment the next circle opens — there is no projection step left to miss. A fourth, `issue_draw.py issues/`, was dropped 2026-08-13: `issue_draw.py` was then a development tool — a picture for a human to read, nothing a part or a gate reads back — so it moved to `work/graph/` beside its own output and stopped being auto-regenerated here. **It is auto-regenerated again since 2026-08-27, from elsewhere and on a different trigger:** the script now lives at `ui/issue_draw.py`, it ships, and `coordinator/circle.py` redraws it at every live `/close` whose graph actually moved (`--if-stale`). This chain still does not run it and should not — once per circle, not once per ruling. A status change made outside a circle leaves the picture stale until the next live close, or until `python ui/issue_draw.py issues/` is run by hand. See `ui/docs/issue_draw.md`.
+After a real (non-dry-run) status change, the script also re-runs a fixed chain of downstream generators — today two: `issue_index.py`, `issue_gate.py`. A third, `check_issues.py --project`, was removed from this chain 2026-08-11 alongside `self/circle_briefing.md`'s own retirement: that step used to regenerate the file circle_objectives was read from, and the docstring originally framed the whole chain as needed because "a demoted node would otherwise keep being presented to the room as live until the next scheduled nightly run." `group_attention.py::circle_briefing_build()` now reads `issues/*.toml` directly at prompt-assembly time, so a status change is reflected the moment the next circle opens — there is no projection step left to miss. A fourth, `issue_draw.py issues/`, was dropped 2026-08-13: `issue_draw.py` was then a development tool — a picture for a human to read, nothing a part or a gate reads back — so it moved to `work/graph/` beside its own output and stopped being auto-regenerated here. **It is auto-regenerated again since 2026-08-27, from elsewhere and on a different trigger:** the script now lives at `ui/issue_draw.py`, it ships, and `coordinator/circle.py` redraws it at every live `/close` whose graph actually moved (`--if-stale`). This chain still does not run it and should not — once per circle, not once per ruling. A status change made outside a circle leaves the picture stale until the next live close, or until `python ui/issue_draw.py issues/` is run by hand. See `ui/docs/issue_draw.md`.
 
 ## MAIN
     parse arguments: one or more node ids, required --to (a legal status),
@@ -20,6 +20,12 @@ After a real (non-dry-run) status change, the script also re-runs a fixed chain 
     load every node in the graph (_load_all());
     if (any given node id is not in the graph) then {
         print "no such issue: <ids>"; return 2
+    }
+    if (any given node has its root flag set) then {
+        print "REFUSED" naming it as root and that a root is never
+            retired, demoted, or moved to any other status; return 2
+        (NEW, R429, 2026-09-01 — before this ruling
+        nothing here treated root specially at all)
     }
     if (any given node already has the target status) then {
         print "already `<status>`" listing them; return 2
@@ -47,7 +53,7 @@ After a real (non-dry-run) status change, the script also re-runs a fixed chain 
                 fall back to a plain filesystem rename
             }
         }
-        save the mutated document (via issue_schema.save) to the
+        save the mutated document (via issue_schema.issue_write) to the
             destination path
     }
 
@@ -70,24 +76,24 @@ After a real (non-dry-run) status change, the script also re-runs a fixed chain 
 
 ## COMMAND-LINE ARGUMENTS
 - `nodes` (required, one or more positional arguments): the node ids to move, each a bare id like `nNNNN`.
-- `--to STATUS` (required): the target status; must be one of `issue_schema.STATUSES` (live/root/settled/declined/retired/lead).
+- `--to STATUS` (required): the target status; must be one of `issue_schema.STATUSES` (live/settled/declined/retired/lead — `root` is NOT one of these since R429, 2026-09-01: it is a permanence flag on a live node, not a status a node moves to).
 - `--ruled TEXT` (optional, default empty): the human's own words explaining the ruling, written verbatim into the history line if given.
 - `--source REF` (optional, default empty): the circle or session identifier the ruling was made in, recorded in the history line if given.
 - `--dry-run` (optional flag): compute and print the full plan (transitions, renames, history excerpts) but write nothing and skip the downstream regeneration chain entirely.
 
 ## DEPENDENCIES
-Standard library: `argparse`, `datetime`, `pathlib`, `subprocess`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.DISPLAY` — a fixed, non-identifying display string, "Self," written into the history line as "Ruled by Self." Before R132 (2026-08-11) this line called `ID.user_name()`, a per-installation configurable label; that ruling closed personalization for anything reaching a prompt, since a node's provenance text is read directly into circle_objectives (`circle.py::build_briefing()` via `check_issues.block()`)); `issue_schema` (as `S`, for `S.nodes()`, `S.load()`, `S.path_for()`, `S.save()`, `S.STATUSES`, `S.ROOT`). External program: `git` (invoked via `subprocess.run(["git", "mv", ...])` for renames that preserve file history) and Python itself (`sys.executable`, to invoke the two downstream coordinator scripts as subprocesses).
+Standard library: `argparse`, `datetime`, `pathlib`, `subprocess`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.DISPLAY` — a fixed, non-identifying display string, "Self," written into the history line as "Ruled by Self." Before R132 (2026-08-11) this line called `ID.user_name()`, a per-installation configurable label; that ruling closed personalization for anything reaching a prompt, since a node's provenance text is read directly into circle_objectives (`group_attention.py::circle_briefing_build()` via `issue_prompt_projection.issue_block_render()`)); `issue_schema` (as `S`, for `S.issue_nodes_read()`, `S.issue_read()`, `S.issue_locate()`, `S.issue_write()`, `S.STATUSES`, `S.ROOT`). External program: `git` (invoked via `subprocess.run(["git", "mv", ...])` for renames that preserve file history) and Python itself (`sys.executable`, to invoke the two downstream coordinator scripts as subprocesses).
 
 ## EXTERNAL FILES
 Read: every `issues/*nNNNN.toml` node file, via `issue_schema` (`_load_all()`).
 
-Written: the TOML file for each node being moved, at its new status-prefixed path (via `issue_schema.save()`), with the old path removed via `git mv` or a plain rename when the destination path differs — all skipped entirely under `--dry-run`. Indirectly, whatever the two downstream scripts (`issue_index.py`, `issue_gate.py`) themselves write, run as a fixed chain immediately after a real (non-dry-run) status change.
+Written: the TOML file for each node being moved, at its new status-prefixed path (via `issue_schema.issue_write()`), with the old path removed via `git mv` or a plain rename when the destination path differs — all skipped entirely under `--dry-run`. Indirectly, whatever the two downstream scripts (`issue_index.py`, `issue_gate.py`) themselves write, run as a fixed chain immediately after a real (non-dry-run) status change.
 
 ## NETWORK ACCESS
 None directly. (The downstream scripts it invokes are not verified here beyond their designations; other docs in this set describe `issue_gate.py` and `issue_index.py` as read-only/local.)
 
 ## HUMAN I/O
-Stdout only, no stdin. Prints unknown-node and already-at-status errors, a REFUSED closure-violation report with each breaking edge listed, a per-node transition/rename/history-excerpt trace, a dry-run confirmation, and — on a real run — the designation and tail output of each downstream script as it runs, plus a recovery hint if one of them fails. Exit codes: 2 for an unknown node id or a no-op (already at target status); 1 for a closure-violation refusal, or for a downstream script failing after the graph writes already landed; 0 for a completed dry run or a fully successful real run.
+Stdout only, no stdin. Prints unknown-node, root-is-permanent, and already-at-status errors, a REFUSED closure-violation report with each breaking edge listed, a per-node transition/rename/history-excerpt trace, a dry-run confirmation, and — on a real run — the designation and tail output of each downstream script as it runs, plus a recovery hint if one of them fails. Exit codes: 2 for an unknown node id, a root (any target status), or a no-op (already at target status); 1 for a closure-violation refusal, or for a downstream script failing after the graph writes already landed; 0 for a completed dry run or a fully successful real run.
 
 ## OPERATION
 
@@ -116,7 +122,7 @@ Stdout only, no stdin. Prints unknown-node and already-at-status errors, a REFUS
     {
         build a Markdown bullet: today's date, the new status, "Ruled by
         Self" (ID.DISPLAY, a fixed non-identifying string — R132, 2026-08-11,
-        closed the previous ID.user_name() call as a personalization
+        closed the previous ID.user_name_read() call as a personalization
         channel into a node's provenance text, which reaches every part's
         prompt directly), the source circle/session if given, and the
         ruling's own words in quotes if given. Old history lines written

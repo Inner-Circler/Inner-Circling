@@ -1,5 +1,5 @@
 # IFS Inner Circle — Process Rules (operations)
-Version: 2026-07-26
+Version: 2026-09-01
 
 Part-facing rules — what you are, circle start, speaking, challenge, signals,
 dual-mirror, common good, short-term write-up, Soul, new parts, goals,
@@ -35,14 +35,14 @@ therefore respond to one another within a round, not to a snapshot taken at its
 start. Order is random per round; `--seed` fixes it for a repeatable test and has
 no effect on what parts say.
 
-**Enforced in code, not by discipline** (`run_round`):
+**Enforced in code, not by discipline** (`circle_round_run`):
 
 - max 2 statements per part since Self last spoke; every Self statement resets
   the counters
 - never speak twice in a row
 - a part at the limit is held, and the hold is recorded in the transcript
 
-**Truncation is an error, never a pass.** `rounds.MAX_TOKENS` is the ceiling and
+**Truncation is an error, never a pass.** `circle_rounds.MAX_TOKENS` is the ceiling and
 the length rule is `prompt_build.LENGTH_MAX_WORDS` — **no number is written here,
 deliberately**: both are settings since 2026-08-28, and a rulebook that restated
 them would be a fourth literal to go stale. This paragraph carried two at once
@@ -65,7 +65,8 @@ pipeline with no safety net.
 
 **Write guard.** In `--live` mode `WriteGuard` admits exactly five things:
 this circle's own transcript `circles/circle_<OT>.md`;
-`parts/<name>/short_term_<OT>.md`; `parts/<name>/remember.toml`;
+`parts/<name>/short_term_<OT>.toml` (and the `.md` a resumed pre-2026-09-04 close
+still writes — R434); `parts/<name>/remember.toml`;
 `self/remember.toml`; and this circle's prompt captures under
 `work/prompts/<OT>/`, plus its `<OT>_resume_<k>` siblings. Anything else
 RAISES — it refuses rather than warns, because a refused write should be a
@@ -84,7 +85,7 @@ in its own writer instead: `self/best_practices.toml` (`/practice-add`,
 `long_term.md` is genuinely unwritable in-circle. `part_relationships.toml`
 used to be unwritable *by the guard* but staged by `inter_circle.py` at
 `/close` instead — "structurally unwritable during a circle" was true of the
-mechanism and false of the run. RETIRED 2026-08-22 (RULINGS.md): the register,
+mechanism and false of the run. RETIRED 2026-08-22 (rulings/, after R308): the register,
 its module, and the seven files are deleted; the write this paragraph
 describes stopped before that, the same day.
 
@@ -132,9 +133,10 @@ may speak through this voice; parts may surface it.
 `/close` at the `Self>` prompt runs the close sequence:
 
 1. Each part is asked for its four-section short_term and the coordinator writes
-   `parts/<name>/short_term_<OT>.md`. A part that never spoke is not asked and
-   correctly writes nothing.
-2. `coordinator/circle_close.py --short-term-only --open-time <OT> --write-report`
+   `parts/<name>/short_term_<OT>.toml` (`.md` before 2026-09-04, R434), then reads
+   it back and refuses a record any of whose four sections is missing or empty.
+   A part that never spoke is not asked and correctly writes nothing.
+2. `coordinator/circle_close_verify.py --short-term-only --open-time <OT> --write-report`
    verifies every speaking part has a well-formed record and emits the durable
    close report `work/logs/close_<OT>.json` — each part's size and sha256.
 3. The circle is committed to git: transcript, short_terms, close report, tagged
@@ -146,7 +148,7 @@ transcript, collects no short_terms, and says so.
 
 ### short_term backfill from the transcript
 
-When a part spoke but its `short_term_<OT>.md` is missing or malformed,
+When a part spoke but its `short_term_<OT>.toml` (or legacy `.md`) is missing or malformed,
 reconstruct it from the transcript — the authoritative account of what was said —
 rather than leave the circle reading as no-engagement for that part.
 
@@ -157,7 +159,8 @@ constructs it from `issues/issue_model.md` + `issues/*.toml` —
 B46 2026-08-17)
 plus `circles/circle_<OT>.md`, and have it produce the
 four-section record with *What I said* and *What I observed* grounded in its own
-transcript lines. **Write only** `parts/<part>/short_term_<OT>.md`; never
+transcript lines. **Write only** `parts/<part>/short_term_<OT>.toml` — or `.md`
+when the circle's other parts are `.md`, the repair matching the circle it lands in; never
 `long_term.md` or any other per-part file. If processing already read the circle
 as no-engagement for that part, re-consolidate afterwards and correct the
 affected `self/` files.
@@ -168,6 +171,15 @@ below. (First applied 2026-07-11 for Child and Learner, `circle_2026-07-10_1223`
 ---
 
 ## Nightly
+
+**THIS HEADING IS LOAD-BEARING — `coordinator/record_verify.py`'s
+PROCESS_ANCHORS names it literally as a truncation-guard anchor** (audit-
+register.md #12). The guard does not care that the section is retired; it
+only checks the heading is present, at circle open and in `circle_audit.py`
+phase 0. Renaming or deleting this heading without updating PROCESS_ANCHORS
+would make the guard fire on every future commit touching this file — the
+exact "worse than none" failure PROCESS_ANCHORS' own comment warns about,
+citing the 2026-08-07 incident that taught it. Update both together.
 
 RETIRED — R228 removed the batch shape, and the scheduled tasks are gone from
 the scheduler. Dreaming and synthesis now run synchronously, as `/close`'s
@@ -186,7 +198,7 @@ short_terms and nothing else. Design history: `docs/NIGHTLY_DESIGN.md`.
 
 ### Durability guards, in order
 
-1. **Reconcile.** `coordinator/circle_close.py --reconcile --open-time <OT>` re-reads
+1. **Reconcile.** `coordinator/circle_close_verify.py --reconcile --open-time <OT>` re-reads
    each short_term recorded present at close and compares size + sha256.
    `RECONCILE-DRIFT` means a write was lost or altered after a clean close;
    backfill those parts from the transcript before dreaming.
@@ -214,9 +226,17 @@ its historic weight.
 - An entry with no `*Last mentioned:*` field anchors to **its own dream date**.
   Self-report entries written outside any circle carry no circle reference;
   without this rule they would sit outside the recency model permanently.
-  (Settled 2026-07-26 — `coordinator/NIGHTLY_DESIGN.md` §10.)
+  (Settled 2026-07-26 — `docs/NIGHTLY_DESIGN.md` §10.)
 - **The threshold is circles, not days.** An entry that goes **≥ 5 circles**
-  without substantial engagement is flagged `[review]`. Counting is over circle
+  without substantial engagement is flagged `[review]` — a DIFFERENT, earlier
+  stage than `quote_verify.py`'s own **≥ 12 circles** SETTLE threshold (that
+  one moves a review-flagged entry on to `## Settled`, below); this line read
+  as contradicting that one until audit-register.md #41 clarified the two are
+  sequential, not competing numbers for the same event. **NEITHER IS
+  MECHANICALLY ENFORCED TODAY** — `parts/*/dreams.toml` has been READ-ONLY
+  since R178 (`register_gate.py`'s own REGISTERS entry: `"frozen": True`, "nothing
+  writes it"), so no writer currently applies either threshold; both describe
+  the intended rule, not code that runs. Counting is over circle
   files in `circles/`, so a fortnight with no circle ages nothing.
 - After a review circle passes: if the topic was engaged, the flag clears; if
   not, the entry moves to `## Settled` at the bottom of `long_term.md` — frozen
@@ -243,7 +263,9 @@ Content above that header is not subject to recency tracking or settling.
 
 ### Self's synthesis
 
-Reads all parts' `long_term.md` and `part_relationships.toml`, plus **all circle
+Reads all parts' `long_term.md` (`part_relationships.toml` dropped, RETIRED
+2026-08-22 per :84-89 above — this line said "and part_relationships.toml"
+until audit-register.md #41), plus **all circle
 transcripts since the last synthesis — transcripts are ground truth** and take
 precedence over dream-compressed summaries when facts conflict. Then:
 
@@ -257,8 +279,14 @@ precedence over dream-compressed summaries when facts conflict. Then:
    time (see `docs/BNF.md` BLOCK 2), and nothing today gives
    "resolved questions" a home; a synthesis redesign that wants to keep
    surfacing them needs a new destination, not this rewrite.
-4. Writes the narrative layer: a phase bullet appended to `self/narrative_arc.md`
-   only on a genuine phase transition, and a fresh `self/narrative_YYYY-MM-DD.md`
+4. STEP RETIRED, though never marked so until audit-register.md #41: used to
+   write the narrative layer, a phase bullet appended to `self/narrative_arc.md`
+   only on a genuine phase transition, plus a fresh `self/narrative_YYYY-MM-DD.md`.
+   R165 (2026-08-15) moved the one job this did — the cross-circle phase
+   bullet — into `self/circle_history.toml`; R256 (2026-08-19) confirmed
+   "no writer since R165" for the arc file. `ifs_model.py` calls the
+   dependency "A PHANTOM": nothing writes either file today, and the operator's
+   own `self/narrative_arc.md` is untouched, frozen history since 2026-07-27.
 
 ---
 
@@ -281,7 +309,8 @@ MARK — `self/marks/<OT>.toml`, `/mark`, the `[mark ...]` annotation, its five
 kinds (`lands`/`stings`/`denied`/`lead`/`platitude`), the `· TEST` convention,
 and PROPOSE MARK (`[propose mark]`, `self/mark_proposals.toml`) — is retired
 outright, code included (docs/BNF.md). Self's reflexive record is REMEMBER
-now, surfaced on demand by `/recall` (built 2026-08-18, R224). The
+now, surfaced on demand by `/remember-list` (`/recall` a kept alias, built
+2026-08-18, R224). The
 old `self/marks/<OT>.toml` records are in git, not lost —
 `git log --all -- self/marks/` finds them. `self/leads.md` is left in place,
 frozen: its writer

@@ -17,7 +17,7 @@ without either importing the other.
 
 ONE ROW SHAPE, 2026-08-21 (the lab findings of that day, S5/S6). Every
 verb /help prints — level 0 in either tier, a class's own verbs at level
-2, the dual pane's local verbs — goes through `help_row()`: the full
+2, the dual pane's local verbs — goes through `command_help_row_render()`: the full
 command spec, an em-dash, the WHOLE description joined to one line, the
 row wrapped at HELP_WIDTH with an 8-space hanging indent, and the rows
 sorted by verb. Until then level 0 printed the first LINE of a
@@ -100,14 +100,14 @@ ROW_HANG = 8          # a wrapped row's continuation indent — the operator, 20
                       # "Indent wrapped help following the first line"
 
 
-def help_row(spec: str, desc: str = "", pad: int = 0) -> str:
+def command_help_row_render(spec: str, desc: str = "", pad: int = 0) -> str:
     """ONE help row: `  <spec>  —  <description>`, wrapped to HELP_WIDTH with
     an ROW_HANG-space hanging indent — 2026-08-21 (lab findings, S5).
 
     THE DESCRIPTION IS JOINED TO ONE LINE FIRST. COMMANDS' descriptions are
     hard-wrapped at ~50 columns for the layout this replaced; a TOML
     `'''...'''` description may be hard-wrapped for editing. Either way a
-    single newline is soft here (issue_schema.unwrap()'s rule for node
+    single newline is soft here (issue_schema.issue_unwrap()'s rule for node
     prose, applied to help), so the row is re-flowed to THIS width rather
     than carrying a wrap made for another one. Nothing is truncated: the
     2026-08-20 one-liner tier printed only a description's first line, and
@@ -130,7 +130,7 @@ def help_row(spec: str, desc: str = "", pad: int = 0) -> str:
     spec is padded to `pad` visible characters (NBSP, so the wrap cannot
     break inside the padding) and a wrapped row's continuation indents to
     the DESCRIPTION column rather than ROW_HANG, so every hyphen and every
-    continuation in one listing sits on the same column. help_rows() below
+    continuation in one listing sits on the same column. command_help_rows_render() below
     computes the pad for a group; a bare help_row keeps the old shape."""
     one = " ".join(desc.split())
     safe_spec = spec.replace(" ", "\xa0")
@@ -154,10 +154,10 @@ def help_row(spec: str, desc: str = "", pad: int = 0) -> str:
 PAD_MAX = 33
 
 
-def pad_for(pairs) -> int:
+def command_help_pad(pairs) -> int:
     """The column ONE listing aligns on: its widest spec, capped at PAD_MAX.
 
-    SEPARATE FROM help_rows() SINCE 2026-08-25, because a PANE is not
+    SEPARATE FROM command_help_rows_render() SINCE 2026-08-25, because a PANE is not
     always one listing. `/help issue` prints its own verbs, then a child
     class, then that child's verbs — three groups, and a pad per group put
     three different hyphen columns and three different continuation
@@ -168,15 +168,15 @@ def pad_for(pairs) -> int:
     return min(max((len(s) for s, _ in pairs), default=0), PAD_MAX)
 
 
-def help_rows(pairs, pad: int | None = None) -> list[str]:
+def command_help_rows_render(pairs, pad: int | None = None) -> list[str]:
     """One LISTING of (spec, description) rows, the column aligned across
-    the group — each row through help_row() with the group's own pad, which
+    the group — each row through command_help_row_render() with the group's own pad, which
     is its widest spec, capped at PAD_MAX. The pad is computed here and
     nowhere else, so a listing cannot half-align.
 
-    `pad`, when given, is a WIDER page's column — see pad_for()."""
+    `pad`, when given, is a WIDER page's column — see command_help_pad()."""
     pairs = list(pairs)
-    return [help_row(s, d, pad_for(pairs) if pad is None else pad)
+    return [command_help_row_render(s, d, command_help_pad(pairs) if pad is None else pad)
             for s, d in pairs]
 
 
@@ -216,16 +216,13 @@ def _verb_pairs(heads, specs: dict[str, tuple[str, str]]) -> list[tuple[str, str
     head may be named twice between the circle-pane three and a table).
 
     SPLIT OUT FROM _verb_rows 2026-08-25 so a pane can measure every group
-    it is about to print before printing any of them — see pad_for()."""
+    it is about to print before printing any of them — see command_help_pad()."""
     return [_gloss(h, specs) for h in sorted(dict.fromkeys(heads))]
 
 
-def _verb_rows(heads, specs: dict[str, tuple[str, str]],
-               pad: int | None = None) -> list[str]:
-    """_verb_pairs() rendered — the group's own column unless the caller
-    passes a wider page's."""
-    return help_rows(_verb_pairs(heads, specs), pad)
-
+# _verb_rows() (rendered _verb_pairs() output) DELETED 2026-09-01 --
+# audit-register.md #30 found it a zero-reference symbol: nothing called
+# it after the 2026-08-25 split, only comments named it.
 
 # THE SPEECH ROW IS GONE, 2026-08-21 (R285). COMMANDS
 # carried a `<text>` row — "speak as <name>" — and level 0 printed it first,
@@ -291,12 +288,12 @@ def _subtree(cls: str, classes) -> list[str]:
 
 
 def _class_verb_rows(name: str) -> list[str]:
-    """The class's COMMANDS, sorted, each a full help_row(). A DEV-table verb
+    """The class's COMMANDS, sorted, each a full command_help_row_render(). A DEV-table verb
     (/issue-apply rides `issue` by name) prints only while dev is on — read
     from the tables as module attributes, never a copied set."""
     classes = object_classes()
     specs = _command_specs()
-    return help_rows(specs[head] for head in sorted(specs)
+    return command_help_rows_render(specs[head] for head in sorted(specs)
                      if _class_of_head(head, classes) == name
                      and not (head in CS.DEV_SUBSET_COMMANDS
                               and not CS.dev_mode))
@@ -327,7 +324,7 @@ def object_class_help_text(name: str = "") -> str:
                     "deliberately deferred (RULED 2026-08-10, undertaken "
                     "depth-first when this work starts). See "
                     "docs/dual_pane_integration.md §4.")
-        out = ["  OBJECT CLASSES"] + help_rows(
+        out = ["  OBJECT CLASSES"] + command_help_rows_render(
             (f"/help {cname}", c.get("description", ""))
             for cname, c in classes.items())
         return "\n".join(out)
@@ -338,10 +335,10 @@ def object_class_help_text(name: str = "") -> str:
     out = [f"  {name}"]
     if c.get("description"):
         # A TOML `'''...'''` description may be hard-wrapped for editing —
-        # a single newline is soft, same rule issue_schema.unwrap() uses
+        # a single newline is soft, same rule issue_schema.issue_unwrap() uses
         # for node prose. Collapse it back to one line for display.
         out.append(f"      {' '.join(c['description'].split())}")
-    out += help_rows((f"/help {name} {sub}", desc)
+    out += command_help_rows_render((f"/help {name} {sub}", desc)
                      for sub, desc in LEVEL_ROWS)
     out += _class_verb_rows(name)
     return "\n".join(out)
@@ -357,18 +354,18 @@ def object_class_help_text(name: str = "") -> str:
 # this a limitation to accept, not a bug: the register is small enough
 # that a fresh read costs nothing).
 def _issue_entries() -> list[tuple[str, str]]:
-    docs = (S_.load(p) for p in S_.live_nodes())
+    docs = (S_.issue_read(p) for p in S_.issue_live_read())
     return [(d["id"], d.get("label", "")) for d in docs]
 
 
 def _issue_read(nid: str) -> str:
-    p = next(q for q in S_.live_nodes() if S_.nid_of(q.stem) == nid)
-    return S_.render(S_.load(p))
+    p = next(q for q in S_.issue_live_read() if S_.issue_id_read(q.stem) == nid)
+    return S_.issue_render(S_.issue_read(p))
 
 
 def _issue_relationship_entries() -> list[tuple[str, str]]:
     return [(f"{e['src']} {e['type']} {e['target']}", e["type"])
-            for e in IC.all_edges()]
+            for e in IC.issue_edges_read()]
 
 
 def _issue_relationship_read(id_: str) -> str:
@@ -377,23 +374,23 @@ def _issue_relationship_read(id_: str) -> str:
     # a single space, twice: neither a node id nor an edge type ever
     # contains one, so this can't misparse.
     src, typ, tgt = id_.split(" ", 2)
-    e = next(x for x in IC.all_edges()
+    e = next(x for x in IC.issue_edges_read()
              if x["src"] == src and x["type"] == typ and x["target"] == tgt)
     L = [f"# {src} {typ} {tgt}", "",
          f"**Status:** {e['status']}"
          + (f" ({e['dated']})" if e.get("dated") else "")
          + (f" — {e['status_note']}" if e.get("status_note") else ""), "",
-         f"**Basis:** {S_.unwrap(e['basis'])}", ""]
+         f"**Basis:** {S_.issue_unwrap(e['basis'])}", ""]
     if e.get("why"):
-        L += [f"**Why:** {S_.unwrap(e['why'])}", ""]
+        L += [f"**Why:** {S_.issue_unwrap(e['why'])}", ""]
     for extra in e.get("notes", []):
-        L += [S_.unwrap(extra), ""]
+        L += [S_.issue_unwrap(extra), ""]
     if e.get("ask"):
         L += ["**Ask:** " + ", ".join(e["ask"]), ""]
     if e.get("quote"):
-        L += ["> " + S_.unwrap(e["quote"]), ""]
+        L += ["> " + S_.issue_unwrap(e["quote"]), ""]
     if e.get("retired"):
-        L += [f"**Retired:** {S_.unwrap(e['retired'])}", ""]
+        L += [f"**Retired:** {S_.issue_unwrap(e['retired'])}", ""]
     return "\n".join(L)
 
 
@@ -511,7 +508,7 @@ def circle_pane_help() -> str:
         "",
         "  IN THE ROOM you speak. Type and press Enter — that IS your turn.",
         "",
-        "\n".join(help_rows((c, _one_liner(c))
+        "\n".join(command_help_rows_render((c, _one_liner(c))
                             for c in circle_verbs() + ("/help",))),
         "",
         "  INSIDE what you say, two annotations ride along:",
@@ -609,13 +606,13 @@ def _help_level0() -> str:
     # /status when this was cut.
 
     # THE LEVEL-1 ROW SHARES THE CLASS ROWS' COLUMN, 2026-08-25 — it was a
-    # bare help_row(), so its wrapped text hung at ROW_HANG under a listing
+    # bare command_help_row_render(), so its wrapped text hung at ROW_HANG under a listing
     # whose own continuations sat at the description column.
     level1 = [_LEVEL1_ROW] if (CS.dev_mode and classes) else []
-    pad = pad_for(class_pairs + level1)
-    out += help_rows(class_pairs, pad)
+    pad = command_help_pad(class_pairs + level1)
+    out += command_help_rows_render(class_pairs, pad)
     if level1:
-        out += [""] + help_rows(level1, pad)
+        out += [""] + command_help_rows_render(level1, pad)
     return "\n".join(out) + "\n"
 
 
@@ -671,7 +668,7 @@ def _class_tree_text(cls: str) -> str:
     # groups with three pads, so one page carried three hyphen columns and
     # three continuation indents. `blocks` holds either a run of
     # (spec, description) pairs or literal lines; every pair is pooled for
-    # ONE pad_for() below.
+    # ONE command_help_pad() below.
     blocks: list[tuple[str, list]] = [
         ("text", [f"  {cls.upper()}", f"    {desc}", ""]),
         ("rows", _verb_pairs(mine, specs)),
@@ -711,11 +708,11 @@ def _class_tree_text(cls: str) -> str:
         blocks.append(("rows", [(f"/help {cls} {name}", why)
                                 for name, why in LEVEL_ROWS]))
 
-    pad = pad_for([p for kind, block in blocks if kind == "rows"
+    pad = command_help_pad([p for kind, block in blocks if kind == "rows"
                    for p in block])
     out: list[str] = []
     for kind, block in blocks:
-        out += block if kind == "text" else help_rows(block, pad)
+        out += block if kind == "text" else command_help_rows_render(block, pad)
     return "\n".join(out)
 
 
@@ -777,7 +774,7 @@ def _verb_help_text(head: str) -> str:
         pairs.append((f"/help {cls}",
                       f"the other verbs in the {cls.upper()} class"))
     if pairs:
-        out += [""] + help_rows(pairs)
+        out += [""] + command_help_rows_render(pairs)
     return "\n".join(out)
 
 
@@ -787,7 +784,7 @@ def _wrap80(text: str, width: int = HELP_WIDTH) -> str:
     paragraph-at-a-time: a line that already fits (a table row, a blank
     line, a short heading) is left untouched, so this never reflows
     content that was already laid out on purpose. A line that overflows
-    (unwrapped TOML prose, collapsed via issue_schema.unwrap() to one
+    (unwrapped TOML prose, collapsed via issue_schema.issue_unwrap() to one
     line per paragraph for DISPLAY — its own separate, correct
     convention, not a bug) hard-wraps here instead, with its continuation
     hanging past the original indent and any leading `-`/`*`/`#`/`N.`
@@ -809,7 +806,7 @@ def _wrap80(text: str, width: int = HELP_WIDTH) -> str:
     return "\n".join(out)
 
 
-def help_text(arg: str = "") -> str:
+def command_help_render(arg: str = "") -> str:
     """RULED 2026-08-10: `/help`, `/help object_classes`, `/help <class>`
     — one function, dispatched by argument, everything hot-reloaded fresh
     on every call. `/help <class> list` and `/help <class> read #` are
@@ -820,7 +817,7 @@ def help_text(arg: str = "") -> str:
     "(dev-gated)" for every level but never actually gated until now:
     level 0 (`arg == ""`) TIERS by dev_mode via `_help_level0()`, never
     refusing outright; levels 1-4 (`object_classes` and every `<class>`
-    form) REFUSE while dev is off, reusing `dev_restricted_text()` — the
+    form) REFUSE while dev is off, reusing `command_dev_restricted_render()` — the
     same refusal a command-pane verb typed with dev off already gets, so
     this doesn't invent a third phrasing. RULED 2026-08-16: "dev is meant
     to require being told, permanently" — that refusal, and level 0's own
@@ -836,7 +833,7 @@ def help_text(arg: str = "") -> str:
     on its way out — RULED 2026-08-16, "80 column max window", after a
     node's rendered markdown (level 4, `/help <class> read #`) showed
     lines past 900 characters. `object_class_help_text()`'s own paragraph
-    text is collapsed to one line per paragraph by `issue_schema.unwrap()`
+    text is collapsed to one line per paragraph by `issue_schema.issue_unwrap()`
     — a separate, correct DISPLAY convention (CLAUDE.md, `issues/` TOML) —
     so wrapping belongs here, at the point text actually reaches a human,
     not inside that convention."""
@@ -848,7 +845,7 @@ def _help_text_raw(arg: str = "") -> str:
         return _help_level0()
     if arg == "object_classes":
         if not CS.dev_mode:
-            return dev_restricted_text()
+            return command_dev_restricted_render()
         return "\n" + object_class_help_text("") + "\n"
     words = arg.split(None, 2)
     # A LEADING SLASH IS ACCEPTED EVERYWHERE, 2026-08-25 — the operator
@@ -875,7 +872,7 @@ def _help_text_raw(arg: str = "") -> str:
         if len(words) == 1:
             return "\n" + _class_tree_text(cls) + "\n"
         if not CS.dev_mode:
-            return dev_restricted_text()
+            return command_dev_restricted_render()
         if len(words) >= 2 and words[1] == "list":
             return "\n" + object_class_list_text(cls) + "\n"
         if len(words) >= 3 and words[1] == "read":
@@ -886,7 +883,7 @@ def _help_text_raw(arg: str = "") -> str:
     # is both a class and (through SYNONYMS) a verb head, and the class is
     # the larger answer: /help propose keeps printing the class page, and
     # /help propose-add the verb's own.
-    head = CS.normalise_head(words[0]) if words else ""
+    head = CS.command_head_normalise(words[0]) if words else ""
     if len(words) == 1 and head in _command_specs():
         return "\n" + _verb_help_text(head) + "\n"
     # R199/R280, MEASURED AND CLOSED 2026-08-24. This branch answered a
@@ -908,23 +905,23 @@ def _help_text_raw(arg: str = "") -> str:
     # "invisible while dev==false", so any garbage typed after `help`
     # announced the level-1 form to a reader who may not have it.
     #
-    # With dev off both answer with dev_restricted_text() and are
+    # With dev off both answer with command_dev_restricted_render() and are
     # indistinguishable. With dev on the pointer is useful and stays.
     if not CS.dev_mode:
-        return dev_restricted_text()
+        return command_dev_restricted_render()
     return f"\n  unrecognized: help {arg!r} — try /help or /help object_classes\n"
 
 
-def cmd_help(arg: str) -> None:
-    """`/help`'s always-available door. `help_text()` is a pure read of
+def command_help(arg: str) -> None:
+    """`/help`'s always-available door. `command_help_render()` is a pure read of
     COMMANDS and object_classes.toml — no transcript, no running circle
     needed — but until 2026-08-16 `dispatch_dev_cmd()` had no case for it,
     so `--dev-cmd help` wrongly refused with "needs a live circle" even
     though circling.py's command pane special-cases bare `help` itself and
     never hit the gap. `.strip()`: `--dev-cmd help object_classes` arrives
     here as `" object_classes"` (main()'s own `rest_text` construction),
-    and help_text()'s `arg == "object_classes"` check is exact-equality."""
-    seam.emit("command", help_text(arg.strip()))
+    and command_help_render()'s `arg == "object_classes"` check is exact-equality."""
+    seam.emit("command", command_help_render(arg.strip()))
 
 
 def junk_help(line: str) -> str:
@@ -954,7 +951,7 @@ def junk_help(line: str) -> str:
     return f"  not a command: {line.strip()}\n  See help"
 
 
-def dev_restricted_text() -> str:
+def command_dev_restricted_render() -> str:
     """What the dev-gated HELP HIERARCHY prints back while dev is off —
     `/help object_classes`, `/help <class>`, `list`, `read #`
     (R280, 2026-08-21).
@@ -967,6 +964,6 @@ def dev_restricted_text() -> str:
     NO LONGER THE COMMAND PANE'S REFUSAL, 2026-08-21: a dev-table VERB typed
     with dev off is JUNK and is answered with junk_help() — the listing —
     by the pane and by circle.py's loop alike. This one-liner survives only
-    for the hierarchy's own levels, which are read through help_text()
-    itself and so cannot sensibly answer with help_text()."""
+    for the hierarchy's own levels, which are read through command_help_render()
+    itself and so cannot sensibly answer with command_help_render()."""
     return "  not understood, see 'help'\n"

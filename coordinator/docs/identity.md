@@ -12,7 +12,7 @@ identity.py — resolves who "Self" is for this installation: the fixed internal
 This module resolves ruling 2026-08-07: "during circles, the role of the user 'Self' should be personalized, that is, code should accept and generate 'Self' unless a 'UserName' is present." It exists to prevent conflating two distinct names that a single earlier hardcoded value used to be:
 
 - `SELF_ID` ("self") — the canonical internal id, never displayed or written to a transcript, used for every `speaker ==` comparison in the codebase.
-- `user_name()` — the CONSOLE-ONLY name: the Soul's recorded preferred_name, else $IFS_USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
+- `user_name_read()` — the CONSOLE-ONLY name: the Soul's recorded preferred_name, else $IFS_USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
 
 The docstring documents, in some detail, a Windows-specific trap: `os.environ` is case-insensitive on Windows and Windows always sets `USERNAME` for every process, so a naive `os.environ.get("UserName")` silently returns the OS login name (lower-cased) rather than an unset default, and `.env` cannot override it because `load_dotenv()` never overwrites a variable the OS already set. The module works around this by checking a project-specific variable, `IFS_USER_NAME`, first — it is the only variable `.env` can actually control on this platform — and the ruled `UserName` variable second, as the fallback that in practice is rarely reached once `IFS_USER_NAME` is set (which it now is, per the docstring, as of 2026-08-07).
 
@@ -39,7 +39,7 @@ None. The module takes no arguments; running it with `python coordinator/identit
 Standard library: `os`, `pathlib`, `__future__`. Optional third-party: `python-dotenv` (`from dotenv import load_dotenv`), used best-effort inside `_load_env()`; a missing package is caught and tolerated silently.
 
 ## EXTERNAL FILES
-Read: `ROOT/.env`, best-effort, via `_load_env()`, called from `user_name()`, `user_name_source()`, and `retired_tags()` — every function that needs environment configuration re-loads `.env` rather than caching it once.
+Read: `ROOT/.env`, best-effort, via `_load_env()`, called from `user_name_read()`, `user_name_source()`, and `self_retired_tags_read()` — every function that needs environment configuration re-loads `.env` rather than caching it once.
 
 Written: none.
 
@@ -58,14 +58,14 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
 
 ### `soul_preferred_name()`
     {
-        read parts/soul/part.toml directly with tomllib (dependency-light, the way installed_tags()
+        read parts/soul/part.toml directly with tomllib (dependency-light, the way self_installed_tags_read()
         reads self/identity.toml); return [context].answers.preferred_name stripped, or "" when the
         file, the table or the key is absent, empty, or unreadable — never raises. Re-read on every
         call. (R325, 2026-08-23; the Soul is a RESERVED part, which is why a shipped
         module may name its directory.)
     }
 
-### `user_name(explicit=None)`
+### `user_name_read(explicit=None)`
     if (an explicit non-blank name was passed) then {
         return it, stripped.
     } else {
@@ -80,14 +80,15 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
         console-only name — DISPLAY and SELF_ID do not move (R329).
     }
 
-### `retired_tags()`
+### `self_retired_tags_read()`
     {
         Read the comma-separated $IFS_SELF_TAGS environment variable (via .env) and return its non-blank, stripped entries as a frozenset. This exists to let an installation register a display name it used to write but no longer does, so older transcripts under that name keep parsing correctly after the configured name changes. Empty is the normal case — nothing currently needs it.
     }
 
 ### `self_tags(current=None)`
     {
-        Return the union of: the fixed HISTORICAL_NAMES tuple (currently just "Self"), retired_tags(), and either the given `current` name or the live user_name().
+        Return the union of: the fixed HISTORICAL_NAMES tuple (currently just "Self"),
+        self_retired_tags_read(), and either the given `current` name or the live user_name_read().
     }
 
 ### `is_self_tag(tag, current=None)`

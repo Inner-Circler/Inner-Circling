@@ -26,14 +26,23 @@ working_sets.toml        which issue nodes each circle
 self_observation_log.toml  what synthesis
                          noticed about the room, one
                          record per circle
-marks/<OT>.toml          your ratifications, written at
-                         close
+coalesce.toml            the proposal coalesce register --
+                         groups of pending proposals that
+                         are one ask in different words
+                         (added 2026-08-26, R356/B69)
+redaction.toml           your curated redaction targets for
+                         the CIRCLE pane's redacted view
+                         (added 2026-08-31)
+groups.toml              your named rosters of parts, so
+                         `--group <name>` can invoke a whole
+                         circle by name (added 2026-09-03)
 ```
 
-**Each empty register is the document its reader builds anyway.** `topics.py`,
-`circle_history.py`, `remember.py` and `self_observation_log.py` each construct
-`next_id = 1` plus an empty table when their file is absent, and these delegates
-are byte-equivalent to that.
+**Each empty register is the document its reader builds anyway.** `topic_manager.py`,
+`circle_history_manager.py`, `remember_manager.py`, `self_observation_manager.py`, `proposal_group_manager.py`,
+`redaction_manager.py` and `group_add.py` each construct their own empty shape — `next_id = 1` (or,
+for `redaction_manager.py`, four separate `next_*` counters) plus an empty table —
+when their file is absent, and these delegates are byte-equivalent to that.
 So a fresh install reads the same document whether it received the delegate or no
 file at all — the delegate exists so the file is *there*, valid and loadable,
 rather than conjured on first write.
@@ -94,3 +103,11 @@ nothing in the shipped code opens it. `self/leads.md`'s only writer was
 wholesale retirement, and the file has been frozen since. The operator's own
 `self/leads.md` is untouched — it is real history. A seed file for a store
 nothing will ever write promises a mechanism the recipient does not have.
+
+**There is no `marks/<OT>.toml` any more either — MARK was RETIRED WHOLESALE
+2026-08-14, code included.** This document's own register table named it as a
+live register (*"your ratifications, written at close"*) for weeks past that
+date, even after the `leads.md` paragraph above already cited the same
+retirement as the reason `leads.md`'s writer disappeared. `self/marks/` is not
+a directory the shipped code creates or reads at all; the old records are in
+git, at their own paths, for anyone who held them before the retirement.

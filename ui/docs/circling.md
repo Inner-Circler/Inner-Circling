@@ -119,9 +119,9 @@ Related pages:
 
     coordinator/docs/circle.md          the circle itself, in full
     coordinator/docs/circle_state.md    is a circle open right now?
-    coordinator/docs/check_integrity.md the check that runs before a circle opens
-    coordinator/docs/circle_close.md    what happens at close, and how it is verified
-    coordinator/docs/mid_term.md        how a part's sense of itself is distilled
+    coordinator/docs/record_verify.md the check that runs before a circle opens
+    coordinator/docs/circle_close_verify.md    what happens at close, and how it is verified
+    coordinator/docs/part_mid_term_manager.md        how a part's sense of itself is distilled
 
 ## OPTIONS
 

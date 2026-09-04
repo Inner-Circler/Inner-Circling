@@ -17,7 +17,7 @@ thread of this process behind rebound seam.py ends, and it is now the entry
 point a person is meant to reach for; `coordinator/circle.py` remains the
 single-pane way in and everything underneath. The name says THAT.
 
-The old name survives in RULINGS.md and progress.md, which are append-only and
+The old name survives in rulings/ and progress.md, which are append-only and
 were deliberately not rewritten, and in docs/dual_pane_integration.md, whose
 subject is the two-pane INTEGRATION design — a concept this rename does not
 touch. "Dual pane" still names the shape: an upper CIRCLE pane and a lower
@@ -68,7 +68,9 @@ STRUCTURE, so the parts that need a real terminal and the parts that don't
 are never tangled together:
 
     Pane, AppState     pure data + state transitions. No I/O. Fully
-                       unit-testable without a TTY — see `self_test()`.
+                       unit-testable without a TTY — see
+                       ui/tests/test_circling_selftest.py (self_test() until
+                       2026-09-03; the flag still runs it).
     AgentSimulator     the only thread-based piece. Pushes lines onto a
                        queue; never touches the screen itself.
     render_*           takes an AppState and a `write` callable. Testable
@@ -77,7 +79,7 @@ are never tangled together:
     poll_key / raw_mode
                        the one genuinely OS-specific, TTY-dependent layer:
                        msvcrt on Windows, termios/select on POSIX. This is
-                       the part `self_test()` cannot exercise and the part
+                       the part the self-test cannot exercise and the part
                        that actually needs a person at a keyboard to judge.
 
 CONTROLS. Tab switches focus between panes AND reshapes the split: the
@@ -157,7 +159,7 @@ IS_WINDOWS = os.name == "nt"
 # --------------------------------------------------------------------------
 
 
-def wrap_line(line: str, width: int | None) -> list[str]:
+def ui_line_wrap(line: str, width: int | None) -> list[str]:
     """One logical line -> the display rows it occupies. PURE.
 
     THE PANE TRUNCATED UNTIL 2026-08-20. `render_pane_body` wrote
@@ -220,7 +222,7 @@ def _command_surface():
 ALERT_MARK = "!!"
 
 
-def is_alert(line: str) -> bool:
+def ui_is_alert(line: str) -> bool:
     """Whether a COMMAND-channel line is one of circle.py's `!!` lines — the
     roster that does not verify, a corrupted operational file, an
     interrupted close, a dreaming that did not run, a pre-warm failure, a
@@ -310,7 +312,7 @@ class Pane:
         # match reality: one row in, one row out.
         for one in (line.split("\n") if "\n" in line else [line]):
             self.logical.append(one)
-            self.lines.extend(wrap_line(self._display_line(one), self.width))
+            self.lines.extend(ui_line_wrap(self._display_line(one), self.width))
 
     def _display_line(self, one: str) -> str:
         """The rendered form of one LOGICAL line — redacted when this
@@ -320,8 +322,8 @@ class Pane:
         screen."""
         if not self.redact_view:
             return one
-        import redaction as RDX
-        return RDX.redact(one)
+        import stream_redaction as SR
+        return SR.stream_redact(one)
 
     def body_needs_repaint(self, input_rows: int = 1) -> bool:
         """Whether the BODY rows are stale — i.e. whether `visible()` has
@@ -402,7 +404,7 @@ class Pane:
         that row carries the mark: `wrap_line` indents a continuation, it
         does not repeat what the line started with."""
         for i in range(len(self.lines) - 1, -1, -1):
-            if is_alert(self.lines[i]):
+            if ui_is_alert(self.lines[i]):
                 return i
         return None
 
@@ -434,7 +436,7 @@ class Pane:
         set_width()'s own long-standing reasoning, which now covers both."""
         rows: list[str] = []
         for one in self.logical:
-            rows.extend(wrap_line(self._display_line(one), self.width))
+            rows.extend(ui_line_wrap(self._display_line(one), self.width))
         self.lines = rows
         if self.scroll_top is not None:
             self.scroll_top = max(0, min(self.scroll_top, self._max_top()))
@@ -536,7 +538,7 @@ class AppState:
                                         # is due at all.
         # docs/dual_pane_integration.md §1/§5 step 3. None (the default)
         # preserves today's self-tested stub behavior in `_submit` below,
-        # byte-for-byte -- `self_test()` asserts the exact stub strings,
+        # byte-for-byte -- test_circling_selftest.py asserts the exact stub strings,
         # so this must stay opt-in, never a silent behavior change to the
         # demo path. A `CircleEngine` is the one real implementation today.
         self.backend = backend
@@ -624,13 +626,13 @@ class AppState:
     def _pane_verb(self, text: str) -> str | None:
         """The command-pane verb this circle-dialog line stands alone as,
         or None. D55(2), 2026-08-20 — see `_submit`. The classifier itself
-        moved to command_surface.pane_verb 2026-08-30, when the Ticker
+        moved to command_surface.command_pane_verb_read 2026-08-30, when the Ticker
         bridge turned out to need the same test below this pane layer;
         one classifier, both flavors."""
         cs = getattr(self, "_CS", None) or _command_surface()
         if cs is None:
             return None
-        return cs.pane_verb(text)
+        return cs.command_pane_verb_read(text)
 
     def _answering(self, pane: Pane) -> bool:
         """True when a blocked `read_line` will consume THIS pane's next
@@ -837,7 +839,7 @@ class AppState:
         up with End or a bare Enter. Telling "the reader scrolled" apart
         from "an earlier alert pinned this" needs a flag this does not
         have, and did not need to have to answer what was asked."""
-        if not is_alert(line):
+        if not ui_is_alert(line):
             return None
         if self.command.is_scrolled():
             return None
@@ -891,7 +893,7 @@ class AppState:
         `CircleEngine._read_line`'s comment), because in the original
         single-terminal design Self already sees what he typed. With no
         `backend` attached (`self.backend is None`, the default, and what
-        `self_test()` exercises), the command pane stays the STUB it
+        the self-test exercises), the command pane stays the STUB it
         always was: it logs what was typed and says plainly that nothing
         was executed. With a `CircleEngine` attached, dispatch belongs to
         `submit_command()` — the pane's own verbs ('quit', 'abort', 'help',
@@ -1073,7 +1075,7 @@ class AgentSimulator:
     sequence for the other two parts. The lock matters: three threads
     calling `_next_seq()` at once is exactly the race that would silently
     hand out a duplicate or skip a number if the increment weren't
-    protected — verified in `self_test()` by actually running the
+    protected — verified in test_circling_selftest.py by actually running the
     simulator and checking the collected numbers are exactly consecutive."""
 
     def __init__(self, out_queue: "queue.Queue[str]",
@@ -1115,7 +1117,7 @@ class AgentSimulator:
 # rebinding surface is seam.emit/seam.read_line now, which circle.py's
 # own thin wrappers late-bind through) so output lands on a queue instead
 # of real stdout, and input blocks on a queue instead of real stdin. Same queue-and-thread shape as
-# AgentSimulator on purpose -- main_loop() drains either one the same way,
+# AgentSimulator on purpose -- ui_main_loop() drains either one the same way,
 # just demultiplexed by channel here since CircleEngine's items carry one.
 # --------------------------------------------------------------------------
 
@@ -1146,13 +1148,13 @@ class CircleEngine:
     what `circle.py`'s own `emit()` calls were classified as by step 2/5
     (currently `"command"` almost everywhere except the two known
     transcript-echo sites fixed to `"circle"` in this step; the full
-    audit is step 5's job, not redone here). `main_loop()` demuxes on
+    audit is step 5's job, not redone here). `ui_main_loop()` demuxes on
     that value; nothing in this class decides CIRCLE vs COMMAND itself
     — `circle.py`'s own channel argument is the single source of truth,
     by design, so there is exactly one place that classification can
     drift from the rubric, and it is auditable by reading `circle.py`.
 
-    NOT wired into `main_loop()`'s default path — opt-in via `--circle`
+    NOT wired into `ui_main_loop()`'s default path — opt-in via `--circle`
     on `circling.py`'s own CLI (main(), below). Replacing
     `AgentSimulator` as the unconditional default would silently change
     what `python ui/circling.py` does for anyone running the existing,
@@ -1167,7 +1169,7 @@ class CircleEngine:
     doesn't pass `live=True` — every test in this repo, the `--circle`
     demo without `--live` — keeps today's forced-sandbox behavior
     byte-for-byte. `self.live` records which mode a running/finished
-    engine was actually started in, so `main_loop()` can tell whether
+    engine was actually started in, so `ui_main_loop()` can tell whether
     the extra exit-safety below applies.
 
     The background thread is `daemon=True` — deliberately, so a hung
@@ -1175,7 +1177,7 @@ class CircleEngine:
     moment this process actually exits, that thread is killed with NO
     `finally` guarantee, wherever it happens to be. Harmless in
     `--dry-run` (nothing real is being written); a genuine risk once
-    `live=True` if it happens mid-`/close`. `main_loop()`'s own `finally`
+    `live=True` if it happens mid-`/close`. `ui_main_loop()`'s own `finally`
     block is where this is actually guarded — see its comment there —
     not this class, since only the caller knows whether a QUIT is
     genuinely in flight.
@@ -1221,7 +1223,7 @@ class CircleEngine:
         # `finally` would fire there and mean nothing.
         #
         # SET at rest, not cleared, so the readers that drive this engine by
-        # poking `waiting_for_input` directly -- this file's own self_test,
+        # poking `waiting_for_input` directly -- ui/tests/test_circling_selftest.py,
         # ui/tests/test_circling.py -- do not inherit a permanently-cleared event
         # they never knew to wait on.
         #
@@ -1237,7 +1239,7 @@ class CircleEngine:
         # 2026-08-17). Only meaningful while `waiting_for_input` is True;
         # its resting value is "circle" rather than None so that the
         # legacy readers which set `waiting_for_input = True` on its own —
-        # this file's own self_test, ui/tests/test_circling.py,
+        # ui/tests/test_circling_selftest.py, ui/tests/test_circling.py,
         # ui/tests/test_circle_engine.py — keep describing a circle-lane read,
         # which is what they were written against.
         self.waiting_for_channel = "circle"
@@ -1254,7 +1256,7 @@ class CircleEngine:
         # come before it, the close and abort confirmations are command
         # lane), so a cmd> line forwarded into circle_in lands in the one
         # reader that DISPATCHES commands. Before it, the same forward
-        # landed in ask_working_set()'s read and was consumed as the
+        # landed in working_set_ask()'s read and was consumed as the
         # working set — "not in the graph: /issue-list", re-asked, once per
         # command typed. `_running()` could not tell the two apart: it is
         # True from start() on. See `_phase()`.
@@ -1454,7 +1456,7 @@ class CircleEngine:
         circle-lane read (the working set, the topic) is a QUESTION, and a
         command is never its answer. So on 2026-08-21 every line the operator
         typed at cmd> during the open — /issue-list, status, dev, /help
-        object_classes — was consumed by ask_working_set() as a working
+        object_classes — was consumed by working_set_ask() as a working
         set, refused ("not in the graph: /issue-list"), and the question
         was re-asked, its prompt re-echoed into the circle pane once per
         command. Fourteen of the day's findings were this one defect.
@@ -1524,7 +1526,7 @@ class CircleEngine:
     )
 
     def local_verb_text(self) -> str:
-        # ALIGNED LIKE help_system.help_rows() — the operator, 2026-08-25:
+        # ALIGNED LIKE help_system.command_help_rows_render() — the operator, 2026-08-25:
         # *"pad the left column to align the hyphens and line breaks (for
         # all helps)"*. Rendered locally (this dispatcher deliberately
         # imports no help_system — see _junk_help), with the same NBSP
@@ -1574,7 +1576,7 @@ class CircleEngine:
         sandbox/circles/ normally, circles/ once `self.live` is True
         (RULED 2026-08-13, Q3; name kept for now, widened rather than
         renamed, since every existing caller/test already says
-        `_open_sandbox_circles`). Reuses circle_state.open_circles()
+        `_open_sandbox_circles`). Reuses circle_state.circle_open_read()
         directly — the same source circle.py's own "N circle(s) may
         still be OPEN" preflight warning is built from, so a bare
         'resume' finds exactly what that warning just reported, not a
@@ -1584,7 +1586,7 @@ class CircleEngine:
         assumptions about where it's allowed to write."""
         import circle_state
         root = circle_state.LIVE if self.live else circle_state.SANDBOX
-        return [c for c in circle_state.open_circles()
+        return [c for c in circle_state.circle_open_read()
                 if c["path"].parent.resolve() == root.resolve()]
 
     def submit_command(self, text: str) -> str | None:
@@ -1604,7 +1606,7 @@ class CircleEngine:
         loop, so it has nothing to set state.running or trigger a pane
         resize on directly. Every response TEXT is queued onto out_queue
         with channel "command", same as any real circle.py output, so it
-        reaches the pane through the one normal drain path in main_loop().
+        reaches the pane through the one normal drain path in ui_main_loop().
         """
         # A COMMAND-LANE read_line IS BLOCKED RIGHT NOW: this line is its
         # ANSWER, not a command. Forward it VERBATIM, before any
@@ -1697,7 +1699,7 @@ class CircleEngine:
             # by nothing on screen. the operator ended their first live lab session
             # with Ctrl-C for want of this line.
             self.out_queue.put(("command",
-                                self._C.help_text("") + self.local_verb_text()))
+                                self._C.command_help_render("") + self.local_verb_text()))
             return "help"
         if word == "status":
             # /status is a circle-pane command (dispatched inside
@@ -1747,7 +1749,7 @@ class CircleEngine:
             # (unlike the CLI, where you already know which OT you meant
             # to type). BARE 'resume' now means "resume the circle just
             # reported": look up open sandbox circles directly (the same
-            # circle_state.open_circles() the "N circle(s) may still be
+            # circle_state.circle_open_read() the "N circle(s) may still be
             # OPEN" warning itself is built from) and use its open_time
             # when there's exactly one candidate. An explicit open_time
             # is still accepted and still wins outright, for the case
@@ -1830,7 +1832,7 @@ class CircleEngine:
         # "//help" and be refused. normalise_head only folds case and
         # reads `_` as `-`; letting it supply the slash would quietly turn
         # a double-slash typo into a resolved verb.
-        head = self._CS.normalise_head("/" + head_word)
+        head = self._CS.command_head_normalise("/" + head_word)
         rest_of_line = (" " + arg_rest) if arg_rest else ""
         pane = self._CS.PANE_OF.get(head)
         # A DEV-TABLE VERB WITH DEV OFF IS JUNK — 2026-08-21, the JUNK rule
@@ -1947,7 +1949,7 @@ class CircleEngine:
             # say where it works, rather than record a row of blanks. The
             # stub's own "(no interactive confirmation ...)" line still
             # covers the yes/no reads that ignore the flag.
-            return C.dispatch_dev_cmd(head, rest_text, interactive=False)
+            return C.command_dev_dispatch(head, rest_text, interactive=False)
         finally:
             S.emit, S.read_line = orig_emit, orig_read_line
 
@@ -2060,8 +2062,8 @@ COLOR = False
 # sixteen colours are the theme its owner chose, and emitting 24-bit would
 # make this room match the palette file and stop matching them. So this is
 # the one surface where the palette shares the meaning and not the number.
-C_PROMPT, C_ERR = PALETTE.ansi("GREEN"), PALETTE.ansi("RED")
-C_CHROME, C_OFF = PALETTE.ansi("TEAL"), PALETTE.ansi("OFF")
+C_PROMPT, C_ERR = PALETTE.ui_ansi_read("GREEN"), PALETTE.ui_ansi_read("RED")
+C_CHROME, C_OFF = PALETTE.ui_ansi_read("TEAL"), PALETTE.ui_ansi_read("OFF")
 
 
 def _tint(code: str, s: str) -> str:
@@ -2148,7 +2150,7 @@ def _input_rows(prompt: str, buf: str, width: int | None) -> list[tuple[int, int
     is a wrap made AT a space: the space stays at the end of its row as the
     width-th cell — a cursor on it is the last column, a cursor after it is
     the next row's first. A word longer than a row is cut at the cap, as
-    wrap_line() cuts a body row. width=None (the selftest's no-terminal
+    ui_line_wrap() cuts a body row. width=None (the selftest's no-terminal
     calls) is one row, unwrapped, exactly as before."""
     line = prompt + buf
     n = len(line)
@@ -2218,7 +2220,7 @@ def _input_geometry(state: AppState, which: str, prompt: str,
                 body_rows=max(0, pane.height - (k - 1)), k=k)
 
 
-def render_pane_header(state: AppState, which: str, width: int, write) -> None:
+def ui_pane_header_render(state: AppState, which: str, width: int, write) -> None:
     """Just this pane's own header line. Always safe to call — it's a
     single row that never overlaps the body rows below it, so calling
     this on every relevant event (including ones that don't touch this
@@ -2380,7 +2382,7 @@ def _command_prompt(state: AppState) -> str:
     return state.command.prompt
 
 
-def render_pane_body(state: AppState, which: str, width: int, write,
+def ui_pane_body_render(state: AppState, which: str, width: int, write,
                       circle_prompt: str | None = None,
                       command_prompt: str | None = None) -> None:
     """This pane's content rows + its input line. Skipped entirely if
@@ -2436,19 +2438,19 @@ def render_pane_body(state: AppState, which: str, width: int, write,
     pane.input_prompt_drawn = prompt               # B66: record what was drawn
 
 
-def render_pane(state: AppState, which: str, width: int, write,
+def ui_pane_render(state: AppState, which: str, width: int, write,
                  circle_prompt: str | None = None,
                  command_prompt: str | None = None) -> None:
     """Header (always) + body (only if due). The one function most call
     sites want: it always keeps the live "N above/below" count current,
     while leaving unchanged (including scrolled-away-from-live) body
     content completely alone."""
-    render_pane_header(state, which, width, write)
-    render_pane_body(state, which, width, write, circle_prompt=circle_prompt,
+    ui_pane_header_render(state, which, width, write)
+    ui_pane_body_render(state, which, width, write, circle_prompt=circle_prompt,
                      command_prompt=command_prompt)
 
 
-def render_chrome(state: AppState, width: int, write) -> None:
+def ui_chrome_render(state: AppState, width: int, write) -> None:
     """The divider and status line — the control legend, and nothing about
     focus. It used to end "focus: CIRCLE/COMMAND"; the split itself now
     carries that (`_pane_heights`), so the text was a second, redundant
@@ -2472,7 +2474,7 @@ def render_chrome(state: AppState, width: int, write) -> None:
                    "[Ctrl-C] quit")[:width]))
 
 
-def render_full(state: AppState, width: int, write) -> None:
+def ui_full_render(state: AppState, width: int, write) -> None:
     """Startup only. `Pane._painted` starts as `None`, which already
     differs from any real `visible()` result, so both panes' bodies paint
     on this first call without needing a special-case flag — nothing
@@ -2480,10 +2482,10 @@ def render_full(state: AppState, width: int, write) -> None:
     write("\x1b[2J")  # clear screen — once, at startup, defensively
     circle_prompt = _circle_prompt(state)
     command_prompt = _command_prompt(state)
-    render_pane(state, "circle", width, write, circle_prompt=circle_prompt)
-    render_pane(state, "command", width, write, command_prompt=command_prompt)
-    render_chrome(state, width, write)
-    render_cursor(state, write, circle_prompt=circle_prompt, width=width,
+    ui_pane_render(state, "circle", width, write, circle_prompt=circle_prompt)
+    ui_pane_render(state, "command", width, write, command_prompt=command_prompt)
+    ui_chrome_render(state, width, write)
+    ui_cursor_render(state, write, circle_prompt=circle_prompt, width=width,
                   command_prompt=command_prompt)
 
 
@@ -2499,7 +2501,7 @@ def _render_input_row(state: AppState, which: str, prompt: str, write,
         # The input grew or shrank by a row: the body's bottom edge moved,
         # so this is a body redraw, not a row redraw. render_pane_body's
         # own gate includes the row count and will repaint.
-        render_pane_body(state, which, width, write,
+        ui_pane_body_render(state, which, width, write,
                          circle_prompt=prompt if which == "circle" else None,
                          command_prompt=prompt if which == "command" else None)
         return
@@ -2510,7 +2512,7 @@ def _render_input_row(state: AppState, which: str, prompt: str, write,
     pane.input_prompt_drawn = prompt               # B66: record what was drawn
 
 
-def render_input_line(state: AppState, write, width: int | None = None) -> None:
+def ui_input_line_render(state: AppState, write, width: int | None = None) -> None:
     """Cheapest redraw: just the focused pane's own input line, for the
     common case of one keystroke. Never touches the other pane's lines.
     `width` threads through to the shared _input_view window (tier 4
@@ -2518,13 +2520,13 @@ def render_input_line(state: AppState, write, width: int | None = None) -> None:
     prompt = (_circle_prompt(state) if state.focus == "circle"
               else _command_prompt(state))
     _render_input_row(state, state.focus, prompt, write, width)
-    render_cursor(state, write,
+    ui_cursor_render(state, write,
                   circle_prompt=prompt if state.focus == "circle" else None,
                   command_prompt=prompt if state.focus == "command" else None,
                   width=width)
 
 
-def render_cursor(state: AppState, write, circle_prompt: str | None = None,
+def ui_cursor_render(state: AppState, write, circle_prompt: str | None = None,
                   width: int | None = None,
                   command_prompt: str | None = None) -> None:
     """`circle_prompt`, when given, is used verbatim instead of a fresh
@@ -2760,7 +2762,7 @@ else:
 # --------------------------------------------------------------------------
 
 
-def read_burst(first_ch: str, poll=None) -> list[tuple[str, str]]:
+def ui_burst_read(first_ch: str, poll=None) -> list[tuple[str, str]]:
     """Drain everything already sitting in the input buffer, starting with
     `first_ch`, and group it into ('text', batched_chars) and
     ('key', single_token) units, in the order they arrived.
@@ -2910,8 +2912,8 @@ def _parked_on_read(engine) -> bool:
     A queued line means work is coming; a pending read over EMPTY queues
     means the engine is parked.
 
-    getattr throughout: a backend that is not a CircleEngine (this file's
-    own self_test fakes, the demo path) carries none of these attributes
+    getattr throughout: a backend that is not a CircleEngine (the
+    self-test's fakes, the demo path) carries none of these attributes
     and must read NOT parked — the conservative answer, and exactly the
     behaviour every caller was written against before this existed."""
     if not getattr(engine, "waiting_for_input", False):
@@ -2923,7 +2925,7 @@ def _parked_on_read(engine) -> bool:
     return True
 
 
-def wait_for_live_engine_before_exit(engine: "CircleEngine", warn_after: float = 60,
+def ui_live_engine_wait(engine: "CircleEngine", warn_after: float = 60,
                                      out=print) -> None:
     """RULED 2026-08-13 (Q3 sub-item): quitting must not silently orphan
     a live circle. `CircleEngine`'s background thread is `daemon=True`
@@ -2931,7 +2933,7 @@ def wait_for_live_engine_before_exit(engine: "CircleEngine", warn_after: float =
     that thread is killed with NO `finally` guarantee, wherever it
     happens to be, which could be mid-/close (short_terms half-written,
     a git commit half-applied). Harmless for --dry-run (nothing real to
-    lose, and `main_loop()`'s `finally` only calls this when
+    lose, and `ui_main_loop()`'s `finally` only calls this when
     `engine.live` is True to begin with); a genuine risk otherwise.
 
     IT WAITS FOR WORK, NEVER FOR AN ANSWER — RULED 2026-08-25 by the
@@ -2957,9 +2959,9 @@ def wait_for_live_engine_before_exit(engine: "CircleEngine", warn_after: float =
     and re-waited on purpose, so the warning's own claim ("Ctrl-C will
     not cut it short") is something the code actually does, not just says.
 
-    Extracted from `main_loop()`'s `finally` block specifically so it is
+    Extracted from `ui_main_loop()`'s `finally` block specifically so it is
     callable — and its timing testable, via `warn_after` — without a
-    real TTY, which `main_loop()` itself requires and `self_test()`
+    real TTY, which `ui_main_loop()` itself requires and the self-test
     cannot exercise (see this file's own top-of-file docstring)."""
     if not (engine.live and not engine.finished.is_set()):
         return
@@ -2993,7 +2995,7 @@ def wait_for_live_engine_before_exit(engine: "CircleEngine", warn_after: float =
     out("  circle finished — exiting cleanly.")
 
 
-def main_loop(engine: "CircleEngine | None" = None,
+def ui_main_loop(engine: "CircleEngine | None" = None,
               extra_argv: list[str] | None = None) -> int:
     """`extra_argv` is only meaningful with a real `engine` attached — the
     exact argv `CircleEngine.start()` was given (e.g. `--parts a,b,c`),
@@ -3008,12 +3010,12 @@ def main_loop(engine: "CircleEngine | None" = None,
     state = AppState(*_pane_heights(rows, "circle"), backend=engine)
     assert state.focus == "circle", "opening split must match opening focus"
     # THE REDACTED VIEW'S OWN DEFAULT (2026-08-31) — seeded here, not in
-    # AppState.__init__, which self_test() and test_circling.py's stub
+    # AppState.__init__, which the self-test and test_circling.py's stub
     # engine both exercise headless with zero coordinator imports. Only
     # the CIRCLE pane is seeded; state.command's redact_view stays False
     # for the life of the window.
-    import redaction as RDX
-    state.circle.set_redact(RDX.REDACT_VIEW_DEFAULT)
+    import stream_redaction as SR
+    state.circle.set_redact(SR.REDACT_VIEW_DEFAULT)
     extra_argv = list(extra_argv or [])
 
     # `engine is None` (the default) is byte-for-byte the demo path this
@@ -3055,7 +3057,7 @@ def main_loop(engine: "CircleEngine | None" = None,
     write(ALT_SCREEN_ON)
     try:
         with raw_mode():
-            render_full(state, cols, write)
+            ui_full_render(state, cols, write)
             flush()
             # WHAT EACH INPUT ROW LAST SHOWED lives on the pane itself now
             # (`Pane.input_prompt_drawn`, set at the draw sites) — B66,
@@ -3093,7 +3095,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                 if (new_cols, new_rows) != (cols, rows):
                     cols, rows = new_cols, new_rows
                     state.resize(*_pane_heights(rows, state.focus))
-                    render_full(state, cols, write)
+                    ui_full_render(state, cols, write)
                     flush()
 
                 drained = False
@@ -3166,7 +3168,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                     # Tab gets, and it repaints whatever this drain appended.
                     state.resize(*_pane_heights(rows, state.focus))
                     state.apply_alert_anchor()   # AFTER the resize — resize
-                    render_full(state, cols, write)  # clamps, and would eat it
+                    ui_full_render(state, cols, write)  # clamps, and would eat it
                 elif drained:
                     # A NEW LINE IN CIRCLE MUST NEVER MOVE FOCUS, TOUCH THE
                     # COMMAND PANE, OR TOUCH CIRCLE'S OWN BODY IF CIRCLE IS
@@ -3179,11 +3181,11 @@ def main_loop(engine: "CircleEngine | None" = None,
                     # cheap no-op, not a correctness risk.
                     circle_prompt = _circle_prompt(state)
                     command_prompt = _command_prompt(state)
-                    render_pane(state, "circle", cols, write, circle_prompt=circle_prompt)
+                    ui_pane_render(state, "circle", cols, write, circle_prompt=circle_prompt)
                     if touched_command:
-                        render_pane(state, "command", cols, write,
+                        ui_pane_render(state, "command", cols, write,
                                     command_prompt=command_prompt)
-                    render_cursor(state, write, circle_prompt=circle_prompt,
+                    ui_cursor_render(state, write, circle_prompt=circle_prompt,
                                   width=cols, command_prompt=command_prompt)
 
                 # THE END OF THE CIRCLE IS ANNOUNCED, ONCE — 2026-08-25, the
@@ -3198,7 +3200,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                     ended_announced = True
                     if state.on_finished() == "focus":
                         state.resize(*_pane_heights(rows, state.focus))
-                        render_full(state, cols, write)
+                        ui_full_render(state, cols, write)
 
                 # A PROMPT CAN CHANGE WITH NOTHING ARRIVING — 2026-08-21. A
                 # command-lane question takes the cmd> row with NO scrollback
@@ -3225,7 +3227,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                         _render_input_row(state, "circle", circle_prompt, write, cols)
                     if command_prompt != state.command.input_prompt_drawn:
                         _render_input_row(state, "command", command_prompt, write, cols)
-                    render_cursor(state, write, circle_prompt=circle_prompt,
+                    ui_cursor_render(state, write, circle_prompt=circle_prompt,
                                   width=cols, command_prompt=command_prompt)
 
                 ch = poll_key()
@@ -3235,7 +3237,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                     # as grouped units instead of one redraw per character.
                     # See `read_burst`. For ordinary typing this is a
                     # single unit, so nothing changes for the common case.
-                    for kind, value in read_burst(ch):
+                    for kind, value in ui_burst_read(ch):
                         effect = (state.handle_text(value) if kind == "text"
                                   else state.handle_key(value))
                         reposition = True
@@ -3254,7 +3256,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                         elif effect in ("submit", "scroll"):
                             # Always the pane that HAD focus at keypress
                             # time — never the other one.
-                            render_pane(state, state.focus, cols, write,
+                            ui_pane_render(state, state.focus, cols, write,
                                        circle_prompt=circle_prompt,
                                        command_prompt=command_prompt)
                         elif effect in ("focus", "help_resize", "revert_resize"):
@@ -3275,10 +3277,10 @@ def main_loop(engine: "CircleEngine | None" = None,
                             # unsynchronized read `render_cursor`'s
                             # docstring exists to prevent.
                             state.resize(*_pane_heights(rows, state.focus))
-                            render_full(state, cols, write)
+                            ui_full_render(state, cols, write)
                             reposition = False
                         elif effect == "input":
-                            render_input_line(state, write, cols)  # repositions itself
+                            ui_input_line_render(state, write, cols)  # repositions itself
                             reposition = False
                         elif effect is not None and effect.startswith("resume:"):
                             # 'resume <open_time>' from the COMMAND pane —
@@ -3322,7 +3324,7 @@ def main_loop(engine: "CircleEngine | None" = None,
                                     f"  ! resume failed: the current circle "
                                     f"session did not finish within 5s — "
                                     f"try 'abort', then 'resume {ot}' again")
-                                render_pane(state, "command", cols, write)
+                                ui_pane_render(state, "command", cols, write)
                             else:
                                 # `live` MUST carry forward — the OT this
                                 # resume targets was itself only offered
@@ -3363,10 +3365,10 @@ def main_loop(engine: "CircleEngine | None" = None,
                                 state.backend = engine
                                 ended_announced = False   # a NEW circle: the
                                 # banner is owed again when this one ends
-                                render_full(state, cols, write)
+                                ui_full_render(state, cols, write)
                             reposition = False
                         if reposition:
-                            render_cursor(state, write, circle_prompt=circle_prompt,
+                            ui_cursor_render(state, write, circle_prompt=circle_prompt,
                                           width=cols, command_prompt=command_prompt)
                     if not state.running:
                         break
@@ -3383,7 +3385,7 @@ def main_loop(engine: "CircleEngine | None" = None,
         if sim is not None:
             sim.stop()
         elif engine is not None:
-            wait_for_live_engine_before_exit(engine)
+            ui_live_engine_wait(engine)
             engine.stop()
         print("*** harness closed ***")
     return 0
@@ -3398,2047 +3400,22 @@ def main_loop(engine: "CircleEngine | None" = None,
 
 
 def self_test() -> int:
-    failures: list[str] = []
-    total = [0]
-
-    def check(label: str, cond: bool) -> None:
-        total[0] += 1
-        print(f"  {'PASS' if cond else 'FAIL'}  {label}")
-        if not cond:
-            failures.append(label)
-
-    # FOUR CHECKS BELOW ASSERT AGAINST THIS INSTALLATION'S OWN CONTENT — a
-    # practice carrying a BP- id, the issue node n0002 — and a fresh
-    # install has neither. They were written in a populated tree and had
-    # only ever been run in one; measured 2026-08-24 against a freshly
-    # built bundle, four of the 276 FAILED there, every one for want of
-    # data rather than for a defect. A shipped self-test that fails out of
-    # the box teaches its reader to ignore it.
-    #
-    # A SKIP IS NOT A PASS AND IS NOT COUNTED AS ONE. It names the datum
-    # that was missing, so a check that quietly stops running in a
-    # POPULATED tree — the real hazard — shows up as a skip nobody
-    # expected rather than as a green line. Same rule the hook's syntax
-    # gate uses when `sh` is absent: the validator's absence is not
-    # evidence of health.
-    skipped: list[str] = []
-
-    def skip(label: str, why: str) -> None:
-        skipped.append(label)
-        print(f"  skip  {label}")
-        print(f"          — {why}")
-
-    def _nodes() -> list:
-        """Every issue node this installation holds, through the one
-        reader of issues/ rather than a glob -- a filename there carries
-        the STATUS in its prefix, so the directory listing is not the
-        question anyone means to ask."""
-        try:
-            import issue_schema as _IS
-            return _IS.nodes()
-        except Exception:                                    # noqa: BLE001
-            return []
-
-    def _has_issue(nid: str) -> bool:
-        try:
-            import issue_schema as _IS
-            return any(_IS.nid_of(q.stem) == nid for q in _nodes())
-        except Exception:                                    # noqa: BLE001
-            return False
-
-    def _has_practice() -> bool:
-        try:
-            import check_best_practices as _BPX
-            return bool(_BPX.practices())
-        except Exception:                                    # noqa: BLE001
-            return False
-
-    state = AppState(circle_height=8, command_height=4)
-
-    for ch in "hello circle\r":
-        state.handle_key(ch)
-    check("circle input submits as [You]: line",
-          state.circle.lines == ["[You]: hello circle"])
-    check("command pane untouched by a circle submit",
-          state.command.lines == [])
-
-    effect = state.handle_key("\t")
-    check("Tab returns 'focus'", effect == "focus")
-    check("focus is now command", state.focus == "command")
-
-    # Start typing a command, but do NOT submit yet — this is the
-    # in-progress-input-in-the-inactive-pane scenario the whole design
-    # exists to protect.
-    for ch in "issue issue-relationship-":
-        state.handle_key(ch)
-    check("command input buffer holds the partial line",
-          state.command.input_buf == "issue issue-relationship-")
-
-    # An agent line arrives for the OTHER pane while the above is
-    # mid-typed. This is exactly what AgentSimulator does via the queue;
-    # here it's done directly since self_test has no event loop.
-    state.circle.append("[Judge]: an independent line, interleaved")
-    check("circle received the interleaved line",
-          state.circle.lines[-1] == "[Judge]: an independent line, interleaved")
-    check("focus did NOT move because the OTHER pane received output",
-          state.focus == "command")
-    check("the in-progress command buffer survived the interleaved line",
-          state.command.input_buf == "issue issue-relationship-")
-
-    for ch in "add\r":
-        state.handle_key(ch)
-    check("command submit is logged as a stub, not executed",
-          state.command.lines[0] == "> issue issue-relationship-add"
-          and "stub" in state.command.lines[1])
-
-    effect = state.handle_key("\t")
-    check("Tab back to circle", state.focus == "circle" and effect == "focus")
-
-    # --- CircleEngine.submit_command() — the three wired verbs ----------
-    # Unit-level, no real circle.py thread started: `circle` is imported
-    # eagerly in __init__ now (not start()), specifically so 'help' works
-    # on a bare, never-started CircleEngine — proving that here, not just
-    # asserting it in a comment.
-    eng = CircleEngine(queue.Queue())
-    check("'quit' returns the quit signal, case-insensitively",
-          eng.submit_command("Quit") == "quit")
-
-    # B57(1): the consumption handshake, and the two orderings everything
-    # built on it depends on. Cheap to pin, and impossible to notice broken —
-    # a handshake that fires early does not fail, it misattributes output.
-    check("line_taken rests SET, so a reader that never waits is unaffected",
-          eng.line_taken.is_set())
-    eng.submit_circle("something")
-    check("submit_circle CLEARS it — the line is pending, not taken",
-          not eng.line_taken.is_set())
-    eng.circle_in.get_nowait()
-    # A COMMAND-lane read, completed for real: pre-feed command_in so
-    # _read_line's `q.get()` returns at once rather than blocking here.
-    eng.command_in.put("answered")
-    eng._read_line(prompt="", channel="command")
-    check("a COMMAND-lane read does NOT set it — the lane scoping holds, so "
-          "a queued circle line is not reported taken by the other lane",
-          not eng.line_taken.is_set())
-    eng.circle_in.put("answered")
-    eng._read_line(prompt="", channel="circle")
-    check("a CIRCLE-lane read DOES set it", eng.line_taken.is_set())
-    check("...and waiting_for_input was already False when it did — a waiter "
-          "released by the event never sees the stale-True window",
-          not eng.waiting_for_input)
-    eng.out_queue.queue.clear()
-
-    # A RUNNING ENGINE IS THE PRECONDITION for forwarding, and since
-    # 2026-08-20 the branch checks it. `_running()` is `_thread is not None
-    # and not finished` — a stand-in object is enough here; start() would
-    # run a real circle.
-    eng._thread = object()
-    # ...AND SINCE 2026-08-21 SO IS THE Self> LOOP HAVING BEEN REACHED. A
-    # running engine that has not got there is OPENING — busy in the API
-    # check or the pre-warm, or parked on the working-set / topic question
-    # — and a forwarded line is consumed as that question's ANSWER: the
-    # lab's 2026-08-21 findings were fourteen of those ("not in the graph:
-    # /issue-list", "/status", "/dev", "/help, object_classes"). Busy first:
-    check("running but not yet at the Self> loop, nothing pending: the "
-          "phase reads 'opening'", eng._phase() == "opening")
-    # 'abort' IS THE ROOM'S VERB SINCE 2026-08-31 (R414):
-    # it ends the CIRCLE, so it sits beside /close, and cmd> refuses it in
-    # EVERY phase the way it refuses /close — the idle, opening and
-    # dead-engine guards its own local branch carried went with the branch.
-    eng.submit_command("abort")
-    check("'abort' at cmd> while the circle is still OPENING forwards nothing",
-          eng.circle_in.empty())
-    _t = eng.out_queue.get_nowait()[1]
-    check("...and is refused as circle-pane speech, the list naming /abort "
-          "beside /close", "circle-pane speech" in _t and "/abort" in _t
-          and "/close" in _t)
-    # Parked on the working-set question: refusals name it, and the verbs
-    # that need no transcript RUN there.
-    eng.waiting_for_input, eng.waiting_for_channel = True, "circle"
-    eng.pending_prompt = "CIRCLE issues (blank = all, 'none', '?'):"
-    check("parked on a circle-lane question before the loop: 'opening-q'",
-          eng._phase() == "opening-q")
-    eng.submit_command("abort")
-    check("'abort' parked on the working-set question forwards nothing "
-          "either", eng.circle_in.empty())
-    check("...and is the same circle-pane refusal, not a phase message",
-          "circle-pane speech" in eng.out_queue.get_nowait()[1])
-    if _nodes():
-        eng.submit_command("issue-list")
-        check("a no-transcript verb (issue-list) typed while parked on the "
-              "working-set question RUNS — the operator typed it to answer "
-              "that very question — and nothing reaches circle_in",
-              eng.circle_in.empty()
-              and "live" in eng.out_queue.get_nowait()[1])
-    else:
-        skip("a no-transcript verb (issue-list) typed while parked on the "
-             "working-set question RUNS — the operator typed it to answer "
-             "that very question — and nothing reaches circle_in",
-             "issues/ is empty — the listing has no 'live' line to find, "
-             "which is correct on an install that has opened no issue yet")
-    eng.out_queue.queue.clear()                     # the listing's rows
-    eng.submit_command("issue-evidence-list")
-    check("a verb that needs the open circle (issue-evidence-list) is refused "
-          "there, naming the question the circle is asking",
-          eng.circle_in.empty()
-          and "CIRCLE issues" in eng.out_queue.get_nowait()[1])
-    eng.waiting_for_input, eng.pending_prompt = False, ""
-    eng.loop_reached = True
-    check("once the Self> loop has been reached the phase is 'loop'",
-          eng._phase() == "loop")
-    eng.line_taken.set()
-    eng.submit_command("abort")
-    check("'abort' at cmd> with the Self> loop reached forwards NOTHING — "
-          "the room owns the circle's end (R414)",
-          eng.circle_in.empty() and eng.line_taken.is_set())
-    check("...and is refused as circle-pane speech there too",
-          "circle-pane speech" in eng.out_queue.get_nowait()[1])
-    check("/abort typed in the CIRCLE pane passes the pane guard to "
-          "circle.py's loop, whose two-step confirmation (R173) is unchanged",
-          eng._CS.pane_verb("/abort") is None
-          and eng._CS.verb_class("/abort") == "circle")
-    check("/quit typed in the circle pane is refused by name — the "
-          "window's verb, cmd> only",
-          eng._CS.pane_verb("/quit") == "/quit"
-          and eng._CS.verb_class("/quit") == "window")
-    check("a bare word is speech in the room — 'quit' and 'close' without "
-          "a slash classify as nothing",
-          eng._CS.verb_class("quit") is None
-          and eng._CS.verb_class("close") is None)
-
-    # THE CRASH CASE, 2026-08-20, kept for what it still proves: after the
-    # engine died, cmd> answers rather than queueing onto a lane nothing
-    # drains — the answer is now the same circle-pane refusal, and the verb
-    # that DOES end the window is named by the pane's own help.
-    eng.finished.set()
-    eng.out_queue.queue.clear()
-    eng.submit_command("abort")
-    check("'abort' after the engine ENDED forwards NOTHING — nothing drains "
-          "circle_in once the thread is gone", eng.circle_in.empty())
-    channel, text = eng.out_queue.get_nowait()
-    check("...and is answered, not queued into the void",
-          channel == "command" and "circle-pane speech" in text)
-    eng.finished.clear()
-    eng._thread = None
-    eng.out_queue.queue.clear()
-    eng.submit_command("abort")
-    check("'abort' before any circle was started forwards nothing either",
-          eng.circle_in.empty())
-    check("...with the same refusal — one answer in every phase",
-          "circle-pane speech" in eng.out_queue.get_nowait()[1])
-    eng.out_queue.queue.clear()
-
-    # THE PANE'S OWN VERBS ARE NAMED SOMEWHERE A READER WILL FIND THEM.
-    # `quit` has worked since this dispatcher was written and appeared in
-    # NO help output — /help renders circle.py's COMMANDS table, and a
-    # pane-local verb cannot be a row in it.
-    check("the local verb list names quit", "quit" in eng.local_verb_text())
-    check("...and every verb the dispatcher actually handles locally",
-          all(v in eng.local_verb_text()
-              for v, _ in eng.LOCAL_VERBS))
-
-    result = eng.submit_command("help")
-    channel, text = eng.out_queue.get_nowait()
-    check("'help' works before start() was ever called — no live circle needed",
-          channel == "command" and "/help" in text and "quit" in text)
-    check("...and cmd> help lists no circle-pane verb — each pane's help "
-          "shows what that pane operates (R414)",
-          not any(f"  {v} " in text or f"  {v}\xa0" in text
-                  for v in ("/abort", "/close", "/round", "/pass")))
-    check("'help' returns the 'help' signal (drives the pane resize)",
-          result == "help")
-
-    eng.submit_command("bogus")
-    ch_j, txt_j = eng.out_queue.get_nowait()
-    check("an unrecognized word is JUNK: the line that names what was typed, "
-          "then a pointer to help — and NOT the listing, which is longer "
-          "than the pane and scrolled the diagnosis out of sight "
-          "(2026-08-24; R285 had ruled the listing)",
-          ch_j == "command"
-          and txt_j == "  not a command: bogus\n  See help")
-
-    eng.submit_command("status")
-    check("'status' with NO engine running refuses with a reason instead "
-          "of queueing /status on a circle_in nothing drains (2026-08-21 — "
-          "this branch had no guard at all)",
-          eng.circle_in.empty()
-          and "needs a circle open" in eng.out_queue.get_nowait()[1])
-    eng._thread = object()                 # running; loop_reached is True
-    eng.submit_command("status")
-    check("'status' forwards /status to circle_in once a circle is at its "
-          "Self> loop — the command was never reachable from THIS pane "
-          "before, despite /status's own output landing on the command "
-          "channel",
-          eng.circle_in.get_nowait() == "/status")
-    eng.loop_reached = False               # the same engine, still OPENING
-    eng.submit_command("status")
-    check("'status' while the circle is still opening forwards nothing "
-          "and says so — on 2026-08-21 it became the working set",
-          eng.circle_in.empty()
-          and "still opening" in eng.out_queue.get_nowait()[1])
-    eng.loop_reached = True
-    eng._thread = None
-
-    # --- 'dev' — RULED 2026-08-13: one module-global dev_mode
-    # (command_surface.py since phase 2 stage 0; circle.py before),
-    # reachable and toggleable whether or not a circle is running. Forwards while running (same mechanism as abort/status
-    # above — real, tested via `_running()`, not a live thread, matching
-    # this section's own "bare engine, no live circle.py needed" style);
-    # flips the attribute directly when nothing is running to forward
-    # into, since an unread queue item would otherwise toggle nothing. --
-    check("bare (never-started) engine reads as not running",
-          not eng._running())
-    before = eng._CS.dev_mode
-    eng.submit_command("dev")
-    after = eng._CS.dev_mode
-    check("'dev' with no engine running flips command_surface.dev_mode "
-          "directly",
-          after == (not before))
-    channel, text = eng.out_queue.get_nowait()
-    check("...and acknowledges on the command channel",
-          channel == "command"
-          and text.strip() == f"dev mode: {'on' if after else 'off'}")
-    eng._CS.dev_mode = before  # restore — this is the real shared attribute
-
-    eng._thread = threading.current_thread()  # fake "running", no real session
-    check("with a thread set and not finished, engine now reads as running",
-          eng._running())
-    eng.submit_command("dev")
-    # DIRECT IN EVERY PHASE since 2026-08-21 (R286). This
-    # asserted a forward of "/dev" onto circle_in while running; the loop's
-    # /dev handler that forward fed is gone, and dev is cmd>-only.
-    check("'dev' while running at the Self> loop flips dev_mode DIRECTLY and "
-          "forwards nothing — the loop has no /dev any more",
-          eng.circle_in.empty() and eng._CS.dev_mode == (not before))
-    eng.out_queue.get_nowait()             # its "dev mode: ..." ack
-    eng._CS.dev_mode = before              # restore the shared attribute
-    eng.loop_reached = False               # still OPENING: flip directly
-    eng.submit_command("dev")
-    check("'dev' while the circle is still opening flips dev_mode DIRECTLY "
-          "rather than forwarding — forwarded, '/dev' became the working "
-          "set on 2026-08-21",
-          eng.circle_in.empty() and eng._CS.dev_mode == (not before))
-    eng.out_queue.get_nowait()             # its "dev mode: ..." ack
-    eng._CS.dev_mode = before              # restore the shared attribute
-    eng.loop_reached = True
-    eng._thread = None        # restore
-
-    # --- 'resume <open_time>' — same function as circle.py's --resume,
-    # from the command pane, without quitting and relaunching. the operator:
-    # "when an unclosed circle is reported, support 'resume' in the
-    # command pane, same function as --resume." -------------------------
-    result = eng.submit_command("resume 2026-08-10_2112")
-    check("'resume <open_time>' declines whatever read_line is pending — on "
-          "COMMAND_IN since R221, because the read it answers (circle.py's "
-          "\"type 'yes' to open a NEW circle\") is command lane; on circle_in "
-          "it would sit unread and every resume would fail its 5s wait",
-          eng.command_in.get_nowait() == "no")
-    check("...and nothing was put on circle_in by that decline",
-          eng.circle_in.empty())
-    check("'resume <open_time>' acknowledges on the command channel",
-          eng.out_queue.get_nowait() == ("command", "  resuming circle_2026-08-10_2112 —"))
-    check("'resume <open_time>' returns the resume signal for AppState/"
-          "main_loop to act on",
-          result == "resume:2026-08-10_2112")
-
-    # BARE 'resume' auto-detects from circle_state.open_circles() — the
-    # SAME source circle.py's own "N circle(s) may still be OPEN" warning
-    # is built from. the operator, after the first cut required an explicit
-    # open_time: that requirement "makes no sense" from the command pane
-    # (unlike the CLI flag, where you already know the OT you meant to
-    # type) — "resume the circle reported." Mocked so this doesn't depend
-    # on whatever is actually sitting in work/sandbox/circles/ at
-    # test time. ----------------------------------------------------------
-    import unittest.mock as _mock
-    import circle_state as _CS
-
-    def _candidate(ot: str) -> dict:
-        return {"path": _CS.SANDBOX / f"circle_{ot}.md", "ot": ot,
-                "quiet": 480.0, "why": "no close report and last written 8 min ago"}
-
-    with _mock.patch("circle_state.open_circles", return_value=[]):
-        result = eng.submit_command("resume")
-        check("bare 'resume' with nothing open says so",
-              result is None
-              and eng.out_queue.get_nowait() == ("command", "  no open circle to resume"))
-
-    with _mock.patch("circle_state.open_circles",
-                      return_value=[_candidate("2026-08-10_2112")]):
-        result = eng.submit_command("resume")
-        check("bare 'resume' auto-detects the single open sandbox circle",
-              result == "resume:2026-08-10_2112")
-        check("the auto-detected resume still declines the pending read_line, "
-              "on command_in — same lane as the explicit form above",
-              eng.command_in.get_nowait() == "no")
-        eng.out_queue.get_nowait()   # the acknowledgement, already covered above
-
-    with _mock.patch("circle_state.open_circles",
-                      return_value=[_candidate("2026-08-10_2112"),
-                                    _candidate("2026-08-06_1012")]):
-        result = eng.submit_command("resume")
-        channel, text = eng.out_queue.get_nowait()
-        check("bare 'resume' with MULTIPLE open circles refuses to guess",
-              result is None and "2 open circles" in text
-              and "2026-08-10_2112" in text and "2026-08-06_1012" in text)
-
-    result = eng.submit_command("resume not-a-real-open-time")
-    check("a malformed open_time is refused the same way",
-          result is None)
-    eng.out_queue.get_nowait()  # the explanatory message
-
-    check("_strip_resume drops an existing --resume pair",
-          _strip_resume(["--parts", "child,idealist", "--resume", "2026-08-01_0900"])
-          == ["--parts", "child,idealist"])
-    check("_strip_resume is a no-op when there's nothing to strip",
-          _strip_resume(["--parts", "child"]) == ["--parts", "child"])
-
-    # End-to-end through AppState._submit, proving 'quit' actually stops
-    # the run loop rather than just returning the right string in isolation.
-    eng2 = CircleEngine(queue.Queue())
-    s2 = AppState(4, 4, backend=eng2)
-    s2.focus = "command"
-    s2._submit(s2.command, "quit")
-    check("'quit' submitted in the command pane sets state.running False",
-          s2.running is False)
-
-    # --- help/revert pane-resize signal -----------------------------
-    # the operator: "If help is invoked, resize the panes to 1/5th and 4/5ths.
-    # When a circle is started or continued with a user circle entry,
-    # revert the pane sizes."
-    eng3 = CircleEngine(queue.Queue())
-    s3 = AppState(4, 4, backend=eng3)
-    s3.focus = "command"
-    sig = s3._submit(s3.command, "help")
-    check("'help' in the command pane signals help_resize",
-          sig == "help_resize" and s3.help_mode is True)
-
-    s3.focus = "circle"
-    sig = s3._submit(s3.circle, "a real statement")
-    # D55(2), RULED 2026-08-20: a command-pane verb standing alone in
-    # circle dialog is a NO-OP. It used to be forwarded verbatim into
-    # circle.py's one Self> loop, which cannot tell which pane sent it —
-    # so with dev on, `/practice-add ...` typed into the ROOM wrote a
-    # practice. docs/BNF.md defines COMMAND as cmd>-only.
-    print("\n  a command-pane verb standing alone in the room is a no-op")
-    s_np = AppState(6, 6)
-    s_np.focus = "circle"
-    before_lines = list(s_np.circle.lines)
-    s_np._submit(s_np.circle, "/practice-add hold the queue")
-    check("nothing was spoken — the room's scrollback is untouched",
-          s_np.circle.lines == before_lines)
-    check("...and the reason lands in the COMMAND pane, never the room",
-          any("ignored in the room" in l for l in s_np.command.lines))
-    check("...naming the verb, so a silent swallow is not what happens",
-          any("/practice-add" in l for l in s_np.command.lines))
-    for verb in ("/round", "/pass", "/close"):
-        s_ok = AppState(6, 6)
-        s_ok.focus = "circle"
-        s_ok._submit(s_ok.circle, verb)
-        # `in`, not `[-1]`: /close appends its own hand-over line after the
-        # echo (finding 11), so the echo is not the last row for that one.
-        check(f"{verb} is a CIRCLE-pane verb and still goes through",
-              f"[You]: {verb}" in s_ok.circle.lines)
-    # BARE /help PASSES THE GUARD, 2026-08-21 (R287): the room's own help
-    # answers it; `/help <arg>` and `/dev` are refused like any
-    # command-pane verb.
-    s_h = AppState(6, 6)
-    s_h.focus = "circle"
-    s_h._submit(s_h.circle, "/help")
-    check("bare /help in the room goes THROUGH to the loop (the room form "
-          "answers it) — it was refused by this guard until 2026-08-21",
-          s_h.circle.lines[-1] == "[You]: /help")
-    s_ha = AppState(6, 6)
-    s_ha.focus = "circle"
-    s_ha._submit(s_ha.circle, "/help object_classes")
-    check("/help <arg> in the room is refused and pointed at cmd>",
-          "[You]: /help object_classes" not in s_ha.circle.lines
-          and any("ignored in the room" in l for l in s_ha.command.lines))
-    s_hd = AppState(6, 6)
-    s_hd.focus = "circle"
-    s_hd._submit(s_hd.circle, "/dev")
-    check("/dev in the room is refused — cmd>-only (R286); "
-          "it used to pass because it is no PANE_OF key",
-          "[You]: /dev" not in s_hd.circle.lines
-          and any("/dev is a command-pane verb" in l for l in s_hd.command.lines))
-    s_sp = AppState(6, 6)
-    s_sp.focus = "circle"
-    s_sp._submit(s_sp.circle, "close the door behind you")
-    check("a bare word that merely looks like a verb is SPEECH — no slash, "
-          "no verb (the room is the opposite of cmd>, where R201 makes the "
-          "slash optional)",
-          s_sp.circle.lines[-1] == "[You]: close the door behind you")
-    s_an = AppState(6, 6)
-    s_an.focus = "circle"
-    # `[proposed:` — the keyword R273 fixed, 2026-08-20. This fixture said
-    # `[propose:` for one afternoon, which is dialog text under that
-    # grammar, so the "verb INSIDE an annotation" check was exercising
-    # plain speech (the UI never validates circle input, so it passed).
-    s_an._submit(s_an.circle,
-                 "maybe [proposed: /issue-relationship-add n0001 leads-to n0002]")
-    check("a verb INSIDE an annotation still reaches the room — it stages "
-          "for a ruling, which is the one way a command may be named from "
-          "here (D55(2))",
-          "[proposed:" in s_an.circle.lines[-1])
-
-    check("the next circle entry reverts — signals revert_resize",
-          sig == "revert_resize" and s3.help_mode is False)
-
-    sig = s3._submit(s3.circle, "another statement")
-    check("once reverted, ordinary circle entries stay plain (no signal)",
-          sig is None)
-
-    # /close HANDS THE WINDOW OVER, 2026-08-20. Everything a close prints
-    # is COMMAND channel, so before this the room went quiet and the work
-    # happened in the pane that was one fifth of the screen and possibly
-    # scrolled away from its own live edge.
-    # SINCE 2026-08-21 THE HANDOVER FOLLOWS THE COORDINATOR'S WORD, not the
-    # typed text: the first /close may only SHOW the unruled proposals and
-    # ask for a second, and the operator was moved to cmd> where that
-    # second /close was refused. circle.py emits state "closing" when the
-    # close proceeds; main_loop hands it to on_state().
-    s_cl = AppState(6, 6)
-    s_cl.focus = "circle"
-    s_cl.command.append("old line")
-    s_cl.command.line_up(5)                      # scrolled away from the edge
-    sig_typed = s_cl._submit(s_cl.circle, "/close")
-    check("a typed /close no longer moves focus by itself — it may be a "
-          "question, not a close",
-          s_cl.focus == "circle" and sig_typed is None)
-    sig_cl = s_cl.on_state("closing")
-    check("state 'closing' echoes into the ROOM",
-          s_cl.circle.lines[-1] == "Closing this circle...")
-    check("...then hands focus to the command pane", s_cl.focus == "command")
-    check("...scrolled back to the live edge, so the close is actually seen",
-          s_cl.command.scroll_top is None)
-    check("...and says what the wait is for",
-          s_cl.command.lines[-1]
-          == "closing the circle... collecting memories, please wait...")
-    check("...signalling a FULL redraw, since both pane heights follow focus",
-          sig_cl == "focus")
-    check("the other tokens change nothing on screen",
-          s_cl.on_state("close-confirm-pending") is None
-          and s_cl.on_state("") is None)
-    # THE INITIALIZATION HANDOVER (R330, 2026-08-23) — the same shape as
-    # "closing", in both directions: the first-run dialogs own the command
-    # pane, "Starting your circle..." hands the window back.
-    s_in = AppState(6, 6)
-    s_in.focus = "circle"
-    s_in.command.append("old line")
-    s_in.command.line_up(5)
-    sig_in = s_in.on_state("initializing")
-    check("state 'initializing' hands focus to the command pane, at its live "
-          "edge, with a full redraw",
-          s_in.focus == "command" and s_in.command.scroll_top is None
-          and sig_in == "focus")
-    sig_out = s_in.on_state("initialized")
-    check("state 'initialized' hands it back to the circle pane the same way",
-          s_in.focus == "circle" and s_in.circle.scroll_top is None
-          and sig_out == "focus")
-    # THE END OF THE CIRCLE IS ANNOUNCED — the operator, 2026-08-25: *"After
-    # /close finishes its post-close processing, the UI just sits. It is not
-    # clear that everything is done and ready for app exit, nor is it clear
-    # how to exit."* main_loop calls this once, after the last of the
-    # engine's output has been drained.
-    class _Done:
-        def __init__(self, crashed=None, code=0):
-            self.finished = threading.Event()
-            self.finished.set()
-            self._thread = object()          # started, then finished
-            self.crashed = crashed
-            self.exit_code = code
-            self.live = True
-
-    s_fin = AppState(6, 6, backend=_Done())
-    s_fin.focus = "circle"
-    s_fin.circle.append("[Judge]: a statement")
-    sig_fin = s_fin.on_finished()
-    check("the end hands focus to the command pane, with a full redraw",
-          s_fin.focus == "command" and sig_fin == "focus"
-          and s_fin.command.scroll_top is None)
-    check("...the room is told it is over",
-          "the circle is over" in s_fin.circle.lines[-1])
-    check("...and the command pane names the ONE way out",
-          "written everything it was going to write" in s_fin.command.lines[-2]
-          and "quit" in s_fin.command.lines[-1])
-    s_bad = AppState(6, 6, backend=_Done(code=1))
-    s_bad.on_finished()
-    check("a non-zero exit says a problem was reported, and claims nothing "
-          "about what was written",
-          "reported a problem" in s_bad.command.lines[-2]
-          and "written everything" not in s_bad.command.lines[-2])
-    check("speech after the end is refused, in the command pane, naming quit",
-          s_fin._submit(s_fin.circle, "zz") is not None
-          or "quit" in s_fin.command.lines[-1])
-    check("...and the circle pane did NOT echo it",
-          "[You]: zz" not in "\n".join(s_fin.circle.lines))
-    check("the circle row reads (ended), even with a line still in flight",
-          _circle_prompt(s_fin).endswith("(ended)> "))
-    s_fin.backend.line_taken = threading.Event()      # cleared = in flight
-    check("...which is exactly the case that used to read '(waiting)'",
-          _circle_prompt(s_fin).endswith("(ended)> "))
-    # AN ERROR BRINGS THE COMMAND PANE FORWARD — the operator, 2026-08-25, after an
-    # open-time "its DREAMING did not run" scrolled out of the one-fifth
-    # pane while the proposal listing below it took the screen. The drain
-    # calls on_alert for every COMMAND-channel line, AFTER appending it; a
-    # `!!` one takes focus (and with it the 4/5ths) and pins the view to the
-    # alert's own row. The resize/apply ORDER below is the contract
-    # main_loop follows and no suite can execute main_loop to check.
-    line_al = "\n  !! circle_2026-08-21_1139: its DREAMING did not run."
-    check("is_alert reads the mark through a leading newline and indent",
-          is_alert(line_al) and is_alert("  !! LIVE, IN A WORKTREE")
-          and not is_alert("  2 practice proposal(s) awaiting a ruling"))
-    s_al = AppState(6, 3)
-    s_al.focus = "circle"
-    for i in range(12):
-        s_al.command.append(f"open-time line {i}")
-    s_al.command.append(line_al)                 # the drain appends first
-    sig_al = s_al.on_alert(line_al)
-    row_al = s_al.command.last_alert_row()
-    check("a `!!` command line hands focus over, with a full redraw",
-          s_al.focus == "command" and sig_al == "focus")
-    check("...anchored on the alert's own row, but NOT applied yet",
-          s_al.command.scroll_top is None and s_al._alert_anchor == row_al)
-    s_al.command.resize(9)                       # what _pane_heights gives it
-    s_al.apply_alert_anchor()
-    check("...applied after the resize, unclamped, the alert on top",
-          s_al.command.scroll_top == row_al
-          and s_al.command.visible()[0] == s_al.command.lines[row_al]
-          and row_al > s_al.command._max_top())
-    s_al.command.append("        [BP-0041] add — synthesis")
-    check("...so what follows the alert fills in BELOW it, view unmoved",
-          s_al.command.visible()[0] == s_al.command.lines[row_al]
-          and s_al.command.visible()[-1].endswith("add — synthesis"))
-    check("a second `!!` while pinned leaves the FIRST one anchored",
-          s_al.on_alert("\n  !! and another") is None
-          and s_al.command.scroll_top == row_al)
-    check("an ordinary command line is not an alert at all",
-          s_al.on_alert("  9 issue(s) in the working set") is None)
-    s_at = AppState(6, 3)
-    s_at.focus = "circle"
-    s_at.circle.input_buf = "half a sentence, not yet said"
-    for i in range(12):
-        s_at.command.append(f"open-time line {i}")
-    s_at.command.append(line_al)
-    check("mid-sentence in the room, the alert pins WITHOUT taking focus",
-          s_at.on_alert(line_al) is None and s_at.focus == "circle"
-          and s_at.command.scroll_top == s_at.command.last_alert_row())
-    s_ac = AppState(6, 3)
-    s_ac.command.append(line_al)
-    s_ac.on_alert(line_al)
-    check("the coordinator's own handover clears a pending alert anchor",
-          s_ac._alert_anchor is not None
-          and s_ac.on_state("closing") == "focus"
-          and s_ac._alert_anchor is None)
-    # TWO EMPTY LINES BEFORE SELF'S OWN LINE (2026-08-21), pane only.
-    s_sp = AppState(6, 6)
-    s_sp._submit(s_sp.circle, "first words")
-    check("the first line in an empty pane takes no spacer",
-          s_sp.circle.lines == ["[You]: first words"])
-    s_sp.circle.append("[Judge]: a reply")
-    s_sp._submit(s_sp.circle, "second words")
-    check("a later line is prefaced by two empty rows",
-          s_sp.circle.lines[-3:] == ["", "", "[You]: second words"])
-    s_or = AppState(6, 6)
-    s_or.focus = "circle"
-    sig_or = s_or._submit(s_or.circle, "ordinary speech")
-    check("ordinary speech does none of it", 
-          s_or.focus == "circle" and sig_or is None
-          and s_or.circle.lines[-1] == "[You]: ordinary speech")
-    s_nb = AppState(6, 6)
-    s_nb.focus = "circle"
-    sig_nb = s_nb._submit(s_nb.circle, "  /close  ")
-    check("a typed /close, whitespace or not, is speech to forward and no "
-          "longer a handover — focus stays until the coordinator says "
-          "'closing'",
-          s_nb.focus == "circle" and sig_nb is None
-          and s_nb.circle.lines[-1] == "[You]:   /close  ")
-    s_bare = AppState(6, 6)
-    s_bare.focus = "circle"
-    s_bare._submit(s_bare.circle, "close")
-    check("a BARE unslashed 'close' is speech, not the verb — E11's own "
-          "history is a bare `close` typed as a typo",
-          s_bare.focus == "circle")
-
-    # --- THE CLOSE'S OWN STATE at the command pane (2026-08-21) ----------
-    eng_cs = CircleEngine(queue.Queue())
-    eng_cs._thread = threading.Thread(target=lambda: None)   # "running"
-    eng_cs.loop_reached = True
-    eng_cs.close_state = "closing"
-    check("_command_prompt reads the closing notice while the close proceeds",
-          _command_prompt(AppState(4, 4, backend=eng_cs))
-          == "closing the circle — collecting memories, please wait (input disabled) ")
-    r_cs = eng_cs.submit_command("status")
-    check("a cmd> line while closing is refused with a notice, not run",
-          r_cs is None and eng_cs.circle_in.empty()
-          and "input is disabled" in eng_cs.out_queue.get_nowait()[1])
-    check("...but 'quit' is still honoured — a hung close stays escapable",
-          eng_cs.submit_command("quit") == "quit")
-    eng_cs.waiting_for_input, eng_cs.waiting_for_channel = True, "command"
-    eng_cs.pending_prompt = "[BP-7] a)pprove, d)eny, s)kip ?"
-    eng_cs.submit_command("s")
-    check("a command-lane question the CLOSE itself asks (vetting at close) "
-          "still takes its answer while closing",
-          eng_cs.command_in.get_nowait() == "s")
-    check("...and owns the cmd> row over the closing notice",
-          _command_prompt(AppState(4, 4, backend=eng_cs)).startswith("[BP-7]"))
-    eng_cs.waiting_for_input, eng_cs.pending_prompt = False, ""
-    eng_cs.close_state = "close-confirm-pending"
-    eng_cs.submit_command("close")
-    check("while the circle waits for its SECOND /close, 'close' at cmd> is "
-          "FORWARDED into the room — the one circle verb cmd> passes on",
-          eng_cs.circle_in.get_nowait() == "/close"
-          and "forwarded" in eng_cs.out_queue.get_nowait()[1])
-    eng_cs.close_state = ""
-    eng_cs.submit_command("/close")
-    check("...and with no confirmation pending it is refused as before",
-          eng_cs.circle_in.empty()
-          and "circle-pane speech" in eng_cs.out_queue.get_nowait()[1])
-    check("the engine's _emit routes a 'state' item to close_state AND the "
-          "queue — the screen handles it in order with the output around it",
-          (eng_cs._emit("state", "closing") or True)
-          and eng_cs.close_state == "closing"
-          and eng_cs.out_queue.get_nowait() == ("state", "closing"))
-
-    # --- "(waiting)" THE INSTANT A LINE IS SUBMITTED (2026-08-21) --------
-    eng_w = CircleEngine(queue.Queue())
-    eng_w.waiting_for_input = True          # parked at Self>, as the flags say
-    eng_w.speaking_turn = True
-    eng_w.loop_reached = True               # a Self> park implies the loop
-    s_w = AppState(4, 4, backend=eng_w)
-    check("parked at Self>: the plain prompt",
-          _circle_prompt(s_w) == f"{eng_w._C.CONSOLE_NAME}> ")
-    eng_w.submit_circle("a statement")      # engine thread has NOT woken yet
-    check("the moment a line is submitted the row says (waiting), even "
-          "though the engine's own flags still read 'parked' — line_taken "
-          "is cleared on this thread, before the put; NAMED since D62 (a)",
-          _circle_prompt(s_w)
-          == f"{eng_w._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
-    eng_w.line_taken.set()                  # the read returned...
-    eng_w.waiting_for_input = False         # ...and the loop is busy
-    check("...and stays (waiting) while the parts reply",
-          _circle_prompt(s_w)
-          == f"{eng_w._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
-    eng_w.waiting_for_input = True
-    check("...until the loop is back at its read",
-          _circle_prompt(s_w) == f"{eng_w._C.CONSOLE_NAME}> ")
-
-    # --- B66: the tick's baseline is what was DRAWN, never a loop copy --
-    # The install circle's screen, 2026-08-25: an invalid working-set
-    # answer was refused and the question re-asked, but the row kept
-    # saying "(waiting)" with the cursor at the question's own column.
-    # The prompt had gone question -> waiting -> the SAME question; the
-    # waiting draw happened on the keystroke path, which never told the
-    # tick's loop-local baseline, so the returned question compared equal
-    # to it. The baseline is Pane.input_prompt_drawn now, written by the
-    # drawers themselves — this exercises exactly the A -> B -> A shape.
-    eng_b66 = CircleEngine(queue.Queue())
-    eng_b66.waiting_for_input, eng_b66.waiting_for_channel = True, "circle"
-    eng_b66.pending_prompt = "Do you have specific issues to focus on ?"
-    s_b66 = AppState(4, 4, backend=eng_b66)
-    sink_b66: list[str] = []
-    q_prompt = _circle_prompt(s_b66)
-    _render_input_row(s_b66, "circle", q_prompt, sink_b66.append, 100)
-    check("B66: the drawer records the prompt it drew on the pane",
-          s_b66.circle.input_prompt_drawn == q_prompt)
-    eng_b66.submit_circle("16")             # the keystroke path's state
-    w_prompt = _circle_prompt(s_b66)
-    check("B66: the submitted line flips the live prompt to a waiting form",
-          w_prompt != q_prompt)
-    _render_input_row(s_b66, "circle", w_prompt, sink_b66.append, 100)
-    eng_b66.line_taken.set()                # consumed; the SAME question back
-    check("B66: the re-asked question DIFFERS from what is on screen — the "
-          "A->B->A shape a loop-local baseline compared equal, so the tick "
-          "now sees a repaint owing",
-          _circle_prompt(s_b66) == q_prompt
-          and _circle_prompt(s_b66) != s_b66.circle.input_prompt_drawn)
-
-    # --- A BLANK ANSWER IS ECHOED AS THE QUESTION'S OWN LEGEND (2026-08-21)
-    eng_b = CircleEngine(queue.Queue())
-    eng_b.waiting_for_input, eng_b.waiting_for_channel = True, "circle"
-    eng_b.pending_prompt = "CIRCLE issues (blank = all, 'none', '?'):"
-    s_b = AppState(4, 4, backend=eng_b)
-    s_b._submit(s_b.circle, "")
-    check("a blank working-set answer echoes as '[You]: (blank = all)' — the "
-          "legend read off the question, not a coordinator word the pane "
-          "learned",
-          s_b.circle.lines[-1] == "[You]: (blank = all)")
-    eng_b.pending_prompt = "CIRCLE topic (blank = open):"
-    s_b._submit(s_b.circle, "")
-    check("...and the topic's as '(blank = open)'",
-          s_b.circle.lines[-1] == "[You]: (blank = open)")
-    s_b._submit(s_b.circle, "n0010")
-    check("a typed answer echoes as itself",
-          s_b.circle.lines[-1] == "[You]: n0010")
-
-
-    # --- Tab reshapes the split, and the split IS the focus indicator
-    # (2026-08-18). The heights and the header/chrome text are checkable
-    # here; the main_loop wiring that applies them on a real keypress
-    # needs a TTY and is not reachable from a headless run. ------------
-    demo_rows = 40
-    tall_circle = _pane_heights(demo_rows, "circle")
-    tall_command = _pane_heights(demo_rows, "command")
-    check("the FOCUSED pane gets the larger share, whichever one it is",
-          tall_circle[0] > tall_circle[1] and tall_command[1] > tall_command[0])
-    check("_pane_heights is an exact mirror — focus picks the slot, never "
-          "the tuple order",
-          tall_circle == tuple(reversed(tall_command)))
-
-    s_tab = AppState(*tall_circle)
-    check("the opening split matches AppState's opening focus (CIRCLE tall)",
-          s_tab.circle.height > s_tab.command.height)
-    s_tab.handle_key("\t")
-    s_tab.resize(*_pane_heights(demo_rows, s_tab.focus))
-    check("after one Tab COMMAND is the taller pane — which is now the "
-          "whole of how the UI says where typing lands",
-          s_tab.command.height > s_tab.circle.height)
-    s_tab.handle_key("\t")
-    s_tab.resize(*_pane_heights(demo_rows, s_tab.focus))
-    check("Tab back restores the opening split exactly",
-          (s_tab.circle.height, s_tab.command.height) == tall_circle)
-
-    hdr_focused: list[str] = []
-    render_pane_header(s_tab, "circle", 80, hdr_focused.append)
-    s_tab.handle_key("\t")                     # same pane, now UNfocused
-    hdr_unfocused: list[str] = []
-    render_pane_header(s_tab, "circle", 80, hdr_unfocused.append)
-    check("a pane's header is byte-identical focused or not — the [FOCUS] "
-          "tag is gone, not merely moved",
-          hdr_focused == hdr_unfocused
-          and "FOCUS" not in "".join(hdr_focused))
-    chrome_out: list[str] = []
-    render_chrome(s_tab, 80, chrome_out.append)
-    check("the status line no longer names the focused pane either",
-          "focus:" not in "".join(chrome_out).lower())
-
-    # --- 'resume <OT>' typed in the command pane propagates through
-    # AppState._submit exactly like 'quit'/'help' already do ------------
-    eng6 = CircleEngine(queue.Queue())
-    s6b = AppState(4, 4, backend=eng6)
-    s6b.focus = "command"
-    sig = s6b._submit(s6b.command, "resume 2026-08-10_2112")
-    check("AppState._submit relays the resume signal for main_loop",
-          sig == "resume:2026-08-10_2112")
-
-    # --- Merged verb surface (stages 5/6, RULED 2026-08-13) — unit level,
-    # bare/never-started engine so no real circle.py thread is needed,
-    # same style as the quit/abort/help/status checks above. ------------
-    eng8 = CircleEngine(queue.Queue())
-    eng8.submit_command("round")
-    check("bare engine: 'round' is refused as circle-pane-only, not "
-          "'not understood'",
-          "circle-pane speech" in eng8.out_queue.get_nowait()[1])
-    eng8.submit_command("pass")
-    check("'pass' refused the same way",
-          "circle-pane speech" in eng8.out_queue.get_nowait()[1])
-
-    eng8.submit_command("issue-evidence-list")
-    check("an attest-class verb (issue-evidence-list) with no circle running "
-          "refuses with a reason, not 'not understood'",
-          "needs a circle open" in eng8.out_queue.get_nowait()[1])
-
-    eng8.submit_command("bogus-verb-nobody-registered")
-    check("a genuinely unrecognized word is JUNK — answered with the help "
-          "listing headed by the line naming it (2026-08-21)",
-          eng8.out_queue.get_nowait()[1].startswith(
-              "  not a command: bogus-verb-nobody-registered"))
-
-    if _has_practice():
-        eng8.submit_command("practice-list")
-        channel, text = eng8.out_queue.get_nowait()
-        check("an always-available verb (practice-list) works with no "
-              "circle running, calling circle.py's own function directly",
-              channel == "command" and "[BP-" in text)
-    else:
-        skip("an always-available verb (practice-list) works with no "
-             "circle running, calling circle.py's own function directly",
-             "self/best_practices.toml holds no entries — the assertion "
-             "looks for a BP- id, and a fresh install has ruled none in")
-
-    # DEV ON for the next four: /prompt-show, /issue-apply, /issue-status and
-    # /issue-label-update are DEV-table verbs since 2026-08-21
-    # (R288), and with dev off the pane answers them as
-    # JUNK — pinned first, then the real dispatch with dev on.
-    eng8.submit_command("prompt-show circle")
-    ch_g, txt_g = eng8.out_queue.get_nowait()
-    check("a DEV-table verb typed with dev OFF is JUNK at the pane itself — "
-          "answered with the help listing, never dispatched (2026-08-21; "
-          "until then the pane ran a dev verb with no circle regardless)",
-          ch_g == "command" and txt_g.startswith("  not a command: prompt-show")
-          and "BLOCK 1" not in txt_g)
-    _dev_before8 = eng8._CS.dev_mode
-    eng8._CS.dev_mode = True
-    eng8.submit_command("prompt-show circle")
-    channel, text = eng8.out_queue.get_nowait()
-    check("prompt-show works with no circle running too",
-          channel == "command" and "BLOCK 1" in text)
-
-    eng8.submit_command("issue-apply")
-    check("issue-apply with no args reports its usage (ported from "
-          "ic.py, unaffected by the no-circle path)",
-          eng8.out_queue.get_nowait()[1].strip().startswith("usage:"))
-
-    # R261, 2026-08-20: the VERB IS THE HEAD. These read `issue nNNNN
-    # status` and `issue issue-label-update ...` — two commands behind one
-    # word, told apart by whether the FIRST ARGUMENT looked like a node id.
-    # The split they were checking is unchanged and still matters: a NODE's
-    # status runs here and now, a RULING batches at close and needs a
-    # circle. Only the spelling moved.
-    if _has_issue("n0002"):
-        eng8.submit_command("issue-status n0002")
-        channel, text = eng8.out_queue.get_nowait()
-        check("'issue-status nNNNN' (bare property, no circle needed) READS a "
-              "real issue's status — the construct's read half",
-              channel == "command" and text.strip().startswith("n0002:"))
-    else:
-        skip("'issue-status nNNNN' (bare property, no circle needed) READS a "
-             "real issue's status — the construct's read half",
-             "issues/ holds no n0002 — this half of the construct is the "
-             "READ, so it needs a node that exists")
-
-    eng8.submit_command('issue-label-update n0002 "x" "y"')
-    check("'issue-label-update ...' refuses as needing a circle — it "
-          "attests against a transcript and batches at close, and no "
-          "argument inspection is involved in telling it apart any more",
-          "needs a circle open" in eng8.out_queue.get_nowait()[1])
-
-    # FINDING 14, the same day: `/topic_close` was refused twice as "not
-    # understood". An underscore is a typo, not a second grammar — and the
-    # normaliser is shared with circle.py so it cannot be fixed in one
-    # dispatcher and left broken in the others.
-    if _has_issue("n0002"):
-        eng8.submit_command("issue_status n0002")
-        channel, text = eng8.out_queue.get_nowait()
-        check("an UNDERSCORE resolves to the hyphen the table holds",
-              channel == "command" and text.strip().startswith("n0002:"))
-    else:
-        skip("an UNDERSCORE resolves to the hyphen the table holds",
-             "issues/ holds no n0002 — the normaliser is what is under "
-             "test, but the assertion reads a real node's status back")
-    eng8._CS.dev_mode = _dev_before8          # restore the shared attribute
-
-    # --- leading slash is OPTIONAL in the command pane, never required
-    # (2026-08-16). "/" only disambiguates command from dialog in the
-    # CIRCLE pane (docs/HELP_DESIGN.md §0) — everything typed HERE is
-    # already a command. Before this fix, the merged verb surface below
-    # unconditionally PREPENDED "/" to the first word, so a user typing
-    # "/help" got "//help", matched no PANE_OF key, and fell through to
-    # "not understood, see 'help'" — exactly what the operator reported. ---------
-    eng_slash = CircleEngine(queue.Queue())
-    r_bare = eng_slash.submit_command("help")
-    t_bare = eng_slash.out_queue.get_nowait()
-    eng_slash2 = CircleEngine(queue.Queue())
-    r_slash = eng_slash2.submit_command("/help")
-    t_slash = eng_slash2.out_queue.get_nowait()
-    check("'help' and '/help' return the same signal",
-          r_bare == r_slash == "help")
-    check("'help' and '/help' produce identical output", t_bare == t_slash)
-
-    eng_slash3 = CircleEngine(queue.Queue())
-    eng_slash3.submit_command("/practice-list")
-    ch_s, txt_s = eng_slash3.out_queue.get_nowait()
-    check("'/practice-list' (slashed) reaches the always-available "
-          "dispatcher, not the JUNK listing",
-          ch_s == "command" and "not a command" not in txt_s)
-
-    eng_slash4 = CircleEngine(queue.Queue())
-    eng_slash4.submit_command("//help")
-    check("'//help' (two slashes) is still JUNK — not silently accepted "
-          "as a third spelling",
-          eng_slash4.out_queue.get_nowait()[1].startswith("  not a command: //help"))
-
-    # The no-op read_line stub, checked in isolation (see its own
-    # docstring for why: whether n0002 -> declined specifically would
-    # reach a confirmation prompt at all depends on live issues/ graph
-    # state — its own edges, checked elsewhere — not on this mechanism).
-    result = eng8._no_block_read_line("  type 'yes' to apply: ")
-    check("_no_block_read_line answers '' immediately, never blocks",
-          result == "")
-    check("...and echoes the prompt itself first",
-          eng8.out_queue.get_nowait() == ("command", "  type 'yes' to apply: "))
-    check("...then explains why, on the command channel",
-          "no interactive confirmation" in eng8.out_queue.get_nowait()[1])
-
-    # --- stage 8 (RULED 2026-08-13, Q3): CircleEngine.start(live=...)
-    # argv construction. C.main() is faked here (records sys.argv,
-    # returns 0 immediately) specifically so this NEVER lets a real
-    # --live run reach the roster check, the API-key check, or a
-    # single write under circles/parts/work — this test is about what
-    # argv gets BUILT, not about running a circle. -----------------------
-    captured_argv: list[list[str]] = []
-    eng9 = CircleEngine(queue.Queue())
-    orig_main = eng9._C.main            # same module for every CircleEngine
-    eng9._C.main = lambda: (captured_argv.append(list(sys.argv)), 0)[1]
-    try:
-        eng9.start(live=False)
-        check("live=False (the default) still builds --dry-run, no --live",
-              eng9.finished.wait(timeout=5)
-              and "--dry-run" in captured_argv[-1]
-              and "--live" not in captured_argv[-1])
-        check("engine.live records False", eng9.live is False)
-
-        eng9b = CircleEngine(queue.Queue())
-        captured_argv.clear()
-        eng9b.start(live=True)
-        check("live=True builds --live, no --dry-run",
-              eng9b.finished.wait(timeout=5)
-              and "--live" in captured_argv[-1]
-              and "--dry-run" not in captured_argv[-1])
-        check("engine.live records True", eng9b.live is True)
-
-        eng9c = CircleEngine(queue.Queue())
-        captured_argv.clear()
-        eng9c.start(extra_argv=["--live", "--dry-run", "--parts", "judge"],
-                   live=False)
-        check("--live/--dry-run in extra_argv are stripped regardless — "
-              "the `live` parameter is the only door, RULED 2026-08-13",
-              eng9c.finished.wait(timeout=5)
-              and captured_argv[-1].count("--live") == 0
-              and captured_argv[-1].count("--dry-run") == 1  # from live=False alone
-              and "--parts" in captured_argv[-1])
-    finally:
-        eng9._C.main = orig_main
-
-    # --- _open_sandbox_circles(): scoped to the engine's OWN root -------
-    fake_live_entry = {"path": pathlib.Path("circles") / "circle_2026-08-13_0900.md"}
-    fake_sandbox_entry = {"path": pathlib.Path("work") / "sandbox"
-                           / "circles" / "circle_2026-08-13_0901.md"}
-    eng9d = CircleEngine(queue.Queue())
-    import circle_state as _cs
-    orig_open_circles = _cs.open_circles
-    _cs.open_circles = lambda: [fake_live_entry, fake_sandbox_entry]
-    try:
-        eng9d.live = False
-        found = eng9d._open_sandbox_circles()
-        check("not live -> only the SANDBOX-rooted fake entry",
-              len(found) == 1 and found[0] is fake_sandbox_entry)
-        eng9d.live = True
-        found = eng9d._open_sandbox_circles()
-        check("live=True -> only the LIVE-rooted fake entry",
-              len(found) == 1 and found[0] is fake_live_entry)
-    finally:
-        _cs.open_circles = orig_open_circles
-
-    # --- wait_for_live_engine_before_exit() — the exit-safety wait,
-    # extracted specifically so it's testable without a real TTY. -------
-    class _FakeEngine:
-        def __init__(self, live: bool) -> None:
-            self.live = live
-            self.finished = threading.Event()
-
-    out_lines: list[str] = []
-    fe1 = _FakeEngine(live=False)
-    wait_for_live_engine_before_exit(fe1, warn_after=0.05, out=out_lines.append)
-    check("live=False: returns immediately, nothing printed",
-          out_lines == [])
-
-    fe2 = _FakeEngine(live=True)
-    fe2.finished.set()
-    wait_for_live_engine_before_exit(fe2, warn_after=0.05, out=out_lines.append)
-    check("live=True but already finished: returns immediately too",
-          out_lines == [])
-
-    fe3 = _FakeEngine(live=True)
-
-    def _finish_fe3_soon() -> None:
-        time.sleep(0.02)
-        fe3.finished.set()
-    threading.Thread(target=_finish_fe3_soon, daemon=True).start()
-    wait_for_live_engine_before_exit(fe3, warn_after=5, out=out_lines.append)
-    check("live=True, finishes well within warn_after: reports finished",
-          any("finished" in ln for ln in out_lines))
-    check("...with no periodic re-warning (only the initial 'waiting...' "
-          "announcement, never the '!! still running past ...' one)",
-          not any(ln.strip().startswith("!!") for ln in out_lines))
-
-    out_lines.clear()
-    fe4 = _FakeEngine(live=True)
-
-    def _finish_fe4_after_warning() -> None:
-        time.sleep(0.15)                 # past two 0.05s warn cycles
-        fe4.finished.set()
-    threading.Thread(target=_finish_fe4_after_warning, daemon=True).start()
-    wait_for_live_engine_before_exit(fe4, warn_after=0.05, out=out_lines.append)
-    check("still running past warn_after: the periodic warning fires "
-          "at least once before it finishes",
-          any("still running" in ln for ln in out_lines))
-    check("...and still reports finished once it actually does",
-          any("finished" in ln for ln in out_lines[-1:]))
-
-    # TWO KEY CLUSTERS, TWO JOBS — the operator, 2026-08-25: *"number pad to
-    # scroll, dedicated to change line?"* Measured at his own terminal first:
-    # numpad 7/8/9/4/6/1/2/3 arrive as lead '\x00', the arrow cluster as
-    # '\xe0', with the SAME eight scan codes. poll_key's own wiring is
-    # Windows-console-only and outside this suite's reach; the TABLES are
-    # not, and neither is what handle_key does with the tokens.
-    if "_WIN_SCAN_EXT" in globals():
-        check("the numpad's eight scan codes and the dedicated cluster's are "
-              "the same eight",
-              set(_WIN_SCAN_NUMPAD) == set(_WIN_SCAN_EXT) == set("HPIQGOKM"))
-        check("the numpad scrolls: its Up/Down/Home/End are SCROLL_KEYS",
-              all(_WIN_SCAN_NUMPAD[c] in SCROLL_KEYS for c in "HPGO"))
-        check("the arrows edit: their Up/Down and Home/End are cursor tokens",
-              _WIN_SCAN_EXT["H"] in CURSOR_ROW_KEYS
-              and _WIN_SCAN_EXT["P"] in CURSOR_ROW_KEYS
-              and _WIN_SCAN_EXT["G"] in CURSOR_ENDS
-              and _WIN_SCAN_EXT["O"] in CURSOR_ENDS)
-        check("paging stays on BOTH — NumLock on, or no numpad at all, still "
-              "leaves a pane readable",
-              _WIN_SCAN_NUMPAD["I"] == _WIN_SCAN_EXT["I"] == "PGUP"
-              and _WIN_SCAN_NUMPAD["Q"] == _WIN_SCAN_EXT["Q"] == "PGDN")
-        check("nothing scrolls sideways, so 4/6 mean the same on both",
-              _WIN_SCAN_NUMPAD["K"] == _WIN_SCAN_EXT["K"] == "LEFT"
-              and _WIN_SCAN_NUMPAD["M"] == _WIN_SCAN_EXT["M"] == "RIGHT")
-
-    # VERTICAL MOVEMENT ACROSS A WRAPPED INPUT. Asserted against the ROW
-    # RANGES rather than against magic indices: the wrap is at a WORD break,
-    # so a hardcoded column is a statement about this sentence's spaces, not
-    # about the movement — and the first version of these checks measured
-    # `"x" * 60`, one unbreakable word, whose only break point is the space
-    # inside the prompt itself.
-    s_cur = AppState(6, 6)
-    s_cur.circle.width = 30
-    s_cur.circle.input_buf = ("the room is quieter than it was, and I want to "
-                              "say why before it moves again")
-    _pr = _circle_prompt(s_cur)
-    _rg = _input_rows(_pr, s_cur.circle.input_buf, 30)
-    _at = lambda row, col: _rg[row][0] + col - len(_pr)   # noqa: E731
-    check("the sample input really does wrap onto three rows or more",
-          len(_rg) >= 3)
-    s_cur.circle.input_cursor = _at(-1, 4)
-    eff = s_cur.handle_key("CUR_UP")
-    check("dedicated Up moves the cursor one row up, same column, and redraws "
-          "only the input",
-          s_cur.circle.input_cursor == _at(-2, 4) and eff == "input")
-    check("...and the pane did NOT scroll", not s_cur.circle.is_scrolled())
-    s_cur.handle_key("CUR_DOWN")
-    check("dedicated Down comes back down, same column",
-          s_cur.circle.input_cursor == _at(-1, 4))
-    s_cur.handle_key("CUR_DOWN")
-    check("Down on the last row is a no-op, not a scroll",
-          s_cur.circle.input_cursor == _at(-1, 4)
-          and not s_cur.circle.is_scrolled())
-    s_cur.circle.input_cursor = len(s_cur.circle.input_buf)
-    s_cur.handle_key("CUR_UP")
-    check("from the append cell, Up clamps to the last addressable column of "
-          "the row above rather than running past its break",
-          s_cur.circle.input_cursor <= _rg[-2][1] - 1 - len(_pr))
-    s_cur.circle.input_cursor = 0
-    s_cur.handle_key("CUR_UP")
-    check("Up from the first row is a no-op", s_cur.circle.input_cursor == 0)
-    s_cur.handle_key("CUR_END")
-    check("dedicated End goes to the end of the whole input, not of its row",
-          s_cur.circle.input_cursor == len(s_cur.circle.input_buf))
-    s_cur.handle_key("CUR_HOME")
-    check("...and Home to its start", s_cur.circle.input_cursor == 0)
-    s_flat = AppState(6, 6)
-    s_flat.circle.input_buf = "short"
-    s_flat.circle.input_cursor = 2
-    s_flat.circle.append("a line")
-    s_flat.circle.append("another")
-    s_flat.handle_key("CUR_UP")
-    check("on an UNWRAPPED line the arrows do nothing — they never fall back "
-          "to scrolling, which is what having two clusters is for",
-          s_flat.circle.input_cursor == 2 and not s_flat.circle.is_scrolled())
-    check("while the numpad's own token still scrolls that same pane",
-          s_flat.handle_key("UP") == "scroll" or s_flat.circle.is_scrolled())
-
-    # PARKED AT A READ = EXIT AT ONCE — the operator, 2026-08-25: *"Exit at
-    # once whenever the circle is waiting for input; keep waiting only while
-    # a close or an API call is in flight."* The engine can only finish if
-    # this UI answers it, and this UI has just been quit.
-    class _ParkedEngine:
-        def __init__(self, waiting: bool = True) -> None:
-            self.live = True
-            self.finished = threading.Event()
-            self.waiting_for_input = waiting
-            self.circle_in: "queue.Queue[str]" = queue.Queue()
-            self.command_in: "queue.Queue[str]" = queue.Queue()
-
-    out_lines.clear()
-    fe5 = _ParkedEngine()
-    wait_for_live_engine_before_exit(fe5, warn_after=30, out=out_lines.append)
-    check("parked at a read: returns AT ONCE, without the 'waiting...' "
-          "announcement",
-          out_lines and "WAITING FOR YOU TO TYPE" in out_lines[0]
-          and not any("still running" in ln for ln in out_lines))
-    check("...and says the transcript is intact and the circle left open",
-          "intact" in out_lines[0] and "OPEN" in out_lines[0])
-    check("a line already queued is NOT parked — that line is about to "
-          "become work", _parked_on_read(fe5) and
-          (fe5.circle_in.put("hello") or not _parked_on_read(fe5)))
-    check("a command-lane line queued counts the same",
-          fe5.circle_in.get() == "hello" and _parked_on_read(fe5)
-          and (fe5.command_in.put("yes") or not _parked_on_read(fe5)))
-    check("mid-flight (no pending read) is NOT parked — it keeps waiting",
-          not _parked_on_read(_ParkedEngine(waiting=False)))
-    check("a backend with none of these attributes reads NOT parked",
-          not _parked_on_read(_FakeEngine(live=True)))
-
-    # AND THE SECOND TEST, INSIDE THE WAIT: an engine that is working when
-    # quit is typed, then comes back asking a question nobody can answer,
-    # must exit there rather than move the wedge one step along.
-    out_lines.clear()
-    fe6 = _ParkedEngine(waiting=False)
-
-    def _park_fe6_soon() -> None:
-        time.sleep(0.05)
-        fe6.waiting_for_input = True
-    threading.Thread(target=_park_fe6_soon, daemon=True).start()
-    wait_for_live_engine_before_exit(fe6, warn_after=30, out=out_lines.append)
-    check("in flight at first, then parked: the wait notices and exits",
-          any("WAITING FOR YOU TO TYPE" in ln for ln in out_lines)
-          and not any("finished" in ln for ln in out_lines))
-
-    # --- CircleEngine._read_line: circle.py's own CONSOLE_NAME-style
-    # plain speaking prompt is suppressed (circling already draws an
-    # equivalent "Self> " input-row prompt); every other prompt — the
-    # working-set question, the topic question, a yes/no confirmation —
-    # still echoes, since those carry real content. Reported live: a
-    # bare duplicate prompt row landing right above the real "Self> "
-    # input row on every single turn. -----------------------------
-    eng4 = CircleEngine(queue.Queue())
-    plain_prompt = f"\n{eng4._C.CONSOLE_NAME}> "
-    holder: dict[str, str] = {}
-
-    def _blocked_read(prompt: str, channel: str = "circle") -> None:
-        # channel="circle" by default: every prompt this block exercises
-        # (the speaking turn, the topic question) is circle lane under
-        # R221, and _read_line's own default is "command".
-        holder["result"] = eng4._read_line(prompt, channel)
-
-    t = threading.Thread(target=_blocked_read, args=(plain_prompt,))
-    t.start()
-    eng4.circle_in.put("a statement")
-    t.join(timeout=2)
-    check("circle.py's own plain speaking prompt is NOT echoed into the "
-          "pane — circling already shows an equivalent 'Self> ' row",
-          eng4.out_queue.empty() and holder["result"] == "a statement")
-
-    # SINCE 2026-08-21 A CIRCLE-LANE QUESTION IS NOT ECHOED EITHER (the operator:
-    # the scrollback line was redundant to the prompt row that carries it);
-    # what the probe pins now is that the question OWNS THE ROW while the
-    # read waits, and that nothing lands in scrollback.
-    seen: dict[str, str] = {}
-
-    def _blocked_read_watching(prompt: str, channel: str = "circle") -> None:
-        holder["result"] = eng4._read_line(prompt, channel)
-
-    t2 = threading.Thread(target=_blocked_read_watching,
-                           args=("\nCIRCLE topic (blank = open): ",))
-    t2.start()
-    for _ in range(200):
-        if eng4.waiting_for_input:
-            break
-        time.sleep(0.005)
-    seen["row"] = eng4.pending_prompt
-    eng4.circle_in.put("")
-    t2.join(timeout=2)
-    check("a circle-lane QUESTION (the topic prompt) is NOT echoed into "
-          "scrollback — the row carries it (2026-08-21)",
-          eng4.out_queue.empty() and holder["result"] == "")
-    check("...and the question owned the input row while the read waited",
-          seen["row"] == "CIRCLE topic (blank = open):")
-
-    circle_src = (COORD_DIR / "circle.py").read_text(encoding="utf-8")
-    check("circle.py's own Self-turn read_line call still has the exact "
-          "shape this suppression assumes — catches drift if that call "
-          "site ever changes format",
-          'cmd = read_line(f"\\n{CONSOLE_NAME}> ", channel="circle").strip()'
-          in circle_src)
-
-    # --- RULED 2026-08-13: only one prompt, and it names CONSOLE_NAME —
-    # _circle_prompt() must derive from circle.py's own attribute, not a
-    # second hardcoded literal that can silently disagree with it the
-    # moment IFS_USER_NAME is set to anything other than the default. ---
-    eng7 = CircleEngine(queue.Queue())
-    s7 = AppState(4, 4, backend=eng7)
-    check("circle-pane prompt reads circle.py's own CONSOLE_NAME, not a "
-          "second hardcoded literal (shown waiting/opening — eng7 was never "
-          "started, so waiting_for_input is still False)",
-          _circle_prompt(s7)
-          == f"{eng7._C.CONSOLE_NAME} (waiting — opening the circle)> ")
-    eng7.waiting_for_input = True
-    check("...and drops the (waiting) suffix once actually parked at "
-          "read_line — same name either way",
-          _circle_prompt(s7) == f"{eng7._C.CONSOLE_NAME}> ")
-
-    # --- waiting_for_input: the replacement signal for the suppressed
-    # echo above. True only while the background thread is actually
-    # parked in read_line(); the render layer (_circle_prompt) reflects
-    # this so a user can tell "will my Enter be read right now" without
-    # the duplicate prompt row. -----------------------------------------
-    eng5 = CircleEngine(queue.Queue())
-    check("not waiting before any read_line has been reached",
-          eng5.waiting_for_input is False)
-
-    seen_waiting: dict[str, bool] = {}
-
-    def _blocked_read_observing(prompt: str, channel: str = "circle") -> None:
-        holder["result"] = eng5._read_line(prompt, channel)
-
-    t3 = threading.Thread(target=_blocked_read_observing, args=(plain_prompt,))
-    t3.start()
-    for _ in range(200):                      # wait for the thread to block
-        if eng5.waiting_for_input:
-            break
-        time.sleep(0.005)
-    seen_waiting["mid"] = eng5.waiting_for_input
-    eng5.circle_in.put("a statement")
-    t3.join(timeout=2)
-    check("waiting_for_input is True while genuinely blocked in read_line",
-          seen_waiting["mid"] is True)
-    check("waiting_for_input clears again once unblocked",
-          eng5.waiting_for_input is False)
-
-    # --- _circle_prompt: what the render layer actually shows ----------
-    demo_state = AppState(circle_height=3, command_height=3)  # backend=None
-    check("no backend (demo path) — always the plain prompt, unaffected",
-          _circle_prompt(demo_state) == "Self> ")
-
-    busy_state = AppState(circle_height=3, command_height=3, backend=eng5)
-    check("a real engine NOT yet blocked in read_line shows as busy, "
-          "named from CONSOLE_NAME (not necessarily 'Self' — whatever "
-          "IFS_USER_NAME is set to; eng5's speaking turn above set "
-          "loop_reached, so the busy state names the parts)",
-          _circle_prompt(busy_state)
-          == f"{eng5._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
-
-    eng5.waiting_for_input = True
-    check("a real engine genuinely blocked in read_line shows the plain "
-          "prompt, same name — safe to type, it will be read now",
-          _circle_prompt(busy_state) == f"{eng5._C.CONSOLE_NAME}> ")
-
-    # --- Regression: body text and cursor column must come from the SAME
-    # read of waiting_for_input, not two independent ones. Reported live:
-    # the body showed "Self (waiting)> " while the cursor sat at the column
-    # "Self> " would have used — right before the "w" — because the flag
-    # flipped between the two reads. A backend whose flag toggles on
-    # EVERY access pins this down: render_input_line must draw the body
-    # and place the cursor from one shared value, or they will disagree
-    # every single call (not just occasionally, as the live race did). --
-    class _TogglingBackend:
-        def __init__(self) -> None:
-            self._n = 0
-
-        @property
-        def waiting_for_input(self) -> bool:
-            self._n += 1
-            return self._n % 2 == 1
-
-    tb_state = AppState(circle_height=3, command_height=3,
-                        backend=_TogglingBackend())
-    tb_state.focus = "circle"
-    tb_out: list[str] = []
-    render_input_line(tb_state, tb_out.append)
-    tb_blob = "".join(tb_out)
-    long_prompt, short_prompt = "Self (waiting)> ", "Self> "
-    used_long = long_prompt in tb_blob
-    expected_len = len(long_prompt if used_long else short_prompt)
-    cursor_cols = re.findall(r"\x1b\[\d+;(\d+)H", tb_blob)
-    check("render_input_line's cursor column matches whichever prompt it "
-          "actually drew, even when the backend's flag toggles on every "
-          "read — proves body and cursor share ONE read, not two",
-          cursor_cols and int(cursor_cols[-1]) == expected_len + 1)
-
-    # --- R221: the LANE split. A command-channel read must ask in the
-    # COMMAND pane and be answered from it, because docs/BNF.md line 105
-    # keeps RATIFICATION_DIALOG (and every other Coordinator->Self
-    # exchange) out of the circle entirely. Before this, _read_line put
-    # EVERY prompt on "circle" and drained circle_in, so vetting asked in
-    # the circle pane while the proposal being ruled on sat in command —
-    # and answering where you were reading returned "not understood". ---
-    eng8 = CircleEngine(queue.Queue())
-    vet_prompt = "  [BP-7] a)pprove, d)eny, s)kip ? "
-    held: dict[str, str] = {}
-
-    def _vet_read() -> None:
-        held["answer"] = eng8._read_line(vet_prompt)      # default = command
-
-    t8 = threading.Thread(target=_vet_read)
-    t8.start()
-    for _ in range(200):                                  # wait to park
-        if eng8.waiting_for_input:
-            break
-        time.sleep(0.005)
-    # THE QUESTION RIDES THE cmd> ROW, NOT SCROLLBACK — 2026-08-21, the
-    # lab's finding 1, the operator: "overload the prompt instead". Until then
-    # this check asserted ("command", vet_prompt) was QUEUED for the pane
-    # — the question as a scrollback line above a row that still said
-    # "cmd> ". Nothing is queued now; pending_prompt holds the question
-    # and _command_prompt renders it as the input row.
-    check("a command-channel read_line puts NOTHING in the command pane's "
-          "scrollback — the question is the input row, not a line above it",
-          eng8.out_queue.empty())
-    check("...and holds the question, stripped, for the row",
-          eng8.pending_prompt == vet_prompt.strip())
-    s8 = AppState(4, 4, backend=eng8)
-    check("...which _command_prompt renders as the cmd> row while it waits",
-          _command_prompt(s8) == vet_prompt.strip() + " ")
-    check("...while the circle row shows (waiting) — and NAMES the other "
-          "pane as what it waits on (D62 a)",
-          "(waiting — a question below in COMMANDS)" in _circle_prompt(s8))
-    check("...and records which lane it is waiting on",
-          eng8.waiting_for_channel == "command")
-    check("...and is NOT the speaking turn, so a bare Enter still means "
-          "'answer', not 'catch me up'",
-          eng8.speaking_turn is False)
-
-    # PROBE 2: the answer forwards VERBATIM, ahead of every dispatch path.
-    # "/StAtEmEnTs" must NOT become "/statements" (submit_command's normal
-    # `head + rest_of_line` reconstruction), and "abort" must NOT be
-    # intercepted — as the local verb it was, or as the circle-pane verb
-    # it is since 2026-08-31 — RULED: a pending question owns the pane,
-    # forward everything.
-    check("a line typed at the command pane while a command read is "
-          "pending forwards VERBATIM, not through the dispatcher",
-          eng8.submit_command("/StAtEmEnTs") is None
-          and eng8.command_in.get_nowait() == "/StAtEmEnTs")
-    check("...and nothing was queued to circle_in by that forward",
-          eng8.circle_in.empty())
-    eng8.submit_command("abort")
-    check("...and even a local verb forwards verbatim rather than being "
-          "intercepted — interception is how 'abort' used to be swallowed",
-          eng8.command_in.get_nowait() == "abort")
-    eng8.submit_command("a")
-    t8.join(timeout=2)
-    check("the command pane's answer is what the blocked read returns",
-          held.get("answer") == "a")
-    check("waiting_for_channel resets once the read unblocks",
-          eng8.waiting_for_input is False
-          and eng8.waiting_for_channel == "circle")
-    check("...and the cmd> row is 'cmd> ' again the moment the read "
-          "returns — 'restore after a valid reply'",
-          _command_prompt(s8) == "cmd> ")
-
-    # PROBE 3: the empty-Enter carve-out. vetting.py offers "(or Enter to
-    # skip)" and the working-set/topic prompts are both "blank = ..." —
-    # all three were unreachable while handle_key dropped whitespace-only
-    # lines before the seam. The carve-out must NOT extend to the speaking
-    # turn, which is circle lane AND the steady state of a running circle.
-    eng9 = CircleEngine(queue.Queue())
-    s9 = AppState(4, 4, backend=eng9)
-    s9.focus = "command"
-    eng9.waiting_for_input, eng9.waiting_for_channel = True, "command"
-    check("_answering is True for the pane a pending command read drains",
-          s9._answering(s9.command) is True)
-    check("...and False for the other pane",
-          s9._answering(s9.circle) is False)
-    s9.handle_key("\r")                                   # bare Enter
-    check("a bare Enter reaches the seam while a command read is pending "
-          "— this is vetting's '(or Enter to skip)', unreachable before",
-          eng9.command_in.get_nowait() == "")
-
-    eng9.waiting_for_channel, eng9.speaking_turn = "circle", True
-    s9.focus = "circle"
-    check("_answering is False on Self's speaking turn, even though it IS "
-          "circle lane and pending — a bare Enter there still means "
-          "'catch me up', per the affordance at handle_key",
-          s9._answering(s9.circle) is False)
-    s9.handle_key("\r")
-    check("...so nothing is posted, and the pane is not disturbed",
-          eng9.circle_in.empty())
-
-    check("_answering is False with no backend at all — the demo and "
-          "self-test path must behave exactly as it did before R221",
-          AppState(4, 4)._answering(AppState(4, 4).circle) is False)
-
-    # --- THE MIRROR EDGE, 2026-08-21: a line typed into the ROOM while a
-    # COMMAND-lane question is pending BEFORE the Self> loop exists would
-    # sit on circle_in until the next circle-lane read — the working-set
-    # question — and become the working set, the same way a cmd> line did
-    # in the other direction. Refused with the question named; once the
-    # loop is reached, speech is queued as it always was. -----------------
-    eng10 = CircleEngine(queue.Queue())
-    s10 = AppState(4, 4, backend=eng10)
-    eng10.waiting_for_input, eng10.waiting_for_channel = True, "command"
-    eng10.pending_prompt = "[BP-7] a)pprove, d)eny, s)kip ?"
-    s10._submit(s10.circle, "hello room")
-    check("circle-pane speech while a command-lane question is pending "
-          "BEFORE the loop is refused — nothing reaches circle_in",
-          eng10.circle_in.empty())
-    check("...the notice lands in the COMMAND pane and names the question",
-          any("a)pprove" in ln for ln in s10.command.lines))
-    check("...and the room shows no '[You]:' echo for it",
-          not any(ln.startswith("[You]:") for ln in s10.circle.lines))
-    eng10.loop_reached = True
-    s10._submit(s10.circle, "hello room")
-    check("the same line AFTER the loop is reached is queued as speech — "
-          "mid-circle statements during a pending ruling are untouched "
-          "(ruled 2026-08-20)",
-          eng10.circle_in.get_nowait() == "hello room"
-          and s10.circle.lines[-1] == "[You]: hello room")
-
-    # --- _command_prompt: the cmd> row's text, 2026-08-21 -----------------
-    check("_command_prompt: no backend — the plain 'cmd> '",
-          _command_prompt(AppState(4, 4)) == "cmd> ")
-    eng11 = CircleEngine(queue.Queue())
-    s11 = AppState(4, 4, backend=eng11)
-    eng11.waiting_for_input, eng11.waiting_for_channel = True, "circle"
-    eng11.pending_prompt = "CIRCLE topic (blank = open):"
-    check("_command_prompt: a pending CIRCLE-lane question leaves the cmd> "
-          "row alone — it belongs to the other pane",
-          _command_prompt(s11) == "cmd> ")
-    eng11.waiting_for_channel = "command"
-    eng11.pending_prompt = "type 'yes' to apply:"
-    check("_command_prompt: a pending COMMAND-lane question IS the row",
-          _command_prompt(s11) == "type 'yes' to apply: ")
-    eng11.waiting_for_input = False
-    check("_command_prompt: 'cmd> ' is back the moment nothing is pending",
-          _command_prompt(s11) == "cmd> ")
-    chrome11: list[str] = []
-    render_chrome(s11, 80, chrome11.append)
-    check("the status line no longer says '(grows to 4/5ths)' (2026-08-21)",
-          "4/5ths" not in "".join(chrome11) and "[Tab] pane" in "".join(chrome11))
-
-    # --- append() splits embedded newlines into separate rows -----------
-    # Regression for a real bug: circle.py's read_line prompts and many
-    # emit() calls carry a leading/embedded "\n" (a plain-terminal
-    # spacer convention) that broke the fixed-row renderer — see
-    # Pane.append's docstring.
-    p0 = Pane("T", "t> ", height=4)
-    p0.append("\nCIRCLE issues (blank = all): ")
-    check("a leading \\n becomes its own (blank) row, not lost",
-          p0.lines == ["", "CIRCLE issues (blank = all): "])
-    p0.append("a\nb\nc")
-    check("multiple embedded \\n become multiple rows",
-          p0.lines[-3:] == ["a", "b", "c"])
-    p0.append("plain, no newline")
-    check("a plain line is still exactly one row",
-          p0.lines[-1] == "plain, no newline")
-
-    # WRAPPING, 2026-08-20. The body wrote `text[:width]` and TRUNCATED: a
-    # statement longer than the terminal was cut and the remainder was never
-    # on screen at all, which is why resizing did not bring it back. the operator
-    # found it in the first live lab circle.
-    print("\n  wrapping — nothing leaves the screen, and a resize reflows")
-    check("no width means no wrapping — a bare Pane is unchanged",
-          wrap_line("x" * 99, None) == ["x" * 99])
-    check("a line that fits is returned untouched",
-          wrap_line("exactly twenty chars", 20) == ["exactly twenty chars"])
-    check("a long line breaks on spaces, never mid-word",
-          all(len(r) <= 24 for r in wrap_line(
-              "[Judge]: a long statement that must wrap", 24)))
-    check("...and loses nothing — the words come back in order",
-          " ".join(wrap_line("[Judge]: a long statement that must wrap", 24)).split()
-          == "[Judge]: a long statement that must wrap".split())
-    check("the continuation carries the source line's own indent, so an "
-          "indented block does not fall back under a label column",
-          [r[:4] for r in wrap_line("    focus n0021 and a long tail here", 22)]
-          == ["    ", "    "])
-    check("a word longer than the width is CUT rather than left to overflow",
-          wrap_line("a" * 30, 12) == ["a" * 12, "a" * 12, "a" * 6])
-    check("an empty line stays one empty row — a spacer is still a spacer",
-          wrap_line("", 20) == [""])
-
-    pw = Pane("c", "> ", 10)
-    pw.set_width(20)
-    pw.append("one two three four five six seven")
-    check("append wraps at the pane's width", len(pw.lines) > 1)
-    check("...and the SOURCE line is kept whole for re-wrapping",
-          pw.logical == ["one two three four five six seven"])
-    wide = len(pw.lines)
-    pw.set_width(80)
-    check("widening REFLOWS rather than re-truncating — fewer rows, same text",
-          len(pw.lines) < wide and pw.lines == ["one two three four five six seven"])
-    pw.set_width(20)
-    check("narrowing reflows back", len(pw.lines) == wide)
-    check("set_width is idempotent — the same width does not rebuild",
-          (pw.set_width(20), pw.lines == pw.lines)[1])
-
-    # --- set_redact: toggling is architecturally a resize (2026-08-31) --
-    sys.path.insert(0, str(COORD_DIR))   # _command_surface()'s own pattern
-    import redaction as _RDX
-    import tempfile as _tempfile
-    _live_alias, _live_map = _RDX.ALIAS_PATH, _RDX.MAP_PATH
-    with _tempfile.TemporaryDirectory() as _td:
-        _RDX.ALIAS_PATH = pathlib.Path(_td) / "redaction.toml"
-        _RDX.MAP_PATH = pathlib.Path(_td) / "redaction_map.toml"
-        _RDX._alias_cache.update(mtime="unread", re=None, form_to_row={})
-        _RDX.add_alias("Alice Smith", "person", ["Alice"])
-
-        pr = Pane("c", "> ", 10)
-        pr.set_width(40)
-        pr.append("Alice Smith walked in.")
-        before = list(pr.lines)
-        check("redact_view starts off", not pr.redact_view)
-        check("unredacted by default", "Alice Smith" in before[0])
-
-        pr.set_redact(True)
-        check("toggling ON redacts an ALREADY-SHOWN line, not only future "
-              "ones — the whole point of sharing _rebuild() with resize",
-              "Alice Smith" not in pr.lines[0] and "P1" in pr.lines[0])
-        check(".logical (the record) is untouched by redaction",
-              pr.logical == ["Alice Smith walked in."])
-
-        pr.set_redact(True)
-        check("set_redact is idempotent — the same flag does not rebuild",
-              pr.lines == pr.lines)
-
-        pr.set_redact(False)
-        check("toggling OFF restores the original rendering",
-              pr.lines == before)
-
-        for n in range(8):
-            pr.append(f"Alice Smith line {n}, long enough to wrap at 40")
-        pr.height = 3
-        pr.scroll_top = pr._max_top()   # pin to the current bottom-most top
-        wide_lines, wide_top = len(pr.lines), pr.scroll_top
-        pr.set_redact(True)             # "P1" is shorter -> fewer rows
-        check("redacting shrank the row count (shorter token, same lines)",
-              len(pr.lines) < wide_lines)
-        check("an out-of-range scroll_top clamps under set_redact exactly "
-              "as it does under set_width/resize — same _rebuild(), same "
-              "clamp, never left pointing past the new end",
-              pr.scroll_top <= pr._max_top())
-        check("...and it actually WOULD have been out of range unclamped "
-              "— the test is real, not vacuously true",
-              wide_top > pr._max_top())
-        pr.set_redact(False)
-        check("toggling back restores the wider row count",
-              len(pr.lines) == wide_lines)
-    _RDX.ALIAS_PATH, _RDX.MAP_PATH = _live_alias, _live_map
-    _RDX._alias_cache.update(mtime="unread", re=None, form_to_row={})
-
-    # --- Scrolling: Pane-level, direct (no AppState involved) -----------
-    p = Pane("T", "t> ", height=4)
-    for n in range(10):
-        p.append(f"line {n}")
-    check("following by default shows the tail",
-          p.visible() == ["line 6", "line 7", "line 8", "line 9"])
-    check("not scrolled while following", not p.is_scrolled())
-
-    p.line_up(2)
-    check("line_up(2) moves the view up by two",
-          p.visible() == ["line 4", "line 5", "line 6", "line 7"])
-    check("is_scrolled once scroll_top is set", p.is_scrolled())
-
-    p.append("line 10")
-    check("a new line while scrolled does NOT move the pinned view",
-          p.visible() == ["line 4", "line 5", "line 6", "line 7"])
-    check("hidden_below counts what's below the pinned view",
-          p.hidden_below() == 3)   # lines 8, 9, 10 are below "line 7"
-    check("hidden_above counts what's above the pinned view",
-          p.hidden_above() == 4)   # lines 0, 1, 2, 3 are above "line 4"
-
-    p2 = Pane("T2", "t2> ", height=4)
-    for n in range(6):
-        p2.append(f"x{n}")
-    check("hidden_above is nonzero even while following, if scrollback "
-          "exceeds the pane height", p2.hidden_above() == 2)
-
-    p.jump_top()
-    check("jump_top pins to the very first line",
-          p.visible()[0] == "line 0")
-
-    p.jump_bottom()
-    check("jump_bottom resumes following",
-          not p.is_scrolled() and p.visible()[-1] == "line 10")
-
-    p.line_up(1)
-    p.page_down()
-    check("page_down past the live edge resumes following",
-          not p.is_scrolled())
-
-    # --- Scrolling: routed through AppState, to the FOCUSED pane only ---
-    s2 = AppState(circle_height=3, command_height=3)
-    for n in range(8):
-        s2.circle.append(f"c{n}")
-    for n in range(8):
-        s2.command.append(f"m{n}")
-    # focus is circle (default) — UP must move circle, not command
-    s2.handle_key("UP")
-    check("UP with circle focused scrolls circle, not command",
-          s2.circle.is_scrolled() and not s2.command.is_scrolled())
-
-    s2.toggle_focus()
-    s2.handle_key("PGUP")
-    check("PGUP with command focused scrolls command, not the already-"
-          "scrolled circle pane (each pane's position is independent)",
-          s2.command.is_scrolled() and s2.circle.is_scrolled())
-
-    effect = s2.handle_key("DOWN")
-    check("a named scroll token is never appended as literal text",
-          s2.command.input_buf == "")
-    check("a named scroll token returns the 'scroll' effect tag",
-          effect == "scroll")
-
-    # --- Scrolling away from the live edge IS the freeze — verified at
-    # the mechanism level, not just at visible(). Proven end to end
-    # through the renderer: body content that arrives while scrolled must
-    # not reach the screen; the header's live count must, and the body
-    # must catch up, intact, once scrolled back to the live edge. --------
-    s3 = AppState(circle_height=3, command_height=3)
-    for n in range(6):                    # more than the height, or there's
-        s3.circle.append(f"before-scroll-{n}")   # nothing to scroll away to
-    out0: list[str] = []
-    render_full(s3, width=80, write=out0.append)   # first paint, establishes _painted
-
-    s3.handle_key("UP")
-    check("scrolling away from the live edge sets is_scrolled",
-          s3.circle.is_scrolled())
-    scrolled_out: list[str] = []
-    render_pane(s3, "circle", width=80, write=scrolled_out.append)  # paints
-    check("that scroll got painted once — the view actually moved",
-          "".join(scrolled_out).strip() != "")
-
-    check("with the scrolled view now painted, nothing pending changed it",
-          not s3.circle.body_needs_repaint())
-
-    s3.circle.append("during-scroll — should not reach the screen yet")
-    check("appending while scrolled does NOT flip body_needs_repaint — "
-          "this IS the freeze, no separate toggle needed",
-          not s3.circle.body_needs_repaint())
-    out1: list[str] = []
-    render_pane(s3, "circle", width=80, write=out1.append)
-    blob1 = "".join(out1)
-    check("header updates immediately (the live count)",
-          "above" in blob1 or "below" in blob1 or "scrolled" in blob1)
-    check("body content that arrived while scrolled is NOT drawn",
-          "during-scroll" not in blob1)
-
-    s3.handle_key("END")   # back to the live edge
-    check("End resumes following", not s3.circle.is_scrolled())
-    out2b: list[str] = []
-    render_pane(s3, "circle", width=80, write=out2b.append)
-    blob2b = "".join(out2b)
-    check("on catching up, the line that arrived while scrolled is now "
-          "shown, intact — nothing was lost", "during-scroll" in blob2b)
-
-    # --- A bare Enter (empty input) is a second way to catch up, next to
-    # End — it posts nothing but still reflows to the live edge, for
-    # whichever pane is focused. -------------------------------------------
-    s6 = AppState(circle_height=3, command_height=3)
-    for n in range(6):
-        s6.circle.append(f"before-{n}")
-    s6.handle_key("UP")
-    check("scrolled away, as the setup for this check",
-          s6.circle.is_scrolled())
-    s6.circle.append("arrived-while-scrolled")
-    effect = s6.handle_key("\r")               # bare Enter, input_buf is ""
-    check("a bare Enter on an empty line posts nothing",
-          s6.circle.lines[-1] == "arrived-while-scrolled")
-    check("but it DOES resume following, same as End",
-          not s6.circle.is_scrolled())
-    check("and it's reported as a 'scroll' effect so the pane repaints",
-          effect == "scroll")
-    out6: list[str] = []
-    render_pane(s6, "circle", width=80, write=out6.append)
-    check("the repaint actually shows the line that arrived while scrolled",
-          "arrived-while-scrolled" in "".join(out6))
-
-    s7 = AppState(circle_height=3, command_height=3)
-    s7.circle.append("only-one-line")            # nothing to scroll away to
-    effect7 = s7.handle_key("\r")
-    check("a bare Enter while already following stays the cheap no-op it "
-          "always was — no false 'scroll' effect from a following pane",
-          effect7 == "input" and not s7.circle.is_scrolled())
-
-    # --- Paste batching: read_burst groups a fast-arriving run of
-    # characters into ONE text unit instead of N, and treats an Enter
-    # mid-burst as paste content, not a submit. Uses an injected `poll` so
-    # this needs no real stdin. -------------------------------------------
-    fake_stream = iter(["b", "c", " ", "d"])
-    units = read_burst("a", poll=lambda: next(fake_stream, None))
-    check("a burst of plain characters becomes ONE 'text' unit",
-          units == [("text", "abc d")])
-
-    fake_stream2 = iter([])
-    units2 = read_burst("\r", poll=lambda: next(fake_stream2, None))
-    check("a standalone Enter (nothing buffered behind it) is a real "
-          "'key' unit, never batched", units2 == [("key", "\r")])
-
-    fake_stream3 = iter(["i", "\n", "n", "e", "2"])
-    units3 = read_burst("l", poll=lambda: next(fake_stream3, None))
-    check("a CR/LF encountered MID-burst (a multi-line paste) becomes a "
-          "space inside the batch, not a submit",
-          units3 == [("text", "li ne2")])
-
-    fake_stream4 = iter(["b", "\t", "c"])
-    units4 = read_burst("a", poll=lambda: next(fake_stream4, None))
-    check("a control key mid-burst ends the current batch and is its own "
-          "unit, in order, without losing what came after it",
-          units4 == [("text", "ab"), ("key", "\t"), ("text", "c")])
-
-    # --- Astral characters (tier 4 #39): Windows getwch() delivers an
-    # emoji as two UTF-16 surrogates, each of which fails the
-    # isprintable() gates — poll_key pairs them (Windows-console wiring,
-    # untestable here) via _surrogate_pair, whose math and downstream
-    # acceptance are what this can assert anywhere. ---------------------
-    heart = _surrogate_pair("\ud83d", "\udc94")
-    check("_surrogate_pair combines a UTF-16 pair into ONE code point",
-          heart == "\U0001f494" and len(heart) == 1)
-    check("...which the isprintable() gates accept", heart.isprintable())
-    fake_stream5 = iter([heart, "x"])
-    units5 = read_burst("a", poll=lambda: next(fake_stream5, None))
-    check("a paired astral char rides a text burst like any character",
-          units5 == [("text", f"a{heart}x")])
-    s_emoji = AppState(circle_height=3, command_height=3)
-    s_emoji.handle_key(heart)
-    check("handle_key inserts it into the input buffer",
-          s_emoji.circle.input_buf == heart)
-
-    # --- Pane heights fit the terminal (tier 4 #40): the 6/4 floors used
-    # to be unconditional, so any terminal under 24 rows needed more rows
-    # than existed and the bottom rows overwrote one another every tick.
-    # The invariant: the two heights never exceed what the chrome leaves,
-    # whenever at least two rows exist to split. --------------------------
-    fits = all(sum(_pane_heights(r, f)) <= max(2, r - 9)
-               for r in range(10, 41) for f in ("circle", "command"))
-    check("pane heights fit within rows-9 across 10..40-row terminals "
-          "(9 chrome rows since B67's spacer above the divider)",
-          fits)
-    check("both panes keep at least one row even on a pathological screen",
-          min(_pane_heights(8, "circle")) >= 1)
-    check("full-size terminals keep the exact 4/5ths split (one row "
-          "smaller than pre-B67 — the spacer took it)",
-          _pane_heights(30, "circle") == (16, 5)
-          and _pane_heights(30, "command") == (5, 16))
-    check("the ruled 6/4 floors still hold where they fit",
-          _pane_heights(25, "circle")[1] == 4)
-
-    # --- The input WRAPS AT A WORD BREAK inside the pane width (2026-08-21,
-    # the operator: "it currently scrolls the line left when approaching the right
-    # bound"); it was a cursor-anchored single-row window from tier 4 #38
-    # until then. _input_layout is the single computation both the row
-    # drawers and render_cursor read, so text and cursor cannot disagree.
-    check("a fitting line is one row, cursor after its last character "
-          "(the legacy shape)",
-          _input_layout("p> ", "abc", 3, 80) == (["p> abc"], 0, 7))
-    check("width=None (no terminal) is one row whatever the length",
-          _input_layout("p> ", "x" * 100, 100, None) == (["p> " + "x" * 100], 0, 104))
-    words = " ".join(["word"] * 60)           # 299 chars, breakable
-    rows_w, r_w, c_w = _input_layout("Owner> ", words, len(words), 80)
-    check("a 300-char line of words in an 80-column pane is four rows, each "
-          "under the width, every break at a space",
-          len(rows_w) == 4 and all(len(r) <= 80 for r in rows_w)
-          and all(r.endswith(" ") for r in rows_w[:-1])
-          and "".join(rows_w) == "Owner> " + words)
-    check("...with the cursor on the LAST row, after its last character",
-          r_w == 3 and c_w == len(rows_w[3]) + 1)
-    rows_l, r_l, c_l = _input_layout("Owner> ", words, len(words) - 100, 80)
-    check("LEFT x100 puts the cursor on an earlier row at the matching "
-          "column — the rows do not move, the cursor does",
-          rows_l == rows_w and r_l < 3 and 1 <= c_l <= 80
-          and rows_l[r_l][c_l - 1] == ("Owner> " + words)[7 + len(words) - 100])
-    rows_h, r_h, c_h = _input_layout("Owner> ", words, 0, 80)
-    check("...and at the start of the text the cursor is on row 0, just "
-          "after the prompt",
-          r_h == 0 and c_h == 8 and rows_h == rows_w)
-    rows_x, r_x, c_x = _input_layout("p> ", "x" * 100, 100, 20)
-    check("a word longer than a row is cut at width-1 per row — the append "
-          "cell stays on screen (col never exceeds the width)",
-          all(len(r) <= 19 for r in rows_x) and c_x <= 20
-          and "".join(rows_x) == "p> " + "x" * 100)
-    check("the exact-width boundary: a line of exactly `width` chars wraps "
-          "its last character rather than hanging the cursor at width+1",
-          _input_layout("", "x" * 40, 40, 40)[1:] == (1, 2))
-    rows_c, r_c, _ = _input_layout("p> ", " ".join(["w"] * 100), 0, 20, max_rows=3)
-    check("max_rows caps what is SHOWN to the run containing the cursor row",
-          len(rows_c) == 3 and r_c == 0)
-    rows_c2, r_c2, _ = _input_layout("p> ", " ".join(["w"] * 100),
-                                     len(" ".join(["w"] * 100)), 20, max_rows=3)
-    check("...anchored at the end when the cursor is at the end",
-          len(rows_c2) == 3 and r_c2 == 2)
-    tb2 = AppState(circle_height=3, command_height=3)
-    tb2.handle_text(" ".join(["yy"] * 60))
-    out_narrow: list[str] = []
-    render_input_line(tb2, out_narrow.append, 40)
-    drawn_rows = re.findall(r"\x1b\[\d+;1H\x1b\[2K([^\x1b]*)", "".join(out_narrow))
-    check("render_input_line writes every wrapped row and never a byte past "
-          "the width",
-          drawn_rows and all(len(r) <= 40 for r in drawn_rows))
-    g2 = _input_geometry(tb2, "circle", _circle_prompt(tb2), 40)
-    check("the input takes its rows FROM THE BODY, bottom up — k rows of "
-          "input leave height-(k-1) body rows",
-          g2["k"] > 1 and g2["body_rows"] == tb2.circle.height - (g2["k"] - 1)
-          and g2["first_row"] == _pane_rows(tb2, "circle")["input"] - (g2["k"] - 1))
-    check("...and the body repaint gate knows the row count — a change in "
-          "k alone is a repaint",
-          tb2.circle.body_needs_repaint(g2["k"]) is False
-          or tb2.circle.body_needs_repaint(g2["k"] + 1) is True)
-
-    s4 = AppState(circle_height=3, command_height=3)
-    effect = s4.handle_text("pasted text")
-    check("handle_text bulk-appends in one call and returns 'input'",
-          s4.circle.input_buf == "pasted text" and effect == "input")
-
-    # --- Left/Right move the cursor WITHIN the input line, not just
-    # append-at-end/backspace-at-end — the operator: "I'd like the left/right
-    # arrows to support moving on the line for edit." -------------------
-    s8 = AppState(circle_height=3, command_height=3)
-    for ch in "abd":
-        s8.handle_key(ch)
-    check("typed text lands at the end by default",
-          s8.circle.input_buf == "abd" and s8.circle.input_cursor == 3)
-
-    s8.handle_key("LEFT")
-    check("LEFT moves the cursor back one", s8.circle.input_cursor == 2)
-    s8.handle_key("c")
-    check("typing at a mid-line cursor INSERTS, not appends",
-          s8.circle.input_buf == "abcd" and s8.circle.input_cursor == 3)
-
-    for _ in range(10):
-        s8.handle_key("LEFT")
-    check("LEFT is bounded at column 0, never goes negative",
-          s8.circle.input_cursor == 0)
-
-    for _ in range(10):
-        s8.handle_key("RIGHT")
-    check("RIGHT is bounded at the end of the buffer",
-          s8.circle.input_cursor == len(s8.circle.input_buf) == 4)
-
-    s8.handle_key("LEFT")
-    s8.handle_key("\x7f")   # backspace
-    check("backspace at a mid-line cursor removes the char BEFORE it, "
-          "not always the last character in the buffer",
-          s8.circle.input_buf == "abd" and s8.circle.input_cursor == 2)
-
-    s8.handle_key("\r")
-    check("submitting resets the cursor along with the buffer",
-          s8.circle.input_cursor == 0)
-
-    s9 = AppState(circle_height=3, command_height=3)
-    s9.handle_key("a")
-    s9.handle_key("d")
-    s9.handle_key("LEFT")
-    s9.handle_text("bc")
-    check("a paste (handle_text) inserts at the cursor too, not just "
-          "appends at the end",
-          s9.circle.input_buf == "abcd" and s9.circle.input_cursor == 3)
-
-    out_cursor: list[str] = []
-    render_cursor(s9, out_cursor.append)
-    L9 = _layout(s9)
-    expected_cursor = _move(L9["circle_input_row"],
-                             len(s9.circle.prompt) + s9.circle.input_cursor + 1)
-    check("render_cursor positions the terminal cursor at input_cursor, "
-          "not at the end of the buffer",
-          out_cursor[0] == expected_cursor)
-
-    # --- Resize: a terminal resize can't be prevented from inside this
-    # process (see main_loop's comment — ConPTY hides the real window
-    # handle), so the fallback is to detect it and recover cleanly rather
-    # than leave stale geometry on screen. Tested at the Pane/AppState
-    # level, which is where the actual recovery logic (new height, clamped
-    # scroll, forced repaint) lives. -----------------------------------
-    p3 = Pane("T3", "t3> ", height=10)
-    for n in range(20):
-        p3.append(f"r{n}")
-    p3.line_up(5)                          # scroll_top now 5 (max_top=10)
-    check("scrolled before resize, at a position only valid for height 10",
-          p3.scroll_top == 5)
-    p3.resize(4)                            # shrink — max_top is now 16
-    check("resize updates height", p3.height == 4)
-    check("resize does not touch the underlying lines, only what's shown",
-          len(p3.lines) == 20)
-    check("a scroll_top that's still valid after a resize is left alone",
-          p3.scroll_top == 5)
-
-    p5 = Pane("T5", "t5> ", height=3)
-    for n in range(10):
-        p5.append(f"u{n}")
-    p5.line_up(3)                           # max_top was 7 -> scroll_top = 4
-    check("scrolled to a position valid for the OLD, smaller height",
-          p5.scroll_top == 4)
-    p5.resize(8)                            # max_top is now 2 — 4 no longer fits
-    check("resize clamps an out-of-range scroll_top into the new bounds "
-          "instead of leaving it pointing past the end",
-          p5.scroll_top == p5._max_top() == 2)
-
-    check("resize resets the painted cache so the next render repaints "
-          "unconditionally, regardless of whether visible() happens to "
-          "coincide with the old painted content",
-          p3._painted is None)
-
-    s5 = AppState(circle_height=3, command_height=3)
-    for n in range(10):
-        s5.circle.append(f"cc{n}")
-        s5.command.append(f"mm{n}")
-    s5.resize(circle_height=6, command_height=2)
-    check("AppState.resize fans out to both panes independently",
-          s5.circle.height == 6 and s5.command.height == 2)
-    out_resize: list[str] = []
-    render_full(s5, width=80, write=out_resize.append)
-    check("render_full after a resize runs clean at the new geometry",
-          "CIRCLE" in "".join(out_resize)
-          and "COMMANDS" in "".join(out_resize))
-
-    # Renderer smoke test: capture output into a list instead of a real
-    # terminal, and check it doesn't crash and mentions both panes.
-    out: list[str] = []
-    render_full(state, width=80, write=out.append)
-    blob = "".join(out)
-    check("render_full ran without raising and drew both headers",
-          "CIRCLE" in blob and "COMMANDS" in blob)
-    check("render_full shows the interleaved agent line",
-          "Judge" in blob)
-
-    # The header's scroll tag: both counts appear once scrolled.
-    out2: list[str] = []
-    render_full(s2, width=80, write=out2.append)
-    blob2 = "".join(out2)
-    check("header shows an 'above' count for a scrolled pane",
-          "above" in blob2 and "below" in blob2 and "scrolled" in blob2)
-
-    quit_effect = state.handle_key("\x03")
-    check("Ctrl-C sets running False", quit_effect == "quit"
-          and state.running is False)
-
-    # --- AgentSimulator: a real (short, fast) run, checking the ONE
-    # property the numbering exists for — the global sequence has no gaps
-    # and no duplicates, proving the lock actually protects the three
-    # threads' shared counter. -------------------------------------------
-    sim_q: "queue.Queue[str]" = queue.Queue()
-    sim = AgentSimulator(sim_q, delay_range=(0.0, 0.02))
-    sim.start()
-    time.sleep(0.4)
-    sim.stop()
-    got: list[str] = []
-    while True:
-        try:
-            got.append(sim_q.get_nowait())
-        except queue.Empty:
-            break
-    check("AgentSimulator produced multiple statements in 0.4s",
-          len(got) >= 5)
-    pattern = re.compile(r"^\[(\w+)\]: \1 statement (\d+)$")
-    matched = [pattern.match(g) for g in got]
-    check("every statement matches '[Name]: Name statement NNN'",
-          all(matched))
-    nums = sorted(int(m.group(2)) for m in matched if m)
-    check("sequence numbers are globally consecutive across all three "
-          "parts' threads, no gaps or duplicates — proving the lock, and "
-          "the exact property that makes a dropped line visible by eye",
-          nums == list(range(1, len(nums) + 1)))
-
-    # --- COLOR is a write-time tint, armed only by main() (D64 a) -------
-    global COLOR
-    check("with COLOR off (every suite's state) _tint is byte-inert",
-          _tint(C_ERR, "  !! boom") == "  !! boom")
-    COLOR = True
-    try:
-        check("with COLOR on it wraps and resets, nothing else",
-              _tint(C_ERR, "  !! boom") == f"{C_ERR}  !! boom{C_OFF}")
-        check("...and an empty string stays empty — no stray escape codes "
-              "on blank rows", _tint(C_CHROME, "") == "")
-    finally:
-        COLOR = False
-
-    print()
-    if failures:
-        if skipped:
-            print(f"  {len(skipped)} skipped for missing data (see 'skip' "
-                  f"lines above) — not counted as passes")
-        print(f"SELF-TEST: FAIL ({len(failures)} of {total[0]})")
-        return 1
-    if skipped:
-        print(f"  {len(skipped)} check(s) SKIPPED for missing data — a fresh "
-              f"install has no issue graph and no ruled practices yet, and "
-              f"these read one back. Not counted as passes:")
-        for s in skipped:
-            print(f"      {s[:96]}")
-    print(f"SELF-TEST: PASS ({total[0]} of {total[0]})")
-    return 0
+    """MOVED to ui/tests/test_circling_selftest.py, 2026-09-03 (B99 stage 15; R435: a suite lives
+    in tests/). This is the flag's door only: `ui/circling.py --selftest` is what the shipped
+    bundle, install.py and the scaffold README say, so the flag stays and runs the file. The suite
+    imports THIS module as `circling`; when this file is __main__ the alias below makes that the
+    same object, so the tint it arms and the main_loop it fakes are the running program's."""
+    import importlib.util
+    suite = pathlib.Path(__file__).resolve().parent / "tests" / "test_circling_selftest.py"
+    if not suite.is_file():
+        print(f"SELF-TEST: not run — the suite is ui/tests/test_circling_selftest.py, absent here "
+              f"({suite})", file=sys.stderr)
+        return 2
+    sys.modules.setdefault("circling", sys.modules[__name__])
+    spec = importlib.util.spec_from_file_location("test_circling_selftest", suite)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return mod.self_test()
 
 
 HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARGS...]]
@@ -5475,6 +3452,15 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                whenever stdout is a real terminal and the NO_COLOR
                environment variable is unset (R342, D64 a:
                green prompts, red !! errors, cyan chrome).
+
+  --dev[=true|false]
+               open with dev mode ON — forwarded to circle.py's own
+               --dev (R286; scope widened 2026-09-01 to also cover the
+               coalesce/pre-warm/opening-round progress lines, not only
+               the DEV-table verbs and the help hierarchy). Default:
+               off. Works in EITHER position — before --circle (as a
+               top-level flag here, like --live) or after it (as one of
+               the forwarded ARGS).
 
   --help, -h   print this and exit.
 """
@@ -5513,10 +3499,21 @@ def main() -> int:
         # from the forward exactly as --live/--dry-run are in start().
         extra_argv = [a for a in argv[i + 1:] if a != "--no-color"]
         live = "--live" in argv
+        # --dev, added 2026-09-01: unlike --live/--dry-run, nothing filters
+        # --dev out of extra_argv, so `--circle ... --dev` already forwards
+        # to circle.py on its own. This covers the OTHER position — --dev
+        # typed BEFORE --circle, which start() never sees — so --dev works
+        # symmetrically with --live rather than being silently dropped
+        # there. Forwards whatever form was typed (--dev, --dev=true,
+        # --dev=false) verbatim; circle.py's own --dev parses all three.
+        dev_arg = next((a for a in argv
+                        if a == "--dev" or a.startswith("--dev=")), None)
+        if dev_arg and dev_arg not in extra_argv:
+            extra_argv.append(dev_arg)
         engine = CircleEngine(queue.Queue())
         engine.start(extra_argv=extra_argv, live=live)
-        return main_loop(engine=engine, extra_argv=extra_argv)
-    return main_loop()
+        return ui_main_loop(engine=engine, extra_argv=extra_argv)
+    return ui_main_loop()
 
 
 if __name__ == "__main__":

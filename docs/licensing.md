@@ -141,7 +141,8 @@ that requires attribution must say who is being attributed.
 **THE NAME QUESTION IS NOW RULED, AND IT DECIDES THIS.** On 2026-08-07:
 every occurrence of the circle owner's given name in a shared public
 file becomes "Self". 311 occurrences across 53 files were replaced, and
-`--name-scan` holds the line.
+`packaging/sanitize.py` plus `packaging/test_package.py` hold the line now
+— `check_classification.py --name-scan` retired 2026-08-08.
 
 A `NOTICE` reading `Copyright 2026 <given name> <surname>` would be the
 single largest exception to a rule just made, in the one file guaranteed

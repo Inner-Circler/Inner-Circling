@@ -52,11 +52,11 @@ ISSUES_URL = "https://github.com/Inner-Circler/Inner-Circling/issues"
 # hook invokes AND ships has an entry here, so a new gate cannot arrive without
 # its sentence.
 PLAIN: dict[str, str] = {
-    "coordinator/check_best_practices.py":
+    "coordinator/practice_verify.py":
         "One of your saved practices didn't read back the way it was written.",
-    "coordinator/check_integrity.py":
+    "coordinator/record_verify.py":
         "A file the program needs looks damaged.",
-    "coordinator/check_line_endings.py":
+    "coordinator/file_line_endings_verify.py":
         "A file was saved in a format the rest of the program can't read.",
     "coordinator/circle_audit.py":
         "The program's check of your own records didn't pass.",
@@ -64,15 +64,35 @@ PLAIN: dict[str, str] = {
         "The record of what was sent to the parts didn't match what was kept.",
     "memory/issue_gate.py":
         "The record of what you're working on didn't pass its own check.",
-    "memory/issue_projection.py":
+    "memory/issue_prompt_projection.py":
         "What the next circle would be shown couldn't be prepared.",
-    "ui/circling.py":
-        "The two-pane window's own self-check didn't pass.",
+    # keyed "ui/circling.py" until 2026-09-03: the hook ran `--selftest`; it runs the file now
+    "ui/tests/test_circling_selftest.py":
+        "The two-pane circle UI's own self-check didn't pass.",   # "window" was ambiguous (R443)
+    # v112 (2026-09-02) wired six more checks into the hook without a sentence
+    # each; test_gate_report refused every commit touching this file or the
+    # hook until 2026-09-03, when stage 7b of the cohesion re-homing met it.
+    "coordinator/system_unique_home_verify.py":
+        "The same fact is written down in two places in the program, and they could drift apart.",
+    "coordinator/system_layer_verify.py":
+        "A lower part of the program has started depending on a higher one.",
+    "coordinator/system_name_verify.py":
+        "A new function was named without saying what kind of thing it works on.",
+    "coordinator/system_setting_verify.py":
+        "The settings file and the program disagree about which settings exist.",
+    "ui/palette.py":
+        "The program's list of colours didn't pass its own check.",
+    ".claude/skills/install-package/test_install.py":
+        "The installer's own rehearsal didn't pass.",
+    ".claude/skills/my_commit/test_my_commit.py":
+        "The safe-to-save check's own rehearsal didn't pass.",
+    ".claude/skills/publish-package/test_publish.py":
+        "The publisher's own rehearsal didn't pass.",
 }
 FALLBACK = "A check called {name} stopped."
 
 
-def plain_for(script: str) -> str:
+def system_gate_plain_read(script: str) -> str:
     return PLAIN.get(script, FALLBACK.format(name=pathlib.PurePath(script).name))
 
 
@@ -85,7 +105,7 @@ def _git(*args: str) -> str:
         return ""
 
 
-def version() -> str:
+def system_gate_version_read() -> str:
     """What code this is. A delivered copy carries `VERSION`, stamped by the
     packager; a checkout answers with its own commit. Neither is required — an
     unknown version is reported as unknown rather than guessed, because the
@@ -102,7 +122,7 @@ def version() -> str:
     return f"checkout {sha}" if sha else "unknown"
 
 
-def shape() -> str:
+def system_gate_shape_read() -> str:
     """How much of the program is here. A delivered package ships the product
     and not the probes, so "6 of 72" is the difference between a bundle and a
     development tree — and it is the first thing worth knowing about a failure
@@ -120,12 +140,12 @@ def shape() -> str:
     return f"{here} of {len(named)} checks present  ({kind})"
 
 
-def staged() -> list[str]:
+def system_gate_staged_read() -> list[str]:
     out = _git("diff", "--cached", "--name-only", "--diff-filter=d")
     return [ln for ln in out.splitlines() if ln.strip()]
 
 
-def scrub(text: str) -> str:
+def system_gate_scrub(text: str) -> str:
     """Take this machine out of the checker's own words.
 
     CAUGHT BY READING A REAL ONE, 2026-08-26. The file promises the block does
@@ -147,12 +167,12 @@ def scrub(text: str) -> str:
     return text
 
 
-def block(script: str, code: int, output: str) -> str:
+def system_gate_block_render(script: str, code: int, output: str) -> str:
     """The part the person may send. Written to be read by a Claude with NO
     knowledge of this project — which is why it opens by saying what the program
     is, and why it says how to speak back before it says what went wrong."""
-    files = "\n".join(f"    {p}" for p in staged()) or "    (nothing staged)"
-    body = "\n".join(f"    {ln}" for ln in scrub(output).strip().splitlines()) \
+    files = "\n".join(f"    {p}" for p in system_gate_staged_read()) or "    (nothing staged)"
+    body = "\n".join(f"    {ln}" for ln in system_gate_scrub(output).strip().splitlines()) \
         or "    (the check printed nothing)"
     return f"""You are helping someone use Inner Circling, a private journaling tool that runs
 on their own computer. It keeps their writing as plain text files in a git
@@ -179,13 +199,13 @@ its output, verbatim:
 --- what was being saved ---------------------------------------------
 {files}
 --- this installation ------------------------------------------------
-    Inner Circling {version()}
+    Inner Circling {system_gate_version_read()}
     python {platform.python_version()}  ·  {platform.system()}
-    {shape()}
+    {system_gate_shape_read()}
 """
 
 
-def report(script: str, code: int, output: str) -> pathlib.Path:
+def system_gate_report(script: str, code: int, output: str) -> pathlib.Path:
     now = datetime.datetime.now()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     p = OUT_DIR / f"gate_{now:%Y-%m-%d_%H%M%S}.md"
@@ -193,7 +213,7 @@ def report(script: str, code: int, output: str) -> pathlib.Path:
 
 ## What happened
 
-{plain_for(script)}
+{system_gate_plain_read(script)}
 
 Nothing you wrote is lost — it is all still on your computer. What did not
 happen is the automatic copy into the project's own history.
@@ -220,7 +240,7 @@ If Claude needs one of those to help, it will ask you for that one thing.
 ## The block to send — everything between the lines
 
 ----------------------------------------------------------------------
-{block(script, code, output)}----------------------------------------------------------------------
+{system_gate_block_render(script, code, output)}----------------------------------------------------------------------
 """
     p.write_text(text, encoding="utf-8", newline="")
     return p
@@ -243,7 +263,7 @@ def main(argv: list[str]) -> int:
     # traceback on top of that buries the checker's own message and teaches the
     # reader that the program broke, which is not what happened.
     try:
-        p = report(name, a.code, captured)
+        p = system_gate_report(name, a.code, captured)
     except Exception as e:                                   # noqa: BLE001
         print(f"\n  (a check didn't pass, and the note about it could not be "
               f"written: {e})")

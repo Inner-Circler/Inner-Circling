@@ -30,7 +30,7 @@ NOTHING directly):
     4  RENDER+STAGE each register module renders baseline + its own tail
                     (render_dreamt/render_new/render_stage — the same code
                     the direct writers use); Transaction stages the bytes
-    5  GATE         ifs_model.compare_trees — the register gate judges
+    5  GATE         register_gate.record_tree_compare — the register gate judges
                     baseline vs candidate; any FAIL leaves the tree
                     untouched, staging kept
     6  COMMIT       Transaction.commit, then mid_term --refresh for the
@@ -58,7 +58,7 @@ code writing part_relationships.toml. Leave it in place and patch it out;
 no LLM call(s)."). Follows R302, which had already removed the BLOCK 3
 READ — this removes the WRITE too, so no part of DREAMING's prompt or
 output spends any attention on it any more. part_relationships.py, the
-seven parts/*/part_relationships.toml files, and ifs_model.REGISTERS'
+seven parts/*/part_relationships.toml files, and register_gate.REGISTERS'
 own entry for the register are UNTOUCHED — a part's LAST converged
 record from before this change simply stops updating. See NEXT.md,
 "part-relationships-unconsumed," for what becomes of the register
@@ -78,21 +78,23 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
-import self_schema as SS                                       # noqa: E402
-import remember as RM                                          # noqa: E402
-import topics as TOP                                           # noqa: E402
-import circle_history as CH                                    # noqa: E402
-import self_observation_log as SO                              # noqa: E402
-import check_best_practices as BPX                             # noqa: E402
-import mid_term as MT                                          # noqa: E402
-import transaction as T                                        # noqa: E402
+import REGISTER_CLASS as SS                                       # noqa: E402
+import remember_manager as RM                                          # noqa: E402
+import topic_manager as TOP                                           # noqa: E402
+import circle_history_manager as CH                                    # noqa: E402
+import self_observation_manager as SO                              # noqa: E402
+import practice_manager as PM                             # noqa: E402
+import part_mid_term_manager as MT                                          # noqa: E402
+import TRANSACTION_CLASS as T                                        # noqa: E402
 import roster as R                                             # noqa: E402
-import ifs_model as M                                          # noqa: E402  (B54)
 import backfill as BF                                          # noqa: E402  (B54)
-import command_surface as CS                                   # noqa: E402  dev_mode,
-                                                               # attribute access only
 import llm_client as LC                                        # noqa: E402  MODEL's owner
-import settings as SET                                         # noqa: E402
+import LLM_response_disassembler as RD                         # noqa: E402  every read
+                                                               # of a reply (2026-09-02)
+import setting_manager as SET                                         # noqa: E402
+import part_dreaming as PD                                     # noqa: E402  DREAMING, and the
+                                                               # shared _call (stage 11)
+import circle_synthesis as SYN                                 # noqa: E402  SYNTHESIS (stage 11)
 import phase_clock as PC                                       # noqa: E402  wall-clock
                                                                # per phase (2026-08-30)
 import prompt_capture as PCAP                                  # noqa: E402  the circle's
@@ -105,157 +107,17 @@ if hasattr(sys.stdout, "reconfigure"):
 # `"claude-sonnet-5"  # circle.MODEL — the parts' own model`: a comment naming
 # the owner, beside a literal that did not read from it. Dreaming and synthesis
 # must run on the same model the parts spoke on, and that is now true by
-# construction rather than by two files agreeing.
-MODEL = LC.MODEL
-# RAISED 2026-08-21 (the operator: "raise the caps as you suggest"), after the
-# lab circle 2026-08-21_1139: child and mourner stopped at max_tokens=4,000 with
-# only ~4.5k chars of visible reply. A probe the same day showed why —
-# claude-sonnet-5 THINKS ADAPTIVELY BY DEFAULT (a bare messages.create with no
-# `thinking` parameter returned content blocks ['thinking', 'text']), and its
-# thinking tokens COUNT AGAINST max_tokens. The visible document is the same
-# size it always was; the budget it shares is not. 4,000 was "proven
-# sufficient, 7/7 parts" only while the thinking stayed small.
-DREAM_MAX_TOKENS = SET.value("dream_max_tokens", 8000)    # was 4000 — see above
-SYNTH_MAX_TOKENS = SET.value("synth_max_tokens", 12000)   # was 8000: one
-                                # circle-wide call across five
-                                # sections — HISTORY alone is capped at CH.CAP
-                                # (8000 chars) — needs more headroom than a
-                                # single part's dreaming pass, and now also
-                                # the room for the thinking above.
+# construction rather than by two files agreeing: read as LC.MODEL at the
+# use (a local MODEL alias stood here until 2026-09-03).
+# THE TWO CAPS AND THE TWO PROMPTS MOVED OUT, 2026-09-03 (cohesion re-homing stage
+# 11): DREAM_MAX_TOKENS and DREAMING_PROMPT_V1 to part_dreaming.py, SYNTH_MAX_TOKENS,
+# SYNTHESIS_PROMPT_V2, SYN_HEADERS and _INSIST to circle_synthesis.py, with the
+# passes that use them. This file is the DRIVER: the diagnostic, the marker, the
+# capture, the transaction and the commit.
 # IMPORTED, NOT COPIED (2026-08-28) — the diagnostic call is a few
 # paragraphs, and coalesce's grouping pass a few lines, but the number is set
-# by thinking headroom in both. See llm_client.AUX_MAX_TOKENS.
-DIAG_MAX_TOKENS = LC.AUX_MAX_TOKENS
-
-# ---------------------------------------------------------------- prompts
-# VERSIONED CODE CONSTANTS (docs/INTER_CIRCLE_DESIGN.md) — the chain and
-# format mechanics live here, never in a payload. One conformance against
-# the ICD's committed text, flagged to its owner rather than silent: the
-# "emit no other text at column 0" line is DROPPED — a self.md replacement
-# CONTAINS column-0 `## ` headings, so the parser below splits on the exact
-# header lines instead, each required once, in order.
-#
-# PART_RELATIONSHIP DROPPED, 2026-08-22 — see inter_circle's own module
-# docstring, "part_relationships IS INERT." DREAMING asks for, and parses,
-# MEMORY alone now.
-
-DREAMING_PROMPT_V1 = """\
-You are {part}'s dreaming pass for the circle that just closed ({ot}).
-
-Below: your own identity as the circle sees it (your distillate); the closed circle's
-transcript; your own short_term for it, if you spoke; and — if one exists — the most
-recent memory in your own chain (a note your dreaming pass left for you last time,
-including how charged it was, if you said so).
-
-The transcript is the WHOLE circle — every part's lines, each tagged with who said
-it, not only yours. Write only about what YOU said or experienced. If no short_term
-for you appears above, you did not speak this circle; nothing in the transcript is
-yours to claim in your own voice, however vivid, and MEMORY should be empty.
-
-Write AT MOST ONE memory to carry forward to your own next circle. This is not a
-summary of the circle — it is a note from you, to your future self, in your own voice,
-about what to hold going into the next one. If a prior memory exists below, either
-continue it (reference what it said, extend it) or let it stand and write nothing new
-— a memory you choose not to change is not a failure. Keep it under {cap} characters.
-
-OUTPUT FORMAT, exactly. Section headers, each alone on its own line, at column 0,
-spelled exactly as shown. Print MEMORY even when it is empty — the header and nothing
-under it. Print SALIENCE whenever MEMORY is not empty; omit it entirely (no header at
-all) when MEMORY is empty. Print RESOLUTION only when it applies.
-
-MEMORY
-    Either one memory as plain prose, or — if you are continuing the prior memory
-    rather than starting a new thread — a first line reading exactly "CONTINUES"
-    followed by the memory. Empty if you are letting the prior memory stand.
-
-SALIENCE
-    Required whenever MEMORY is not empty. Your own sense of how charged this memory
-    is — exactly one word: passing, notable, charged, or resolved. "passing" is
-    ordinary; "notable" is worth a second look later; "charged" is something live and
-    unsettled; "resolved" is a charge that has actually settled. Your own judgment,
-    never a score anyone else assigns.
-
-RESOLUTION
-    Only if this memory resolves a prior memory you tagged "charged" — a line
-    naming what settled. Leave the section entirely absent otherwise.
-"""
-
-SYNTHESIS_PROMPT_V2 = """\
-You are the circle's synthesis pass for the circle that just closed ({ot}).
-{n} parts attended: {roster}.
-
-Below, in order: the closed circle's full transcript; the most recent dreaming record
-for each part that produced one, written moments ago by that part's own dreaming pass;
-every proposal Self confirmed during this circle; the CURRENT self.md, the standing
-account of Self this circle may or may not have moved; the PREVIOUS circle's HISTORY
-entry, so what you write continues an account rather than restarting one; and — if one
-exists — the most recent observation in your own chain, a note your synthesis pass left
-for Self last time, including how charged it was, if you said so.
-
-Your job is to find what is TRUE OF THE CIRCLE — not of any one part. A thing only one
-part said, that no other part took up and Self did not confirm, is that part's own
-material and belongs to that part alone. Leave it there.
-
-Condense syntactically. Coalesce semantically. Where several parts said one thing in
-different words, say it once, in words none of them used. Where they genuinely disagreed,
-that disagreement IS the finding — record it as a live tension, not as a split you resolve
-on their behalf.
-
-Emit only what is ACTIONABLE: something that changes what a future circle does, attends
-to, or holds as settled. Observation with no consequence is not actionable. Say nothing
-rather than pad.
-
-OUTPUT FORMAT, exactly. Seven section headers, each alone on its own line, at column 0,
-spelled exactly as shown, in this order. EVERY header must be printed even when that
-section is empty — print the header and nothing under it.
-
-HISTORY
-    One durable entry for the circle record: what this circle was, and what moved. Prose,
-    a part's-eye view of the whole rather than a summary of turns. Under {history_cap}
-    characters.
-
-OBSERVATION
-    Appended to Self's own observation log. What you noticed about the CIRCLE as a
-    working body — its pace, what it avoided, where it went easily. Addressed to Self,
-    about the room, never about Self. If a prior observation exists below, either
-    continue it — a first line reading exactly "CONTINUES" followed by the observation —
-    or let it stand and leave this section EMPTY; an observation you choose not to
-    change is not a failure. A new thread simply starts as plain prose.
-
-SALIENCE
-    Required whenever OBSERVATION is not empty — your own sense of how charged the
-    observation is, exactly one word: passing, notable, charged, or resolved. "passing"
-    is ordinary; "notable" is worth a second look later; "charged" is live and
-    unsettled; "resolved" is a charge that has actually settled. Print the header with
-    nothing under it when OBSERVATION is empty.
-
-RESOLUTION
-    Only filled if this observation resolves a prior observation you tagged "charged" —
-    a line naming what settled. Print the header with nothing under it otherwise.
-
-SELF
-    A REPLACEMENT for self.md, in full, only if this circle genuinely moved the standing
-    account of Self given below. Reproduce its section headings exactly; carry forward
-    every section this circle did not touch, unchanged and verbatim. If nothing moved,
-    leave this section EMPTY — that is the ordinary case, and an unnecessary rewrite of a
-    standing document is a loss, not an update.
-
-BLOCK 2 CANDIDATE
-    Cross-part, part-agnostic material for the NEXT circle's working surface: an open
-    question the room did not close, a tension worth naming aloud, an unconfirmed proposal
-    worth discussing. This is what the next room will WORK ON. Each item one short
-    paragraph, opening with "- ". It is a topic, never an instruction.
-
-BLOCK 1 CANDIDATE
-    Only for something that has genuinely SETTLED and should become how the circle
-    behaves from now on — a practice, in the same register as the practices already in
-    the prompt. Self must ratify each one before it lands, so propose sparingly: an item
-    here asserts "this is now identity", and most circles will have none. Each item one
-    short paragraph, opening with "- ".
-
-BLOCK 2 CANDIDATE items reach the next circle's room UNVETTED, as topics for it to
-examine (R184). BLOCK 1 CANDIDATE items reach no part until Self has ratified each one.
-"""
+# by thinking headroom in both. Read as LC.AUX_MAX_TOKENS at the diagnostic
+# call (a local DIAG_MAX_TOKENS alias stood here until 2026-09-03).
 
 DIAGNOSIS_PROMPT = """\
 A between-circles processing run (DREAMING/SYNTHESIS) failed. Below is its error
@@ -268,125 +130,7 @@ RECOMMENDATION (what to check or try). Diagnostic only — you repair nothing.
 # so exercising the R168 failure path cannot overwrite or delete a REAL
 # dream_error_<OT>.json. It writes under a real circle's OT by necessity (the
 # driver reads the transcript by that OT), so redirecting the WRITE is the
-# only separation available. Same convention as topics.PATH.
-SYN_HEADERS = ("HISTORY", "OBSERVATION", "SALIENCE", "RESOLUTION", "SELF",
-               "BLOCK 2 CANDIDATE", "BLOCK 1 CANDIDATE")
-
-# Appended to the SYNTHESIS system prompt for the ONE re-ask a cap breach
-# earns (R192). Names the ACTUAL overshoot rather than repeating the original
-# instruction louder: the first ask already said "under {history_cap}", so
-# saying it again unchanged is the same request, and the model has no way to
-# know by how much it missed.
-_INSIST = """
-
---- THIS IS A SECOND ASK. YOUR PREVIOUS ANSWER WAS REFUSED. ---
-
-Your HISTORY section was {got:,} characters. The register refuses anything
-over {cap:,} and it does not truncate — an over-length answer is DISCARDED
-whole and the previous circle's entry stands instead, so the account of this
-circle is simply lost.
-
-Write HISTORY again, under {target:,} characters. Every other section stays as
-you judged it. Do not pad the shortfall elsewhere; cut HISTORY itself — decide
-what this circle was ABOUT and say that, rather than covering everything that
-happened in it."""
-
-
-def _truncate_at(text: str, cap: int) -> str:
-    """Cut `text` to at most `cap` characters at the LAST WHITESPACE before
-    the cap — never mid-word — and strip the ragged end. The operator,
-    2026-08-21: *"a cap-crunch must not cause a fail; report, but truncate
-    at the cap and allow."* A text already within the cap comes back
-    unchanged, byte for byte. A text with no whitespace before the cap is
-    hard-cut at it rather than refused — the rule is truncate-and-allow."""
-    if len(text) <= cap:
-        return text
-    cut = text[:cap]
-    sp = max(cut.rfind(" "), cut.rfind("\n"), cut.rfind("\t"))
-    if sp > 0:
-        cut = cut[:sp]
-    return cut.rstrip()
-
-
-def _norm_len(s: str) -> int:
-    """Length as circle_history.render_new() will measure it — it collapses
-    whitespace before checking the cap, so measuring the raw section would
-    over-count and trigger a re-ask that the register would have accepted."""
-    return len(" ".join(s.split()))
-
-
-def _usage_dict(u):
-    """Token counts as a plain dict. anthropic's Usage is a pydantic model
-    — no .get(), and iterating it yields (name, value) pairs, not keys —
-    so the old dict-style merge below ALWAYS raised AttributeError on two
-    real Usage objects and fell back to dropping the second one."""
-    if u is None or isinstance(u, dict):
-        return u
-    dump = getattr(u, "model_dump", None)
-    items = dump() if callable(dump) else vars(u)
-    return {k: v for k, v in items.items() if isinstance(v, int)}
-
-
-def _merge_usage(a, b):
-    """Two calls' usage, summed where both are present. The re-ask is a REAL
-    cost and must appear in the run's total; dropping it would under-report
-    exactly the case worth watching. Returns a plain dict when it actually
-    merged — _out_tokens() reads both shapes."""
-    if a is None:
-        return b
-    if b is None:
-        return a
-    da, db = _usage_dict(a), _usage_dict(b)
-    return {k: (da.get(k, 0) or 0) + (db.get(k, 0) or 0)
-            for k in set(da) | set(db)}
-
-
-def _out_tokens(u):
-    """output_tokens off a Usage object OR a _merge_usage() dict."""
-    if isinstance(u, dict):
-        return u.get("output_tokens")
-    return getattr(u, "output_tokens", None)
-
-
-def _block_stats(blocks: list[str]) -> list[tuple[str, int]]:
-    """(label, char count) for each block in a prompt built from '# label'
-    sections — DREAMING's and SYNTHESIS's user messages, each a list of
-    such blocks joined with blank lines. The label is the block's own
-    heading line; the count is the block's FULL length including it, i.e.
-    exactly what reaches the model, not just the body under the heading."""
-    out = []
-    for b in blocks:
-        label = b.splitlines()[0].lstrip("#").strip() if b else "(empty)"
-        out.append((label, len(b)))
-    return out
-
-
-def _report_chars(say, who: str, chars: dict) -> None:
-    """Every LLM call in this module reports its own footprint through
-    here: prompt chars (system + user) and reply chars; per-block chars too
-    when the prompt was built from named '# ' sections rather than one blob
-    (DREAMING, SYNTHESIS — not DIAGNOSIS, whose user message is a single
-    JSON report with no block structure).
-
-    DEV-ON DETAIL, 2026-08-21 — the operator, on the close he watched: dev
-    OFF prints the headers and the errors only; dev ON prints this per-call
-    footprint as well. "<part>: done — …", "FAILED —", "SUSPECT —",
-    "TRUNCATED —", the phase lines and the diagnosis are never gated — those
-    are what a person waiting on a close needs to read. CS.dev_mode is read
-    by attribute, as every reader of that flag must (command_surface.py)."""
-    if not CS.dev_mode:
-        return
-    system, user, reply = chars["system"], chars["user"], chars["reply"]
-    say(f"  {who}: prompt {len(system) + len(user):,} chars "
-        f"(system {len(system):,} + user {len(user):,}) — "
-        f"reply {len(reply):,} chars")
-    stats = _block_stats(chars.get("blocks") or [])
-    if stats:
-        w = max(len(label) for label, _ in stats)
-        for label, n in stats:
-            say(f"      {label:<{w}}  {n:,} chars")
-
-
+# only separation available. Same convention as topic_manager.PATH.
 LOGS = ROOT / "work" / "logs"
 
 
@@ -430,357 +174,33 @@ class _PostCommitFailed(RuntimeError):
     BEFORE any live-tree write — their report's "the live tree is untouched"
     line is true for them and would be a LIE here. 2026-08-16: a live run
     against 2026-08-09_1520 hit exactly this (project_stats.py --check
-    refused the commit) and `process_circle()` never checked
-    `gitrepo.commit_paths()`'s return value at all — it printed "phase 2
+    refused the commit) and `circle_process()` never checked
+    `gitrepo.system_git_paths_commit()`'s return value at all — it printed "phase 2
     complete" and exited 0 on a run whose git commit never landed, while 25
     files sat modified and uncommitted in the live tree."""
 
 
-# ----------------------------------------------------------------- parsing
-def parse_sections(text: str, headers: tuple[str, ...],
-                   optional: frozenset[str] = frozenset()
-                   ) -> tuple[dict | None, str | None]:
-    """Split model output on EXACT header lines, in order. A header NOT in
-    `optional` is required exactly once — a missing, duplicated, or
-    out-of-order required header refuses the whole output: fail loud,
-    never guess (R168 hands it back). A header IN `optional` may appear
-    zero or one times; absent, it is simply missing from the returned dict
-    rather than a refusal — DESIGN_V2's SALIENCE/RESOLUTION lines, which
-    "coerce ... never refuse the whole DREAMING call over one bad tag."
-    Section bodies may contain anything — including column-0 `## `
-    headings, which is why 'no other text at column 0' cannot be the
-    rule."""
-    lines = text.splitlines()
-    pos: list[tuple[str, int]] = []
-    for h in headers:
-        hits = [i for i, l in enumerate(lines) if l.strip() == h and l == l.lstrip()]
-        if h in optional:
-            if len(hits) > 1:
-                return None, (f"optional header {h!r} appears {len(hits)} "
-                              f"times; expected at most once")
-            if hits:
-                pos.append((h, hits[0]))
-            continue
-        if len(hits) != 1:
-            return None, (f"header {h!r} appears {len(hits)} time(s); "
-                          f"expected exactly once")
-        pos.append((h, hits[0]))
-    if [i for _h, i in pos] != sorted(i for _h, i in pos):
-        return None, "headers out of order"
-    out = {}
-    for k, (h, i) in enumerate(pos):
-        end = pos[k + 1][1] if k + 1 < len(pos) else len(lines)
-        out[h] = "\n".join(lines[i + 1:end]).strip("\n").strip()
-    return out, None
-
-
-def items_of(section: str) -> list[str]:
-    """'- ' items, each possibly wrapping onto following lines."""
-    out, cur = [], []
-    for l in section.splitlines():
-        if l.lstrip().startswith("- "):
-            if cur:
-                out.append(" ".join(cur))
-            cur = [l.lstrip()[2:].strip()]
-        elif cur and l.strip():
-            cur.append(l.strip())
-    if cur:
-        out.append(" ".join(cur))
-    return [x for x in out if x]
-
-
-def _headings(text: str) -> list[str]:
-    return [l.strip() for l in text.splitlines() if l.startswith("## ")]
-
-
-# ------------------------------------------------------------------- model
-# _client() MOVED to llm_client.build_client(), 2026-08-28 (stage 1 of the
-# provider socket). It was one of five copies; two of the other four resolved
-# the key by hand-parsing .env for a line starting ANTHROPIC_API_KEY, which
-# reads a key the shell has already overridden. One builder now, and its
-# refusal message is this one's, word for word.
-
-
-def _call(system: str, user: str, max_tokens: int, *,
-          kind: str = "dreaming", record: bool = False,
-          part: "str | None" = None) -> tuple[str, object, str]:
-    """One call, its own client — a client per worker costs nothing and
-    removes every thread-safety question (R170: the seven run in parallel).
-
-    `kind` NAMES THE CALL — dreaming, synthesis, backfill, diagnosis — for
-    the retry ladder's wait line and, since R412 (2026-08-30), the capture:
-    until then every call this module made was labelled "dreaming", the
-    synthesis and the diagnostic included. `record=True` writes the request
-    to the circle's capture as it is sent, when a turn log is open (a live
-    /close, or the one process_circle() opens for a hand re-run); `part` is
-    who it is for, None for the circle-wide synthesis. The diagnostic is
-    never recorded — it writes nothing, and the ruling left it out.
-
-    Returns (text, usage, stop_reason). stop_reason lives on the Message
-    response itself, NOT on usage — Usage carries only token counts. An
-    earlier version of the SYNTHESIS failure path read
-    `usage._stop_reason`, an attribute that does not exist on either object,
-    and so silently reported no stop_reason on every failure ever seen,
-    including 2026-08-09_1520 — the one case that most needed it, to tell a
-    genuine max_tokens truncation apart from the model stopping on its own.
-
-    THROUGH THE TRANSPORT SINCE 2026-08-28 (stage 1 of the provider socket).
-    This built its own client and called the SDK directly, so it had no
-    retry ladder: a transient 529 in one of seven parallel dreaming calls
-    failed the whole run, and staging is all-or-nothing, so the cost was a
-    re-run rather than the 15-second wait the ladder would have taken. It
-    also metered nothing. Both arrive with the routing; the per-call client
-    R170 wanted is unchanged — call_once builds one per call unless handed
-    one."""
-    return LC.call_once(system, user, max_tokens, kind=kind,
-                        record=record, part=part)
-
-
-# ---------------------------------------------------------------- dreaming
-def dream_one(part: str, ot: str, transcript: str) -> dict:
-    """ONE part's dreaming pass — returns a PAYLOAD, writes nothing.
-    A silent part (no short_term, maybe no statements) still dreams: the
-    designed outcome for it is an unchanged document and an empty MEMORY,
-    which is legal and non-SUSPECT."""
-    tag = R.TAG_BY_DIR[part]
-    distillate, _why = MT.block(part)
-    st_path = ROOT / "parts" / part / f"short_term_{ot}.md"
-    prior = RM.newest_dreamt(part)
-    user = [f"# Your identity distillate\n{distillate or '(none on file)'}",
-            f"# Transcript of circle {ot}\n{transcript}"]
-    if st_path.is_file():
-        st_text = st_path.read_text(encoding="utf-8")
-        # R248, 2026-08-19: "Do mark reconstructions." The mark is only worth
-        # writing if the reader that matters acts on it, and this is that
-        # reader — a reconstruction was written from the transcript AFTER the
-        # fact, and dreaming taking it for the part's own contemporaneous
-        # record is exactly the blur the ruling refuses.
-        head = "# Your short_term for this circle"
-        if M.is_reconstructed(st_text):
-            head += (" — RECONSTRUCTED from the transcript after the fact, "
-                     "NOT what you wrote in the moment")
-        user.append(f"{head}\n{st_text}")
-    if prior:
-        sal_note = f" (tagged {prior['salience']})" if prior.get("salience") else ""
-        user.append(f"# The most recent memory in your chain{sal_note}\n"
-                    f"{prior['text']}")
-    system = DREAMING_PROMPT_V1.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
-    user_text = "\n\n".join(user)
-    text, usage, stop_reason = _call(system, user_text, DREAM_MAX_TOKENS,
-                                     kind="dreaming", record=True, part=part)
-    chars = {"system": system, "user": user_text, "reply": text,
-             "blocks": user}
-    sections, err = parse_sections(
-        text, ("MEMORY", "SALIENCE", "RESOLUTION"),
-        optional=frozenset({"SALIENCE", "RESOLUTION"}))
-    # output_tokens AND stop_reason RIDE EVERY PAYLOAD, 2026-08-21 — the two
-    # numbers that told the 2026-08-21_1139 failure apart from a header
-    # mismatch, and that the report did not carry at the time.
-    if sections is None:
-        # RAW OUTPUT KEPT. R168 promises a diagnosis, and an unparseable
-        # output cannot be diagnosed from the error string alone — the first
-        # rehearsal (2026-08-09_1520) failed here and the sample was gone,
-        # so re-seeing it would have cost another 8 model calls.
-        return {"part": part, "error": f"unparseable output: {err}",
-                "raw": text, "usage": usage, "stop_reason": stop_reason,
-                "output_tokens": _out_tokens(usage), "chars": chars}
-    out: dict = {"part": part, "usage": usage, "suspect": [], "truncated": [],
-                 "chars": chars, "stop_reason": stop_reason,
-                 "output_tokens": _out_tokens(usage)}
-    mem = sections["MEMORY"].strip()
-    if mem:
-        continues = mem.splitlines()[0].strip() == "CONTINUES"
-        body = "\n".join(mem.splitlines()[1:]).strip() if continues else mem
-        if not body:
-            pass                        # bare CONTINUES = let it stand
-        else:
-            # Same rule for the memory: over the tolerance (1.5 x
-            # RECORD_CAP, the most the register ever accepted whole) it is
-            # TRUNCATED there and kept, not refused. render_dreamt() then
-            # applies RECORD_CAP itself, as it always has.
-            limit = int(RM.RECORD_CAP * 1.5)
-            if len(body) > limit:
-                was = len(body)
-                body = _truncate_at(" ".join(body.split()), limit)
-                out["truncated"].append(
-                    f"memory TRUNCATED at {len(body):,} chars (was {was:,}; "
-                    f"the {RM.RECORD_CAP}-char cap's tolerance is {limit})")
-            out["memory"] = body
-            # SALIENCE (DESIGN_V2), 2026-08-22: required whenever MEMORY is
-            # non-empty, but an absent or unparseable answer COERCES rather
-            # than refuses the call (RM.coerce_salience's own rule).
-            sal_raw = sections.get("SALIENCE")
-            out["salience"] = RM.coerce_salience(sal_raw)
-            if sal_raw is None or sal_raw.strip().lower() not in RM.SALIENCE_VALUES:
-                out["suspect"].append(
-                    f"SALIENCE absent or unparseable ({sal_raw!r}) — "
-                    f"coerced to 'passing'")
-            # RESOLUTION also chains onto the prior memory, same mechanism
-            # as a MEMORY-level "CONTINUES" — either one is sufficient.
-            resolution = sections.get("RESOLUTION")
-            resolved = bool(resolution and resolution.strip())
-            if resolved and prior and prior.get("salience") != "charged":
-                out["suspect"].append(
-                    "RESOLUTION claimed but the prior memory in this "
-                    f"chain was not tagged 'charged' (was "
-                    f"{prior.get('salience')!r})")
-            out["continues"] = continues or resolved
-    return out
-
-
-# --------------------------------------------------------------- synthesis
-def synthesise(ot: str, transcript: str, payloads: list[dict],
-               confirmed: list[dict], say=lambda _s: None) -> dict:
-    dreams = []
-    for p in payloads:
-        if p.get("memory"):
-            dreams.append(f"[{R.TAG_BY_DIR[p['part']]}] {p['memory']}")
-    conf = [f"- {c['kind']} {c['id']}: {c['line']}" for c in confirmed]
-    self_md = (ROOT / "self" / "self.md")
-    self_now = self_md.read_text(encoding="utf-8") if self_md.is_file() else ""
-    prior = CH.most_recent()
-    prior_obs = SO.most_recent()          # R358: the chain the OBSERVATION
-    user = [f"# Transcript of circle {ot}\n{transcript}",
-            "# Each part's fresh dreaming record\n"
-            + ("\n".join(dreams) if dreams else "(none produced one)"),
-            "# Proposals Self confirmed this circle\n"
-            + ("\n".join(conf) if conf else "(none)"),
-            f"# The CURRENT self.md\n{self_now or '(absent)'}",
-            "# The previous circle's HISTORY entry\n"
-            + (f"{prior['id']} ({prior['circle']}): {prior['text']}"
-               if prior else "(none — this is the first)"),
-            "# The previous observation in your own chain\n"
-            + ((f"{prior_obs['id']} ({prior_obs['circle']}"
-                + (f", {prior_obs['salience']}"
-                   if prior_obs.get("salience") else "")
-                + f"): {prior_obs['text']}")
-               if prior_obs else "(none — this is the first)")]
-    # ASK FOR TARGET, REFUSE AT CAP (R192). The prompt names CH.TARGET
-    # (7200); render_new() refuses at CH.CAP (8000). A model asked for
-    # exactly its hard limit has no room to run slightly long without being
-    # refused — and the whole run, seven DREAMING calls included, is lost to
-    # a few dozen characters.
-    system = SYNTHESIS_PROMPT_V2.format(
-        ot=ot, n=len(R.DIR_NAMES), roster=", ".join(R.TAGS),
-        history_cap=CH.TARGET)
-    body = "\n\n".join(user)
-    # RECORDED WITH NO PART (R412): the synthesis speaks for the circle, and
-    # its turn file is named by kind — Per_turn_synthesis_<time>_<seq>.json.
-    text, usage, stop_reason = _call(system, body, SYNTH_MAX_TOKENS,
-                                     kind="synthesis", record=True)
-    _report_chars(say, "synthesis", {"system": system, "user": body,
-                                     "reply": text, "blocks": user})
-    sections, err = parse_sections(text, SYN_HEADERS)
-
-    # ONE INSISTENT RE-ASK ON A CAP BREACH (R192: "ask the LLM again and
-    # insist"). Only when the overshoot would actually be REFUSED — an answer
-    # between TARGET and CAP is within the headroom the target exists to
-    # provide, and re-billing it would waste a call to buy nothing.
-    #
-    # Bounded at ONE retry: a model that ignores an explicit character count
-    # twice will not comply on a third, and R168's hand-back is the honest
-    # outcome there rather than a loop that spends money to reach it slowly.
-    if sections is not None:
-        n_hist = _norm_len(sections["HISTORY"])
-        if n_hist > CH.CAP:
-            say(f"  HISTORY {n_hist:,} chars — over the {CH.CAP:,} cap; "
-                f"re-asking once, insisting")
-            insisted_system = system + _INSIST.format(
-                got=n_hist, cap=CH.CAP, target=CH.TARGET)
-            text2, usage2, stop_reason2 = _call(insisted_system, body,
-                                                SYNTH_MAX_TOKENS,
-                                                kind="synthesis", record=True)
-            _report_chars(say, "synthesis re-ask",
-                         {"system": insisted_system, "user": body,
-                          "reply": text2, "blocks": user})
-            usage = _merge_usage(usage, usage2)
-            s2, e2 = parse_sections(text2, SYN_HEADERS)
-            if s2 is None:
-                say(f"  the re-ask did not parse ({e2}) — keeping the first "
-                    f"answer, which the cap will refuse")
-            else:
-                n2 = _norm_len(s2["HISTORY"])
-                say(f"  re-ask returned {n2:,} chars"
-                    + ("" if n2 <= CH.CAP
-                       else " — still over; truncating at the cap"))
-                sections, err, text, stop_reason = s2, e2, text2, stop_reason2
-
-    if sections is None:
-        return {"error": f"unparseable output: {err}", "raw": text,
-                "usage": usage, "stop_reason": stop_reason,
-                "output_tokens": _out_tokens(usage)}
-    out = {"usage": usage, "suspect": [], "truncated": [], "sections": sections,
-           "stop_reason": stop_reason, "output_tokens": _out_tokens(usage)}
-    # A CAP CRUNCH IS TRUNCATED AND ALLOWED, 2026-08-21 (the operator's rule,
-    # see dream_one). CH.render_new() still REFUSES over CH.CAP — that is the
-    # register's own guard and does not move — so the HISTORY it is handed
-    # is already cut to the cap, whitespace-aware, on the same normalized
-    # text render_new measures. Reported, never silent.
-    n_hist = _norm_len(sections["HISTORY"])
-    if n_hist > CH.CAP:
-        norm = " ".join(sections["HISTORY"].split())
-        cut = _truncate_at(norm, CH.CAP)
-        sections = dict(sections, HISTORY=cut)
-        out["sections"] = sections
-        out["truncated"].append(
-            f"HISTORY TRUNCATED at {len(cut):,} chars (was {n_hist:,}; cap "
-            f"{CH.CAP:,}) — the insistent re-ask did not bring it under")
-    # THE OBSERVATION FOLLOWS THE DREAMING MODEL (R358): CONTINUES chains
-    # onto the prior observation, SALIENCE coerces rather than refuses, a
-    # RESOLUTION also chains, and a bare CONTINUES lets the prior stand —
-    # dream_one's own rules, applied to the circle's reflexive record.
-    obs = sections["OBSERVATION"].strip()
-    if obs:
-        o_cont = obs.splitlines()[0].strip() == "CONTINUES"
-        o_body = "\n".join(obs.splitlines()[1:]).strip() if o_cont else obs
-        if o_body:
-            out["observation"] = o_body
-            sal_raw = sections.get("SALIENCE")
-            out["obs_salience"] = RM.coerce_salience(sal_raw)
-            if (sal_raw is None
-                    or sal_raw.strip().lower() not in RM.SALIENCE_VALUES):
-                out["suspect"].append(
-                    f"OBSERVATION SALIENCE absent or unparseable "
-                    f"({sal_raw!r}) — coerced to 'passing'")
-            resolution = sections.get("RESOLUTION")
-            resolved = bool(resolution and resolution.strip())
-            if resolved and prior_obs and prior_obs.get("salience") != "charged":
-                out["suspect"].append(
-                    "OBSERVATION RESOLUTION claimed but the prior "
-                    f"observation was not tagged 'charged' (was "
-                    f"{prior_obs.get('salience')!r})")
-            out["obs_continues"] = o_cont or resolved
-        # a bare CONTINUES lets the prior observation stand — nothing staged
-
-    self_new = sections["SELF"].strip()
-    if self_new:
-        if set(_headings(self_new)) != set(_headings(self_now)):
-            out["suspect"].append(
-                "SELF replacement changes self.md's heading set — a dropped "
-                "section is silent loss; refused, self.md stands")
-        else:
-            out["self_md"] = self_new
-    return out
-
+# part_dream() -> part_dreaming.py, circle_synthesise() -> circle_synthesis.py, 2026-09-03
+# (stage 11); this driver reads them as PD and SYN.
 
 # ------------------------------------------------------------------ driver
 def _stage_toml(tx: T.Transaction, rel: str, doc: dict, table: str,
                 order: tuple[str, ...]) -> None:
-    tx.stage(rel, SS.dumps(doc, table, order).encode("utf-8"))
+    tx.stage(rel, SS.register_dumps(doc, table, order).encode("utf-8"))
 
 
 def _load_or(p: pathlib.Path, empty: dict) -> dict:
-    return SS.load(p) if p.is_file() else empty
+    return SS.register_read(p) if p.is_file() else empty
 
 
-def already_processed(ot: str) -> bool:
+def circle_is_processed(ot: str) -> bool:
     """Has phase 2 ALREADY run to completion for this circle? The second
     commit's own `dream/<OT>` tag is the durable marker — all-or-nothing
     staging makes a FAILED run leave nothing, so the tag exists exactly
     when a run succeeded. This is the run-marker H6 deliberately did not
     build into the records themselves; the tag carries it instead.
 
-    Through gitrepo.run() since 2026-08-19 (review tier 2): the raw
+    Through gitrepo.system_git_run() since 2026-08-19 (review tier 2): the raw
     subprocess call had no timeout (git hung by AV = phase 2 blocked
     forever, before touching anything) and let a missing git binary raise
     a bare FileNotFoundError. And this guard must NEVER answer "not
@@ -812,32 +232,33 @@ def already_processed(ot: str) -> bool:
     present and git still cannot answer, something is wrong and this
     refuses to guess, as it always did."""
     import gitrepo as G
-    if dream_marker(ot).is_file():
+    if circle_dream_marker_read(ot).is_file():
         return True
-    if not git_history_here():
+    if not circle_git_history_read():
         return False
     # THE READER USES THE SAME NAMER AS THE WRITER (B56(5), R245): in a
     # lab tree this asks about `dream/lab/<OT>`, which is what a lab run
     # writes. Asking about the plain name there would never find the
     # marker and would re-dream every run — the guard dead in exactly the
     # venue meant to rehearse it.
-    tag = G.tag_name("dream", ot)
-    rc, out = G.run("tag", "-l", tag, read_only=True)
+    tag = G.system_git_tag_name_read("dream", ot)
+    rc, out = G.system_git_run("tag", "-l", tag, read_only=True)
     if rc != 0:
         raise G.GitError(f"git tag -l {tag} -> {rc}: {out} — cannot "
                          f"tell whether this circle was already dreamt")
     return bool(out.strip())
 
 
-def backfill_step(ot: str, say) -> int:
+def short_term_backfill_step(ot: str, say) -> int:
     """STEP 0 of every live close: a part that SPOKE never reaches dreaming as
     if it had been silent. B54, 2026-08-19.
 
     THE GAP THIS CLOSES. Detection and repair both existed, in circle_audit's
     phases 2 and 3, and NOTHING CALLED EITHER on this path — the one that runs
     synchronously at every live /close since B3/R189, with dreaming as the
-    first thing it does. dream_one() guards the short_term on a bare
-    `is_file()`, and a silent part is a designed, legal, non-SUSPECT outcome,
+    first thing it does. PD.part_dream() guards the short_term on a bare
+    `is_file()`, and a silent part is a designed, legal, non-SUSPECT outcome
+    (with an empty MEMORY — B91 flags a silent part that writes one),
     so a part that spoke and lost its record simply did not move that circle.
     No error anywhere.
 
@@ -849,7 +270,7 @@ def backfill_step(ot: str, say) -> int:
     WARN-REPAIR-RECORD, not refuse. Refusing to process would lose the circle
     over a record that can be rebuilt. Every reconstruction is MARKED (R248,
     "Do mark reconstructions") and dreaming is told which kind of record it
-    has — see dream_one.
+    has — see PD.part_dream.
 
     THE ORDERING IS THE WHOLE POINT and was already written down in
     circle_audit's own failure text: *backfill from the transcript before
@@ -858,32 +279,43 @@ def backfill_step(ot: str, say) -> int:
 
     Returns 0 to continue. Non-zero only if a repair was needed and could not
     be made — dreaming on a record known to be missing would bake the loss in."""
-    todo = BF.needs_backfill(ot)
+    todo = BF.short_term_needs_backfill(ot)
     if not todo:
         return 0
     say(f"\n  transcript safety net — {len(todo)} part(s) spoke with no usable "
         f"record. Reconstructing before dreaming; this adds {len(todo)} model "
         f"call(s) to this close.")
+    # SAME STALE-`False`-ARGUMENT BREAK AS circle_audit.py/midterms_project.py
+    # (audit-register.md Tier 1 #2, fixed there 2026-09-01) — R360
+    # (2026-08-27) dropped build_briefing()'s and shared_block()'s trailing
+    # `minimal` parameter entirely; this call site's own trailing `False`
+    # was never updated to match, so both calls would have raised TypeError
+    # the moment needs_backfill() ever found real work — which nothing had,
+    # since the live wiring's first exercise is still pending (see
+    # CLAUDE.md, "There is no nightly"). shared_block() ITSELF RETIRED
+    # 2026-09-02 alongside the fix, replaced by one call, assemble_part().
     import prompt_build as C
-    core = C.load_shared()
-    briefing, _ = C.build_briefing([], False)
+    core = C.group_shared_read()
+    briefing, _ = C.circle_briefing_build([])
     failed: list[str] = []
     for part, n, why in todo:
         say(f"    {part}: spoke {n}x — {why}")
-        shared, _ = C.shared_block(part, briefing, False)
-        system = C.system_blocks(part, core, shared)
+        system, _ = C.prompt_part_assemble(part, core, briefing)
         # a real part prompt, so it records under the PART shape — kind
         # backfill, R277's own rule ("every request that carries a part's
         # system prompt"), which the wiring never honoured until R412
-        text, err = BF.reconstruct(
+        text, err = BF.short_term_backfill(
             part, ot, R.TAG_BY_DIR[part], system,
-            lambda s, u, m, _p=part: _call(s, u, m, kind="backfill",
+            lambda s, u, m, _p=part: PD._call(s, u, m, kind="backfill",
                                            record=True, part=_p))
         if err:
             failed.append(f"{part}: {err}")
             say(f"    {part}: RECONSTRUCTION FAILED — {err}")
             continue
-        (ROOT / "parts" / part / f"short_term_{ot}.md").write_text(
+        # In the circle's OWN format (B96, R434): .toml for a circle whose other
+        # parts are .toml, .md into a legacy circle — backfill decides, once,
+        # for both the text and the path.
+        BF.short_term_backfill_path(part, ot).write_text(
             text, encoding="utf-8", newline="\n")
         say(f"    {part}: reconstructed and MARKED ({len(text.split())} words)")
     if failed:
@@ -894,12 +326,12 @@ def backfill_step(ot: str, say) -> int:
     return 0
 
 
-def first_synthesis_here() -> bool:
+def circle_synthesis_is_first() -> bool:
     """Has phase 2 EVER completed in this tree? The shrink waiver's own
     test — R348, the operator's "(a)"
     (2026-08-25): the FIRST synthesis replaces the shipped seed self.md,
-    not a record, so compare_trees waives its shrink tolerance for that
-    one run. Evidence mirrors already_processed()'s two markers: any
+    not a record, so record_tree_compare waives its shrink tolerance for that
+    one run. Evidence mirrors circle_is_processed()'s two markers: any
     `dream_<OT>.json` run marker (the [0-9] glob keeps the
     `dream_error_*` reports beside them from counting as runs), else any
     `dream/*` tag where there is a git history.
@@ -910,11 +342,11 @@ def first_synthesis_here() -> bool:
     reproduces today's refusal, loudly."""
     if any(LOGS.glob("dream_[0-9]*.json")):
         return False
-    if not git_history_here():
+    if not circle_git_history_read():
         return True
     try:
         import gitrepo as G
-        rc, out = G.run("tag", "-l", "dream/*", read_only=True)
+        rc, out = G.system_git_run("tag", "-l", "dream/*", read_only=True)
     except Exception:                                       # noqa: BLE001
         return False
     if rc != 0:
@@ -922,41 +354,41 @@ def first_synthesis_here() -> bool:
     return not out.strip()
 
 
-def dream_marker(ot: str) -> pathlib.Path:
+def circle_dream_marker_read(ot: str) -> pathlib.Path:
     """`work/logs/dream_<OT>.json` — the run marker's FILE form, and the
     twin of the `dream_error_<OT>.json` that has always sat beside it.
-    Written as the last act of a successful run; see write_dream_marker()."""
+    Written as the last act of a successful run; see circle_dream_marker_write()."""
     return LOGS / f"dream_{ot}.json"
 
 
-def git_history_here() -> bool:
+def circle_git_history_read() -> bool:
     """Does this tree keep a git history at all? A FILESYSTEM test, no
     subprocess — so it answers the same on a machine with no git binary
     installed as on one that has it.
 
     `.git` is a directory in a main checkout and a FILE (the `gitdir:`
     pointer) in a worktree, so `.exists()` and not `.is_dir()` — the same
-    distinction gitrepo.in_main_checkout() turns the other way."""
+    distinction gitrepo.system_git_is_main_checkout() turns the other way."""
     return (ROOT / ".git").exists()
 
 
-def write_dream_marker(ot: str, *, committed: bool, tag: str | None) -> None:
+def circle_dream_marker_write(ot: str, *, committed: bool, tag: str | None) -> None:
     """Record that phase 2 ran to completion for this circle. Called ONCE,
     last, after the commit step — so a run that died earlier leaves no
     marker and its re-run is clean, the same property the tag has.
 
     THE TAG REMAINS AUTHORITATIVE WHEREVER THERE IS ONE. This file does
-    not replace it; already_processed() reads either, and in a tree with a
+    not replace it; circle_is_processed() reads either, and in a tree with a
     git history the tag is what a failed commit still guarantees. The file
     exists for the tree that has no history to hold a tag."""
     LOGS.mkdir(parents=True, exist_ok=True)
     rec = {"ot": ot, "processed_at": datetime.datetime.now().isoformat(timespec="seconds"),
            "committed": committed, "tag": tag,
            "note": "phase 2 (dreaming + synthesis) completed for this circle. "
-                   "already_processed() reads this file OR the git tag; either "
+                   "circle_is_processed() reads this file OR the git tag; either "
                    "one refuses a re-run. Delete it only if you mean to dream "
                    "this circle again."}
-    dream_marker(ot).write_text(json.dumps(rec, indent=2) + "\n",
+    circle_dream_marker_read(ot).write_text(json.dumps(rec, indent=2) + "\n",
                                 encoding="utf-8", newline="\n")
 
 
@@ -973,7 +405,7 @@ def _capture_paths(ot: str, dirty: "list[str] | None" = None
     committed costs nothing; a capture that was never opened (a re-run of a
     circle with none) contributes nothing.
 
-    `dirty` is git's own porcelain (gitrepo.dirty()) so "changed" means what
+    `dirty` is git's own porcelain (gitrepo.system_git_is_dirty()) so "changed" means what
     the commit will see; injectable so a probe can hand it a line. A tree
     with no git, or a capture root outside the repository (a suite's temp
     redirect), answers (files, False) and the tier-1 branch reports as it
@@ -989,7 +421,7 @@ def _capture_paths(ot: str, dirty: "list[str] | None" = None
     if dirty is None:
         try:
             import gitrepo as G
-            dirty = G.dirty()
+            dirty = G.system_git_is_dirty()
         except Exception:                                      # noqa: BLE001
             dirty = []
     moved = any(line[3:].strip().strip('"').startswith(rel) for line in dirty)
@@ -1000,20 +432,20 @@ def _open_capture_log(ot: str, live: bool, say) -> bool:
     """For the HAND RE-RUN (R168's `--ot <OT> --live`): open the circle's own
     capture directory so this run's processing calls record there, exactly
     as they do under circle.py's /close, whose turn log is already open when
-    it calls process_circle(). Returns True only when THIS call opened it —
+    it calls circle_process(). Returns True only when THIS call opened it —
     the caller closes what it opened and nothing else. R412/R413, 2026-08-31.
 
     LIVE ONLY: a rehearsal and a dry run record nothing (R360). A circle with
     no capture (closed before R277) has nowhere to record and is skipped; a
     capture that cannot be read is skipped too and said so — a capture
     failure must not cost a run, the rule the transport already keeps."""
-    if not live or PCAP.turn_log_dir() is not None:
+    if not live or PCAP.prompt_turn_log_locate() is not None:
         return False
     d = PCAP.PROMPTS / ot
     if not (d / PCAP.MANIFEST).is_file():
         return False
     try:
-        PCAP.open_turn_log(d, ot)
+        PCAP.prompt_turn_log_open(d, ot)
     except Exception as e:                                     # noqa: BLE001
         say(f"  capture: {_shown(d)}/ could not be opened "
             f"({type(e).__name__}: {e}) — this run's requests are NOT "
@@ -1023,7 +455,7 @@ def _open_capture_log(ot: str, live: bool, say) -> bool:
     return True
 
 
-def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
+def circle_process(ot: str, live: bool, confirmed: list[dict] | None = None,
                    say=print) -> int:
     """Phase 2, whole. Returns 0 on success; non-zero means the circle's
     own record is UNTOUCHED and work/logs/dream_error_<OT>.json says why.
@@ -1036,14 +468,14 @@ def process_circle(ot: str, live: bool, confirmed: list[dict] | None = None,
         return _process_circle(ot, live, confirmed, say)
     finally:
         if opened:
-            PCAP.open_turn_log(None)
+            PCAP.prompt_turn_log_open(None)
 
 
 def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                     say) -> int:
-    """process_circle()'s body — everything but the capture log's lifetime."""
+    """circle_process()'s body — everything but the capture log's lifetime."""
     confirmed = confirmed or []
-    if already_processed(ot):
+    if circle_is_processed(ot):
         say(f"  circle {ot} is already processed (git tag dream/{ot}) — "
             f"re-running would double-dream it. Delete the tag first if "
             f"you mean it.")
@@ -1058,15 +490,15 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
     # THE HEARTBEAT, for the hand re-run path: under a live /close circle.py
     # is already beating and this returns False; run from the CLI it starts
     # one, so the every-10-seconds rule (2026-08-30) holds either way in.
-    PC.PHASES.start_heartbeat(SET.value("close_heartbeat_seconds", 10),
+    PC.PHASES.start_heartbeat(SET.setting_value_read("close_heartbeat_seconds", 10),
                               notify=say)
     if live:
         with PC.PHASES.span("inter.backfill"):
-            rc0 = backfill_step(ot, say)
+            rc0 = short_term_backfill_step(ot, say)
         if rc0:
             return rc0
     parts = R.DIR_NAMES
-    say(f"\ndreaming — {len(parts)} parts, in parallel ({MODEL}):")
+    say(f"\ndreaming — {len(parts)} parts, in parallel ({LC.MODEL}):")
     payloads: list[dict] = []
     errors: list[str] = []
     try:
@@ -1074,12 +506,12 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             say(f"  {p}: started")
         with PC.PHASES.span("inter.dreaming"), \
                 concurrent.futures.ThreadPoolExecutor(len(parts)) as ex:
-            futs = {ex.submit(dream_one, p, ot, transcript): p for p in parts}
+            futs = {ex.submit(PD.part_dream, p, ot, transcript): p for p in parts}
             for f in concurrent.futures.as_completed(futs):
                 pay = f.result()
                 payloads.append(pay)
                 if pay.get("chars"):
-                    _report_chars(say, pay["part"], pay["chars"])
+                    PD._report_chars(say, pay["part"], pay["chars"])
                 what = []
                 if pay.get("memory"):
                     what.append("memory"
@@ -1093,7 +525,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                     say(f"  {pay['part']}: SUSPECT — {s}")
                 # THE TWO NUMBERS THAT EXPLAIN A TRUNCATION, on every line
                 # since 2026-08-21: how many output tokens the call spent
-                # (thinking included — see DREAM_MAX_TOKENS) and why it
+                # (thinking included — see PD.DREAM_MAX_TOKENS) and why it
                 # stopped.
                 tok = pay.get("output_tokens")
                 sr = pay.get("stop_reason")
@@ -1118,7 +550,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
 
         say("\nsynthesis — one circle-wide call:")
         with PC.PHASES.span("inter.synthesis"):
-            syn = synthesise(ot, transcript, payloads, confirmed, say)
+            syn = SYN.circle_synthesise(ot, transcript, payloads, confirmed, say)
         if syn.get("error"):
             raise _Unparseable(f"SYNTHESIS: {syn['error']}", syn.get("raw"),
                                syn.get("stop_reason"), syn.get("output_tokens"))
@@ -1139,13 +571,13 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         for pay in sorted(payloads, key=lambda x: x["part"]):
             part = pay["part"]
             if pay.get("memory"):
-                doc, rec = RM.render_dreamt(
+                doc, rec = RM.remember_dreamt_render(
                     _load_or(RM._real_path(part), {RM.TABLE: []}),
                     pay["memory"], ot, pay.get("continues", False),
                     salience=pay.get("salience"))
                 _stage_toml(tx, f"parts/{part}/remember.toml", doc,
                             RM.TABLE, RM.ORDER)
-                if RM.qualifying_chain(doc, rec):
+                if RM.remember_chain_qualifies(doc, rec):
                     lt_candidates.append((part, rec))
             # part_relationships.toml: NOT staged, 2026-08-22 — see
             # inter_circle's own module docstring, "part_relationships IS
@@ -1156,7 +588,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                 f"to long_term.md")
         secs = syn["sections"]
         if secs["HISTORY"].strip():
-            doc, _rec = CH.render_new(CH._doc(), ot, secs["HISTORY"])
+            doc, _rec = CH.circle_history_new_render(CH._doc(), ot, secs["HISTORY"])
             _stage_toml(tx, "self/circle_history.toml", doc, CH.TABLE,
                         CH.ORDER)
         if syn.get("observation"):
@@ -1165,7 +597,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             # — synthesis" heading carried the only structure it had.
             # R358: the parsed body (CONTINUES prefix stripped), with the
             # dreaming-model fields; a bare CONTINUES staged nothing above.
-            doc, _rec = SO.render_new(SO._doc(), ot, syn["observation"],
+            doc, _rec = SO.self_observation_new_render(SO._doc(), ot, syn["observation"],
                                       salience=syn.get("obs_salience"),
                                       continues=bool(syn.get("obs_continues")))
             _stage_toml(tx, "self/self_observation_log.toml", doc,
@@ -1173,29 +605,29 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         if syn.get("self_md"):
             tx.stage("self/self.md", (syn["self_md"] + "\n").encode("utf-8"))
         tdoc = TOP._doc()
-        for item in items_of(secs["BLOCK 2 CANDIDATE"]):
-            tdoc, _rec = TOP.render_new(tdoc, ot, item)
+        for item in RD.message_items_read(secs["BLOCK 2 CANDIDATE"]):
+            tdoc, _rec = TOP.topic_new_render(tdoc, ot, item)
         # LONG_TERM_CANDIDATE rows ride the SAME register SYNTHESIS's own
         # BLOCK 2 CANDIDATE already uses (DESIGN_V2's own words) — no new
         # field, a human-legible prefix distinguishes them in the listing.
         for part, rec in lt_candidates:
             tag = R.TAG_BY_DIR[part]
-            tdoc, _rec2 = TOP.render_new(
+            tdoc, _rec2 = TOP.topic_new_render(
                 tdoc, ot, f"LONG_TERM CANDIDATE [{tag}]: {rec['text']}")
-        bdoc = BPX._doc()
-        for item in items_of(secs["BLOCK 1 CANDIDATE"]):
-            bdoc, _pid = BPX.render_stage(bdoc, "add", addressee="All parts",
+        bdoc = PM._doc()
+        for item in RD.message_items_read(secs["BLOCK 1 CANDIDATE"]):
+            bdoc, _pid = PM.practice_stage_render(bdoc, "add", addressee="All parts",
                                           title=item, sources=["synthesis"],
                                           circle=f"circle_{ot}")
-        if items_of(secs["BLOCK 2 CANDIDATE"]) or lt_candidates:
+        if RD.message_items_read(secs["BLOCK 2 CANDIDATE"]) or lt_candidates:
             _stage_toml(tx, "self/topics.toml", tdoc, TOP.TABLE, TOP.ORDER)
-        if items_of(secs["BLOCK 1 CANDIDATE"]):
+        if RD.message_items_read(secs["BLOCK 1 CANDIDATE"]):
             _stage_toml(tx, "self/best_practices.toml", bdoc,
-                        "practice", BPX.ORDER)
+                        "practice", PM.ORDER)
         staged = tx.changed()
         say(f"  {len(staged)} file(s) staged: "
             + (", ".join(staged) if staged else "nothing to write"))
-        first = first_synthesis_here()
+        first = circle_synthesis_is_first()
         if first:
             say("  first synthesis of this tree — self.md's shrink "
                 "tolerance is waived this once: the seed is not yet a "
@@ -1221,13 +653,13 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
 
         # PAST tx.commit(), THE LIVE TREE IS ALREADY UPDATED (whenever
         # anything was staged). Anything that RAISES from here on —
-        # MT.refresh()'s raw messages.create (no retry ladder; one
+        # MT.part_mid_term_refresh()'s raw messages.create (no retry ladder; one
         # transient 529 does it), the gitrepo import, commit_paths raising
         # GitError or TimeoutExpired instead of returning False — used to
         # fall through to the generic R168 handler, whose report claims
         # "the live tree is untouched; the re-run below starts clean" and
         # prints the re-run command. Both halves were lies in this window:
-        # no dream/<OT> tag exists yet, so already_processed() reads False
+        # no dream/<OT> tag exists yet, so circle_is_processed() reads False
         # and the advised re-run would DREAM AGAIN on top of the committed
         # content. Since 2026-08-19 every raise in this window is wrapped
         # into _PostCommitFailed, whose report shape tells the truth. When
@@ -1237,14 +669,14 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         try:
             say("\nmid_term refresh — stale parts only (R186/H3):")
             with PC.PHASES.span("inter.mid_term_refresh"):
-                mt_fails = MT.refresh(say=say)
+                mt_fails = MT.part_mid_term_refresh(say=say)
             if mt_fails:
                 say(f"  {mt_fails} SUSPECT derivation(s) NOT written — rerun "
                     f"mid_term --refresh by hand; everything else committed")
 
             import gitrepo as G
             paths = [ROOT / rel for rel in staged]
-            paths += [MT.path(p) for p in parts if MT.path(p).is_file()]
+            paths += [MT.part_mid_term_locate(p) for p in parts if MT.part_mid_term_locate(p).is_file()]
             # THE CIRCLE'S CAPTURE RIDES THIS COMMIT (R412/R413): the turns
             # recorded since commit_circle() took the directory, and the
             # manifest they rewrote. AND IT COMMITS EVEN WHEN NOTHING WAS
@@ -1267,29 +699,29 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             # refused, and telling a recipient their record is "REAL and
             # UNCOMMITTED" in a tree that commits nothing would be a
             # warning about the design working.
-            if to_commit and not git_history_here():
+            if to_commit and not circle_git_history_read():
                 say("  no git history in this tree — the run's output is "
                     "written but not committed. "
                     f"work/logs/dream_{ot}.json records that this circle "
                     f"was processed; that file is what refuses a re-run "
                     f"here, in place of the dream/{ot} tag.")
-            elif to_commit and not G.identity_known():
+            elif to_commit and not G.system_git_identity_is_known():
                 # git is HERE but unconfigured — the fresh-install case,
                 # R349 (2026-08-25): the same
                 # skip as the tier above, never a refusal escalated to
                 # _PostCommitFailed. The marker below still refuses a
                 # re-run; this circle's record stays uncommitted until a
                 # hand `git add` after git learns an identity.
-                G.report_unconfigured(lambda lvl, msg: say(f"  {lvl}  {msg}"))
+                G.system_git_unconfigured_report(lambda lvl, msg: say(f"  {lvl}  {msg}"))
                 say("  git is not configured — the run's output is written "
                     "but not committed. "
                     f"work/logs/dream_{ot}.json records that this circle "
                     f"was processed; that file is what refuses a re-run "
                     f"here, in place of the dream/{ot} tag.")
             elif to_commit:
-                tag = G.tag_name("dream", ot)
+                tag = G.system_git_tag_name_read("dream", ot)
                 with PC.PHASES.span("inter.git_commit"):
-                    committed = G.commit_paths(
+                    committed = G.system_git_paths_commit(
                         paths, f"dream/synthesis for circle {ot}",
                         lambda lvl, msg: say(f"  {lvl}  {msg}"),
                         tag=tag)
@@ -1309,7 +741,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                         f"commit failed — see the 'fail' line above for why. "
                         f"These changes are REAL and UNCOMMITTED, not "
                         f"discarded. Do NOT re-run inter_circle.py for {ot} — "
-                        f"already_processed() still reads False (no "
+                        f"circle_is_processed() still reads False (no "
                         f"dream/{ot} tag), so a re-run would DREAM AGAIN on "
                         f"top of this uncommitted content. Fix whatever the "
                         f"commit gate refused, then `git add` and `git commit` "
@@ -1320,7 +752,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             # leaves no marker, so its re-run is clean — the same property
             # all-or-nothing staging gives the tag, kept by writing this
             # only once everything else has succeeded.
-            write_dream_marker(ot, committed=committed, tag=tag)
+            circle_dream_marker_write(ot, committed=committed, tag=tag)
             # One line of wall-clock per phase, here as well as in the spend
             # report — the hand re-run path has no spend report to read.
             rows = [r for r in PC.PHASES.snapshot()["phases"]
@@ -1340,11 +772,11 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                 f"via Transaction.commit) when this failed: "
                 f"{type(e).__name__}: {e}. The committed changes are REAL. "
                 f"Do NOT re-run inter_circle.py for {ot} — "
-                f"already_processed() still reads False (no dream/{ot} tag), "
+                f"circle_is_processed() still reads False (no dream/{ot} tag), "
                 f"so a re-run would DREAM AGAIN on top of them. Fix the "
                 f"cause, then `git add` and `git commit` the pending paths "
                 f"by hand (a mid_term refresh that died mid-way can be "
-                f"re-run safely: mid_term.py --refresh).") from e
+                f"re-run safely: part_mid_term_manager.py --refresh).") from e
 
     except _PostCommitFailed as e:
         # See the class docstring: the live tree IS modified here, so this
@@ -1383,8 +815,8 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                        "stop_reason": p.get("stop_reason"),
                        **({"error": p["error"]} if p.get("error") else {})}
                       for p in sorted(payloads, key=lambda x: x.get("part", ""))],
-            "dream_max_tokens": DREAM_MAX_TOKENS,
-            "synth_max_tokens": SYNTH_MAX_TOKENS,
+            "dream_max_tokens": PD.DREAM_MAX_TOKENS,
+            "synth_max_tokens": SYN.SYNTH_MAX_TOKENS,
             "rerun_safe": True,
             "note": "all-or-nothing staging: the live tree is untouched; "
                     "the re-run below starts clean",
@@ -1398,7 +830,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         rp = LOGS / f"dream_error_{ot}.json"
         rp.parent.mkdir(parents=True, exist_ok=True)
         raw = getattr(e, "raw", None)
-        # `is not None`, NOT truthiness. _call() returns "" when the response
+        # `is not None`, NOT truthiness. PD._call() returns "" when the response
         # carries no text block at all, and an empty answer is precisely the
         # case worth seeing — the first two capture attempts wrote nothing
         # here for exactly that reason, and the report said raw_output: null
@@ -1425,9 +857,9 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         try:
             diag_user = json.dumps(report, indent=2)
             # NOT RECORDED, by ruling (R412): it writes nothing
-            diag, _u, _sr = _call(DIAGNOSIS_PROMPT, diag_user, DIAG_MAX_TOKENS,
-                                  kind="diagnosis")
-            _report_chars(say, "diagnosis", {"system": DIAGNOSIS_PROMPT,
+            diag = PD._call(DIAGNOSIS_PROMPT, diag_user, LC.AUX_MAX_TOKENS,
+                         kind="diagnosis").text
+            PD._report_chars(say, "diagnosis", {"system": DIAGNOSIS_PROMPT,
                                              "user": diag_user, "reply": diag})
             say(f"\ndiagnosis (one model call, diagnostic only):\n{diag}")
         except Exception as e2:
@@ -1455,7 +887,7 @@ def main() -> int:
         print("usage: inter_circle.py --ot <OT> [--live]")
         return 1
     ot = a[a.index("--ot") + 1]
-    return process_circle(ot, live="--live" in a)
+    return circle_process(ot, live="--live" in a)
 
 
 if __name__ == "__main__":

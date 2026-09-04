@@ -37,7 +37,7 @@ from __future__ import annotations
 
 import os
 
-from paths import ROOT
+from record_paths import ROOT
 
 # What a reply's stop reason MEANS, normalised. The vendor's own word is kept
 # beside it on the Turn: callers test the normalised value, the record keeps
@@ -51,13 +51,18 @@ STOP_OTHER = "other"
 class Turn:
     """One reply, in the shape the transport reads."""
 
-    __slots__ = ("text", "stop", "raw_stop", "usage")
+    __slots__ = ("text", "stop", "raw_stop", "usage", "raw_text")
 
-    def __init__(self, text: str, stop: str, raw_stop: str, usage) -> None:
+    def __init__(self, text: str, stop: str, raw_stop: str, usage,
+                 raw_text: "str | None" = None) -> None:
         self.text = text
         self.stop = stop
         self.raw_stop = raw_stop
         self.usage = usage
+        # The text blocks joined and NOT stripped — what the capture has
+        # always recorded (LLM_response_disassembler.message_burst). `text` above is
+        # the room's form.
+        self.raw_text = text if raw_text is None else raw_text
 
 
 class Knob:
@@ -72,7 +77,7 @@ class Knob:
     open to admit arbitrary keys, un-checking the single thing the contract
     checks.
 
-    So a knob is DECLARED here, validated by settings.coerce() like every
+    So a knob is DECLARED here, validated by setting_manager.setting_coerce() like every
     other setting, and TRANSLATED by the provider into its own wire shape.
     The core still never changes when a knob is added, which was the point;
     what it also gets is a gate."""
@@ -89,7 +94,7 @@ class Knob:
         # word and its own inline check, which made it the FOURTH validation
         # vocabulary in the tree a week after the third. It now declares what
         # every other gated field declares and is checked by the same
-        # function, roster.check_value().
+        # function, roster.part_context_value_verify().
         self.values = values
         self.default = default
         self.applies = applies
@@ -97,7 +102,7 @@ class Knob:
         self.data_type = data_type
 
     def as_question(self) -> dict:
-        """The declaration in the shape roster.check_value() reads, so a
+        """The declaration in the shape roster.part_context_value_verify() reads, so a
         provider's knob and a part's context question are held to one rule."""
         return {"key": self.key, "ask": self.ask, "data_type": self.data_type,
                 "gate": self.gate, "values": list(self.values)}
@@ -171,11 +176,15 @@ class Provider:
         does."""
         return None
 
-    def block_counts_are_exact(self) -> bool:
-        """True only where each system block is tokenized separately, which
-        is what makes token_count.py's cumulative-prefix subtraction exact
-        rather than approximately right."""
-        return False
+    def cache_ttl(self, tuning: dict, default: str) -> str:
+        """The prompt-cache lifetime this provider should ask for — the
+        operator's `cache_ttl` tuning when set, else `default`. A provider
+        with no cache ignores it (its cache_control() returns None). Read by
+        prompt_build.prompt_cache_control_read() since 2026-09-04
+        (audit-register #7: the knob was accepted, stored and never read).
+        block_counts_are_exact() sat here until the same day with no
+        consumer and a docstring claiming token_count.py relied on it."""
+        return tuning.get("cache_ttl") or default
 
     def thinking_record(self, resp) -> dict:
         """What the model THOUGHT, as keys to merge into the captured
@@ -243,7 +252,7 @@ class AnthropicProvider(Provider):
     #
     # THE MULTIPLIERS ARE NOT MEASURED. There is data at exactly one effort
     # level, so every number but 1.0 is an estimate — the same status
-    # remember.py marks four of its own numbers with, and the reason the
+    # remember_manager.py marks four of its own numbers with, and the reason the
     # replay comparison is worth running. `high` is 1.0 so that shipping this
     # changes nothing at all until someone turns the dial.
     EFFORT = {
@@ -280,8 +289,9 @@ class AnthropicProvider(Provider):
         eff = tuning.get("effort")
         return self.EFFORT.get(eff, ("", 1.0))[1] if eff else 1.0
 
-    def cache_ttl(self, tuning: dict, default: str) -> str:
-        return tuning.get("cache_ttl") or default
+    # cache_ttl(): the base class's, unchanged — `5m` or `1h`, straight into
+    # cache_control()'s ttl. (Its only caller arrived 2026-09-04; until then
+    # the knob was stored and never read — audit-register #7.)
 
     def client(self):
         """THE ONE PLACE A CLIENT IS CONSTRUCTED. Five call sites resolved the
@@ -365,11 +375,11 @@ class AnthropicProvider(Provider):
     }
 
     def read(self, resp) -> Turn:
-        text = "".join(b.text for b in resp.content
-                       if getattr(b, "type", "") == "text").strip()
+        raw_text = "".join(b.text for b in resp.content
+                           if getattr(b, "type", "") == "text")
         raw = getattr(resp, "stop_reason", None) or ""
-        return Turn(text, self.STOP_MEANING.get(raw, STOP_OTHER), raw,
-                    getattr(resp, "usage", None))
+        return Turn(raw_text.strip(), self.STOP_MEANING.get(raw, STOP_OTHER),
+                    raw, getattr(resp, "usage", None), raw_text=raw_text)
 
     def thinking_record(self, resp) -> dict:
         """RETURNED ON EVERY REPLY, and discarded here until 2026-08-29.
@@ -417,12 +427,6 @@ class AnthropicProvider(Provider):
 
     def cache_control(self, ttl: str) -> dict:
         return {"type": "ephemeral", "ttl": ttl}
-
-    def block_counts_are_exact(self) -> bool:
-        """`system` is a LIST OF BLOCKS and each block is tokenized on its
-        own, so no token can straddle a boundary — which is what makes
-        token_count.py's differencing exact rather than lucky."""
-        return True
 
     def count_tokens(self, client, model: str, system, messages) -> "int | None":
         kw = {"model": model, "messages": messages}
@@ -646,7 +650,7 @@ class DryRunProvider(Provider):
         pieces rather than importing a transport that imports us.
 
         THE KIND IS ASKED FOR, NOT INFERRED. It used to be guessed from
-        `max_tokens > 1000`, and the guess went stale when rounds.MAX_TOKENS
+        `max_tokens > 1000`, and the guess went stale when circle_rounds.MAX_TOKENS
         passed that line: EVERY dry-run statement came back as the four
         short_term headings and the statement branch was dead code for weeks.
         Measured 2026-08-20 — no transcript this project has ever written
@@ -665,7 +669,7 @@ class DryRunProvider(Provider):
 REGISTRY: dict = {AnthropicProvider.name: AnthropicProvider}
 
 
-def active(name: str = ""):
+def stream_provider_active(name: str = ""):
     """The provider this installation talks to. `name` comes from the
     settings register, which validates it against this same registry before
     it is ever stored — so a name arriving here that REGISTRY does not know

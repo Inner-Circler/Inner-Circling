@@ -14,7 +14,7 @@ among them would have manufactured an import cycle (dispatch's /help
 calls help_text, which renders COMMANDS); a leaf module below all of
 them is what makes the later extractions acyclic. DEV_CMD_HEADS and
 ISSUE_NODE_RE ride along for the same reason: each is shared by the
-marker grammar AND the dispatcher, and before this module they lived in
+annotation grammar AND the dispatcher, and before this module they lived in
 one consumer's region while the other reached across the file.
 
 dev_mode IS REBOUND AT RUNTIME — the same late-binding contract as
@@ -34,7 +34,7 @@ import identity as ID
 # The console display name, for the one COMMANDS row that names it.
 # Same derivation circle.py and transcript_store.py use; console-only
 # (R132), never written to a transcript, never sent to a model.
-CONSOLE_NAME = ID.user_name()
+CONSOLE_NAME = ID.user_name_read()
 
 # ONE TABLE, so /help and KNOWN_CMDS cannot disagree. Ruled 2026-08-05:
 # "Add a /help to the coordinator to report /commands. Report only the
@@ -167,6 +167,38 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "reachable from here (R224, docs/BNF.md's\n"
      "REMEMBER_PROJECTION). Named /recall until 2026-08-21;\n"
      "/recall is still accepted", "command"),
+    # SELF_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
+    # CRUD operations and a help entry." self/self_observation_log.toml is
+    # SYNTHESIS's own note to Self about the CIRCLE (never about Self, never
+    # projected into any part's prompt) and is explicitly allowed to hold
+    # personal material — /observation-purge exists because of that, not
+    # despite the register's own "accumulate, never prune" rule: these are
+    # live-window writes, outside the phase-2 gate's scope by the same
+    # carve-out /remember and /practice-add already use (see
+    # self_observation_manager.py's ORDER comment).
+    ("/observation-add <text>",
+     "a note Self adds directly, source=\"self\" — same\n"
+     "register SYNTHESIS writes to at /close, no circle\n"
+     "needed. 2026-09-01", "command"),
+    ("/observation-list [<n>] [--all]",
+     "bare lists every SELF_OBSERVATION entry, numbered\n"
+     "(retired ones hidden unless --all); `<n>` shows one\n"
+     "whole. 2026-09-01", "command"),
+    ("/observation-continue <id> <text>",
+     "a NEW entry chained onto <id> — <id>'s own record is\n"
+     "never touched, matching accumulate-never-prune.\n"
+     "2026-09-01", "command"),
+    ("/observation-retire <id>",
+     "soft delete — hides one entry from the default list;\n"
+     "it stays in the file and in git history.\n"
+     "/observation-list --all still shows it. 2026-09-01",
+     "command"),
+    ("/observation-purge <id> <id>",
+     "true delete of the TEXT only (the id/date/chain shell\n"
+     "survives, so nothing else's chain breaks) — type the\n"
+     "SAME id twice to confirm. Irreversible in the live\n"
+     "file; the pre-purge commit still has it in git\n"
+     "history. 2026-09-01", "command"),
     # THE EDIT PATH FOR WHAT THE FIRST-RUN DIALOG RECORDS — docs/Initialization.md
     # §6; the operator, 2026-08-23: *"Add the ability to launch
     # PART_CONTEXT_DIALOG via cmd> "part-context-update <partname>" regardless
@@ -208,6 +240,23 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "and while a circle may be open; confirmation is typing\n"
      "the DIRECTORY name. The record survives in git\n"
      "(git log --all -- parts/<name>/)", "command"),
+    # THE GROUP VERBS — a named, reusable roster (docs/CIRCLE_TYPES_DESIGN.md),
+    # 2026-09-02. Same numbered/confirmation shape as the part verbs above.
+    ('/group-add "<name>" <m1>,<m2>,...',
+     "define a named roster from existing part directory\n"
+     "names — circle.py --group <name> opens on it instead\n"
+     "of --parts. IMMEDIATE — /abort does not undo it", "command"),
+    ("/group-list",
+     "every defined group, numbered — name and its members.\n"
+     "The number is positional, same contract as\n"
+     "/part-list", "command"),
+    ("/group-view <n>",
+     "one group's full member list, by /group-list's number,\n"
+     "flagging any member that is no longer a real part", "command"),
+    ("/group-delete <n>",
+     "remove a group — confirmation is typing the group's\n"
+     "NAME. Removes only the named roster, never the member\n"
+     "parts themselves", "command"),
     ("/topic-list",
      "the TOPIC register (TP-): open BLOCK 2 topics —\n"
      "synthesis material carried for circle review,\n"
@@ -225,7 +274,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # 2026-08-25: "fill out the list, for now just propose-add (alias
     # bare 'propose' to this) and its arguments." Same register, same
     # checkpoint ruling a part's [proposed: <command>] reaches; the body
-    # meets the identical test (markers' _propose_command_shape) — one
+    # meets the identical test (annotations' _propose_command_shape) — one
     # grammar, not two.
     ("/propose-add <command>   (also bare propose)",
      "stage a proposal yourself — <command> is a\n"
@@ -259,12 +308,12 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # THE SETTINGS EDITOR — 2026-08-28 (R379). COMMAND
     # pane, deliberately: cmd> only means no Self> surface, so a settings
     # change writes no transcript line and there is nothing for a part to
-    # see. That is guarantee 2 of three in coordinator/settings.py's
+    # see. That is guarantee 2 of three in coordinator/setting_manager.py's
     # docstring, and it holds by construction rather than by a filter.
     #
     # THESE ARE NOT IN PROPOSE_SUBSET_COMMANDS AND MUST NEVER BE. Ruled by
     # the operator, 2026-08-28: *"I do NOT want such operations surfaced for
-    # parts."* coordinator/tests/test_settings.py asserts the exclusion
+    # parts."* coordinator/tests/test_setting_manager.py asserts the exclusion
     # against all three sets a proposal could travel through.
     # NEITHER ROW ALLUDES TO ANY FURTHER VIEW — 2026-08-29, the operator:
     # the earlier "dev adds the rest" tail was a leak of a surface he keeps
@@ -284,9 +333,9 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # offer stable reversable opaque ids." USER table beside /settings-*
     # for the same reason: curating what YOUR OWN redacted view hides is
     # a tool for yourself, not a dev surface. NOT IN PROPOSE_SUBSET_COMMANDS
-    # and NEVER should be — the same ruling settings.py's own rows cite: a
+    # and NEVER should be — the same ruling setting_manager.py's own rows cite: a
     # part has no legitimate path to naming what its own operator wants
-    # hidden. test_settings.py asserts the exclusion against all three
+    # hidden. test_setting_manager.py asserts the exclusion against all three
     # sets a proposal could travel through, same as /settings-*.
     ('/redact-alias-add "<canonical>" [<kind>] ["<form>" ...]',
      "curate a name/place/org to hide in the redacted CIRCLE-pane\n"
@@ -385,12 +434,12 @@ DEV_MIN_CMDS = ("/help", "/status")
 # only or transcript-dependent — would be nonsense to "approve" here.
 # This is dispatch_dev_cmd()'s own accepted-heads set, named once so
 # PROPOSE's classifier and dispatch_dev_cmd() itself cannot drift apart
-# — test_proposals.py asserts the two stay in sync. Lived beside the
-# marker grammar until stage 0; both that grammar and the dispatcher
+# — test_proposal_manager.py asserts the two stay in sync. Lived beside the
+# annotation grammar until stage 0; both that grammar and the dispatcher
 # read it, which is exactly why it lives in this shared leaf now.
 # COMPLETED 2026-08-21: it was short by /recall, /issue-list, /issue-status
 # and /issue-status-update — heads dispatch_dev_cmd() had handled for days
-# while test_proposals' sync probe asserted only ⊆ — and it gains the verbs
+# while test_proposal_manager' sync probe asserted only ⊆ — and it gains the verbs
 # minted the same day. Every entry is a no-circle head; /remember-list is
 # listed under its own name (/recall normalises to it, see normalise_head).
 DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
@@ -399,9 +448,13 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/issue-list", "/issue-status", "/issue-status-update",
                  "/issue-relationship-list", "/issue-add",
                  "/remember", "/remember-list", "/propose-list",
+                 "/observation-add", "/observation-list",
+                 "/observation-continue", "/observation-retire",
+                 "/observation-purge",
                  "/part-context-update", "/part-context-list",
                  "/part-context-clear", "/part-add", "/part-list",
-                 "/part-view", "/part-delete")
+                 "/part-view", "/part-delete",
+                 "/group-add", "/group-list", "/group-view", "/group-delete")
 
 # ---------------------------------------------------------- the two tables
 # R266, 2026-08-20, the operator's own words: *"There is, or needs to be, a table of
@@ -444,17 +497,21 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 USER_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-list", "/practice-add", "/practice-list", "/better-option-list",
     "/remember", "/remember-list", "/propose-list", "/propose-add",
+    "/observation-add", "/observation-list", "/observation-continue",
+    "/observation-retire", "/observation-purge",          # 2026-09-01
     "/issue-evidence-list",
     "/part-context-update",                  # "regardless of (dev)", 2026-08-23
     "/part-context-list", "/part-context-clear",     # the same data, same owner
     "/part-add", "/part-list",               # the user's own growth path (stage 5;
                                              # Claude's reading of R288's line)
+    "/group-add", "/group-list",             # choosing which roster to run is the
+                                             # same class of thing, 2026-09-02
     # THE SETTINGS VERBS RIDE THE USER TABLE, and the FIELDS are what dev
     # gates — 2026-08-28. Putting them in DEV_SUBSET_COMMANDS instead would
     # have hidden the verb outright with dev off, and the operator asked for
     # the opposite: a chosen few settings visible to an ordinary person, "such
     # as the LLM provider/model". So the verb is always there and
-    # settings.visible(dev) decides what it shows — R266's "dev adds, never
+    # setting_manager.setting_visible_read(dev) decides what it shows — R266's "dev adds, never
     # takes away", one level down from the verb to the field.
     "/settings-list", "/settings-update", "/settings-clear",
     # THE REDACTION-REGISTRY VERBS RIDE THE USER TABLE for the same reason
@@ -476,11 +533,12 @@ DEV_SUBSET_COMMANDS: tuple[str, ...] = (
     "/better-option-add", "/prompt-show",
     "/part-view", "/part-delete",            # inspection and removal are tooling
                                              # (Claude's reading; say the word to move them)
+    "/group-view", "/group-delete",          # same split as the part verbs, 2026-09-02
 )
 
 # /dev IS IN NEITHER TABLE, and that is R199 (2026-08-16), verbatim: *"yes,
 # dev is meant to require being told, permanently."* Re-confirmed 2026-08-20
-# when it was put to the operator a second time — see RULINGS.md, where the second
+# when it was put to the operator a second time — see rulings/, where the second
 # asking is recorded as an error rather than a second decision.
 
 # R267, 2026-08-20, the operator's own words: *"/practice-add is a circle construct,
@@ -503,7 +561,7 @@ DEV_SUBSET_COMMANDS: tuple[str, ...] = (
 # operator, verbatim: *"remove /issue-status-update from annotation
 # visibility."* R267 is narrowed by that one verb: a part may no longer ask
 # for an issue's status to change; Self sets one at cmd> (a DEV verb since
-# R288). markers' classifier reads this table, so the bracket is MALFORMED
+# R288). annotations' classifier reads this table, so the bracket is MALFORMED
 # ("not proposable") without a second edit, and the `issue_status` shape the
 # classifier and vetting once carried for it is gone with it.
 #
@@ -535,15 +593,22 @@ PROPOSE_SUBSET_COMMANDS: tuple[str, ...] = (
     "/part-add",
 )
 
+# THE FIVE /observation-* VERBS ARE NOT IN PROPOSE_SUBSET_COMMANDS AND MUST
+# NEVER BE, same reasoning as /settings-*/-redact-alias-* above: a part has
+# no legitimate path to proposing a write into Self's own private register,
+# one explicitly allowed to hold personal material never projected into any
+# prompt. test_setting_manager.py's exclusion pattern is the one to extend if this
+# needs asserting the same way (2026-09-01).
+
 # RULED INTO THE TABLE, NOT YET BUILDABLE FROM A BRACKET. R267 put
-# /issue-evidence-add in PROPOSE_SUBSET_COMMANDS and markers.py's classifier
+# /issue-evidence-add in PROPOSE_SUBSET_COMMANDS and annotations.py's classifier
 # refuses it anyway, with a reason — it addresses a statement BY ITS NUMBER
 # and resolves part, quote and source against the LIVE TRANSCRIPT, which the
 # checkpoint a propose is approved at has not got.
 #
 # IT LIVES BESIDE THE TABLE IT SUBTRACTS FROM, 2026-08-20 (code review). It
-# sat in markers.py for one afternoon, and help_system — which reads THIS
-# module, never markers — counted PROPOSE_SUBSET_COMMANDS whole and told
+# sat in annotations.py for one afternoon, and help_system — which reads THIS
+# module, never annotations — counted PROPOSE_SUBSET_COMMANDS whole and told
 # Self "one of the 6 proposable commands" while the classifier's refusal
 # listed 5 and process_core.md taught 5. Before that it was a bare
 # `if head ==` and _proposable_list() advertised the verb as valid, so a
@@ -583,7 +648,7 @@ def _disjoint() -> None:
 
 _disjoint()
 
-def pane_verb(text: str) -> str | None:
+def command_pane_verb_read(text: str) -> str | None:
     """The command-pane verb this circle-dialog line stands alone as, or
     None. D55(2), 2026-08-20, verbatim: *"no command pane verb standing
     alone in any circle dialog text may EVER be recognised - standalones
@@ -614,7 +679,7 @@ def pane_verb(text: str) -> str | None:
     advice for a command, and quit is not one."""
     cls = verb_class(text)
     if cls in ("command", "window"):
-        return normalise_head(text.strip().split(" ", 1)[0])
+        return command_head_normalise(text.strip().split(" ", 1)[0])
     return None
 
 
@@ -632,7 +697,7 @@ def verb_class(text: str) -> str | None:
 
     R414, 2026-08-31 — the operator: *"there are two
     lifecycles to be managed: the app and the circle."* ONE classifier for
-    every input surface in both flavors: pane_verb() above is this filtered
+    every input surface in both flavors: command_pane_verb_read() above is this filtered
     to what a running room refuses, and the Ticker bridge asks it directly
     for the idle band and the closing band, where a verb typed in the wrong
     box becomes a NOTICE rather than a journal entry — his journal carried
@@ -640,7 +705,7 @@ def verb_class(text: str) -> str | None:
     first = text.strip().split(" ", 1)[0]
     if not first.startswith("/"):
         return None
-    head = normalise_head(first)
+    head = command_head_normalise(first)
     if head == "/help":
         return None if text.strip() == "/help" else "command"
     if head == "/dev":
@@ -650,7 +715,7 @@ def verb_class(text: str) -> str | None:
     return PANE_OF.get(head)
 
 
-def normalise_head(word: str) -> str:
+def command_head_normalise(word: str) -> str:
     """A typed verb, normalised to the one spelling the tables hold.
 
     FINDING 14, 2026-08-20. the operator typed `/topic_close TP-0029` and got
@@ -679,7 +744,7 @@ def normalise_head(word: str) -> str:
     return SYNONYMS.get(h, h)
 
 
-# ACCEPTED SPELLINGS THAT ARE NOT THE NAME. One table, read by normalise_head()
+# ACCEPTED SPELLINGS THAT ARE NOT THE NAME. One table, read by command_head_normalise()
 # so every dispatcher — the Self> loop, the dev-command door, the command
 # pane, the circle pane's guard — resolves them identically. /recall was the
 # verb's name from R224 (2026-08-18) until 2026-08-21, when the operator named
@@ -692,7 +757,7 @@ SYNONYMS: dict[str, str] = {"/recall": "/remember-list",
                             "/propose": "/propose-add"}
 
 
-# The node-id shape (`n0001`), shared by the marker grammar's
+# The node-id shape (`n0001`), shared by the annotation grammar's
 # issue_status classification and the /issue command forms — one regex,
 # not one per consumer.
 ISSUE_NODE_RE = re.compile(r"^n\d{4}$")

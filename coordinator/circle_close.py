@@ -1,858 +1,492 @@
 #!/usr/bin/env python3
 """
-circle_close.py — circle-close verifier.
+circle_close.py — the CLOSE step: what `/close` does between the last statement and the
+commit.
 
-MOVED FROM scripts/ TO coordinator/ 2026-08-18. It had sat in scripts/ since the
-agent-teams era, read as leftover tooling, and was twice assessed as a candidate
-for archiving — but it is not leftover: it is the close step itself. Two live
-callers, both in this directory, both by subprocess:
+THIS FILE WAS THE VERIFIER until 2026-09-03; that is circle_close_verify.py now (R435), and
+the bare name belongs to the step itself (B5/C, cohesion re-homing stage 12). Everything
+here lived in circle.py, verbatim; only the file moved, and the driver reads it as CC.
 
-    transcript_store.run_verifier()   --short-term-only --write-report, at every
-                                      live close; writes work/logs/close_<OT>.json
-    circle_audit.py  phase 2          --reconcile, per unprocessed circle
+RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodies untouched:
 
-The one sweep in scripts/ that WAS still general — preflight_check.py's
-NUL/UTF-8/JSON corruption sweep — moved the same day to check_integrity.py and is
-now a gate at circle open. The nightly SKILL prompts were retired and scripts/
-itself removed (2026-08-19).
+    collect_short_terms  -> short_term_collect      SHORT_TERM is R442's own class word
+    mark_close_started   -> circle_close_mark
+    list_resumable       -> circle_resumable_list   (the flag stays --list-resumable)
+    _short_term_call, _interrupted_closes, _failed_phase2, _close_began, _dest_for,
+    _prompt_blocks_changed, CLOSING_MARK, SHORT_TERM_*   private, or constants — unchanged
 
-WHAT IS LIVE HERE, AND WHAT IS VESTIGIAL. --short-term-only and --reconcile are
-the load-bearing modes. The team-state checks below (1, 2, 4) and --prune belong
-to the retired agent-teams runtime: coordinator/circle.py drives the parts as
-direct Messages API calls, so there are no teammates to tear down and no
-~/.claude/teams state to orphan. They are kept, not deleted, because they are
-self-skipping when their subject is absent and because a tree archived from that
-era still verifies against them. Nothing schedules them and no live path runs
-them. Retiring them is Self's call.
+    SHORT_TERM_PROMPT, SHORT_TERM_MAX_TOKENS   the one request the close makes of each part
+                                               that spoke (R255: the four sections, then the
+                                               part's one remember, last)
+    _short_term_call, short_term_collect      that request on a worker thread per part
+                                               (B89/R420), every write back on this thread
+    CLOSING_MARK, circle_close_mark,          the start-of-close marker (2026-08-23) and the
+    _close_began                               question it answers
+    _interrupted_closes, _failed_phase2        the two open-time reports (R312) the next open
+                                               prints from the marker, the close reports and
+                                               the dream/<OT> tags
+    _dest_for, _prompt_blocks_changed,         where a short_term lands; the resume gate's
+    circle_resumable_list                             prompt-drift check; --list-resumable
 
-Historic role, for reading the checks below: run by the Scribe at circle close,
-AFTER shutting the teammates down, to confirm the team was actually torn down and
-no orphaned or bloated team state remains.
-
-Also deletes every parts/*/statement_temp.md unconditionally (not gated behind
---prune — this is a routine close step, not a rare-orphan cleanup). process.md's
-dual-delivery protocol has always said "delete all temp files at close," but it
-was only ever a Scribe habit with no script backing it; skipping it once left
-four stale files sitting for two hours and cost a full liveness-canary
-investigation before anyone could confirm they were harmless leftovers rather
-than live interference (2026-07-02).
-
-The agent-teams runtime is *supposed* to remove ~/.claude/teams/session-<id>/ when
-the session ends, but in practice it often does not. A leftover team dir silently
-accretes members across circles — the failure that reached 26 members spanning
-four circles before it was noticed. This guard makes that loud.
-
-The CURRENT session's own team dir is the exception: the harness creates it once
-at session startup and is not expected to remove it until the session itself
-ends, so its mere presence after a circle close is normal, not a leftover — it
-is checked for bloat but is never a deletion candidate (see
-own_team_dir_name() below; deleting it breaks spawning for the rest of the
-session, unrecoverable short of starting a new one).
-
-Checks (evaluated against the state that REMAINS after any --prune):
-  1. Leftover team dir   — any OTHER session's ~/.claude/teams/session-*/ still
-                           present after close (current session's own excluded)
-  2. Bloat               — any team config (current session's own included) whose
-                           members array exceeds 8 (7 parts + the lead), i.e. a
-                           part was re-spawned (part-2, ...) instead of messaged
-  3. Today's transcript  — a circles/circle_<today>_*.md exists (close step 2 ran)
-  4. Orphaned tasks dirs — any ~/.claude/tasks/session-*/ with NO corresponding
-                           team dir at all (current session's own excluded).
-                           These accumulate silently even when team-dir teardown
-                           *succeeds* — cleaning a leftover team dir has only ever
-                           deleted its matching tasks dir, never the reverse, so a
-                           tasks dir whose team dir vanished on its own (runtime
-                           cleanup, or an earlier prune before this check existed)
-                           is left behind forever. Found 15 such dirs spanning
-                           2026-06-16 through 2026-06-23 at first check (2026-07-02).
-                           This is clutter, not interference — an orphaned tasks
-                           dir has no mechanism to affect a live circle — so it is
-                           reported as a WARN, not a FAIL.
-  5. Missing short_terms  — every part that SPOKE (>=1 statement in the transcript)
-                           must have a well-formed short_term_<open-time>.md. Under the
-                           lead-writes-short_terms close contract the LEAD authors each
-                           file from the part's reply (the lead's own writes persist
-                           where teammate writes did not); a reply that drops (#43706)
-                           is retried, then transcript-backfilled. Silent parts (e.g.
-                           the Soul, uncalled) are exempt. Needs --open-time (or
-                           a single today's transcript). Prints a parseable
-                           "MISSING-SHORT-TERM: <part>,..." line for the /circle_close
-                           retry loop. Fails CLOSED if the transcript can't be resolved
-                           (a stale mount must not vacuously pass the check).
-
-Close report + reconcile (durability across the close->nightly gap, #69866):
-  --short-term-only --write-report  writes work/logs/close_<open-time>.json recording
-      each speaking part's short_term size+sha256 — the durable manifest of what
-      existed at close.
-  --reconcile --open-time <ot>      the audit's pre-dreaming guard
-      (circle_audit.py phase 2): re-reads the
-      on-disk short_terms and compares to that report. A write that vanished between
-      close and nightly (sandbox mount not flushing to the durable store) is caught as
-      "RECONCILE-DRIFT: <parts>" (exit 1) against a known expectation, so it is
-      backfilled from the transcript instead of silently read as no-engagement — the
-      exact "clean close, empty nightly" contradiction that this closes.
-
-Exit 0 = clean: no leftover (other-session) team dir, no bloat, transcript present,
-            every speaking part wrote a well-formed short_term.
-            (Orphaned tasks dirs alone do not fail the check — see #4 above.)
-Exit 1 = action needed: leftover/bloat remains, today's transcript is missing, or a
-            part that spoke has no (or a malformed) short_term.
-
-With --prune:
-  - leftover OTHER-session team dirs (and their matching
-    ~/.claude/tasks/session-*/) are deleted first;
-  - then any remaining orphaned ~/.claude/tasks/session-*/ with no team dir at
-    all (current session's own excluded) are deleted too.
-The checks then run against what remains. The current session's own team dir
-and own tasks dir are never touched by --prune.
-
-Usage:
-  python coordinator/circle_close.py
-  python coordinator/circle_close.py --prune
-  python coordinator/circle_close.py --short-term-only --open-time YYYY-MM-DD_HHMM --write-report
-  python coordinator/circle_close.py --reconcile --open-time YYYY-MM-DD_HHMM   # audit guard
-  python coordinator/circle_close.py --claude-home /path/to/.claude   # for testing
+Design: docs/BNF.md (CLOSE, CP_PROTOCOL for the request's shape), circle_close_verify.py for
+what is asserted afterwards, transcript_store for the durable records the step ends with.
 """
 
 from __future__ import annotations
-import argparse
-import hashlib
-import json
-import os
-import shutil
+
+import concurrent.futures
+import datetime
+import pathlib
+import re
 import sys
-from collections import Counter
-from datetime import date, datetime
-from pathlib import Path
 
-# WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
-# arrows this project prints. Degrade instead of crashing: a probe that
-# dies formatting its own PASS message reports a failure that is not
-# there, which is how three suites read as broken for a week.
-if hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
-
-
-ROOT = Path(__file__).resolve().parent.parent
-sys.path.insert(0, str(ROOT / "coordinator"))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                       / "memory"))   # the issue-graph code (R203)
+import seam                                                    # noqa: E402
 import roster as R                                             # noqa: E402
+import setting_manager as SET                                         # noqa: E402
+import annotations as MK                                       # noqa: E402  the remember split
+import LLM_response_disassembler as RD                         # noqa: E402  every read of a reply
+import llm_client as LC                                        # noqa: E402  call, build_client
+import prompt_build as PB                                      # noqa: E402  render_messages
+import transcript_store as TS                                  # noqa: E402  write_lf, parse, resume
+import short_term_manager as STM                               # noqa: E402  THE record's one reader/writer (B96)
+from record_paths import ROOT, SANDBOX, PART_TAGS                     # noqa: E402
 
-# 8 named parts + the lead. Raised from 8 on 2026-08-07 with the ruling
-# that a circle STARTS AT TWO and grows through part-initialisation as
-# parts surface — so the roster is not a fixed seven with a spare slot, it
-# is whatever has been met so far.
+
+# THE CLOSE ASKS FOR TWO THINGS NOW, ruled 2026-08-19 (R255): the four
+# short_term sections, and — after them, last — the part's one
+# `[remember: "..."]` for the circle. The two are collected in ONE reply
+# rather than a second call per part because the part is already holding
+# the whole circle in mind at exactly this moment, and a second call would
+# pay for that context twice.
 #
-# THIS IS A BLOAT GUARD, NOT A ROSTER. It exists to catch a part being
-# re-spawned as `part-2` instead of messaged, which once reached 26
-# members across four circles before anyone noticed. Raise it when the
-# roster genuinely grows; leaving it low turns a real circle into a failed
-# close, and raising it far ahead of the roster turns the guard off.
-MAX_MEMBERS = 9
+# THE ORDERING IS LOAD-BEARING, not stylistic. annotations.remember_close_split()
+# is deliberately lenient about "]" so a 1000-word memory containing one
+# cannot be silently truncated mid-sentence; the price of that lenience is
+# that everything after the opener is the memory. Saying "last" here, in
+# process_core.md, annotation and standing guidance alike, is what makes that safe — and
+# short_term_collect() still re-checks the four headings after the split
+# and falls back to the strict parse if any went missing.
+SHORT_TERM_PROMPT = (
+    "The circle is closing. Write your short_term record of THIS circle, in "
+    "exactly these four sections, in this order, with these exact headings:\n\n"
+    "## What I said\n## What I observed in others\n"
+    "## Shifts toward other parts\n## Current emotional state\n\n"
+    "Write substantively under each heading — this is your own memory of the "
+    "circle, and dreaming reads it when the circle closes. No preamble, "
+    "no closing remarks, "
+    "no other headings. Begin with '## What I said'.\n\n"
+    "THEN, if you have one, write your one remember for this circle — "
+    "LAST, after '## Current emotional state', on its own line:\n\n"
+    '[remember: "<what you are choosing to carry forward>"]\n\n'
+    "It is a private note to your own future self: never shown to Self, to "
+    "another part, or to the room, and it is the only thing you write "
+    "tonight that you will read again. Up to 1000 words. Write it in your "
+    "own voice, about what you are keeping rather than what happened. "
+    "One per circle — if you already used yours in a round, this one is "
+    "dropped. Writing none is a real answer and costs you nothing."
+)
 
-# Transcript speaker tag -> parts/ subdir name. Self's own tag is
-# intentionally absent: Self is not a part and writes no short_term, so this
-# map is exactly the set of speakers that owe one. The Scribe writes the
-# transcript, so its tags are the ground truth for who spoke.
+# THE CLOSE BUDGET, named 2026-08-28 (R379). It was the bare
+# literal `5000` in short_term_collect()'s retry loop, and a value with no name
+# is a value nothing can configure — a settings override is resolved BY NAME.
 #
-# THAT ABSENCE IS ALSO WHY PERSONALISING THE TAG IS SAFE HERE. Self's
-# display name is configurable (identity.py) and has been written three ways
-# across the corpus; none of them appears in this map, so none of them can
-# affect which parts are found to have spoken.
-# B29: derived from roster.py. BOTH SPELLINGS (DIR_BY_TAG_ALL, not
-# DIR_BY_TAG) — the tag was renamed 2026-08-07 and 56 lines across the
-# corpus carry the earlier one and are the record, so this reader (which
-# walks historical transcripts, unlike circle_audit.py's STATEMENT_RE) still
-# needs to resolve it.
-TAG_TO_DIR = R.DIR_BY_TAG_ALL
-
-# The four canonical short_term sections (process_core.md) — IMPORTED from
-# ifs_model, the copy the register gate and the audit already share, so a
-# schema edit lands once (2026-08-19, review tier 3 #35: this was the third
-# hand copy; llm_client.py keeps its own by its transport-only charter, and
-# test_register_gate asserts the two spellings agree). A dropped/truncated
-# write is caught by a missing section, not only by an absent file.
-from ifs_model import SHORT_TERM_SECTIONS  # noqa: E402
-
-# A real statement line: "[Part]:" or "[Part] [To: X]:" at line start —
-# roster.statement_re, the one grammar (see its docstring; this file's own
-# copy accepted ANY second bracket and had drifted from nightly's). Scribe
-# annotations like "[Child has now spoken twice ...]" still do not match.
-_STATEMENT_RE = R.statement_re(TAG_TO_DIR)
+# 5000, not 2000 (R255): four substantive sections plus a remember of up to 1000
+# words does not fit in 2000, and the failure mode is not a short answer — it is
+# stop == "max_tokens", which that loop RETRIES, so an under-budget close would
+# have paid for two truncated calls per part and then written the second one
+# anyway.
+#
+# NOT circle_rounds.MAX_TOKENS, which is the ceiling for one STATEMENT. These are two
+# different requests with two different shapes; they were never one number.
+SHORT_TERM_MAX_TOKENS = SET.setting_value_read("short_term_max_tokens", 5000)
 
 
-def own_team_dir_name() -> str | None:
-    """Name of the CURRENT session's own team dir, e.g. 'session-8858292d'.
 
-    The harness creates this dir at session startup (before any agent is
-    spawned) and only removes it "when the session ends" — not per-circle,
-    and never recreates it mid-session. It must never be PRUNED (deleted)
-    while this session is still alive: doing so deletes the only team file
-    this session can spawn into, unrecoverable short of starting a new
-    session (observed 2026-07-02 — a Scribe pruned its own not-yet-torn-down
-    team dir on a false-positive "unclosed circle" match and lost the
-    ability to spawn any part for the rest of that session). It IS still
-    checked for bloat below — re-spawning within the live session is a real
-    failure — just never deleted.
-    """
-    sid = os.environ.get("CLAUDE_CODE_SESSION_ID", "")
-    return f"session-{sid.split('-')[0]}" if sid else None
+CLOSING_MARK = "closing_{ot}.json"
 
 
-def team_dirs_in(teams_root: Path) -> list[Path]:
-    return sorted(teams_root.glob("session-*")) if teams_root.is_dir() else []
+def _close_mark(ot: str) -> pathlib.Path:
+    return ROOT / "work" / "logs" / CLOSING_MARK.format(ot=ot)
 
 
-def task_dirs_in(tasks_root: Path) -> list[Path]:
-    return sorted(tasks_root.glob("session-*")) if tasks_root.is_dir() else []
+def circle_close_mark(ot: str) -> None:
+    """Write the START-OF-CLOSE marker. LIVE closes only; callers gate it.
+
+    THE ONE CASE _interrupted_closes() COULD NOT SEE, and its own docstring
+    named the fix: "a marker written at the START of a close, which nothing
+    writes today". A close that died before writing ANY short_term is
+    indistinguishable from an /abort and from a circle still in progress, so
+    the all-missing case had to be exempted — and after 45 minutes
+    circle_state stops speaking to it too, leaving it reported by nothing.
+
+    IT IS NEVER DELETED. A close report supersedes it: transcript_store writes
+    close_<OT>.json as the last act of a completed close, and every reader here
+    checks that first. A deletion step is one more thing that can fail on the
+    path whose failures this exists to catch."""
+    import json
+    from atomic_write import record_atomic_write
+    m = _close_mark(ot)
+    m.parent.mkdir(parents=True, exist_ok=True)
+    record_atomic_write(m, json.dumps(
+        {"open_time": ot,
+         "started": datetime.datetime.now().isoformat(timespec="seconds")},
+        indent=2) + "\n")
 
 
-def read_members(cfg: Path) -> tuple[list[str] | None, str | None]:
-    try:
-        data = json.loads(cfg.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError) as e:
-        return None, f"unreadable config.json ({e})"
-    members = data.get("members", [])
-    return [m.get("name", "?") for m in members], None
+def _close_began(ot: str) -> bool:
+    """Did a close START for this circle? See circle_close_mark()."""
+    return _close_mark(ot).is_file()
 
 
-def bloat_detail(names: list[str]) -> str:
-    """Name the parts that were re-spawned (base name appears more than once)."""
-    bases = Counter(n.split("-")[0] for n in names)
-    dupes = sorted(f"{b}×{c}" for b, c in bases.items() if c > 1)
-    return ", ".join(dupes) if dupes else ", ".join(sorted(names))
+def _failed_phase2(base: pathlib.Path) -> list[str]:
+    """[open_time] for every circle whose dreaming/synthesis failed and has
+    not been re-run since. Reported at open, 2026-08-23, ruled (R312).
 
+    THE GAP. inter_circle writes work/logs/dream_error_<OT>.json, prints the
+    re-run line and exits non-zero — at that close, once. Nothing mentioned it
+    ever again: the transcript is committed and complete, every short_term is
+    written, so _interrupted_closes() is right to stay quiet and circle_state
+    has nothing to say either. The circle simply never moved anyone's identity,
+    silently, from then on.
 
-def parts_that_spoke(transcript: Path) -> dict[str, int]:
-    """Map parts/ subdir name -> statement count, from the transcript's tags."""
-    counts: Counter = Counter()
-    try:
-        text = transcript.read_text(encoding="utf-8", errors="replace")
-    except OSError:
-        return {}
-    for line in text.splitlines():
-        m = _STATEMENT_RE.match(line)
-        if m:
-            counts[TAG_TO_DIR[m.group(1)]] += 1
-    return dict(counts)
+    THE TAG IS THE RESOLUTION, not the file. already_processed() reads
+    `dream/<OT>` as the durable evidence a run succeeded — all-or-nothing
+    staging means a failed run leaves nothing else behind — so a re-run that
+    works clears this report without anyone tidying up a log. Asked through
+    gitrepo.system_git_tag_name_read() so a lab tree asks about its own `dream/lab/<OT>`.
 
-
-def short_term_status(path: Path) -> tuple[bool, str]:
-    """(ok, reason). ok=True means present, non-empty, all four sections present."""
-    if not path.is_file():
-        return False, "missing"
-    try:
-        text = path.read_text(encoding="utf-8", errors="replace")
-    except OSError as e:
-        return False, f"unreadable ({e})"
-    if not text.strip():
-        return False, "empty"
-    absent = [h[3:] for h in SHORT_TERM_SECTIONS if h not in text]
-    if absent:
-        return False, "malformed (no section: " + "; ".join(absent) + ")"
-    return True, ""
-
-
-def file_digest(path: Path) -> tuple[int | None, str | None]:
-    """(bytes, sha256_hex) for a file, or (None, None) if absent/unreadable."""
-    try:
-        data = path.read_bytes()
-    except OSError:
-        return None, None
-    return len(data), hashlib.sha256(data).hexdigest()
-
-
-def write_close_report(root: Path, ot: str, transcript: Path,
-                       records: list[dict], missing: list[str]) -> Path:
-    """Persist work/logs/close_<ot>.json — the durable close manifest the nightly
-    reconcile verifies against. Records what SHOULD be on disk (per speaking part:
-    size + sha256), so a later total loss (#69866) is caught as a MISSING against a
-    known expectation instead of silently read as no-engagement."""
-    logs = root / "work" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    report = {
-        "open_time": ot,
-        "checked_at": datetime.now().strftime("%Y-%m-%d_%H%M%S"),
-        "transcript": transcript.relative_to(root).as_posix(),
-        "verifier": "circle_close.py check #5",
-        "result": "fail" if missing else "pass",
-        "missing": sorted(missing),
-        "note": ("Hashes are the close-time on-disk view, read through the sandbox "
-                 "mount, which can cache/stale (#45433/#69866). The nightly reconcile "
-                 "re-reads the durable store and treats any MISSING/DRIFT as a lost "
-                 "write to backfill — absence is caught unambiguously regardless."),
-        "parts": records,
-    }
-    path = logs / f"close_{ot}.json"
-    # newline="\n": text mode defaults to CRLF on Windows, and this file is a
-    # durability record under git. Content is JSON so line endings never affected
-    # parsing, but the report should not change shape depending on which machine
-    # wrote it. (2026-07-26)
-    path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
-    return path
-
-
-def resolve_transcript(circles: Path, open_time: str | None):
-    """Return (transcript_path_or_None, open_time_or_None, warn_or_None)."""
-    if open_time:
-        cand = circles / f"circle_{open_time}.md"
-        return (cand if cand.is_file() else None), open_time, None
-    today = date.today().strftime("%Y-%m-%d")
-    todays = sorted(circles.glob(f"circle_{today}_*.md")) if circles.is_dir() else []
-    if len(todays) == 1:
-        return todays[0], todays[0].stem[len("circle_"):], None
-    if len(todays) > 1:
-        return None, None, ("multiple transcripts today; pass --open-time "
-                            "YYYY-MM-DD_HHMM for the short_term check")
-    return None, None, None
-
-
-# ------------------------------------------- the close report as a postcondition
-
-CLOSE_CONTRACT = Path(__file__).resolve().parent / "close_contract.toml"
-
-_PC_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict}
-
-
-def load_close_contract() -> dict:
-    """close_contract.toml, or {} when absent. A MISSING CONTRACT IS SAID OUT
-    LOUD by the caller, never passed over — R368."""
-    try:
-        import tomllib as _toml
-    except ModuleNotFoundError:                              # pragma: no cover
-        import tomli as _toml                                # type: ignore
-    try:
-        with CLOSE_CONTRACT.open("rb") as fh:
-            return _toml.load(fh)
-    except (OSError, ValueError):
-        return {}
-
-
-def _pc_shape(where: str, obj: dict, spec: dict, out: list) -> None:
-    for key in spec.get("required", []):
-        if key not in obj:
-            out.append(where + ": missing required key " + repr(key))
-    if spec.get("closed"):
-        allowed = set(spec.get("required", [])) | set(spec.get("optional", []))
-        for key in sorted(set(obj) - allowed):
-            out.append(where + ": unexpected key " + repr(key)
-                       + " — the contract is closed")
-    for key, want in (spec.get("types") or {}).items():
-        if key not in obj:
+    QUIET ON ANYTHING IT CANNOT READ, the same rule as _interrupted_closes():
+    this runs in the open path, and git being unavailable is not a reason to
+    refuse to start a circle."""
+    logs = ROOT / "work" / "logs"
+    if not logs.is_dir():
+        return []
+    out = []
+    for f in sorted(logs.glob("dream_error_*.json")):
+        ot_i = f.stem[len("dream_error_"):]
+        if ot_i.endswith("_raw"):
             continue
-        cls = _PC_TYPES.get(want)
-        if cls is None:
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{4}", ot_i):
             continue
-        if cls is int and isinstance(obj[key], bool):
-            out.append(where + ": " + key + " is a bool, contract says int")
-        elif not isinstance(obj[key], cls):
-            out.append(where + ": " + key + " is "
-                       + type(obj[key]).__name__ + ", contract says " + want)
-    for key, allowed in (spec.get("values") or {}).items():
-        if key in obj and obj[key] not in allowed:
-            out.append(where + ": " + key + " is " + repr(obj[key])
-                       + ", contract says one of " + repr(allowed))
-
-
-def check_postcondition(name: str, report: dict, root: Path,
-                        contract: dict) -> "tuple[list[str], str]":
-    """Every rule in close_contract.toml against ONE close report. Returns
-    (failures, note). A sandbox report yields no failures and a note: it is a
-    different artefact in a different shape, and refusing it would turn a
-    legitimate record into a red gate."""
-    out: list[str] = []
-    if not contract:
-        return out, ""
-    marker = (contract.get("era") or {}).get("sandbox_report_marker")
-    if marker and marker in report:
-        return out, (name + ": a sandbox close report — a different shape, "
-                     "naming a circle under work/sandbox/; not checked")
-
-    _pc_shape(name, report, contract.get("report", {}), out)
-    parts = report.get("parts")
-    if not isinstance(parts, list):
-        return out, ""
-    for row in parts:
-        if not isinstance(row, dict):
-            out.append(name + ": a parts row is not an object")
+        if not (base / f"circle_{ot_i}.md").is_file():
             continue
-        _pc_shape(name + " parts[" + str(row.get("part")) + "]", row,
-                  contract.get("part", {}), out)
-
-    ot = report.get("open_time")
-    rel = report.get("transcript")
-    tpath = (root / rel) if isinstance(rel, str) else None
-
-    # names_its_own_transcript
-    if tpath is None or not tpath.is_file():
-        out.append(name + " [names_its_own_transcript]: names "
-                   + repr(rel) + ", which is not on disk")
-        return out, ""
-    if isinstance(ot, str) and isinstance(rel, str) and ot not in rel:
-        out.append(name + " [names_its_own_transcript]: open_time " + ot
-                   + " is not the transcript it names, " + rel)
-
-    # THE ONE READER of a transcript's speaker tags — never a second regex
-    spoke = parts_that_spoke(tpath)
-    rows = {r.get("part"): r for r in parts if isinstance(r, dict)}
-
-    # A DIRECTORY RENAME IS NOT A DEFECT (see close_contract.toml). A row
-    # naming a directory today's roster does not have is PAIRED with an
-    # unmatched speaker when their counts agree, and both leave the
-    # name-based checks. Derived from the roster and the counts; no date
-    # and no old name is written down anywhere.
-    renamed: list[str] = []
-    renamed_rows: set = set()
-    paired_speakers: set = set()
-    unmatched = {p: n for p, n in spoke.items() if p not in rows}
-    for part in [p for p in rows if p not in R.DIR_NAMES]:
-        n = rows[part].get("statements")
-        mate = next((s for s, m in unmatched.items() if m == n), None)
-        if mate is None:
+        # EITHER MARKER RESOLVES IT, 2026-08-24. Since the operator ruled
+        # git optional, a completed phase 2 records itself in
+        # work/logs/dream_<OT>.json as well as (or, in a tree with no git
+        # history, instead of) the tag — so this asks the file first and
+        # never reaches git in a bundle.
+        if (logs / f"dream_{ot_i}.json").is_file():
+            continue                                     # processed
+        try:
+            import gitrepo as _G
+            rc, tags = _G.system_git_run("tag", "-l", _G.system_git_tag_name_read("dream", ot_i),
+                              read_only=True)
+            if rc != 0 or tags.strip():
+                continue                 # processed, or git could not tell
+        except Exception:                                        # noqa: BLE001
             continue
-        renamed.append(str(part) + " -> " + mate + " (" + str(n)
-                       + " statement(s))")
-        del unmatched[mate]
-        # THE ROW STAYS IN `rows`. Only the two NAME-based rules skip
-        # it; the digest, the missing/present agreement and the shape
-        # checks all still run, which is what close_contract.toml
-        # promises. Popping it here made a rename an exemption from
-        # everything, and test_close_postcondition caught that.
-        renamed_rows.add(part)
-        paired_speakers.add(mate)
+        out.append(ot_i)
+    return out
 
-    # statements_agree_with_the_transcript
-    for part, row in rows.items():
-        if part in renamed_rows:
+
+def _interrupted_closes(base: pathlib.Path) -> list[tuple[str, list[str]]]:
+    """[(open_time, parts that spoke with no short_term)] for every LIVE
+    circle whose close was interrupted. Reported at open, 2026-08-20.
+
+    THE TEST IS THE RESUME GATE'S, NOT circle_state'S, and that is the
+    whole point of the function. circle_state asks "has this transcript
+    been quiet for 45 minutes" — a heuristic for "is someone still in
+    there", which an interrupted close passes cleanly the moment it is
+    older than the window. On 2026-08-20 a live close died with four of
+    seven short_terms written; by the time anyone looked, circle_state
+    called it finished and the next open would have said nothing.
+
+    A CLOSE REPORT MEANS FINISHED. transcript_store writes it as the last
+    act of a completed close, so its presence ends the question no matter
+    what the parts directory looks like.
+
+    QUIET ON ANYTHING IT CANNOT READ. This runs in the open path, before
+    a circle exists; an unparseable old transcript is not a reason to
+    refuse to start a new one, and the audit is where that belongs.
+
+    THE CASE NOTHING SAW IS SEEN SINCE 2026-08-23, and this paragraph
+    said otherwise until 2026-08-27. A close that died before writing ANY
+    short_term used to be indistinguishable here from an /abort, and
+    indistinguishable to circle_state once the transcript had been quiet
+    45 minutes — reported by neither, after that window. It asked for a
+    marker written at the START of a close; circle_close_mark() is that
+    marker, and the all-missing branch below consults it.
+
+    THE RESIDUE IS HISTORY, and it does not shrink: a circle that closed
+    BEFORE the marker existed has none, so for those the old exemption
+    stands exactly as it did, and circle_audit.py's transcript safety net
+    is still the only thing that catches them — by hand. The exemption
+    itself is deliberate and stays: without a marker, all-missing is what
+    a circle actually in progress looks like, which is what
+    circle_state's own warning is for."""
+    out: list[tuple[str, list[str]]] = []
+    for f in sorted(base.glob("circle_*.md")):
+        ot_i = f.stem[len("circle_"):]
+        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{4}", ot_i):
             continue
-        want = spoke.get(part)
-        if want is None:
-            out.append(name + " [statements_agree_with_the_transcript]: "
-                       + str(part) + " has a row but does not speak in the "
-                       "transcript")
-        elif row.get("statements") != want:
-            out.append(name + " [statements_agree_with_the_transcript]: "
-                       + str(part) + " recorded " + repr(row.get("statements"))
-                       + " statement(s), the transcript shows " + str(want))
-
-    # every_speaking_part_has_a_row
-    for part in sorted(set(spoke) - set(rows) - paired_speakers):
-        out.append(name + " [every_speaking_part_has_a_row]: " + part
-                   + " spoke " + str(spoke[part]) + "× and has no row at all "
-                   "— not recorded absent, simply unmentioned")
-
-    # result_agrees_with_missing
-    missing = report.get("missing")
-    if isinstance(missing, list) and isinstance(report.get("result"), str):
-        want = "pass" if not missing else "fail"
-        if report["result"] != want:
-            out.append(name + " [result_agrees_with_missing]: result is "
-                       + repr(report["result"]) + " while missing is "
-                       + repr(missing))
-
-    # missing_agrees_with_present
-    if isinstance(missing, list):
-        absent = {p for p, r in rows.items() if r.get("present") is False}
-        for p in sorted(absent - set(missing)):
-            out.append(name + " [missing_agrees_with_present]: " + str(p)
-                       + " is recorded absent but is not in `missing`")
-        for p in sorted(set(missing) - absent):
-            out.append(name + " [missing_agrees_with_present]: " + str(p)
-                       + " is in `missing` but no row records it absent")
-
-    # a_present_part_carries_its_digest
-    for part, row in rows.items():
-        if row.get("present") is not True:
+        if (ROOT / "work" / "logs" / f"close_{ot_i}.json").is_file():
             continue
-        sha = row.get("sha256")
-        if not isinstance(sha, str) or len(sha) != 64:
-            out.append(name + " [a_present_part_carries_its_digest]: "
-                       + str(part) + " is present but its sha256 is "
-                       + repr(sha))
-        if not isinstance(row.get("bytes"), int):
-            out.append(name + " [a_present_part_carries_its_digest]: "
-                       + str(part) + " is present but its byte count is "
-                       + repr(row.get("bytes")))
+        try:
+            _, _, tr = TS.circle_transcript_parse(f.read_text(encoding="utf-8"))
+        except (OSError, ValueError):
+            continue
+        spoke = {e["speaker"] for e in tr if e["speaker"] in PART_TAGS}
+        if not spoke:
+            continue
+        missing = sorted(p for p in spoke
+                         if STM.short_term_locate(ROOT / "parts" / p, ot_i) is None)
+        # ALL of them missing usually means an OPEN circle or an /abort, not
+        # an interrupted close — nobody has started closing yet, so nothing
+        # has been written. circle_state's own warning above is what speaks
+        # to that ordinary case.
+        #
+        # THE REAL SIGNAL IS circle_close_mark(), NOT COMPLETION ORDER.
+        # This comment used to read "short_term_collect writes in roster
+        # order, so a genuine interrupt leaves SOME written" — true once,
+        # false since B89 (2026-08-31, R420) parallelized short_terms
+        # collection, where an interrupt can just as easily leave ALL of
+        # them missing. It was already unnecessary the day it stopped being
+        # true: circle_close_mark(), written 2026-08-23 the instant a close
+        # BEGINS — before any short_term is collected, serial or not — settles
+        # the ambiguity on its own. With the marker on disk the circle is
+        # neither open nor aborted, so all-missing is a real interrupted
+        # close and is reported; without one — every circle closed before
+        # the marker existed — the exemption stands exactly as it always did.
+        # `missing` itself was always a plain per-part file-existence check,
+        # never order-dependent to begin with.
+        if missing and (len(missing) < len(spoke) or _close_began(ot_i)):
+            out.append((ot_i, [PART_TAGS[p] for p in missing]))
+    return out
 
-    # The rename note rides out AFTER every rule has run: only the two
-    # NAME-based postconditions skipped the paired rows, which is what
-    # close_contract.toml says happens.
-    if renamed:
-        return out, (name + ": " + ", ".join(renamed)
-                     + " — a parts/ directory renamed since the close; "
-                       "the report was true when written")
-    return out, ""
+
+def _dest_for(part: str, ot: str, guard) -> pathlib.Path:
+    """Where this part's record of this circle goes: the file an interrupted close
+    already wrote, whatever its suffix, else `short_term_<OT>.toml` — R434
+    (2026-09-02, B96): a NEW circle writes TOML, live and dry-run alike."""
+    base = SANDBOX if not guard.live else ROOT
+    return STM.short_term_path_new(base / "parts", part, ot)
 
 
-def postcondition_sweep(root: Path, open_time: "str | None" = None) -> int:
-    """`--postcondition`: every close report read against the transcript it
-    names. With --open-time, one report."""
-    print("Close-report postcondition check (R368)")
-    contract = load_close_contract()
-    if not contract:
-        print("  FAIL  " + CLOSE_CONTRACT.name + " is missing or unreadable — "
-              "nothing was checked")
-        return 1
+def _short_term_call(part: str, sysblocks, transcript, dry: bool):
+    """Runs on a WORKER THREAD (B77's own discipline, R420): the Messages
+    API call only, own client per worker (R170's rule — costs nothing,
+    answers no thread-safety question). Returns (reply, notes) — `notes`
+    are lines the caller emits once this part's future completes, so no two
+    parts' console lines can interleave; what the reply is missing is the
+    disassembler's read of it, taken again by the caller rather than carried.
 
-    logs = root / "work" / "logs"
-    reports = ([logs / ("close_" + open_time + ".json")] if open_time
-               else sorted(logs.glob("close_*.json")))
-    reports = [p for p in reports if p.is_file()]
-    if not reports:
-        print("  no close reports found — nothing to check")
-        return 0
-
-    fails: list[str] = []
+    One loop, two attempts (2026-08-19, review tier 5 #47): the retry used
+    to be a verbatim copy-paste of the first call four lines apart, so any
+    change to the request — budget, prompt, a stop-reason check — had to
+    land twice or the retry silently issued the old one. Semantics
+    unchanged: attempt 1 retries on a missing section OR truncation; the
+    retry's own result is judged on sections alone, exactly as before."""
     notes: list[str] = []
-    checked = 0
-    for p in reports:
-        try:
-            report = json.loads(p.read_text(encoding="utf-8"))
-        except (OSError, ValueError) as e:
-            fails.append(p.name + ": unreadable — " + str(e))
-            continue
-        bad, note = check_postcondition(p.name, report, root, contract)
-        if note:
-            notes.append(note)
-        # A NOTE IS NOT AN EXEMPTION. A sandbox report returns no
-        # failures because it is a different artefact; a renamed
-        # directory returns whatever the other rules found. Both are
-        # counted as read, so the printed total is the real one.
-        checked += 1
-        fails.extend(bad)
+    worker_client = None if dry else LC.stream_client_build()
+    reply = RD.Reply.canned("")
+    for attempt in (1, 2):
+        # SHORT_TERM_MAX_TOKENS, not a literal here — see its own comment
+        # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
+        reply = LC.stream_call(
+            worker_client, part, sysblocks[part],
+            PB.prompt_messages_render(part, transcript, SHORT_TERM_PROMPT),
+            SHORT_TERM_MAX_TOKENS, dry,
+            kind="short_term",
+        )
+        missing = RD.short_term_missing(reply.text)
+        if not (missing or reply.truncated) or attempt == 2:
+            break
+        notes.append(f"  {part:<12} FAILED "
+                    f"({'truncated' if reply.truncated else 'missing ' + missing[0]}) "
+                    f"— retrying")
+    return reply, notes
 
-    # THE CENSUS, both ways. A transcript older than the OLDEST report predates
-    # close reporting and is out of scope — derived from the reports themselves,
-    # never a hand-kept date.
-    stamps = sorted(p.name[len("close_"):-len(".json")] for p in reports)
-    if stamps and open_time is None:
-        oldest = stamps[0]
-        seen = set(stamps)
-        circles = root / "circles"
-        for t in sorted(circles.glob("circle_*.md")):
-            ot = t.name[len("circle_"):-len(".md")]
-            if ot < oldest:
+
+def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> list[str]:
+    spoke = {e["speaker"] for e in transcript}
+    written, failed, todo = [], [], []
+    for part in parts:
+        if part not in spoke:
+            seam.emit("command", f"  {part:<12} did not speak — no short_term")
+            continue
+        dest = _dest_for(part, ot, guard)
+        if dest.is_file():
+            # An interrupted close already wrote this one — the resume
+            # gate let the circle back in for exactly this case. The
+            # first write is the record; re-deriving would overwrite it
+            # with a second telling (and pay for the call again). Listed
+            # in `written` so commit_circle stages it — the interrupt
+            # died before any commit.
+            seam.emit("command", f"  {part:<12} kept — written before the interrupt")
+            written.append(part)
+            continue
+        todo.append(part)
+    if not todo:
+        return written
+
+    # THE CALLS RUN IN PARALLEL — B89/R420, 2026-08-31, on mid_term.refresh()'s
+    # own proven pattern (B77): ONLY _short_term_call() (the API request, its
+    # own client) runs on a worker thread. Every write — apply_remember /
+    # apply_close_remember (both touch `guard`), the file write, and every
+    # seam.emit() — happens back HERE, on this thread, one finished part at a
+    # time via as_completed(), so nothing mutates a file or prints a line
+    # from a worker and no two parts' output can interleave.
+    #
+    # CTRL-C: deliberately NOT special-cased. `with ... as ex:` shuts down
+    # with its default wait=True, so an interrupt here lets in-flight calls
+    # (each already the sole cost — nothing is written until this thread
+    # sees the result) finish before propagating to the KeyboardInterrupt
+    # handler at the call site, same as dreaming's and part_mid_term_manager.part_mid_term_refresh()'s
+    # own pools. Slower to actually stop than the old serial code; no
+    # half-written file or discarded-but-unaccounted spend either way.
+    #
+    # THE ORDER GUARANTEE THIS REPLACES IS GONE ON PURPOSE. Until this
+    # change, _interrupted_closes() could infer a genuine interrupt from
+    # "some but not all" written, because short_term_collect() wrote in
+    # roster order. It no longer does — see that function's own comment,
+    # corrected alongside this one — and does not need to: circle_close_mark()
+    # (2026-08-23) already marks a close as begun independently of order,
+    # and the missing-set test there was always a plain per-part file check,
+    # never order-dependent to begin with.
+    seam.emit("command", f"  {len(todo)} part(s) to write, in parallel:")
+    with concurrent.futures.ThreadPoolExecutor(len(todo)) as ex:
+        futs = {ex.submit(_short_term_call, p, sysblocks, transcript, dry): p
+               for p in todo}
+        for f in concurrent.futures.as_completed(futs):
+            part = futs[f]
+            reply, notes = f.result()
+            text = reply.text
+            missing = RD.short_term_missing(text)
+            for n in notes:
+                seam.emit("command", n)
+            if missing:
+                failed.append(part)
+                seam.emit("command", f"  {part:<12} FAILED — not written")
                 continue
-            if ot not in seen:
-                fails.append(t.name + ": closed after close reporting began ("
-                             + oldest + ") and has no close report")
-        before = sum(1 for t in circles.glob("circle_*.md")
-                     if t.name[len("circle_"):-len(".md")] < oldest)
-        if before:
-            notes.append(str(before) + " transcript(s) predate the oldest "
-                         "close report (" + oldest + ") and are out of scope")
 
-    n_rules = len(contract.get("postcondition", []))
-    print("  " + str(checked) + " report(s) read against the transcript each "
-          "names, " + str(n_rules) + " postcondition(s) per report")
-    for n in notes:
-        print("  note  " + n)
-    if fails:
-        print("\n  " + str(len(fails)) + " FAILURE(S):")
-        for f in fails:
-            print("    - " + f)
-        return 1
-    print("  PASS — every close report is a true statement about the circle "
-          "it closed")
-    return 0
+            # THE REMEMBER COMES OUT BEFORE THE FILE IS WRITTEN (R255). A
+            # short_term is read by dreaming and by circle_audit; a remember
+            # reaches only this part's own BLOCK 4. Leaving the bracket in the
+            # .md would put a private note into the one document another
+            # process reads on the part's behalf.
+            #
+            # FALLBACK ON A LOST SECTION. split_close_remember() takes
+            # everything after the opener, which is what makes a "]" inside a
+            # long memory safe; if a part wrote the bracket mid-reply instead
+            # of last, that would swallow a heading. So the split is checked,
+            # not trusted: if any of the four went missing, the strict ASK_RE
+            # path (apply_remember) runs instead — it keeps the sections and
+            # gives up only the lenience.
+            #
+            # THE CHECK RUNS BEFORE ANY WRITE, and that ordering is the whole
+            # correctness of the fallback. split_close_remember() is PURE, so
+            # it can be consulted first — RD.message_close_split() is that
+            # consultation. Deciding afterwards — writing the lenient record,
+            # then noticing a heading had gone — would leave the
+            # swallowed-heading version on file AND have the strict retry
+            # refuse itself as a second use this circle, since has_remembered()
+            # would already be True. One cap, read once, spent once.
+            if not RD.message_close_split(text):
+                text, recorded = MK.remember_apply(
+                    guard, part, PART_TAGS[part], text)
+            else:
+                text, recorded = MK.remember_close_apply(
+                    guard, part, PART_TAGS[part], text)
+            if recorded:
+                seam.emit("command", f"  {part:<12} remember written")
+            # THE RECORD IS TOML SINCE R434 (B96, 2026-09-04) — four named keys,
+            # the reply's prose verbatim, through the one writer. THE FORMAT
+            # CHECK IS ON THE FILE, NOT THE REPLY: after the write the record is
+            # read back through the one reader, and a section missing or empty
+            # there is a FAILURE, reported the way an unwritten short_term is.
+            # B54's incident is exactly a record on disk that read downstream
+            # as no engagement; a heading check on the reply text (above)
+            # cannot see an empty body, and a write nothing re-reads cannot
+            # see anything at all.
+            rec = STM.short_term_record_build(part, PART_TAGS[part], ot, text)
+            dest = _dest_for(part, ot, guard)
+            guard.check(dest)
+            try:
+                STM.short_term_write(dest, rec)
+                back = STM.short_term_read(dest, part)
+                empty = STM.short_term_sections_missing(back)
+            except (OSError, ValueError) as e:
+                empty, back = [f"({e})"], None
+            if empty:
+                failed.append(part)
+                seam.emit("command", f"  {part:<12} FAILED — the written record does not "
+                                     f"read back whole: {', '.join(empty)}")
+                continue
+            written.append(part)
+            seam.emit("command", f"  {part:<12} wrote {dest}")
+    if failed:
+        seam.fail(f"short_term NOT WRITTEN for: {', '.join(failed)} — these parts spoke "
+             f"but have no record; the transcript safety net will backfill them "
+             f"from circles/circle_{ot}.md at close")
+    return written
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser(description="Circle-close teardown verifier.")
-    ap.add_argument("--claude-home", default=str(Path.home() / ".claude"),
-                    help="path to ~/.claude (override for testing)")
-    ap.add_argument("--root", default=str(ROOT),
-                    help="project root (for the circles/ transcript check)")
-    ap.add_argument("--prune", action="store_true",
-                    help="delete leftover team dirs and their matching tasks dirs")
-    ap.add_argument("--short-term-only", action="store_true",
-                    help="run ONLY the short_term check (check #5) — for the "
-                         "/circle_close retry loop, before hard shutdown, while "
-                         "agents are still reachable; skips teardown checks, prune, "
-                         "and statement_temp deletion")
-    ap.add_argument("--max-members", type=int, default=MAX_MEMBERS)
-    ap.add_argument("--open-time", default=None,
-                    help="circle open time YYYY-MM-DD_HHMM; if given, check for "
-                         "circles/circle_<open-time>.md exactly instead of "
-                         "guessing by today's calendar date (avoids a false "
-                         "WARN when a circle opens before midnight and closes "
-                         "after it)")
-    ap.add_argument("--write-report", action="store_true",
-                    help="with --short-term-only: emit work/logs/close_<open-time>.json "
-                         "recording each speaking part's short_term size+sha256, so the "
-                         "audit reconcile can verify the durable store against what "
-                         "existed at close (closes the silent 'clean close, empty "
-                         "nightly' gap, #69866).")
-    ap.add_argument("--postcondition", action="store_true",
-                    help="read every close report against the transcript "
-                         "it names (R368); --open-time narrows it to one")
-    ap.add_argument("--reconcile", action="store_true",
-                    help="audit durability check (runs BEFORE dreaming): re-read the "
-                         "on-disk short_terms and compare to work/logs/close_<open-time>."
-                         "json; exit 1 with a RECONCILE-DRIFT line naming any part whose "
-                         "recorded write is now absent or changed, so it is backfilled "
-                         "from the transcript instead of read as no-engagement. "
-                         "Requires --open-time.")
-    args = ap.parse_args()
+def _prompt_blocks_changed(orig: pathlib.Path, new: pathlib.Path,
+                           parts: list[str]) -> list[str]:
+    """Parts whose EMITTED PROGRAM differs between two captures.
 
-    claude_home = Path(args.claude_home)
-    root = Path(args.root)
-    teams_root = claude_home / "teams"
-    tasks_root = claude_home / "tasks"
+    Compares the manifests' per-block sha256, never the capture files, whose
+    headers legitimately differ. Returns every part on any error — an unreadable
+    manifest must read as "cannot show it is the same", not as "it is"."""
+    try:
+        import prompt_capture as PC
+        a = PC.block_shas(PC.prompt_manifest_read(orig))
+        b = PC.block_shas(PC.prompt_manifest_read(new))
+    except Exception:
+        return list(parts)
+    out = []
+    for p in parts:
+        ha, hb = a.get(p, []), b.get(p, [])
+        if not ha or ha != hb:
+            out.append(p)
+    return out
 
-    blocks: list[str] = []
-    warns: list[str] = []
-    actions: list[str] = []
 
-    # Reconcile mode: the audit's durability guard, run BEFORE dreaming. Re-reads
-    # each short_term the close report said it wrote and compares size+sha256, so a
-    # write that vanished between close and nightly (sandbox mount not flushing to
-    # the durable store, #69866) is caught as MISSING/DRIFT against a known
-    # expectation — never silently read as no-engagement. Absence is unambiguous
-    # even through a stale mount; a spurious DRIFT only triggers a safe re-backfill.
-    if args.postcondition:
-        # READING circles/ — circle_state fails closed, and a partial
-        # transcript is well-formed, so a mid-circle sweep would report
-        # a protocol failure that is only an in-flight circle (ruled
-        # 2026-08-05).
-        import circle_state
-        if circle_state.is_circle_in_progress():
-            print("Close-report postcondition check (R368)")
-            print("  SKIPPED — a circle may be open; its transcript is "
-                  "still being written.")
-            print("  Run coordinator/circle_state.py to see which.")
-            return 0
-        return postcondition_sweep(root, args.open_time)
-
-    if args.reconcile:
-        ot = args.open_time
-        print("Circle-close reconcile (audit durability check)")
-        if not ot:
-            print("  FAIL  --reconcile requires --open-time YYYY-MM-DD_HHMM")
-            return 1
-        report_path = root / "work" / "logs" / f"close_{ot}.json"
-        if not report_path.is_file():
-            print(f"  WARN  no close report {report_path.relative_to(root).as_posix()} "
-                  f"— circle predates close-report logging; nothing to reconcile")
-            return 0
+def circle_resumable_list() -> int:
+    """Circles with a transcript and no close report — including a close
+    Ctrl-C interrupted mid-collection (some short_terms written, some
+    speaking parts still without; until 2026-08-19 any short_term at all
+    hid the circle here, the same over-wide test the --resume gate used).
+    A circle whose every speaking part has its short_term is a finished
+    close from before close reports existed, and stays hidden. Read-only."""
+    rows = []
+    for f in sorted((ROOT / "circles").glob("circle_*.md")):
+        ot = f.stem[len("circle_"):]
+        if (ROOT / "work" / "logs" / f"close_{ot}.json").is_file():
+            continue
+        done = {p.parent.name for p in STM.short_term_glob(ROOT / "parts", ot)}
         try:
-            report = json.loads(report_path.read_text(encoding="utf-8"))
-        except (OSError, json.JSONDecodeError) as e:
-            print(f"  FAIL  close report unreadable ({e})")
-            return 1
-        drift: list[str] = []
-        for entry in report.get("parts", []):
-            if not entry.get("present"):
-                continue  # not recorded present at close; already surfaced there
-            part = entry.get("part", "?")
-            nbytes, nsha = file_digest(root / "parts" / part / f"short_term_{ot}.md")
-            if nsha is None:
-                drift.append(part)
-                print(f"  MISSING  {part}: close recorded it present "
-                      f"({entry.get('bytes')} bytes) but it is absent on disk now")
-            elif nsha != entry.get("sha256") or nbytes != entry.get("bytes"):
-                drift.append(part)
-                print(f"  DRIFT    {part}: on-disk differs from close "
-                      f"(close {entry.get('bytes')}B/{str(entry.get('sha256'))[:12]}…, "
-                      f"now {nbytes}B/{str(nsha)[:12]}…)")
-            else:
-                print(f"  OK       {part}: matches close report")
-        if drift:
-            print(f"RECONCILE-DRIFT: {','.join(sorted(drift))}")
-            print("\nRECONCILE FAIL — durable store diverged from close state; "
-                  "backfill the named parts from the transcript before dreaming.")
-            return 1
-        print("\nRECONCILE PASS — every short_term recorded at close is intact on disk.")
+            topic, tr, _, _ = TS.circle_transcript_resume_read(f, ot, R.DIR_NAMES)
+            spoke = {e["speaker"] for e in tr if e["speaker"] in PART_TAGS}
+            if done and not (spoke - done):
+                continue                     # closed, pre-close-report era
+            n = sum(1 for e in tr if e["speaker"] in PART_TAGS)
+            note = f"{n} statement(s)"
+            if done:
+                note += (f" — close interrupted, "
+                         f"{len(spoke - done)} short_term(s) missing")
+            rows.append((ot, note, (topic or "(no topic)")[:40]))
+        except ValueError as e:
+            rows.append((ot, "NOT RESUMABLE", str(e).split("\n")[0][:40]))
+    if not rows:
+        seam.emit("command", "\n  no unclosed circles.")
         return 0
-
-    # Short-term-only mode: used by the /circle_close retry loop BEFORE the hard
-    # shutdown, to verify each speaking part's record is durably written while agents
-    # are still alive and re-reachable. Skips all teardown checks, --prune, and
-    # statement_temp deletion (parts may not have fully stood down yet). With
-    # --write-report it also emits the close report the nightly reconcile reads.
-    if args.short_term_only:
-        circles = root / "circles"
-        transcript, ot, st_warn = resolve_transcript(circles, args.open_time)
-        print("Circle-close short_term check")
-        if st_warn:
-            print(f"  WARN  {st_warn}")
-        if transcript is None or not ot:
-            # Fail CLOSED. A stale mount can make the transcript unresolvable
-            # (#41710/#69866); the old `return 0` here let the check vacuously
-            # "pass" with nothing verified — exactly the false clean-close.
-            print("  FAIL  no resolvable transcript; cannot verify short_terms "
-                  "(pass --open-time YYYY-MM-DD_HHMM)")
-            return 1
-        records: list[dict] = []
-        missing: list[str] = []
-        for part, n in sorted(parts_that_spoke(transcript).items()):
-            path = root / "parts" / part / f"short_term_{ot}.md"
-            ok, why = short_term_status(path)
-            nbytes, nsha = file_digest(path)
-            records.append({
-                "part": part, "statements": n, "present": ok,
-                "bytes": nbytes, "sha256": nsha, "status": "ok" if ok else why,
-            })
-            if ok:
-                print(f"  OK    {part}: short_term present ({n} statement(s))")
-            else:
-                missing.append(part)
-                print(f"  FAIL  {part}: spoke {n}× but short_term_{ot}.md {why}")
-        if args.write_report:
-            rp = write_close_report(root, ot, transcript, records, missing)
-            print(f"  DONE  wrote close report {rp.relative_to(root).as_posix()}")
-        if missing:
-            print(f"MISSING-SHORT-TERM: {','.join(sorted(missing))}")
-            return 1
-        print("  OK    every speaking part wrote a short_term")
-        return 0
-
-    # Delete all statement_temp.md files — unconditional, every run (see
-    # module docstring). Not part of --prune: this is routine close hygiene,
-    # not rare-orphan cleanup.
-    parts_root = root / "parts"
-    if parts_root.is_dir():
-        for tmp in sorted(parts_root.glob("*/statement_temp.md")):
-            tmp.unlink()
-            actions.append(f"removed {tmp.relative_to(root).as_posix()}")
-
-    own = own_team_dir_name()
-    dirs = team_dirs_in(teams_root)
-    other_dirs = [d for d in dirs if d.name != own]
-
-    # --prune first, so the checks below reflect the final state.
-    # Only OTHER (genuinely dead-session) dirs are ever deleted — the
-    # current session's own dir is never a deletion candidate while this
-    # session is still running. See own_team_dir_name() docstring.
-    if args.prune and other_dirs:
-        for d in other_dirs:
-            sid = d.name  # "session-xxxxxxxx"
-            shutil.rmtree(d, ignore_errors=True)
-            actions.append(f"removed teams/{sid}")
-            tdir = tasks_root / sid
-            if tdir.is_dir():
-                shutil.rmtree(tdir, ignore_errors=True)
-                actions.append(f"removed tasks/{sid}")
-        dirs = team_dirs_in(teams_root)  # rescan
-        other_dirs = [d for d in dirs if d.name != own]
-
-    # Orphaned tasks dirs: any tasks/session-* with NO corresponding team dir
-    # at all (own excluded). These are left behind even when team-dir teardown
-    # succeeds on its own — the matched-pair prune above only ever fires
-    # alongside a leftover TEAM dir, never in isolation. Reported as a WARN
-    # (clutter, not interference) rather than a FAIL.
-    live_team_names = {d.name for d in team_dirs_in(teams_root)}  # post-prune state
-    orphan_task_dirs = [
-        d for d in task_dirs_in(tasks_root)
-        if d.name != own and d.name not in live_team_names
-    ]
-    if args.prune and orphan_task_dirs:
-        for d in orphan_task_dirs:
-            shutil.rmtree(d, ignore_errors=True)
-            actions.append(f"removed orphaned tasks/{d.name} (no matching team dir)")
-        orphan_task_dirs = []
-
-    # 1: leftover dirs — only OTHER sessions' dirs count; the current
-    # session's own dir persisting is expected (runtime removes it "when
-    # the session ends", not at circle close).
-    if other_dirs:
-        blocks.append(
-            f"{len(other_dirs)} leftover team dir(s) after close: "
-            f"{[d.name for d in other_dirs]} — runtime did not tear down. "
-            f"{'Prune failed.' if args.prune else 'Re-run with --prune, or delete by hand.'}"
-        )
-
-    # 2: bloat — checked across ALL dirs still present, including the
-    # current session's own (re-spawning within the live session is a
-    # real failure even though its dir is never deleted).
-    for d in dirs:
-        cfg = d / "config.json"
-        if not cfg.exists():
-            warns.append(f"{d.name}: no config.json (partial/corrupt team dir)")
-            continue
-        names, err = read_members(cfg)
-        if err:
-            warns.append(f"{d.name}: {err}")
-            continue
-        if len(names) > args.max_members:
-            blocks.append(
-                f"{d.name}: {len(names)} members (> {args.max_members}) — "
-                f"re-spawning detected ({bloat_detail(names)}); a part was spawned "
-                f"again instead of messaged"
-            )
-
-    # 3: transcript present. Exact check if --open-time was given (avoids a
-    # false WARN when a circle opens before midnight and closes after it,
-    # since the transcript filename is stamped with OPEN time, not close
-    # time); falls back to a same-calendar-day guess otherwise.
-    circles = root / "circles"
-    if args.open_time:
-        expected = circles / f"circle_{args.open_time}.md"
-        if not expected.is_file():
-            warns.append(
-                f"expected transcript {expected.relative_to(root).as_posix()} "
-                f"not found — confirm the transcript was written"
-            )
-    else:
-        today = date.today().strftime("%Y-%m-%d")
-        todays = list(circles.glob(f"circle_{today}_*.md")) if circles.is_dir() else []
-        if not todays:
-            warns.append(
-                f"no transcript circles/circle_{today}_*.md — confirm the transcript "
-                f"was written (pass --open-time YYYY-MM-DD_HHMM for an exact check "
-                f"across a midnight boundary)"
-            )
-
-    # 4: orphaned tasks dirs remaining after any --prune.
-    if orphan_task_dirs:
-        warns.append(
-            f"{len(orphan_task_dirs)} orphaned tasks dir(s) with no matching team dir: "
-            f"{[d.name for d in orphan_task_dirs]} — re-run with --prune to remove."
-        )
-
-    # 5: every part that spoke must have a well-formed short_term for this circle.
-    # See module docstring check #5. Needs the transcript to know who spoke.
-    missing_short_terms: list[str] = []
-    transcript, ot, st_warn = resolve_transcript(circles, args.open_time)
-    if st_warn:
-        warns.append(st_warn)
-    if transcript is not None and ot:
-        for part, n in sorted(parts_that_spoke(transcript).items()):
-            ok, why = short_term_status(root / "parts" / part / f"short_term_{ot}.md")
-            if not ok:
-                missing_short_terms.append(part)
-                blocks.append(
-                    f"{part}: spoke {n}× but short_term_{ot}.md {why} — the lead's "
-                    f"close-write did not land (reply dropped #43706, or a mount flush "
-                    f"failure #69866); by the --prune stage agents are down, so backfill "
-                    f"it from the transcript"
-                )
-
-    # Report.
-    print(f"Circle-close check  (teams: {teams_root})")
-    for a in actions:
-        print(f"  DONE  {a}")
-    for w in warns:
-        print(f"  WARN  {w}")
-    for b in blocks:
-        print(f"  FAIL  {b}")
-    if missing_short_terms:
-        # Machine-parseable: the /circle_close retry loop greps this exact prefix
-        # to know which parts to re-send the write+stand-down to.
-        print(f"MISSING-SHORT-TERM: {','.join(sorted(missing_short_terms))}")
-    if blocks:
-        print(f"\nCIRCLE-CLOSE FAIL — {len(blocks)} issue(s) need attention "
-              f"before the next circle.")
-        return 1
-    print("  OK    no leftover team dir, no bloat")
-    print("\nCIRCLE-CLOSE PASS — team torn down cleanly.")
+    seam.emit("command", f"\n  {len(rows)} circle(s) with no close report:\n")
+    for ot, n, why in rows:
+        seam.emit("command", f"    {ot}")
+        seam.emit("command", f"        {n}")
+        seam.emit("command", f"        {why}")
     return 0
-
-
-if __name__ == "__main__":
-    sys.exit(main())
-# check #5 (short_term integrity) + --short-term-only added 2026-07-11
-# fail-closed check #5 + --write-report (close report) + --reconcile (nightly
-# durability guard) added 2026-07-12, after a full-scope close-write loss on
-# circle_2026-07-11_1644 (all 6 speaking parts) passed a clean close and read as
-# no-engagement at nightly — the Cowork sandbox-mount stale/flush bug class
-# (claude-code #45433/#41710/#69866/#51214).

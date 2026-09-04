@@ -9,9 +9,9 @@ standard fix: write the full text to a temp file IN THE SAME DIRECTORY,
 then `os.replace()` it over the real path — a rename, not a
 write-in-place, atomic on NTFS and POSIX alike.
 
-Validation stays the CALLER's job, and stays IN FRONT: self_schema.save
+Validation stays the CALLER's job, and stays IN FRONT: REGISTER_CLASS.register_write
 round-trips the rendered text before calling this (validate, then
-atomically commit — §6's ordering), issue_schema.save renders and
+atomically commit — §6's ordering), issue_schema.issue_write renders and
 commits. Nothing here parses anything.
 
 newline="\\n" IS NOT OPTIONAL — `.gitattributes` sets `* -text`, so a
@@ -26,7 +26,7 @@ import os
 import pathlib
 
 
-def atomic_write(path: pathlib.Path, text: str) -> None:
+def record_atomic_write(path: pathlib.Path, text: str) -> None:
     # PID-stamped so two processes racing the same register never share
     # a temp file (the §6 concurrency note: the crash is the constant
     # risk, the cross-process race the occasional one — this handles the

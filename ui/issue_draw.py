@@ -25,10 +25,10 @@ RUN AT EVERY LIVE /close, coordinator/circle.py, just after the vetting
 checkpoint and before short_terms are collected — the moment the graph is
 final for that circle. Both routes a circle can move the graph are behind
 that point: a ruling typed at cmd> (or into the transcript as an
-annotation), applied by issue_commands.apply(); and a [proposed: ...] row
+annotation), applied by issue_commands.issue_command_apply(); and a [proposed: ...] row
 accepted at the checkpoint, applied by the same function through
 vetting.py. WHAT IT ACTUALLY TESTS IS STALENESS, not either route —
-is_stale() below compares issues/*.toml against the picture's own mtime, so
+issue_draw_is_stale() below compares issues/*.toml against the picture's own mtime, so
 a hand edit, an aborted circle whose cmd> rulings already landed, and a
 brand-new install with no picture at all are all caught by the same test,
 and a close that changed nothing costs nothing. Nothing there can fail the
@@ -68,9 +68,9 @@ ENCODING
     dashed edge  proposed rather than attested — the model's inference, not a
                  part's testimony.
     faint dotted retired — legal no longer (an edge is legal only when both
-    edge          ends are live, or the non-live end is a root). "all" view
+    edge          ends are live — a root counts, it is live). "all" view
                  only, 2026-08-17: drawn to show where a live node's history
-                 reaches a lead/root/settled/declined node, never in the
+                 reaches a lead/settled/declined node, never in the
                  live view or a --working-set view — see main()'s own strip
                  before each of those.
 """
@@ -90,7 +90,10 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # ui/ is not on sys.path when this is imported rather than run — circle.py
 # spawns it at a live close, and the probe imports it.
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
+                       / "coordinator"))   # working_set_manager (stage 10)
 import palette as P                                            # noqa: E402
+import working_set_manager as WS                               # noqa: E402
 ISSUES_DIR = ROOT / "issues"
 
 # THE OUTPUT DIRECTORY IS NAMED, not derived from __file__. It was
@@ -127,7 +130,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-def load_issues(d: pathlib.Path) -> dict:
+def issue_draw_read(d: pathlib.Path) -> dict:
     """Read the graph out of issues/*.toml — every node, every status.
 
     graph.json is the derivation's sandbox output and stops being the truth the
@@ -145,7 +148,7 @@ def load_issues(d: pathlib.Path) -> dict:
     g = {}
     import issue_schema as S
     for f in sorted(d.glob("*n[0-9][0-9][0-9][0-9].toml")):
-        doc = S.load(f)
+        doc = S.issue_read(f)
         nid = doc["id"]
         ev = [{"circle": e["source"], "quote": e["quote"], "part": e["part"]}
               for e in doc.get("evidence", [])
@@ -160,27 +163,33 @@ def load_issues(d: pathlib.Path) -> dict:
         # constraints, just satisfied downstream now instead of by
         # dropping the data at the source: main() strips retired edges
         # before building the live view and before --working-set
-        # selection (neither asked to change), and build_svg() gives a
+        # selection (neither asked to change), and issue_svg_build() gives a
         # retired edge its own visual treatment, distinct from proposed —
         # see the "retired" key below and its use at the dash site.
         edges = [{"type": e["type"], "to": e["target"],
                   "attested": e.get("status") == "attested",
                   "retired": e.get("status") == "retired",
-                  "basis": S.unwrap(e.get("basis", ""))}
+                  "basis": S.issue_unwrap(e.get("basis", ""))}
                  for e in doc.get("edges", [])]
         g[nid] = {"label": doc.get("label", "").strip() or nid,
-                  "description": S.unwrap(doc.get("description", "")),
+                  "description": S.issue_unwrap(doc.get("description", "")),
                   # `absence` was hardcoded to "" and had been since the
                   # drawing was written — so the panel printed "Absence:" with
                   # nothing after it for every node, on every render, while the
                   # schema REQUIRES the field of every node. Found 2026-08-04
                   # by Self reading the table and asking whether it was
                   # "mostly null". It was always null.
-                  "absence": S.unwrap(doc.get("absence", "")),
+                  "absence": S.issue_unwrap(doc.get("absence", "")),
                   "evidence": ev, "edges": edges, "actions": [],
                   "held": sorted({e["part"] for e in doc.get("evidence", [])}),
                   "opened": doc.get("opened", "").replace("circle_", ""),
-                  "status": doc["status"]}
+                  "status": doc["status"],
+                  # `root` — R429, 2026-09-01. Missed on
+                  # the first pass: issue_draw_describe()'s root count and any future
+                  # root-aware drawing both read this dict, not the TOML
+                  # directly, so a field this loader does not copy is
+                  # invisible everywhere downstream, silently.
+                  "root": bool(doc.get("root"))}
     return g
 
 
@@ -236,14 +245,14 @@ _check_vocabulary()
 TIERS = [("spine", 8, P.GREEN), ("thread", 3, P.PURPLE), ("thin", 0, "#9a9a9a")]
 
 
-def tier(depth: int):
+def issue_tier_read(depth: int):
     for name, lo, col in TIERS:
         if depth >= lo:
             return name, col
     return "thin", "#9a9a9a"
 
 
-def communities(g: dict) -> dict:
+def issue_communities_read(g: dict) -> dict:
     """Greedy modularity (Clauset-Newman-Moore agglomeration).
 
     Label propagation was tried first and collapsed 29 of 32 nodes into one
@@ -335,18 +344,18 @@ def _fr(ids, adj, pos, iters, k, temp, anchor=None, pull=0.0):
         t *= 0.97
 
 
-def box(g, nid):
+def issue_draw_box(g, nid):
     """Footprint including the label, which is what actually collides."""
     r = 18 + math.sqrt(len(g[nid]["evidence"])) * 6
     lab = g[nid]["label"]
-    wrapped = max(len(x) for x in wrap_label(lab)) if lab else 8
+    wrapped = max(len(x) for x in issue_label_wrap(lab)) if lab else 8
     # Deliberately conservative: the label is centred on the node now, so the
     # true vertical extent is smaller than this. Over-reserving costs whitespace;
     # under-reserving costs a collision.
     return max(2 * r + 14, wrapped * 6.1 + 10), 2 * r + 34
 
 
-def wrap_label(lab: str, width: int = 30, lines: int = 3) -> list[str]:
+def issue_label_wrap(lab: str, width: int = 30, lines: int = 3) -> list[str]:
     """30x3 = 90 characters. Labels run to 103, median 53.
 
     At the previous 24x2 = 48, twenty-two of thirty-two labels truncated \u2014 which
@@ -371,13 +380,13 @@ def wrap_label(lab: str, width: int = 30, lines: int = 3) -> list[str]:
     return out
 
 
-def separate(g, pos, rounds=600):
+def issue_draw_separate(g, pos, rounds=600):
     """Hard overlap removal. Force-directed gets the shape right and the spacing
     wrong; this guarantees no two footprints overlap, which is the difference
     between a picture and a diagram. Runs after layout so it cannot distort the
     clustering, only relieve it."""
     ids = list(pos)
-    bx = {i: box(g, i) for i in ids}
+    bx = {i: issue_draw_box(g, i) for i in ids}
     for _ in range(rounds):
         moved = False
         for a in range(len(ids)):
@@ -402,7 +411,7 @@ def separate(g, pos, rounds=600):
     return pos
 
 
-def layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[dict, dict]:
+def issue_draw_layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[dict, dict]:
     """Cluster, lay each cluster out on its own, then PACK the clusters as rigid
     blocks.
 
@@ -428,12 +437,12 @@ def layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[dict, dict]:
     shelf-pack into a TOP row exactly as before; singletons shelf-pack into
     their OWN row underneath, positioned after the top row's own height is
     known. Edges between the two rows are untouched by this split — the
-    edge-drawing pass in build_svg() reads every node's position out of the
+    edge-drawing pass in issue_svg_build() reads every node's position out of the
     same flat `pos` dict this function returns either way, live or
     non-live, top row or bottom, and was never filtered by row or status to
     begin with."""
     rnd = random.Random(seed)
-    comm = communities(g)
+    comm = issue_communities_read(g)
     groups = {}
     for i, c in comm.items():
         groups.setdefault(c, []).append(i)
@@ -459,11 +468,11 @@ def layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[dict, dict]:
         for i in mem:
             local[i] = [(local[i][0] - min(xs)) / rx * span,
                         (local[i][1] - min(ys)) / ry * span * 0.78]
-        local = separate(g, local)
+        local = issue_draw_separate(g, local)
         xs = [p[0] for p in local.values()]
         ys = [p[1] for p in local.values()]
-        bw = max(xs) - min(xs) + max(box(g, i)[0] for i in mem) + 64
-        bh = max(ys) - min(ys) + max(box(g, i)[1] for i in mem) + 74
+        bw = max(xs) - min(xs) + max(issue_draw_box(g, i)[0] for i in mem) + 64
+        bh = max(ys) - min(ys) + max(issue_draw_box(g, i)[1] for i in mem) + 74
         for i in mem:
             local[i][0] -= min(xs)
             local[i][1] -= min(ys)
@@ -620,7 +629,7 @@ def layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[dict, dict]:
     return pos, comm
 
 
-def esc(s: str) -> str:
+def issue_draw_escape(s: str) -> str:
     return (s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
             .replace('"', "&quot;"))
 
@@ -628,7 +637,7 @@ def esc(s: str) -> str:
 CLUSTER_FILL = ["#eef4f0", "#f2eef6", "#f6f1e8", "#eef1f6", "#f6eeee", "#eff5f5"]
 
 
-def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
+def issue_svg_build(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
     depth = {i: len({e["circle"] for e in g[i]["evidence"]}) for i in g}
     # THE VIEWBOX IS FITTED TO THE CONTENT, not to the canvas.
     # The layout was tuned for 32 nodes on a 2400x1250 field. After the
@@ -647,7 +656,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
     vy1 += LEGEND_H
     vw, vh = vx1 - vx0, vy1 - vy0
     # Keep the frame from going extreme when the graph is a thin line of
-    # nodes. The upper bound was 2.8 until layout()'s single-row shelf-pack
+    # nodes. The upper bound was 2.8 until issue_draw_layout()'s single-row shelf-pack
     # (the operator, 2026-08-16: lay the groups out horizontally) made a wide
     # frame the NORMAL case rather than an edge case — 2.8 was squashing
     # every run back toward square, undoing the point of the change. Raised
@@ -702,7 +711,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
                    f'stroke-dasharray="7 6"/>')
         out.append(f'<text x="{x0+18:.0f}" y="{y0+24:.0f}" font-size="13" '
                    f'font-weight="700" fill="#9a9a92">{len(mem)} · '
-                   f'{esc(name)}</text>')
+                   f'{issue_draw_escape(name)}</text>')
 
     for nid, n in g.items():                                     # edges first
         for e in n["edges"]:
@@ -736,7 +745,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
     for nid, n in g.items():
         x, y = pos[nid]
         d = depth[nid]
-        name, col = tier(d)
+        name, col = issue_tier_read(d)
         r = 18 + math.sqrt(len(n["evidence"])) * 6
         leaf = inbound[nid] == 0
         out.append(f'<g class="nd" data-id="{nid}" style="cursor:pointer">')
@@ -756,17 +765,17 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
         #
         # The label overruns the circle, so it is stroked white underneath
         # (paint-order) to stay readable where it crosses the rim.
-        lines = wrap_label(n["label"])
+        lines = issue_label_wrap(n["label"])
         y0 = y + 4 - (len(lines) - 1) * 7.5
         for li, ln in enumerate(lines):
             yy = y0 + li * 15
             out.append(f'<text x="{x:.0f}" y="{yy:.0f}" text-anchor="middle" '
                        f'font-size="13" font-weight="600" fill="none" '
                        f'stroke="{P.GROUND}" stroke-width="4" '
-                       f'stroke-linejoin="round">{esc(ln)}</text>')
+                       f'stroke-linejoin="round">{issue_draw_escape(ln)}</text>')
             out.append(f'<text x="{x:.0f}" y="{yy:.0f}" text-anchor="middle" '
                        f'font-size="13" font-weight="600" '
-                       f'fill="#1a1a1a">{esc(ln)}</text>')
+                       f'fill="#1a1a1a">{issue_draw_escape(ln)}</text>')
         # id and depth on one line — a rank sorted by depth was not stable
         # (26 of 32 nodes sit in a depth tie; one further circle renumbered 13),
         # so prose referring to "node 11" decayed silently. One name per node.
@@ -801,7 +810,7 @@ def build_svg(g: dict, pos: dict, inbound: Counter, comm: dict) -> str:
 
 
 def _estat(e: dict) -> str:
-    """The table panel's one-word gloss for an edge, matching build_svg()'s
+    """The table panel's one-word gloss for an edge, matching issue_svg_build()'s
     own three-way dash/opacity split — retired distinct from proposed,
     2026-08-17."""
     if e["retired"]:
@@ -809,7 +818,7 @@ def _estat(e: dict) -> str:
     return "attested" if e["attested"] else "proposed"
 
 
-def build_html(g: dict, svg: str, order: list, inbound: Counter,
+def issue_html_build(g: dict, svg: str, order: list, inbound: Counter,
                g_live: dict | None = None, svg_live: str = "") -> str:
     """One page, two views. Ruled 2026-08-05: *"Add a live/all selector at the
     top of the page, switching the graph and table between live and all
@@ -828,10 +837,10 @@ def build_html(g: dict, svg: str, order: list, inbound: Counter,
         cs = sorted({e["circle"] for e in n["evidence"]})
         ev = "".join(
             f'<div class="q"><span class="c">{e["circle"]} · {e.get("part") or "?"}'
-            f'</span><br>{esc(e.get("quote",""))}</div>' for e in n["evidence"][:6])
+            f'</span><br>{issue_draw_escape(e.get("quote",""))}</div>' for e in n["evidence"][:6])
         eg = "".join(
             f'<li><code>{e["type"]}</code> → <b>{e["to"]}</b> '
-            f'{esc(g.get(e["to"],{}).get("label","?"))} '
+            f'{issue_draw_escape(g.get(e["to"],{}).get("label","?"))} '
             f'<i>({_estat(e)})</i></li>'
             for e in n["edges"])
         # INBOUND too. A node's relationships run both ways and the panel
@@ -840,29 +849,36 @@ def build_html(g: dict, svg: str, order: list, inbound: Counter,
         # target, and nPPPP could not see it.
         ib = "".join(
             f'<li><code>{e["type"]}</code> ← <b>{src}</b> '
-            f'{esc(g[src]["label"])} '
+            f'{issue_draw_escape(g[src]["label"])} '
             f'<i>({_estat(e)})</i></li>'
             for src, sn in sorted(g.items())
             for e in sn["edges"] if e["to"] == nid)
-        ac = "".join(f"<li>{esc(a['what'])}</li>" for a in n["actions"])
+        ac = "".join(f"<li>{issue_draw_escape(a['what'])}</li>" for a in n["actions"])
         rows.append(f'''<tr id="r-{nid}" data-id="{nid}" \
 data-live="{1 if nid in live_ids else 0}">
 <td class="n">{nid}</td>
-<td><b>{esc(n["label"])}</b><div class="m">{len(cs)} circles
- · {cs[0][:10]}..{cs[-1][:10]} · {", ".join(sorted(n["held"])) or "—"}
+<td><b>{issue_draw_escape(n["label"])}</b><div class="m">{len(cs)} circles
+ · {f"{cs[0][:10]}..{cs[-1][:10]}" if cs else "no evidence yet"} · {", ".join(sorted(n["held"])) or "—"}
  {"· <b>LEAF</b>" if inbound[nid]==0 else ""}</div>
-<div class="d">{esc(n["description"])}</div>
-<div class="a"><b>Absent when:</b> {esc(n["absence"])}</div>
+<div class="d">{issue_draw_escape(n["description"])}</div>
+<div class="a"><b>Absent when:</b> {issue_draw_escape(n["absence"])}</div>
 {"<div class=rel><b>Relationships</b> (this node as source):<ul class=e>"
  +eg+"</ul></div>" if eg else
  "<div class=rel><b>Relationships</b> (this node as source): none live</div>"}
 {"<div class=rel><b>and as target:</b><ul class=e>"+ib+"</ul></div>" if ib else ""}
 {"<div class=act><b>Actions:</b><ul>"+ac+"</ul></div>" if ac else ""}
 <details><summary>evidence ({len(n["evidence"])})</summary>{ev}</details></td></tr>''')
-    # The live VIEW is not the same as the live SET: an edge may pull in a
-    # root, and after the root exception (R089) one does. Counting them
-    # together under the word "live" would make the button wrong by one, so
-    # the pulled node is named rather than absorbed. D26, in the interface.
+    # A ROOT IS LIVE (R429, 2026-09-01), so it needs no
+    # pulling in any more — `live_ids` already contains it directly, the
+    # same way it contains every other live node. From 2026-08-05 (B23) to
+    # that date, root was its own status and a root reached this view only
+    # when an edge pulled it in (D26); `pulled` below is what counted that.
+    # It should read 0 now and forever, for any node — the closure rule
+    # (issue_gate.py) no longer admits an edge from a live node to anything
+    # BUT a live node, so nothing non-live can be pulled in here either.
+    # Left computed, not deleted: a future regression that let a non-live
+    # neighbour back into `live_ids` would show up here as a nonzero count
+    # rather than silently.
     strictly = sum(1 for i in live_ids if g.get(i, {}).get("status") == "live")
     pulled = len(live_ids) - strictly
     live_note = ("live nodes only — what the graph currently ASSERTS"
@@ -905,7 +921,7 @@ code{{background:#f2f2ee;padding:1px 4px;border-radius:3px;font-size:11px}}
    nothing is set inline. Three states, not two: the chosen node, its immediate
    neighbours, and everything else pushed back far enough that the subgraph
    reads on its own.
-   Scoped to plain `.act`, not `#svg.act`: box() puts that class on whichever
+   Scoped to plain `.act`, not `#svg.act`: issue_draw_box() puts that class on whichever
    of #svg/#svg2 is the active view, and in the live view that is #svg2. An
    id-scoped selector matched only the `all` container, so live selection ran
    (classes were added) but nothing ever dimmed or lit up. */
@@ -953,7 +969,7 @@ function setView(v){{
   clear();
 }}
 const svgBox=document.getElementById('svg');
-function box(){{ return document.getElementById(LIVE?'svg2':'svg'); }}
+function issue_draw_box(){{ return document.getElementById(LIVE?'svg2':'svg'); }}
 function clear(){{
   document.querySelectorAll('#svg,#svg2').forEach(b=>b.classList.remove('act'));
   document.querySelectorAll('tr').forEach(r=>r.classList.remove('hi'));
@@ -961,7 +977,7 @@ function clear(){{
 }}
 function sel(id){{
   clear();
-  box().classList.add('act');
+  issue_draw_box().classList.add('act');
   const nb=new Set();
   document.querySelectorAll('.ed').forEach(e=>{{
     if(e.dataset.a===id||e.dataset.b===id){{
@@ -981,32 +997,12 @@ document.onkeydown=e=>{{if(e.key==='Escape')clear();}};
 </script>'''
 
 
-def normalise_id(x):
-    """Any of `2`, `nQQQQ`, `L_n9999` -> the bare id. The prefix is
-    presentation; the id is identity."""
-    x = x.strip()
-    if len(x) > 1 and x[1] == "_":
-        x = x[2:]
-    x = x.lstrip("nN")
-    return f"n{int(x):04d}" if x.isdigit() else x
+# issue_id_normalise() and working_set_argv_parse() MOVED to working_set_manager.py, 2026-09-03
+# (stage 10) — read as WS.*. --live stays retired here: the shared parser only honours
+# it when handed a graph, and this tool hands none.
 
 
-def parse_working_set(argv):
-    ids = []
-    # `--live` as a working-set shorthand retired 2026-08-13: the default run
-    # already builds a live-only view (see main()) and embeds it in issue_graph.html
-    # as a toggle, laid out independently so it reads the same as this would
-    # have. A standalone `graph-live.*` selected via this flag was a second,
-    # unsynced copy of that same picture — see progress.md 2026-08-13.
-    for i, a in enumerate(argv):
-        if a == "--working-set" and i + 1 < len(argv):
-            ids += argv[i + 1].split(",")
-        elif a.startswith("--working-set="):
-            ids += a.split("=", 1)[1].split(",")
-    return [normalise_id(x) for x in ids if x.strip()]
-
-
-def limit_to_working_set(g, chosen):
+def issue_working_set_limit(g, chosen):
     """Trim to the named nodes, of ANY status, plus whatever they point at.
 
     Ruled 2026-08-03. NO DEFAULT — without `--working-set` the whole of issues/
@@ -1015,32 +1011,30 @@ def limit_to_working_set(g, chosen):
 
     Anything an included node has an edge to is pulled in and reported: a
     picture that cuts an edge in half draws a relation pointing at nothing."""
-    unknown = [c for c in chosen if c not in g]
-    keep = {c for c in chosen if c in g}
-    pulled = set()
-    for nid in list(keep):
-        for e in g[nid]["edges"]:
-            if e["to"] in g and e["to"] not in keep:
-                pulled.add(e["to"])
-    keep |= pulled
+    # DIRECTED: only what a kept node points AT is pulled. The walk is
+    # working_set_manager.working_set_pull() since 2026-09-03 (stage 10) —
+    # this and issue_index.issue_working_set_read() were one loop written twice.
+    kept, pulled, unknown = WS.working_set_pull(
+        g, chosen, lambda nid: [e["to"] for e in g[nid]["edges"]])
+    keep = set(kept)
     out = {k: dict(v) for k, v in g.items() if k in keep}
     for n in out.values():
         n["edges"] = [e for e in n["edges"] if e["to"] in keep]
     return out, sorted(pulled), unknown
 
 
-def newest_source(d: pathlib.Path) -> float:
+def issue_newest_source_read(d: pathlib.Path) -> float:
     """The mtime of the most recently written node file under `d`, or 0.0
     for a directory with no nodes in it at all.
 
-    The same glob load_issues() uses, deliberately: a file this does not
+    The same glob issue_draw_read() uses, deliberately: a file this does not
     count is a file whose change cannot make the picture stale, and the two
     disagreeing is the failure nobody would see."""
     return max((f.stat().st_mtime
                 for f in d.glob("*n[0-9][0-9][0-9][0-9].toml")), default=0.0)
 
 
-def is_stale(d: pathlib.Path = ISSUES_DIR) -> bool:
+def issue_draw_is_stale(d: pathlib.Path = ISSUES_DIR) -> bool:
     """Has the graph moved since the picture was last drawn?
 
     STALENESS, NOT A CHANGE COUNTER, and the difference is the point. A
@@ -1057,11 +1051,11 @@ def is_stale(d: pathlib.Path = ISSUES_DIR) -> bool:
     it is why the shipped work/graph/ is allowed to be empty."""
     if not OUT_HTML.is_file() or not OUT_SVG.is_file():
         return True
-    return newest_source(d) > min(OUT_HTML.stat().st_mtime,
+    return issue_newest_source_read(d) > min(OUT_HTML.stat().st_mtime,
                                   OUT_SVG.stat().st_mtime)
 
 
-def describe(g: dict) -> str:
+def issue_draw_describe(g: dict) -> str:
     """One line naming what the picture shows — issues by status, and how
     many live relations are drawn between them.
 
@@ -1071,12 +1065,14 @@ def describe(g: dict) -> str:
     graph's own vocabulary (memory/issue_schema.py STATUSES), counted from
     what was actually loaded."""
     by_status = Counter(n.get("status", "?") for n in g.values())
+    n_root = sum(1 for n in g.values() if n.get("root"))
     live_edges = sum(1 for n in g.values()
                      for e in n["edges"] if not e["retired"])
     parts = ", ".join(f"{by_status[s]} {s}"
                       for s in sorted(by_status, key=lambda s: (-by_status[s], s)))
     return (f"{len(g)} issue{'' if len(g) == 1 else 's'}"
-            + (f" ({parts})" if parts else "")
+            + (f" ({parts}" + (f", {n_root} root" if n_root else "") + ")"
+               if parts else "")
             + f", {live_edges} live relation{'' if live_edges == 1 else 's'}")
 
 
@@ -1094,10 +1090,10 @@ def main() -> int:
     # ARE news. Ignored for a graph.json snapshot: that has no picture of
     # its own for the live graph's staleness to be a claim about.
     at_close = "--if-stale" in sys.argv[1:]
-    if at_close and arg.is_dir() and not is_stale(arg):
+    if at_close and arg.is_dir() and not issue_draw_is_stale(arg):
         return 0
     if arg.is_dir():
-        g = load_issues(arg)
+        g = issue_draw_read(arg)
         # never write into issues/ — that directory is the graph itself.
         # OUT_DIR is NAMED (see the constant): this was the script's own
         # directory, a derivation that silently follows the script.
@@ -1106,7 +1102,7 @@ def main() -> int:
         gp = out / "graph.json"          # only sites the output files
         # THE SOURCE LINE IS FOR A PERSON AT A SHELL, who may have named a
         # directory or a snapshot and wants to be told which was read. At a
-        # close there is only ever one source, and describe() below already
+        # close there is only ever one source, and issue_draw_describe() below already
         # opens with the same node count — so under --if-stale this would be
         # the same number twice in four lines. The rest of the report is
         # identical through both doors; this one line is not.
@@ -1116,7 +1112,7 @@ def main() -> int:
         g = json.loads(arg.read_text(encoding="utf-8"))
         gp = arg
         print(f"  source: {arg} (sandbox snapshot) — {len(g)} issues")
-    chosen = parse_working_set(sys.argv[1:])
+    chosen = WS.working_set_argv_parse(sys.argv[1:])
     if "--live" in sys.argv[1:]:
         print("  note: --live is retired 2026-08-13 — open issue_graph.html and use"
               " its live/all toggle instead")
@@ -1129,7 +1125,7 @@ def main() -> int:
         # unchanged from before retired edges were loaded at all.
         for n in g.values():
             n["edges"] = [e for e in n["edges"] if not e["retired"]]
-        g, pulled, unknown = limit_to_working_set(g, chosen)
+        g, pulled, unknown = issue_working_set_limit(g, chosen)
         if unknown:
             print(f"  unknown issue id(s) ignored: {', '.join(unknown)}")
         print(f"  WORKING SET: {len(g)} of {n_all} issues"
@@ -1138,7 +1134,7 @@ def main() -> int:
     inbound = Counter()
     for nid, n in g.items():
         for e in n["edges"]:
-            # A retired edge makes no current claim (see load_issues()) —
+            # A retired edge makes no current claim (see issue_draw_read()) —
             # it must not count toward "nothing depends on it" LEAF status,
             # even though it's now drawn in the "all" view.
             if not e["retired"]:
@@ -1149,8 +1145,8 @@ def main() -> int:
     # two_row only for the genuine, unfiltered "all" view — a --working-set
     # picture reuses this same call but is its own, smaller, focused thing,
     # not what "the all view" meant in this request.
-    pos, comm = layout(g, two_row=not chosen)
-    svg = build_svg(g, pos, inbound, comm)
+    pos, comm = issue_draw_layout(g, two_row=not chosen)
+    svg = issue_svg_build(g, pos, inbound, comm)
 
     # THE SECOND VIEW, built in the same run so one page can hold both.
     # Laid out independently: the live view is arranged for ten nodes and the
@@ -1171,13 +1167,13 @@ def main() -> int:
             # finding named.
             for n in g_copy.values():
                 n["edges"] = [e for e in n["edges"] if not e["retired"]]
-            gl, _pulled, _u = limit_to_working_set(g_copy, live_ids)
+            gl, _pulled, _u = issue_working_set_limit(g_copy, live_ids)
             ib_l = Counter()
             for nid, n in gl.items():
                 for e in n["edges"]:
                     ib_l[e["to"]] += 1
-            pos_l, comm_l = layout(gl)
-            g_live, svg_live = gl, build_svg(gl, pos_l, ib_l, comm_l)
+            pos_l, comm_l = issue_draw_layout(gl)
+            g_live, svg_live = gl, issue_svg_build(gl, pos_l, ib_l, comm_l)
     # ONE FILE PER RUN. A standalone `graph-live.*` used to be written here
     # under a separate stem when `--live` was passed — retired 2026-08-13,
     # since it was just a second, easily-stale copy of the live view already
@@ -1195,7 +1191,7 @@ def main() -> int:
     html_path = gp.parent / "issue_graph.html"
     svg_path.write_text(svg, encoding="utf-8", newline="\n")
     html_path.write_text(
-        build_html(g, svg, order, inbound, g_live, svg_live or ""),
+        issue_html_build(g, svg, order, inbound, g_live, svg_live or ""),
         encoding="utf-8", newline="\n")
     # THE REPORT IS THE SAME THROUGH BOTH DOORS — a person at a shell and
     # the command pane at a close read these same lines, because circle.py
@@ -1203,7 +1199,7 @@ def main() -> int:
     # So it says what the picture SHOWS first and what the renderer did
     # second: at a close the reader has just finished a circle and is being
     # told about their issues, not about a file write.
-    print(f"  issue graph redrawn — {describe(g)}")
+    print(f"  issue graph redrawn — {issue_draw_describe(g)}")
     try:
         rel = svg_path.relative_to(ROOT).as_posix()
     except ValueError:                   # a snapshot rendered outside the tree

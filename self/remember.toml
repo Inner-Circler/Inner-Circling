@@ -7,10 +7,10 @@ next_id = 1
 # delegate ships the register and none of it.
 #
 # `register` IS "self_remember", NOT "remember". The table is `remember`; the
-# register name is not. coordinator/remember.py serves a part's own private
-# remember as well, and the two must not collide in self_schema.py.
+# register name is not. coordinator/remember_manager.py serves a part's own private
+# remember as well, and the two must not collide in REGISTER_CLASS.py.
 #
-# Must stay valid, loadable TOML: remember.py mints ids from doc["next_id"],
+# Must stay valid, loadable TOML: remember_manager.py mints ids from doc["next_id"],
 # defaulting to 1 when absent, so an empty register at next_id = 1 is what a
 # fresh install would build for itself anyway.
 remember = []

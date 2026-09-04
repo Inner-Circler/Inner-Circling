@@ -26,6 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # atomic_write/identity et al.
 import issue_schema as S  # noqa: E402
+import working_set_manager as WS  # noqa: E402  the parsers and the pull (stage 10)
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -38,18 +39,21 @@ if hasattr(sys.stdout, "reconfigure"):
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 ISSUES = ROOT / "issues"
 CLOSED = ("settled", "declined", "retired")
-# ROOT is neither open nor closed: a source the live graph descends from,
-# carrying no claim and owed nothing (R038, B23). Counted on its own so it
-# cannot be read as either.
-ROOTS = ("root",)
+# A ROOT IS A LIVE NODE (R429, 2026-09-01), not a
+# separate bucket beside live/leads/closed. It carries `root = true` in its
+# own doc rather than a status of its own — permanent (never retired or
+# demoted) and always shown in full at circle open, but counted here as
+# part of `live`, the same set it is a member of. Until 2026-09-01 "root"
+# was itself a status, counted disjointly from live; see rulings/ R089
+# and R429 for the history.
 
 
-def load() -> dict:
+def issue_index_read() -> dict:
     """TOML since 2026-08-03. Every field read through `issue_schema`, so this
     file no longer carries its own five regexes over a format with no grammar."""
     g = {}
-    for p in S.nodes():
-        d = S.load(p)
+    for p in S.issue_nodes_read():
+        d = S.issue_read(p)
         nid = d["id"]
         ev = [e["source"] for e in d.get("evidence", [])]
         edges = [(e["type"], e["target"],
@@ -58,8 +62,9 @@ def load() -> dict:
         g[nid] = {
             "file": p.name,
             "label": d.get("label", "").strip() or nid,
-            "desc": S.unwrap(d.get("description", "")),
+            "desc": S.issue_unwrap(d.get("description", "")),
             "status": d["status"],
+            "root": bool(d.get("root")),
             "held": sorted(set(e["part"] for e in d.get("evidence", []))),
             "n_ev": len(ev),
 
@@ -98,58 +103,26 @@ def load() -> dict:
 # One addition the set does not ask for: any node an included node has a LIVE
 # edge to is pulled in, and said so in the output. A view that cuts an edge in
 # half draws a relation pointing at nothing.
-def normalise_id(x):
-    """Any of `2`, `nNNNN`, `L_n9999`, `S_n0099` -> the bare id.
-
-    THE PREFIX IS PRESENTATION; THE ID IS IDENTITY — the project's own rule, and
-    the reason this exists. Naming `L_n9999` and getting nothing back would be
-    the tool disagreeing with its own filenames."""
-    x = x.strip()
-    if len(x) > 1 and x[1] == "_":
-        x = x[2:]
-    x = x.lstrip("nN")
-    return f"n{int(x):04d}" if x.isdigit() else x
+# issue_id_normalise() and working_set_argv_parse() MOVED to working_set_manager.py, 2026-09-03
+# (stage 10) — read as WS.*.
 
 
-def parse_working_set(argv, g=None):
-    """['--working-set', 'nNNNN,nMMMM'] -> ['nNNNN','nMMMM']. Bare ids after the
-    flag are accepted too, since a comma is easy to forget."""
-    ids = []
-    # `--live` = every node whose status is live, as a working set. Ruled
-    # 2026-08-04. The default is EVERY node — the picture shows what is there —
-    # and that is right for reading history, wrong for reading the graph as it
-    # currently claims anything. A lead makes no claim (R002) and a settled node
-    # is concluded, so a live-only view is the graph AS AN ASSERTION.
-    if "--live" in argv:
-        ids += [nid for nid, n in (g or {}).items() if n.get("status") == "live"]
-    for i, a in enumerate(argv):
-        if a == "--working-set" and i + 1 < len(argv):
-            ids += [x.strip() for x in argv[i + 1].split(",") if x.strip()]
-        elif a.startswith("--working-set="):
-            ids += [x.strip() for x in a.split("=", 1)[1].split(",") if x.strip()]
-    return [normalise_id(x) for x in ids]
-
-
-def working_set(g, chosen):
-    """(kept, pulled). `chosen` may name any node of any status."""
-    unknown = [c for c in chosen if c not in g]
-    keep = [c for c in chosen if c in g]
-    pulled = []
-    for nid in list(keep):
-        for a, b in g[nid]["live_edges"]:
-            for other in (a, b):
-                if other in g and other not in keep:
-                    keep.append(other)
-                    pulled.append(other)
-    return keep, pulled, unknown
+def issue_working_set_read(g, chosen):
+    """(kept, pulled, unknown). `chosen` may name any node of any status.
+    UNDIRECTED: both endpoints of a kept node's live edges are pulled. The
+    walk itself is working_set_manager.working_set_pull() since 2026-09-03
+    (stage 10) — this and issue_draw.issue_working_set_limit() were one loop
+    written twice."""
+    return WS.working_set_pull(
+        g, chosen, lambda nid: [o for a, b in g[nid]["live_edges"] for o in (a, b)])
 
 
 def main() -> int:
-    chosen = parse_working_set(sys.argv[1:], load())
-    g = load()
+    chosen = WS.working_set_argv_parse(sys.argv[1:], issue_index_read())
+    g = issue_index_read()
     live = [i for i in g if g[i]["status"] == "live"]
     leads = [i for i in g if g[i]["status"] == "lead"]
-    roots = [i for i in g if g[i]["status"] in ROOTS]
+    roots = [i for i in live if g[i]["root"]]
     closed = [i for i in g if g[i]["status"] in CLOSED]
 
     inbound = collections.Counter()
@@ -159,12 +132,12 @@ def main() -> int:
                 inbound[to] += 1
     pulled, unknown = [], []
     if chosen:
-        keep, pulled, unknown = working_set(g, chosen)
+        keep, pulled, unknown = issue_working_set_read(g, chosen)
         if unknown:
             print(f"  unknown issue id(s) ignored: {', '.join(unknown)}")
         live = [i for i in keep if g[i]["status"] == "live"]
         leads = [i for i in keep if g[i]["status"] == "lead"]
-        roots = [i for i in keep if g[i]["status"] in ROOTS]
+        roots = [i for i in live if g[i]["root"]]
         closed = [i for i in keep if g[i]["status"] in CLOSED]
     n_live_edges = sum(len(n["live_edges"]) for n in g.values())
     n_retired = sum(len(n["edges"]) for n in g.values()) - n_live_edges
@@ -175,22 +148,29 @@ def main() -> int:
     L = ["# Issue graph — index",
          "",
          "**GENERATED by `memory/issue_index.py`. Do not hand-edit — regenerate.**",
-         f"*{datetime.date.today()} · {len(live)} live · {len(leads)} leads · "
-         f"{len(roots)} root(s) · {len(closed)} closed · {sum(n['n_ev'] for n in g.values())} evidence quotes, "
+         f"*{datetime.date.today()} · {len(live)} live ({len(roots)} root) · "
+         f"{len(leads)} leads · {len(closed)} closed · {sum(n['n_ev'] for n in g.values())} evidence quotes, "
          f"each machine-verified verbatim · {n_live_edges} live issue-relationships "
          f"({n_retired} retired)*",
          "",
          "## Status",
          "",
          "```",
-         "live       Self has ruled it a live locus. Files keep the bare id.",
+         "live       Self has ruled it a live locus. Files keep the bare id,",
+         "           unless it is also a root (below), which keeps R_.",
          "settled    it WAS an issue; the owing has been met.          S_",
          "declined   seen, chosen against. A completed act of agency.  D_",
-         "retired    never was an issue. Miscategorised.               R_",
+         "retired    never was an issue. Miscategorised.               X_",
          "lead       may arrive as a FUTURE concern. Makes no claim,   L_",
          "           holds no issue-relationships, and keeps its evidence and id so",
          "           a circle can revive it with a rename.",
          "```",
+         "",
+         "**A root is not a status — it is a permanent flag on a live node.** "
+         f"`root = true` marks a source the live graph descends from: {len(roots)} "
+         "of the live nodes today. It is never retired or demoted, and it is "
+         "shown in full at every circle regardless of the chosen working set. "
+         "See `## Roots` below.",
          "",
          "The filename prefix repeats Status so that `ls issues/n0*.md` shows exactly "
          "the live issues. **The prefix is presentation; the id is identity** — headings, "
@@ -207,7 +187,7 @@ def main() -> int:
     # `len(live) < n_all` — a condition only a --working-set restriction
     # can produce, so it duplicated this banner under it and instructed
     # "Regenerate with `--all`, `--limit N`" — flags this tool has never
-    # accepted (parse_working_set knows --working-set and --live alone).
+    # accepted (working_set_argv_parse knows --working-set and --live alone).
     # A generated document whose own instructions cannot restore the full
     # view is worse than none (2026-08-18 review, tier 2 #24).
     ruled = [n for n in live if g[n].get("ruled")]
@@ -237,10 +217,21 @@ def main() -> int:
     for nid in order:
         n = g[nid]
         leaf = "◦" if inbound[nid] == 0 else " "
-        L.append(f"| {leaf} | `{nid}` | {n['label'][:50]} | {len(n['circles'])} | "
+        label = n["label"][:50] + (" **(root)**" if n["root"] else "")
+        L.append(f"| {leaf} | `{nid}` | {label} | {len(n['circles'])} | "
                  f"{len(n['held'])} | {n['mine']} / {n['n_ev']} | {inbound[nid]} | "
                  f"{'ruled' if n.get('ruled') else ''} |")
-    L += ["", "◦ = nothing points at it.", ""]
+    L += ["", "◦ = nothing points at it. **(root)** = permanent, always shown "
+              "in full at circle open — see `## Roots` below.", ""]
+
+    if roots:
+        L += ["---", "", f"## Roots — {len(roots)}", "",
+              "A source the live graph descends from. Never retired or "
+              "demoted; shown in full detail at every circle regardless of "
+              "the chosen working set.", ""]
+        for nid in sorted(roots):
+            L.append(f"- `{nid}` — {g[nid]['label']}")
+        L.append("")
 
     for nid in order:
         n = g[nid]
@@ -267,7 +258,7 @@ def main() -> int:
     # Self's own words, verbatim, written into a GENERATED document — so a
     # recipient's INDEX.md would have carried one person's rulings as if
     # they were theirs. --corpus-scan found the first. The rule is what
-    # matters here; whose sentence it was belongs in RULINGS.md.
+    # matters here; whose sentence it was belongs in rulings/.
     L += ["---", "", f"## Leads — {len(leads)}", "",
           "A lead means the thing may arrive as a future concern. It makes no "
           "claim and is not a rejection.", "",
@@ -341,8 +332,8 @@ def main() -> int:
         print(f"           issues/INDEX.md is UNCHANGED. See D36.")
         return 1
     (ISSUES / "INDEX.md").write_text(body, encoding="utf-8", newline="\n")
-    print(f"  issues/INDEX.md — {len(live)} live · {len(leads)} leads · "
-          f"{len(roots)} root(s) · {len(closed)} closed · "
+    print(f"  issues/INDEX.md — {len(live)} live ({len(roots)} root) · "
+          f"{len(leads)} leads · {len(closed)} closed · "
           f"{n_live_edges} live issue-relationships")
     return 0
 

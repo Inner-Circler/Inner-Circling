@@ -3,7 +3,7 @@
 write_guard.py — the coordinator's write-safety gate. Phase 1 step 2 of
 the coordinator partitioning (2026-08-16); until then WriteGuard and
 _within lived in circle.py. Verbatim move: the class body and its
-helper are unchanged, only their path constants now come from paths.py.
+helper are unchanged, only their path constants now come from record_paths.py.
 
 The guard is MODE-SCOPED, not path-scoped: sandbox mode may write only
 under work/sandbox/, live mode adds exactly the current circle's own
@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pathlib
 
-from paths import ROOT, SANDBOX, PART_TAGS
+from record_paths import ROOT, SANDBOX, PART_TAGS
 
 
 class WriteGuard:
@@ -41,7 +41,10 @@ class WriteGuard:
             _within(rp, parts_dir)
             and rp.parent.parent == parts_dir
             and rp.parent.name in PART_TAGS
-            and rp.name == f"short_term_{self.ot}.md"
+            # .toml since R434 (B96, 2026-09-04); .md is what a resumed
+            # pre-B96 close still writes into. Spelled here rather than
+            # asked of short_term_manager: this is the grammar layer.
+            and rp.name in (f"short_term_{self.ot}.toml", f"short_term_{self.ot}.md")
         ):
             return rp
         # parts/<part>/remember.toml — a part's own REMEMBER register.

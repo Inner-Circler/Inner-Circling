@@ -10,8 +10,9 @@ ships is the SHAPE — the two sections synthesis expects to find and rewrite,
 with a note in each saying what belongs there.
 
 Fill these in yourself before the first circle, or leave them and let the first
-synthesis run write them. Either is fine; an empty file is not, because
-BLOCK 2's assembly reads this document as one of Self's registers.
+synthesis run write them — synthesis replaces the shipped seed on that first
+run. Either is fine; an empty file is not, because synthesis reads this
+document back as its own prompt input before deciding what to write.
 -->
 
 ## Who Self is

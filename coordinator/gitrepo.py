@@ -19,7 +19,7 @@ WHAT IS AUTOMATED, AND WHY THE REST IS NOT
        and enforced literally; Self then added a `backup` remote pointing at
        a bare repository on a second physical disk, against disk failure —
        which is what the rule exists to permit, not to stop. The literal
-       version silently blocked every circle close for a day. classify_remote()
+       version silently blocked every circle close for a day. system_git_remote_classify()
        now decides by shape and by DRIVE TYPE, and fails closed.
 
     2. HISTORY REWRITING — filter-repo, rebase, reset --hard, commit --amend.
@@ -33,7 +33,7 @@ WHAT IS AUTOMATED, AND WHY THE REST IS NOT
     4. `git add -A` DURING AN AUTOMATED RUN. A machine commit stages ONLY the
        paths that run produced. Otherwise a nightly at 01:11 would sweep up
        whatever you happened to be editing at midnight and commit it under a
-       message about dreaming. commit_paths() takes an explicit list.
+       message about dreaming. system_git_paths_commit() takes an explicit list.
 """
 
 from __future__ import annotations
@@ -63,7 +63,7 @@ ENV_GIT_NAME = "IFS_GIT_NAME"
 ENV_GIT_EMAIL = "IFS_GIT_EMAIL"
 
 # Paths that must never enter history. Anything here is appended to .gitignore by
-# ensure_ignore() and un-tracked by untrack_ignored() if already indexed.
+# system_git_ignore_ensure() and un-tracked by system_git_ignored_untrack() if already indexed.
 REQUIRED_IGNORES = [
     ("# Secrets — never commit", [".env", ".env.*"]),
     ("# Python virtual environment", [".venv/"]),
@@ -84,7 +84,7 @@ REQUIRED_IGNORES = [
     # work/sandbox/ ships — the classification omits it — so
     # tracking it costs the bundle nothing.
     # work/nightly/ stays ignored after the 2026-08-19 rename: it is still
-    # transaction.py's staging/journal root (shared with inter_circle.py);
+    # TRANSACTION_CLASS.py's staging/transaction root (shared with inter_circle.py);
     # work/circle_audit/ is the renamed audit's own lock/snapshot home.
     ("# Temp workspaces — staging, caches, locks, snapshots", [
         "work/nightly/", "work/circle_audit/", "work/issue_trial/"]),
@@ -93,8 +93,7 @@ REQUIRED_IGNORES = [
     # Derived output. Left untracked these show as dirty forever, which is noise in
     # exactly the check meant to catch real uncommitted work. Automated runs never
     # commit them anyway, and git history already records what each run did.
-    ("# Run logs — derived, one per run", ["work/logs/nightly*.log",
-                                           "work/logs/circle_audit*.log"]),
+    ("# Run logs — derived, one per run", ["work/logs/circle_audit*.log"]),
 ]
 
 ATTRIBUTES_RULE = "* -text"
@@ -121,7 +120,7 @@ class GitError(RuntimeError):
 #
 # THE FLAG IS A TOP-LEVEL OPTION and must precede the subcommand.
 # `git status --no-optional-locks` exits 129: `status` has no such option.
-def run(*args: str, check: bool = False, read_only: bool = False) -> tuple[int, str]:
+def system_git_run(*args: str, check: bool = False, read_only: bool = False) -> tuple[int, str]:
     cmd = ["git"] + (["--no-optional-locks"] if read_only else []) + list(args)
     try:
         # errors="replace": `commit` runs the pre-commit and post-commit hooks
@@ -155,18 +154,18 @@ def run(*args: str, check: bool = False, read_only: bool = False) -> tuple[int, 
     return p.returncode, out
 
 
-def available() -> bool:
+def system_git_is_available() -> bool:
     try:
-        return run("--version", read_only=True)[0] == 0
+        return system_git_run("--version", read_only=True)[0] == 0
     except GitError:
         return False
 
 
-def is_repo() -> bool:
-    return run("rev-parse", "--git-dir", read_only=True)[0] == 0
+def system_git_is_repo() -> bool:
+    return system_git_run("rev-parse", "--git-dir", read_only=True)[0] == 0
 
 
-def in_main_checkout() -> bool:
+def system_git_is_main_checkout() -> bool:
     """Is the tree this code is running in the MAIN checkout, or a worktree?
 
     `.git` is a DIRECTORY in the main checkout and a FILE — the `gitdir: ...`
@@ -187,14 +186,14 @@ def in_main_checkout() -> bool:
 LAB_SEGMENT = "lab"
 
 
-def tag_name(*parts: str) -> str:
+def system_git_tag_name_read(*parts: str) -> str:
     """The tag this TREE should write. `tag_name("dream", ot)` ->
     `dream/<ot>` in the main checkout, `dream/lab/<ot>` anywhere else.
 
     THE INVARIANT, and the only thing the spelling has to satisfy: NO TAG
     WRITTEN FROM A LAB TREE MAY EVER BE BYTE-EQUAL TO ONE THE MAIN TREE WOULD
     WRITE. The tag namespace is the one thing a worktree does not isolate —
-    files are contained by construction (paths.ROOT derives from __file__),
+    files are contained by construction (record_paths.ROOT derives from __file__),
     refs are not, because `.git` is shared and every worktree reads one
     namespace. already_processed() is the double-dream guard and it reads
     these refs by EXACT name, so an unstamped lab tag would make the MAIN
@@ -216,28 +215,28 @@ def tag_name(*parts: str) -> str:
     `dream/lab/<OT>` but still LOOKED for `dream/<OT>` would never find its
     own marker and would re-dream every run — the guard dead in exactly the
     venue meant to rehearse it."""
-    if in_main_checkout():
+    if system_git_is_main_checkout():
         return "/".join(parts)
     return "/".join((parts[0], LAB_SEGMENT) + parts[1:])
 
 
-def toplevel() -> pathlib.Path | None:
-    rc, out = run("rev-parse", "--show-toplevel", read_only=True)
+def system_git_toplevel_read() -> pathlib.Path | None:
+    rc, out = system_git_run("rev-parse", "--show-toplevel", read_only=True)
     if rc != 0 or not out.strip():
         return None
     return pathlib.Path(out.strip()).resolve()
 
 
-def assert_isolated(log) -> bool:
+def system_git_isolated_assert(log) -> bool:
     """True if the repository root IS this project folder.
 
     git commands walk UP the directory tree looking for .git, so if a repository
-    were ever created at a parent (D:\\Projects\\.git, or a home-directory
+    were ever created at a parent directory (or a home-directory
     dotfiles repo), every command here would silently start operating on that
     larger repository instead — mixing this project's history with other
     projects', and putting private material in a repo that might well have a
     remote. Checked before anything that commits."""
-    top = toplevel()
+    top = system_git_toplevel_read()
     if top is None:
         log("fail", "not inside a git repository")
         return False
@@ -250,31 +249,31 @@ def assert_isolated(log) -> bool:
     return True
 
 
-def remotes() -> list[str]:
-    rc, out = run("remote", read_only=True)
+def system_git_remotes_read() -> list[str]:
+    rc, out = system_git_run("remote", read_only=True)
     return out.split() if rc == 0 and out.strip() else []
 
 
-def dirty() -> list[str]:
-    rc, out = run("status", "--porcelain", read_only=True)
+def system_git_is_dirty() -> list[str]:
+    rc, out = system_git_run("status", "--porcelain", read_only=True)
     return [l for l in out.splitlines() if l.strip()] if rc == 0 else []
 
 
-def head() -> str:
-    rc, out = run("rev-parse", "--short", "HEAD", read_only=True)
+def system_git_head_read() -> str:
+    rc, out = system_git_run("rev-parse", "--short", "HEAD", read_only=True)
     return out if rc == 0 else "(no commits)"
 
 
 # ---------------------------------------------------------------- setup
-def ensure_repo(log) -> bool:
-    if is_repo():
-        if not assert_isolated(log):
+def system_git_repo_ensure(log) -> bool:
+    if system_git_is_repo():
+        if not system_git_isolated_assert(log):
             return False
-        log("ok", f"git repository is this folder only (HEAD {head()})")
+        log("ok", f"git repository is this folder only (HEAD {system_git_head_read()})")
         return True
-    run("init", check=True)
+    system_git_run("init", check=True)
     log("did", f"git init in {ROOT}")
-    return assert_isolated(log)
+    return system_git_isolated_assert(log)
 
 
 def _load_env() -> None:
@@ -289,11 +288,11 @@ def _load_env() -> None:
 
 
 def _configured(key: str) -> str | None:
-    rc, out = run("config", key, read_only=True)
+    rc, out = system_git_run("config", key, read_only=True)
     return out.strip() or None if rc == 0 else None
 
 
-def resolve_identity(name: str | None = None,
+def system_git_identity_resolve(name: str | None = None,
                      email: str | None = None) -> list[tuple[str | None, str]]:
     """Resolve (user.name, user.email) as [(value, source), ...].
 
@@ -332,8 +331,8 @@ def resolve_identity(name: str | None = None,
     return out
 
 
-def ensure_config(log, name: str | None, email: str | None) -> None:
-    (name, name_src), (email, email_src) = resolve_identity(name, email)
+def system_git_config_ensure(log, name: str | None, email: str | None) -> None:
+    (name, name_src), (email, email_src) = system_git_identity_resolve(name, email)
     for key, src in (("user.name", name_src), ("user.email", email_src)):
         if src == "unset":
             log("warn", f"{key} is not set anywhere — git will refuse to "
@@ -348,7 +347,7 @@ def ensure_config(log, name: str | None, email: str | None) -> None:
                            ("user.email", email, email_src)):
         if want is None:
             continue
-        rc, have = run("config", key, read_only=True)
+        rc, have = system_git_run("config", key, read_only=True)
         if rc == 0 and have.strip() == want:
             continue
         if key.startswith("user.") and rc == 0 and have.strip():
@@ -365,11 +364,11 @@ def ensure_config(log, name: str | None, email: str | None) -> None:
             else:
                 log("ok", f"{key} already set to {have.strip()} — left alone")
             continue
-        run("config", key, want, check=True)
+        system_git_run("config", key, want, check=True)
         log("did", f"git config {key} {want}  (from {src})")
 
 
-def ensure_attributes(log) -> None:
+def system_git_attributes_ensure(log) -> None:
     p = ROOT / ".gitattributes"
     text = p.read_text(encoding="utf-8") if p.is_file() else ""
     if any(l.strip() == ATTRIBUTES_RULE for l in text.splitlines()):
@@ -386,7 +385,7 @@ def ensure_attributes(log) -> None:
 # archive_doc.py, part_relationships.py's --migrate/--archive-md, and the
 # five dead one-shots that rode along. Only the template's COMMENTS named
 # archive/, so no invocation changed; the bump is what installs the
-# corrected body, since ensure_hooks() reinstalls on HOOK_MARK alone.
+# corrected body, since system_git_hooks_ensure() reinstalls on HOOK_MARK alone.
 #
 # v58: the SHIPPED SURFACE runs packaging/sanitize.py, which refuses on a
 # HIGH finding — the owner's name first among them. packaging/package.py
@@ -421,7 +420,7 @@ def ensure_attributes(log) -> None:
 # the same defect R238/R239 rule for ids, arriving here in the one
 # constant whose whole job is to say "the installed hook is out of
 # date". The merged TEMPLATE carried both invocation blocks while the
-# INSTALLED hook carried only master's, and ensure_hooks() would never
+# INSTALLED hook carried only master's, and system_git_hooks_ensure() would never
 # have replaced it — the mark already matched. So the register's own
 # suite would have been triggered and never invoked, which is exactly
 # v45's lesson, reached by a new route. v64 is not new checks; it is the
@@ -466,7 +465,7 @@ def ensure_attributes(log) -> None:
 #
 # v75, 2026-08-23 — Initialization stage 1 (docs/Initialization.md): identity.py
 # gained a resolution step (the Soul's preferred_name names the console,
-# R325) and prompt_build.identity_tail() renders a part's recorded
+# R325) and prompt_build.part_identity_tail_render() renders a part's recorded
 # [context] (R331); coordinator/tests/test_identity.py covers both
 # and had no trigger — the v45 lesson, a probe nobody invokes reports nothing.
 # INSTALLED FROM THE MAIN CHECKOUT AFTER THE MERGE (--git-setup), never from the
@@ -489,7 +488,7 @@ def ensure_attributes(log) -> None:
 # the branch was open, which is the ordinary case for a version that is a
 # single integer in one file. The number is taken at the MERGE, exactly as
 # an R-number is (R238) — a branch that keeps one ships a stale mark, and a
-# stale mark means ensure_hooks() installs nothing.
+# stale mark means system_git_hooks_ensure() installs nothing.
 # Installed from the main checkout after the merge (--git-setup), never
 # from the worktree that wrote it.
 # v87, 2026-08-27 (R365) — a case for ui/tests/test_issue_draw.py. It
@@ -498,7 +497,47 @@ def ensure_attributes(log) -> None:
 # which *ui/* does not match, because the half that breaks packaging is the
 # CALL SITE's path literal and it lives there. The redraw is gated
 # `if args.live:`, so no dry-run end-to-end suite can reach it.
-HOOK_MARK = "# inner-circling pre-commit v102"
+# v107, audit-register.md #14 — three new .claude/skills/ cases (install,
+# my_commit, publish), landed with test_hook_template.py's widened suites()
+# in the same commit; see that case block's own comment.
+# v108, audit-register.md #40(b) — six suites added as self-triggers on
+# their own case blocks (test_issue_gate.py, test_backfill.py,
+# test_convergence_queue.py, test_issue_prompt_projection.py,
+# test_spend_report.py, test_strip_malformed_annotations.py); see those
+# case blocks' own comments.
+# v110, B97 (2026-09-02) — the venv-sharing fix becomes $PY's own default.
+# A worktree has no .venv of its own, so `PY=".venv/..."` fell through to
+# bare `python` (the system interpreter, no anthropic, no tomli) unless a
+# session prepended the main tree's .venv to PATH by hand. $PY now tries the
+# MAIN TREE's .venv, found via git-common-dir, before that last resort —
+# the same lookup coordinator/system_lint_verify.py's venv_python() and
+# .claude/skills/my_commit/my_commit.py's own venv-finder already use.
+# ALSO v110, found blocking the same commit: the Block 1-4 assembly split
+# (group_context/group_attention/parts_prompt_projection/role_attention/
+# role_context/topic_prompt_projection/group_add, all 2026-09-02) had shipped six
+# passing suites wired into nothing — test_hook_template.py's stray-suite
+# check refuses this, and nothing had touched gitrepo.py since they landed
+# to trip it. A new case block below wires all six.
+# v134, 2026-09-04: two branches landed the same night — B91's grounding check
+# (its suite wired here as v133) and B100's logbook_/transaction renames (as
+# v132). The marks were assigned apart on purpose so the merge would CONFLICT
+# here rather than fuse two different hook bodies under one mark; this is the
+# reconciled mark, and --git-setup after the merge installs it.
+# v135, the same night: B96's short_term_manager case (its branch took v134 in
+# parallel with the two above; the merge reconciled it here, one step up).
+# v136, B95 (R433, 2026-09-04): the RULING record — rulings/R<nnn>.toml through
+# coordinator/ruling_manager.py — and its suite; the RULINGS.md trigger below
+# became rulings/ at the same build. Taken one above v135 on purpose: a
+# parallel branch holds v135, and the merge reconciles here, not by fusing.
+# v137, B101 (R447, 2026-09-04): work/instrument/LOG.md joins the logbook
+# trigger — the E rule in logbook_ruling_verify.py holds it to shape, and a
+# branch's E entry is a work/pending/instrument/ fragment the same checker
+# reads (the *work/pending/* leg already covers it).
+# v138, 2026-09-04: the audit's subject-to-trigger gaps closed — nine module
+# paths join the cases whose suites already cover them (audit-register #2, #6,
+# #11). No new suite; the durable check (test_hook_template asserting every
+# suite's subject reaches its case) is queued in NEXT.md.
+HOOK_MARK = "# inner-circling pre-commit v138"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -518,7 +557,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # the template changed nothing that ran. It now replaces an out-of-date hook
 # of its own family, and still refuses to touch a hook it did not write.
 #
-# v9 replaces the inline ast.parse with coordinator/check_lint.py. TWO
+# v9 replaces the inline ast.parse with coordinator/system_lint_verify.py. TWO
 # reasons, both measured on 2026-08-08. `ast.parse` accepts a misplaced
 # `from __future__` import that a real `import` refuses, and three modules
 # had been un-importable for weeks while this hook called them clean. And a
@@ -539,7 +578,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # all been dropped (those four were retired 2026-08-09 and calling them by
 # their old path was failing every commit that touched parts/ or
 # self/ — a check catching its own absence, not a real problem), but this
-# template — the one ensure_hooks() actually installs — still had all four.
+# template — the one system_git_hooks_ensure() actually installs — still had all four.
 # Restoring an equivalent roster-shrink check against the live tree is still
 # open; test_roster.py was retired rather than replaced, which is a real
 # loss of coverage, not a neutral cleanup.
@@ -565,32 +604,32 @@ PRE_COMMIT = f'''#!/bin/sh
 # its own suite. BOTH ends added, because v45 is the standing lesson here —
 # a new module inside a trigger whose case never INVOKES its probe reports
 # nothing and looks green. The *self/* glob already caught the data file;
-# it never caught coordinator/self_observation_log.py.
+# it never caught coordinator/self_observation_manager.py.
 #
 # v63 AND NOT v62, deliberately. .git/hooks is shared with every worktree,
 # and the installed hook already read v62 while master's template read v61
 # — an uncommitted bump in the main checkout, on no branch this sweep could
 # see. Two templates at v62 with different bodies is the silent case:
-# ensure_hooks() reinstalls only when HOOK_MARK DIFFERS, so the tree that
+# system_git_hooks_ensure() reinstalls only when HOOK_MARK DIFFERS, so the tree that
 # already says v62 would skip the reinstall and this file's new trigger
 # would never install. Skipping a number costs nothing here — HOOK_MARK is
 # a version, not a contiguous register — while sharing one costs a trigger
 # that reports nothing. If the other v62 lands after this, the two
 # templates CONFLICT on this line, which is the outcome to want.
 #
-# check_best_practices.py, circle.py or self_schema.py — the CODE the
+# check_best_practices.py, circle.py or REGISTER_CLASS.py — the CODE the
 # PRACTICE LIFECYCLE build actually lives in — touched none of those paths
 # and the whole block, including its own new tests, silently did not run.
-# check_lint.py still caught it (line 413's *coordinator/* case, unchanged)
+# system_lint_verify.py still caught it (line 413's *coordinator/* case, unchanged)
 # but that is compile-and-import only; it would not have caught the
 # **Entries: N** tally bug this same build found, which only a real test
 # run surfaces. Added to the trigger: check_best_practices.py, circle.py,
-# self_schema.py (the practice register's one reader/writer, per its own
+# REGISTER_CLASS.py (the practice register's one reader/writer, per its own
 # module docstring), and the two new test files themselves — editing a
 # test without touching what it tests must not silently stop running it.
 #
 # v15 (v14 was superseded same-session, before ever being committed) adds
-# test_remember.py, test_strip_malformed_markers.py, and test_self_mark.py
+# test_remember_manager.py, test_strip_malformed_markers.py, and test_self_mark.py
 # to the SAME case block v13 fixed — all three exercise
 # circle.py's annotation system directly (apply_remember/
 # apply_self_remember/extract_markers/route_markers/
@@ -624,14 +663,14 @@ PRE_COMMIT = f'''#!/bin/sh
 #
 # v18 adds coordinator/tests/test_convergence_queue.py to the invocation list
 # (not the trigger — circle.py, which it tests, is already there). Same
-# pre-existing gap as test_remember.py's own v14 fix: this file existed,
+# pre-existing gap as test_remember_manager.py's own v14 fix: this file existed,
 # tested real behavior, and was simply never wired in. Caught now because
 # this session's vet-loop generalization (request retired from
 # unruled_proposals()/convergence_queue(), each gaining its own coalesce/stage
 # path — see v17) rewrote a chunk of what it covers.
 #
 # v19 adds coordinator/mark_proposals.py and coordinator/test_mark_
-# proposals.py to both trigger and invocation, same reason as v17 — a
+# proposal_manager.py to both trigger and invocation, same reason as v17 — a
 # NEW module, added from the start rather than shipped once and caught
 # missing later. [hold] retires into [propose mark] here (ruled: "skip
 # references to other statements for now" — self-referential only,
@@ -662,7 +701,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # of v16, which added them.
 #
 # v22 ADDS ui/*.py, found ungated 2026-08-14 while auditing what runs
-# `ui/circling.py --selftest`: check_lint.py's own SCOPE was
+# `ui/circling.py --selftest`: system_lint_verify.py's own SCOPE was
 # `coordinator/` and `scripts/` only, and neither self-test (circling.py
 # --selftest, ui/tests/test_circle_engine.py) was invoked anywhere but by hand.
 # Same shape as v13's gap, one directory later. ui/*.py joins the
@@ -670,7 +709,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # test_circle_engine.py needs `anthropic` (it imports circle.py), so
 # unlike every other invocation in this hook it is called through
 # `.venv/Scripts/python.exe` explicitly rather than bare `python`, which
-# check_lint.py's own docstring already measured as the system 3.10 on
+# system_lint_verify.py's own docstring already measured as the system 3.10 on
 # this machine, not the venv.
 #
 # v23 REMOVES coordinator/marks.py's test (test_marks.py),
@@ -693,26 +732,26 @@ PRE_COMMIT = f'''#!/bin/sh
 # BNF, integrity, ui). The 2026-08-18 review filed it as tier 5 #59;
 # every remaining invocation converts in one bump rather than after four
 # more incidents. TWO deliberate exceptions keep bare python: the
-# unconditional check_line_endings (stdlib-only, and the one check that
-# must run even where .venv does not exist yet) and check_lint (stdlib-
+# unconditional file_line_endings_verify (stdlib-only, and the one check that
+# must run even where .venv does not exist yet) and system_lint_verify (stdlib-
 # only, and it resolves .venv itself, by its own docstring — that
 # self-resolution is the reason bare python was survivable here at all).
 # v51 also closes v49's recorded debt: test_help_system.py (claimed by
 # v35's comment, invoked by nothing) joins the practice case's pattern
 # and body, run green — 77 checks — before wiring.
 #
-# v50 RETARGETS the lint trigger onto check_lint.CODE_DIRS — memory/ in,
-# scripts/ out — and wires coordinator/tests/test_check_lint.py beside the lint
+# v50 RETARGETS the lint trigger onto system_lint_verify.CODE_DIRS — memory/ in,
+# scripts/ out — and wires coordinator/tests/test_system_lint_verify.py beside the lint
 # it guards. The trigger was a hand-copy of the code-directory policy and
 # had rotted (the 2026-08-18 review's tier 3 #25): memory/ has held
 # running code since R203 while the pattern still named scripts/, empty
 # of code since 2026-08-18 — so a commit touching only memory/ ran no
-# lint at all (the very NameError class check_lint was built for, in the
+# lint at all (the very NameError class system_lint_verify was built for, in the
 # one directory the trigger could not see), while the scripts/ leg
 # triggered a linter that does not scan it. The policy now has ONE owner
-# (check_lint.CODE_DIRS, stdlib-only and importable from every checker,
-# bare-python included); check_line_endings and ruling_sweep derive from
-# it, and test_check_lint asserts the agreement — this sh pattern
+# (system_lint_verify.CODE_DIRS, stdlib-only and importable from every checker,
+# bare-python included); file_line_endings_verify and ruling_sweep derive from
+# it, and test_system_lint_verify asserts the agreement — this sh pattern
 # included, matched against the template text, since sh can derive
 # nothing. That probe existed since the SCOPE legs were written and was
 # itself invoked by nothing; it rides its own subject now.
@@ -737,24 +776,24 @@ PRE_COMMIT = f'''#!/bin/sh
 # shape, all four found by the 2026-08-18 whole-tree review
 # (review-findings.md), whose tier-1 fixes landed one commit before this.
 #
-# (1) NEW coordinator/tests/test_transaction.py + coordinator/tests/test_nightly_lock.py,
-# narrow-triggered on transaction.py/nightly.py and themselves (the v46
+# (1) NEW coordinator/tests/test_TRANSACTION_CLASS.py + coordinator/tests/test_nightly_lock.py,
+# narrow-triggered on TRANSACTION_CLASS.py/nightly.py and themselves (the v46
 # shape: both build their own temp trees — and rebind nightly.LOCK — so
 # they need no other path to have moved and can never race a real
 # nightly). The machinery they pin shipped with NO probe at all, and the
 # review found four defects in exactly the states nothing exercised:
-# journal_rollback could not roll back a created file, verify() compared
+# transaction_rollback (journal_rollback then) could not roll back a created file, verify() compared
 # the disk against itself, release_lock() deleted another run's live
 # lock, and phase0 pinned may_commit=False. The crash states are reached
 # by a scripted os.replace failure — the only way they are reachable.
 #
-# (2) coordinator/transcript_store.py and coordinator/mid_term.py join the
+# (2) coordinator/transcript_store.py and coordinator/part_mid_term_manager.py join the
 # practice/annotation case's PATTERN and BODY with their suites.
 # transcript_store left circle.py in phase 1 step 3 (2026-08-16) without
 # taking a trigger entry along — the per-stage obligation v31 names — so
-# a commit touching only it ran check_lint and nothing else; the resume
+# a commit touching only it ran system_lint_verify and nothing else; the resume
 # leak fixed one commit ago is precisely what that gap left unwatched.
-# mid_term.py and test_mid_term.py were never in any trigger either.
+# part_mid_term_manager.py and test_part_mid_term_manager.py were never in any trigger either.
 # Both suites are invoked through the venv interpreter, like every
 # post-v40 addition: proven under it, and never hostage to what bare
 # `python` resolves to.
@@ -764,12 +803,12 @@ PRE_COMMIT = f'''#!/bin/sh
 # distinct forms — and the second form is the one this changelog keeps
 # rediscovering.
 #
-# (1) TRIGGER ONLY. coordinator/remember.py and coordinator/tests/test_remember.py
+# (1) TRIGGER ONLY. coordinator/remember_manager.py and coordinator/tests/test_remember_manager.py
 # were absent from the practice/annotation trigger PATTERN while the body
-# already invoked test_remember.py (added 2026-08-12 beside the E06
+# already invoked test_remember_manager.py (added 2026-08-12 beside the E06
 # bracket-annotation fix). So the suite ran often, but only ever as a
 # PASSENGER — when some other path in that long case matched. A commit
-# touching remember.py alone fired check_lint.py and nothing else. That was
+# touching remember_manager.py alone fired system_lint_verify.py and nothing else. That was
 # masked on 2026-08-17's D23 commit because circle.py, vetting.py,
 # ifs_model.py, parts/ and self/ all match the same case. Masking is not
 # coverage, and a part's own private memory register is a poor place to
@@ -780,18 +819,18 @@ PRE_COMMIT = f'''#!/bin/sh
 # rather than half of it, so both halves land here. It is invoked BEFORE
 # bnf_conformance.py in the same case: the probe checks the harness, and a
 # broken harness's verdict on docs/BNF.md is not evidence of anything.
-# work/tools/ also sits outside check_lint.py's own SCOPE, so nothing
+# work/tools/ also sits outside system_lint_verify.py's own SCOPE, so nothing
 # compiled either file automatically until now.
 #
 # NOT DONE HERE, deliberately, and recorded so the next presweep does not
 # re-report them as new: work/tools/bnf_register_intake.toml is still
 # outside this case's pattern, and work/tools/ is still outside
-# check_line_endings.py's SCOPE_DIRS. Both are B49's own awareness-only
+# file_line_endings_verify.py's SCOPE_DIRS. Both are B49's own awareness-only
 # footnote; neither was asked for.
 #
-# v46 ADDS a case for coordinator/tests/test_check_integrity.py, 2026-08-18. The
-# corruption gate (coordinator/check_integrity.py) and its probe shipped that
-# day covered by NO invocation at all: check_lint.py compiles them under the
+# v46 ADDS a case for coordinator/tests/test_record_verify.py, 2026-08-18. The
+# corruption gate (coordinator/record_verify.py) and its probe shipped that
+# day covered by NO invocation at all: system_lint_verify.py compiles them under the
 # *coordinator/* case, which proves they import, not that the gate still
 # refuses anything. That is v45's own defect one file later — a suite present
 # and invoked by nothing — and it is exactly the shape this gate exists to
@@ -825,7 +864,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # 2026-08-20) had NO probe at
 # all until this file: both write self/best_practices.toml and
 # self/proposals.toml (staged rows) but only run from inside circle.py's
-# own /close handling, which also runs coordinator/circle_close.py and, live,
+# own /close handling, which also runs coordinator/circle_close_verify.py and, live,
 # a git commit — no end-to-end circle session can safely probe them, so
 # this calls both functions directly against a fabricated transcript,
 # live=True, with BP/PROPOSALS monkeypatched to scratch files, same
@@ -838,13 +877,13 @@ PRE_COMMIT = f'''#!/bin/sh
 # v43 FOLLOWS coordinator/relationships.py to
 # coordinator/part_relationships.py — B16, 2026-08-17 (R220): "relationship"
 # alone is ambiguous between this (part-to-part) and an issue-graph edge,
-# same disambiguation family as v42's issue_projection.py neighbor and
+# same disambiguation family as v42's issue_prompt_projection.py neighbor and
 # /help issue-relationship (R218/R219). The practice/annotation trigger's
 # explicit pattern follows the rename or a commit touching only the
 # renamed module silently stops running the suites that cover it — the
 # v13 failure shape.
 #
-# v42 FOLLOWS check_issues.py to memory/issue_projection.py —
+# v42 FOLLOWS check_issues.py to memory/issue_prompt_projection.py —
 # RULED rename (the check_ prefix misdescribed 90% of the file:
 # a projection library with a 40-line self-check main() on top).
 # The practice case invokes it at its new name.
@@ -879,7 +918,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # the INSTALLED v37 hook had an unterminated case line — sh refused it
 # at commit time, which is the gate working: the broken hook FAILED the
 # commit rather than silently skipping its checks. And because
-# ensure_hooks() only reinstalls when HOOK_MARK differs, fixing the
+# system_git_hooks_ensure() only reinstalls when HOOK_MARK differs, fixing the
 # template alone changed nothing (the v8/v11 drift shape, again) — the
 # fix needed this bump to reach .git/hooks. sh -n now gates every
 # install below, so a template whose shell cannot parse can never be
@@ -942,7 +981,7 @@ PRE_COMMIT = f'''#!/bin/sh
 #
 # v29 REPLACES coordinator/requests.py + test_requests.py and
 # coordinator/relation_proposals.py + test_relation_proposals.py (v17/v20)
-# with coordinator/proposals.py + test_proposals.py, in both trigger and
+# with coordinator/proposal_manager.py + test_proposal_manager.py, in both trigger and
 # invocation — R202, 2026-08-16: "the PROPOSE CLASS, syntax, and code
 # subsume every possible future, including 'request'." request and
 # relation folded into one PROPOSE marker/register; found by this same
@@ -953,21 +992,21 @@ PRE_COMMIT = f'''#!/bin/sh
 #
 # v28 ADDS the phase-2 build (B3, 2026-08-15) to trigger and invocation:
 # coordinator/inter_circle.py (the INTER_CIRCLE_PROCESSOR — dreaming/
-# synthesis at /close, R167/R168), circle_history.py (the CH- register),
+# synthesis at /close, R167/R168), circle_history_manager.py (the CH- register),
 # relationships.py (present since R185 but never a trigger — the v22 gap
 # shape, caught here), ifs_model.py (now carries the register gate,
 # R188), and their suites test_inter_circle.py + test_register_gate.py.
 # Both suites are network-free: canned model outputs, staging-only, live
 # registers byte-verified untouched.
 #
-# v27 REMOVES coordinator/tests/test_check_budget.py from invocation — retired
-# 2026-08-15 with check_budget's `relationships` target (ruled: "retire 1
+# v27 REMOVES coordinator/tests/test_quote_verify.py from invocation — retired
+# 2026-08-15 with quote_verify's `relationships` target (ruled: "retire 1
 # and 2, successor for 3"); the suite's whole subject was that target, and
 # leaving the call would fail every parts/-touching commit on a file that
 # no longer exists, the v23/v8/v11 shape again. The LIVE-CITED successor
 # lands in the register gate (docs/REGISTER_GATE_DESIGN.md), whose own
 # probe suite joins this hook when built. v27 also ADDS
-# coordinator/topics.py and coordinator/tests/test_topics.py to trigger and
+# coordinator/topic_manager.py and coordinator/tests/test_topic_manager.py to trigger and
 # invocation — the TOPIC register (R184/R186) shipped in the same session;
 # self/topics.toml commits already fired this case via *self/* with no
 # suite behind them, the exact gap v22 closed for ui/.
@@ -980,7 +1019,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # (2026-08-07, recorded in REQUIRED_IGNORES' comment above) with nothing
 # checking it.
 #
-# v25 adds coordinator/check_block_overlap.py and its own probe suite
+# v25 adds coordinator/block_overlap_verify.py and its own probe suite
 # (B39/R158): content delivered in a LOWER-numbered, broader prompt block
 # must not repeat in a HIGHER-numbered, more specific one. Triggered on
 # the block SOURCES as well as the checker itself — process_core.md, the
@@ -988,7 +1027,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # be introduced by editing content that never touches the checker. Added
 # from the start rather than shipped once and caught missing later.
 #
-# v24 adds coordinator/check_next_md.py and coordinator/tests/test_check_next_md.py
+# v24 adds coordinator/logbook_next_verify.py and coordinator/tests/test_logbook_next_verify.py
 # to both trigger and invocation, same v17/v19 shape as every other NEW
 # module in this hook's history — added from the start rather than shipped
 # once and caught missing later. Checks NEXT.md's BUILD QUEUE itself: every
@@ -1012,7 +1051,7 @@ PRE_COMMIT = f'''#!/bin/sh
 #
 # post-commit JOINS THE TEMPLATES in the same change, at v2. It had been
 # hand-installed since 2026-08-09 with nothing in this file behind it, and
-# that is not incidental to the gap above — ensure_hooks() managed pre-commit
+# that is not incidental to the gap above — system_git_hooks_ensure() managed pre-commit
 # alone, so the hook nobody could see in the source was the hook nobody
 # checked. Both bodies now come from one generator, _backup_push_hook().
 #
@@ -1035,6 +1074,19 @@ FILES=$(git diff --cached --name-only)
 # neither. Resolved once, here.
 PY=".venv/Scripts/python.exe"
 [ -x "$PY" ] || PY=".venv/bin/python"
+# A WORKTREE HAS NO .venv OF ITS OWN — v110, B97, 2026-09-02. Resolve the
+# MAIN TREE's .venv via git-common-dir before falling back to bare python;
+# same lookup coordinator/system_lint_verify.py's venv_python() and
+# .claude/skills/my_commit/my_commit.py's own venv-finder already use.
+if [ ! -x "$PY" ]; then
+    GCD=$(git rev-parse --path-format=absolute --git-common-dir 2>/dev/null)
+    if [ -n "$GCD" ]; then
+        MAIN_ROOT=$(dirname "$GCD")
+        MPY="$MAIN_ROOT/.venv/Scripts/python.exe"
+        [ -x "$MPY" ] || MPY="$MAIN_ROOT/.venv/bin/python"
+        [ -x "$MPY" ] && PY="$MPY"
+    fi
+fi
 [ -x "$PY" ] || PY="python"
 
 # AND A SCRIPT THIS TREE DOES NOT HAVE IS NOT A FAILURE. The published package
@@ -1071,7 +1123,7 @@ run() {{
     # is a SUBSHELL and inherits errexit, so a FAILING probe killed the brace
     # group before `echo $?` could run. rc then read whatever the PREVIOUS
     # probe left in the file — and the first check of every invocation
-    # (check_line_endings) passes and leaves "0" behind. So from the second
+    # (file_line_endings_verify) passes and leaves "0" behind. So from the second
     # probe onward a red gate printed its failure IN FULL and the commit went
     # through anyway. Live from v81 (2026-08-27) to here; found 2026-08-28 by
     # a lab merge whose battery said FAIL and committed.
@@ -1087,7 +1139,7 @@ run() {{
 }}
 
 # AND THE SAME, FOR A SCRIPT WHOSE OWN OUTPUT IS NOISE. `run X >/dev/null`
-# at the call site redirected run() ITSELF, so the note it was about to print
+# at the call site redirected system_git_run() ITSELF, so the note it was about to print
 # went with it — one announcement silently absent from the dev tree's own
 # hook run, which is how this was caught.
 quiet() {{
@@ -1104,53 +1156,96 @@ quiet() {{
     [ "$rc" = "0" ] || {{ cat "$GATE_OUT"; refused "$rc" "$@"; }}
 }}
 
+# v104, 2026-09-01. ADVISORY ONLY — the one case here that never refuses,
+# unlike system_git_run()/quiet() above. Some checks decide what BLOCKS a commit;
+# this one exists because packaging/scaffold_staleness.py's own answer
+# ("might be stale") is a REMINDER, not a verdict — resolving it means
+# running packaging/conform_packaging.py, which costs a real paid model
+# call, and a commit hook may not spend that for you. The hard gate for
+# this same check lives at publish time instead (publish.py's own
+# preflight), which is the one moment staleness actually reaches a user.
+advise() {{
+    [ -f "$1" ] || return 0
+    if [ -n "$NOTE" ]; then printf '%s\n' "$NOTE"; NOTE=""; fi
+    "$PY" "$@" || true
+}}
+
 # FIRST, and unconditional. `.gitattributes` sets `* -text`, so a CR that
 # reaches a commit is a CR that reaches every sha256 downstream of it —
 # nothing normalises it away. Three files were converted wholesale on
 # 2026-08-07 and every other check passed.
-run coordinator/check_line_endings.py --staged
-case "$FILES" in *issues/*)
-    NOTE="  pre-commit: issues/ touched"
+run coordinator/file_line_endings_verify.py --staged
+case "$FILES" in *issues/*|*coordinator/tests/test_issue_gate.py*\
+|*memory/issue_gate.py*|*memory/issue_schema.py*)
+    # v138, audit-register 2026-09-04 #2: the gate and THE ONE READER/WRITER
+    # OF A NODE were gated by nothing but the lint sweep — this case fired on
+    # the DATA and on the suite, never on the two modules. Added to the trigger.
+    NOTE="  pre-commit: issues/ or its gate/schema touched"
     run memory/issue_gate.py
     run coordinator/tests/test_issue_gate.py
 esac
 
 case "$FILES" in *parts/*|*self/*\
-|*coordinator/check_best_practices.py*|*coordinator/circle.py*\
+|*coordinator/practice_manager.py*|*coordinator/practice_verify.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
-|*coordinator/prompt_build.py*|*coordinator/markers.py*\
+|*coordinator/prompt_build.py*|*coordinator/annotations.py*|*coordinator/propose_lifecycle.py*\
 |*coordinator/remember_expand.py*|*coordinator/tests/test_remember_expand.py*\
 |*coordinator/recall_index.py*|*coordinator/tests/test_recall_index.py*\
 |*coordinator/embed_store.py*|*coordinator/process_core.md*\
 |*coordinator/help_system.py*|*coordinator/commands.py*\
-|*coordinator/vetting.py*|*coordinator/rounds.py*\
-|*coordinator/self_schema.py*|*coordinator/tests/test_check_best_practices.py*\
-|*coordinator/tests/test_practice_annotations.py*|*coordinator/proposals.py*\
-|*coordinator/tests/test_proposals.py*|*coordinator/topics.py*\
-|*coordinator/tests/test_topics.py*|*coordinator/inter_circle.py*\
-|*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history.py*\
-|*coordinator/self_observation_log.py*\
-|*coordinator/tests/test_self_observation_log.py*\
-|*coordinator/settings.py*|*coordinator/tests/test_settings.py*\
+|*coordinator/vetting.py*|*coordinator/circle_rounds.py*\
+|*coordinator/REGISTER_CLASS.py*|*coordinator/tests/test_practice_verify.py*\
+|*coordinator/tests/test_practice_annotations.py*|*coordinator/proposal_manager.py*\
+|*coordinator/tests/test_proposal_manager.py*|*coordinator/topic_manager.py*\
+|*coordinator/tests/test_topic_manager.py*|*coordinator/inter_circle.py*\
+|*coordinator/part_dreaming.py*|*coordinator/circle_synthesis.py*\
+|*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history_manager.py*\
+|*coordinator/tests/test_part_dreaming_grounding.py*\
+|*coordinator/self_observation_manager.py*\
+|*coordinator/tests/test_self_observation_manager.py*\
+|*coordinator/setting_manager.py*|*coordinator/tests/test_setting_manager.py*\
+|*coordinator/system_setting_verify.py*\
 |*coordinator/process_core.md*\
 |*coordinator/providers.py*|*coordinator/tests/test_providers.py*\
 |*coordinator/backfill.py*|*coordinator/tests/test_register_gate.py*\
-|*coordinator/ifs_model.py*|*coordinator/tests/test_markers.py*\
-|*coordinator/remember.py*|*coordinator/tests/test_remember.py*\
-|*coordinator/quote_as_mark.py*|*coordinator/tests/test_quote_as_mark.py*\
+|*coordinator/ifs_model.py*|*coordinator/register_gate.py*|*coordinator/tests/test_annotations.py*\
+|*coordinator/remember_manager.py*|*coordinator/tests/test_remember_manager.py*\
+|*coordinator/remember_prompt_projection.py*|*coordinator/remember_list_projection.py*\
+|*coordinator/quote_as_lands.py*|*coordinator/tests/test_quote_as_lands.py*\
 |*coordinator/process_core.md*|*coordinator/roster.py*\
 |*coordinator/tests/test_annotation_exemplars.py*\
 |*coordinator/transcript_store.py*|*coordinator/tests/test_transcript_store.py*\
-|*coordinator/mid_term.py*|*coordinator/tests/test_mid_term.py*\
+|*coordinator/part_mid_term_manager.py*|*coordinator/tests/test_part_mid_term_manager.py*\
 |*coordinator/tests/test_vetting.py*|*coordinator/tests/test_issue_commands.py*\
-|*coordinator/tests/test_rounds_display.py*|*coordinator/llm_client.py*\
+|*coordinator/tests/test_circle_rounds_display.py*|*coordinator/llm_client.py*\
 |*coordinator/token_count.py*|*coordinator/tests/test_token_count.py*\
 |*coordinator/tests/test_llm_client.py*\
 |*coordinator/tests/test_issue_status_cmd.py*|*coordinator/tests/test_help_system.py*\
-|*coordinator/tests/test_dispatch_partition.py*|*coordinator/tests/test_issue_add.py*)
+|*coordinator/tests/test_dispatch_partition.py*|*coordinator/tests/test_issue_add.py*\
+|*coordinator/tests/test_backfill.py*\
+|*coordinator/tests/test_issue_prompt_projection.py*|*coordinator/tests/test_spend_report.py*\
+|*coordinator/tests/test_strip_malformed_annotations.py*\
+|*coordinator/LLM_response_disassembler.py*\
+|*coordinator/tests/test_llm_response_disassembler.py*\
+|*memory/issue_status.py*|*memory/issue_commands.py*|*coordinator/PROPOSE_CLASS.py*\
+|*coordinator/process_core_prompt_projection.py*|*coordinator/quote_verify.py*)
+    # v138, audit-register 2026-09-04 #2/#6/#11: five modules whose SUITES this
+    # case already invokes (test_issue_status_cmd, test_issue_commands,
+    # test_proposal_manager, test_practice_verify, quote_verify itself) were
+    # gated only by the lint sweep because their own paths were not in this
+    # pattern — editing the PROPOSE grammar or the one atomic status writer
+    # ran no suite. Subject-to-trigger, the missing fifth property.
+    # v107, audit-register.md #40(b): the five suites above (test_backfill,
+    # test_convergence_queue, test_issue_prompt_projection, test_spend_report,
+    # test_strip_malformed_annotations) were invoked here but not
+    # self-triggering — editing only the test file, with no change to its
+    # subject, fired nothing. 73 of 80 suites in the tree self-trigger;
+    # these were exceptions, not a deliberate design (test_spend_report.py's
+    # own comment reasoned its subjects already fire this case, which
+    # covers a subject change but not a test-only edit).
     NOTE="  pre-commit: parts/, self/ (incl. self/best_practices.toml), or its
-  implementation (check_best_practices.py/circle.py/self_schema.py/
-  proposals.py)
+  implementation (practice_manager.py, practice_verify.py/circle.py/REGISTER_CLASS.py/
+  proposal_manager.py)
   touched"
     # live_probe.py, test_check_issues.py, test_working_set.py DROPPED —
     # retired 2026-08-09, see the v11 note.
@@ -1160,47 +1255,111 @@ case "$FILES" in *parts/*|*self/*\
     # system 3.10. Four blocks had already been rerouted one incident at
     # a time; the rest carried the same exposure (anything importing
     # anthropic, pyflakes, or tomli on 3.10). The two stdlib-only checks
-    # DESIGNED for bare python keep it: check_line_endings (must run
-    # even where .venv does not exist yet) and check_lint (resolves
+    # DESIGNED for bare python keep it: file_line_endings_verify (must run
+    # even where .venv does not exist yet) and system_lint_verify (resolves
     # .venv itself, by its own docstring).
     # v52: nightly.py is renamed circle_audit.py (the 2026-08-19 ruling). The
     # fallback exists ONLY for the merge window, while a live tree may
     # still carry the old name; a v53 may drop it.
+    # v105: markers.py is renamed annotations.py (D-e, 2026-09-01) — the
+    # trigger glob and the two invocation lines below follow the module;
+    # no merge-window fallback needed, unlike v52, because a stale-named
+    # invocation here fails loudly (file not found) rather than silently.
+    # (Renumbered from this branch's own v103/v104 at the merge — v103 and
+    # v104 were independently taken on master by the test_redaction.py
+    # wiring and the scaffold-staleness advisory; this tree's redundant
+    # copy of the former was dropped rather than kept as a duplicate case.)
     run coordinator/circle_audit.py --selfcheck
-    run coordinator/check_best_practices.py
-    run coordinator/tests/test_check_best_practices.py
+    # v130, 2026-09-03: settings.py -> setting_manager.py + system_setting_verify.py (B99's
+    # residue, Q-6); the case runs the verifier and the register's suite.
+    # v129, 2026-09-03: redaction.py -> redaction_manager.py + stream_redaction.py (the pipeline,
+    # the Ticker's session redaction folded in) — stage 18d; test_redaction.py covers both.
+    # v128, 2026-09-03: the nine registers' modules are <CLASS>_manager.py (stage 18c) —
+    # proposal, proposal_group, topic, remember, circle_history, self_observation,
+    # instrument, part_mid_term, dream_history; suites and man pages with them.
+    # v132, 2026-09-04 (B100, R445): ledger_ruling_verify.py -> logbook_ruling_verify.py and
+    # ledger_next_verify.py -> logbook_next_verify.py, their suites with them — LOGBOOK is the
+    # BNF's word for the four development files, LEDGER a memory's shape (R444). Trigger and
+    # invocation lines both follow.
+    # v127, 2026-09-03: self_schema.py -> REGISTER_CLASS.py, propose_class.py -> PROPOSE_CLASS.py,
+    # transaction.py -> TRANSACTION_CLASS.py with their suites (stage 18b, Q-5).
+    # v126, 2026-09-03: the nine check_*.py verifiers are *_verify.py (B99 stage 18a) —
+    # file_line_endings, record, circling, block_overlap, quote, system_lint,
+    # system_unique_home, ledger_ruling, ledger_next; suites and man pages with them.
+    # v125, 2026-09-03: remember_manager.py's two projections are remember_prompt_projection.py and
+    # remember_list_projection.py (stage 17b); test_remember_manager.py covers all three.
+    # v124, 2026-09-03: the four *_projection.py are *_prompt_projection.py (F5, stage 17a),
+    # suites and the man page with them.
+    # v123, 2026-09-03: system_layer_verify (no upward imports, F7/R10) and
+    # system_name_verify (a new public def carries its class word, R441) ride
+    # system_lint_verify's trigger — B99 stage 16.
+    # v133, 2026-09-04: B91 — part_dream()'s grounding check (a silent part's
+    # memory, the overlap heuristic) has its own suite; it rides this case
+    # because part_dreaming.py already triggers it.
+    # v122, 2026-09-03: circling.py's self_test() is ui/tests/test_circling_selftest.py
+    # (stage 15); the hook runs the file, not the flag.
+    # v121, 2026-09-03: rounds.py -> circle_rounds.py with its suite (stage 13, R7).
+    # v120, 2026-09-03: circle_close.py is the close STEP (12b) and joins the
+    # open-time-reports case; the verifier's own case runs test_circle_close_verify.
+    # v119, 2026-09-03: circle_close.py -> circle_close_verify.py, with its suite
+    # (cohesion re-homing stage 12a, R435); the bare name is the close step's now.
+    # v118, 2026-09-03: part_dreaming.py and circle_synthesis.py join inter_circle's
+    # trigger — DREAMING and SYNTHESIS moved out of the driver (stage 11, B99).
+    # v115, 2026-09-03: register_gate.py joins the trigger — ifs_model.py's gate half
+    # (record_tree_compare, REGISTERS, the register checks) moved there (stage 9, B99).
+    # v114, 2026-09-03: propose_lifecycle.py joins the trigger — annotations.py's
+    # PROPOSE staging half moved there (cohesion re-homing stage 8, B99); its
+    # suites (test_proposal_manager, test_convergence_queue, test_annotations ...) are
+    # already invoked by this case.
+    # v113, 2026-09-03: check_best_practices.py SPLIT into practice_manager.py (the
+    # register, stage 7a) and practice_verify.py (this verifier, stage 7b — R435,
+    # R440). Both join the trigger; the invocations follow the verifier's new name.
+    run coordinator/practice_verify.py
+    run coordinator/tests/test_practice_verify.py
     run coordinator/tests/test_practice_annotations.py
-    run coordinator/check_rulings.py
-    run memory/issue_projection.py
-    run coordinator/tests/test_issue_projection.py
-    run coordinator/check_budget.py
-    # test_check_budget.py RETIRED 2026-08-15 with the relationships
+    run coordinator/logbook_ruling_verify.py
+    run memory/issue_prompt_projection.py
+    run coordinator/tests/test_issue_prompt_projection.py
+    run coordinator/quote_verify.py
+    # test_quote_verify.py RETIRED 2026-08-15 with the relationships
     # target (v27) — successor probes arrive with the register gate.
-    run coordinator/tests/test_topics.py
+    run coordinator/tests/test_topic_manager.py
     run coordinator/tests/test_register_gate.py
     # v62: the SELF_OBSERVATION register (R256). Its own suite,
     # because test_register_gate.py runs on bytes it builds itself and so
     # cannot notice that the 30 migrated records are still whole.
-    run coordinator/tests/test_self_observation_log.py
+    run coordinator/tests/test_self_observation_manager.py
     run coordinator/tests/test_inter_circle.py
+    # v133, 2026-09-04: B91's grounding check on a part's DREAMING memory.
+    run coordinator/tests/test_part_dreaming_grounding.py
     # v56, B54: the transcript safety net. Its detect+repair moved out of
     # circle_audit's phase structure so the LIVE close path could reach it at
     # all, so its probe rides the case its two callers already trigger.
     run coordinator/tests/test_backfill.py
-    # test_remember.py/test_strip_malformed_markers.py were missing from
+    # v111, 2026-09-02: the reply's one reader. Every suite in this case
+    # that fakes a model call now hands back its Reply, so the module rides
+    # the case those suites already trigger.
+    run coordinator/tests/test_llm_response_disassembler.py
+    # test_remember_manager.py/test_strip_malformed_markers.py were missing from
     # this list — both exercise circle.py's annotation system directly
     # (apply_remember/apply_self_remember/extract_markers/route_markers/
     # strip_malformed_markers) and belong exactly where circle.py already
     # triggers this case. Added 2026-08-12 alongside the E06 bracket-
     # annotation fix these two files cover.
-    run coordinator/tests/test_remember.py
+    run coordinator/tests/test_remember_manager.py
     # v57: QUOTE-AS-MARK (R155, routed 2026-08-19). NEW MODULE, added to
     # the trigger AND the invocation in the same change — v19's rule, and
     # v45's lesson about the other order (triggered, uninvoked, crashing
     # unnoticed for a day). It rides this case because its subjects are
     # already here: circle.py's Self> loop calls it, and it writes
-    # through remember.py, whose cap it changed.
-    run coordinator/tests/test_quote_as_mark.py
+    # through remember_manager.py, whose cap it changed.
+    # v109: quote_as_mark.py is renamed quote_as_lands.py (D77, ruling,
+    # 2026-09-01) — the module's own name still carried the retired word
+    # MARK; "lands" was already its live vocabulary (LANDS_CLASS,
+    # lands_text(), the record's own class = "lands"). No merge-window
+    # fallback, same reasoning as v105 (annotations.py): a stale-named
+    # invocation here fails loudly rather than silently.
+    run coordinator/tests/test_quote_as_lands.py
     # v63: the ANNOTATION SURFACE (R254/R255). process_core.md and
     # roster.py join THIS case because they are what the parts are
     # actually taught. Both were already triggered elsewhere — v45's
@@ -1214,10 +1373,14 @@ case "$FILES" in *parts/*|*self/*\
     # R254 was built. Added to trigger AND invocation together — v19's
     # rule, and v45's lesson about the other order.
     run coordinator/tests/test_annotation_exemplars.py
-    run coordinator/tests/test_strip_malformed_markers.py
-    run coordinator/tests/test_convergence_queue.py
-    run coordinator/tests/test_proposals.py
-    run coordinator/tests/test_markers.py
+    run coordinator/tests/test_strip_malformed_annotations.py
+    # v131, B98 (2026-09-04): test_convergence_queue.py RETIRED with
+    # proposal_convergence_queue() — no production caller; the last-stance,
+    # unanimity and issue_cmds rules it pinned live in proposal_coalesce()
+    # and are pinned by test_proposal_manager.py, which took its two
+    # remaining cases (edge normalisation by type; the 1520 grammar check).
+    run coordinator/tests/test_proposal_manager.py
+    run coordinator/tests/test_annotations.py
     # v96, 2026-08-29: tier A recall — the match rule, spans, caps,
     # every degrade row, the BLOCK-4-only placement invariant.
     run coordinator/tests/test_remember_expand.py
@@ -1227,7 +1390,7 @@ case "$FILES" in *parts/*|*self/*\
     # needs neither model nor network.
     run coordinator/tests/test_recall_index.py
     # v66: the room/record split in rounds.py — see the v66 note above.
-    run coordinator/tests/test_rounds_display.py
+    run coordinator/tests/test_circle_rounds_display.py
     # v66: Self's retry ladder over the transport — see the v66 note above.
     run coordinator/tests/test_llm_client.py
     # v93: work/logs/spend_<OT>.json (R380). ITS SUBJECT RUNS
@@ -1238,14 +1401,14 @@ case "$FILES" in *parts/*|*self/*\
     # llm_client.py, already fire this case.
     run coordinator/tests/test_spend_report.py
     # v93: the settings register (R379) and the length rule it now owns.
-    # test_settings.py SHIPPED UNINVOKED — it merged to master with no case
+    # test_setting_manager.py SHIPPED UNINVOKED — it merged to master with no case
     # naming it, so from the day it was written it reported nothing, which is
     # precisely the v45 defect it would itself have caught elsewhere. Found by
     # test_hook_template.py's stray-suite check, which only runs when this
-    # file is touched. process_core.md joins the trigger because settings.py
+    # file is touched. process_core.md joins the trigger because setting_manager.py
     # now gates its length rule against a literal being typed back in.
-    run coordinator/settings.py --check
-    run coordinator/tests/test_settings.py
+    run coordinator/system_setting_verify.py
+    run coordinator/tests/test_setting_manager.py
     # v94: the provider socket (R382 stage 2, R383's closed registry). Its
     # subjects — llm_client.py, prompt_build.py, circle.py — already fire this
     # case; trigger and invocation land together, v19's rule.
@@ -1256,7 +1419,7 @@ case "$FILES" in *parts/*|*self/*\
     # toggle; v49: the vetting approval contracts and the two suites
     # v36's comment always claimed here.
     run coordinator/tests/test_transcript_store.py
-    run coordinator/tests/test_mid_term.py
+    run coordinator/tests/test_part_mid_term_manager.py
     run coordinator/tests/test_vetting.py
     run coordinator/tests/test_issue_commands.py
     run coordinator/tests/test_issue_status_cmd.py
@@ -1268,6 +1431,34 @@ case "$FILES" in *parts/*|*self/*\
     # v68: the two probes the 2026-08-21 series added (see HOOK_MARK's note).
     run coordinator/tests/test_dispatch_partition.py
     run coordinator/tests/test_issue_add.py
+esac
+
+# v110, found while building B97: the Block 1-4 assembly split of 2026-09-02
+# (group_context.py/group_attention.py out of prompt_build.py;
+# parts_prompt_projection.py, role_attention.py, role_context.py,
+# topic_prompt_projection.py out of the modules they were named for; group_add.py
+# new) shipped six passing suites and wired none of them in -- test_hook_
+# template.py's stray-suite check catches exactly this, and would have caught
+# it the day it landed had anything touched gitrepo.py since. All six run
+# green (checked before adding this block, not assumed). group_add.py's own
+# trigger is here rather than a dedicated block like test_issue_gate.py's,
+# because group_context.py/group_attention.py already needed one and a
+# second block for one more roster-shaped file was not a real split.
+case "$FILES" in *coordinator/group_add.py*|*coordinator/group_context.py*\
+|*coordinator/group_attention.py*|*coordinator/parts_prompt_projection.py*\
+|*coordinator/role_attention.py*|*coordinator/role_context.py*\
+|*coordinator/topic_prompt_projection.py*|*coordinator/prompt_build.py*\
+|*coordinator/tests/test_group_add.py*|*coordinator/tests/test_parts_prompt_projection.py*\
+|*coordinator/tests/test_prompt_build.py*|*coordinator/tests/test_role_attention.py*\
+|*coordinator/tests/test_role_context.py*|*coordinator/tests/test_topic_prompt_projection.py*)
+    NOTE="  pre-commit: the Block 1-4 assembly split (group_context/group_attention/
+  parts_prompt_projection/role_attention/role_context/topic_prompt_projection/group_add) touched"
+    run coordinator/tests/test_group_add.py
+    run coordinator/tests/test_parts_prompt_projection.py
+    run coordinator/tests/test_prompt_build.py
+    run coordinator/tests/test_role_attention.py
+    run coordinator/tests/test_role_context.py
+    run coordinator/tests/test_topic_prompt_projection.py
 esac
 
 # v67 ADDS coordinator/token_count.py + coordinator/tests/test_token_count.py to
@@ -1308,42 +1499,53 @@ esac
 # Removed rather than repathed: there is nothing left to point it at.
 
 # v72, R-NEW 2026-08-23: `work/pending/` joins this trigger. A branch's ruling
-# and progress note live THERE now, not at the two ledgers' tails, so a commit
+# and progress note live THERE now, not at the two logbooks' tails, so a commit
 # that adds one must reach the checker that validates it -- otherwise the
 # first reading of a malformed pending entry is the merge, which is the one
 # moment no hook fires and the reader is not its author. progress.md is here
 # for the branch-write refusal, which is the other half of the same rule.
-case "$FILES" in *RULINGS.md*|*progress.md*|*work/pending/*\
-|*coordinator/check_rulings.py*|*coordinator/tests/test_check_rulings.py*)
-    NOTE="  pre-commit: RULINGS.md, progress.md, or a pending entry touched"
-    run coordinator/check_rulings.py
-    run coordinator/tests/test_check_rulings.py
+# v136, B95 (R433, 2026-09-04): *RULINGS.md* became *rulings/* — the logbook is
+# a directory of R<nnn>.toml files, and a commit adding one on a branch (an
+# RNEW-<slug>.toml) must reach the checker that holds it to shape and to the
+# branch rule, for the same reason the pending entries did.
+# v137, B101 (R447, 2026-09-04): *work/instrument/LOG.md* joins — the fourth
+# LOGBOOK, held to the E rule (ids contiguous, dates forward, the three fields)
+# and to the branch-write refusal; its pending kind, work/pending/instrument/,
+# is inside the *work/pending/* leg already.
+case "$FILES" in *rulings/*|*progress.md*|*work/pending/*|*work/instrument/LOG.md*\
+|*coordinator/logbook_ruling_verify.py*|*coordinator/tests/test_logbook_ruling_verify.py*)
+    NOTE="  pre-commit: rulings/, progress.md, LOG.md, or a pending entry touched"
+    run coordinator/logbook_ruling_verify.py
+    run coordinator/tests/test_logbook_ruling_verify.py
 esac
 
 # v53, B55: the assign step is the one place ids change, and it runs at a
 # `git merge` -- which fires NO pre-commit hook. Nothing here can guard the
 # assignment itself; what it CAN do is keep the script and its probe honest
 # on the way in.
-case "$FILES" in *coordinator/assign_ids.py*|*coordinator/tests/test_assign_ids.py*)
+case "$FILES" in *coordinator/assign_ids.py*|*coordinator/tests/test_assign_ids.py*\
+|*coordinator/ruling_sweep.py*)
+    # v138, audit-register 2026-09-04 #11: ruling_sweep.py is what test_assign_ids
+    # reaches for the cross-branch sweep, and had no trigger of its own.
     NOTE="  pre-commit: the id assign step touched"
     run coordinator/tests/test_assign_ids.py
 esac
 
-case "$FILES" in *NEXT.md*|*coordinator/check_next_md.py*\
-|*coordinator/tests/test_check_next_md.py*)
+case "$FILES" in *NEXT.md*|*coordinator/logbook_next_verify.py*\
+|*coordinator/tests/test_logbook_next_verify.py*)
     NOTE="  pre-commit: NEXT.md or its checker touched"
-    run coordinator/check_next_md.py
-    run coordinator/tests/test_check_next_md.py
+    run coordinator/logbook_next_verify.py
+    run coordinator/tests/test_logbook_next_verify.py
 esac
 
-case "$FILES" in *coordinator/check_block_overlap.py*|*coordinator/tests/test_check_block_overlap.py*|*coordinator/process_core.md*|*coordinator/prompt_build.py*|*self/best_practices.toml*|*parts/*)
+case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*coordinator/prompt_build.py*|*self/best_practices.toml*|*parts/*)
     NOTE="  pre-commit: a prompt block source or its overlap checker touched"
     # Through the venv, not bare `python`: this checker imports circle.py,
     # which imports anthropic, and the hook's `python` is the system 3.10
-    # (measured in check_lint.py's docstring). Same reason ui/ is called
+    # (measured in system_lint_verify.py's docstring). Same reason ui/ is called
     # this way below.
-    run coordinator/check_block_overlap.py
-    run coordinator/tests/test_check_block_overlap.py
+    run coordinator/block_overlap_verify.py
+    run coordinator/tests/test_block_overlap_verify.py
 esac
 
 case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_known_gaps.toml*|*work/tools/test_bnf_conformance.py*|*work/graph/prompt_grammar_draw.py*)
@@ -1365,22 +1567,22 @@ case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_k
     #     python work/graph/prompt_grammar_draw.py
 esac
 
-case "$FILES" in *coordinator/dream_history.py*|*coordinator/tests/test_dream_history.py*)
+case "$FILES" in *coordinator/dream_history_manager.py*|*coordinator/tests/test_dream_history_manager.py*)
     NOTE="  pre-commit: DREAM_HISTORY touched"
     # R359/B45 — the one writer of Self's history records; its suite proves
     # the bootstrap-once/fold-per-dream contract and that refusals write
     # nothing.
-    run coordinator/tests/test_dream_history.py
+    run coordinator/tests/test_dream_history_manager.py
 esac
 
-case "$FILES" in *coordinator/coalesce.py*|*coordinator/tests/test_coalesce.py*)
+case "$FILES" in *coordinator/proposal_group_manager.py*|*coordinator/tests/test_proposal_group_manager.py*)
     NOTE="  pre-commit: the proposal coalesce touched"
-    # test_coalesce runs the module selftest itself, then the write path,
+    # test_proposal_group_manager runs the module selftest itself, then the write path,
     # hash guard and ruled-group survival; test_vetting covers the loop the
     # coalesce presents into. R356/B69, and E22 for why the model call
     # lives at circle.py's checkpoints rather than in the loop these
     # suites drive.
-    run coordinator/tests/test_coalesce.py
+    run coordinator/tests/test_proposal_group_manager.py
     run coordinator/tests/test_vetting.py
 esac
 
@@ -1411,31 +1613,40 @@ esac
 case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*)
     NOTE="  pre-commit: code touched — compiling and linting every module"
     # v54, B57(3): .claude/skills/ joins the TRIGGER because it joined
-    # check_lint's SCOPE — the run skill's driver.py is 850 lines that open
+    # system_lint_verify's SCOPE — the run skill's driver.py is 850 lines that open
     # a real circle and was linted only by a human remembering to. It is a
     # SCOPE leg, not a CODE_DIR: CODE_DIRS also drives
-    # check_line_endings.SCOPE_DIRS, and .claude/ is CRLF by convention.
-    # test_check_lint asserts this pattern against CODE_DIRS + EXTRA_LEGS.
-    # v50: the pattern IS check_lint.CODE_DIRS — memory/ joined (it held
+    # file_line_endings_verify.SCOPE_DIRS, and .claude/ is CRLF by convention.
+    # test_system_lint_verify asserts this pattern against CODE_DIRS + EXTRA_LEGS.
+    # v50: the pattern IS system_lint_verify.CODE_DIRS — memory/ joined (it held
     # running code since R203 with no lint trigger at all, so an
     # undefined name there committed clean) and scripts/ left (no code
-    # since 2026-08-18; check_lint's own SCOPE dropped it then, and a
+    # since 2026-08-18; system_lint_verify's own SCOPE dropped it then, and a
     # trigger for a directory the linter does not scan is a dead leg).
-    # test_check_lint asserts this pattern and CODE_DIRS stay one thing.
-    run coordinator/check_lint.py
+    # test_system_lint_verify asserts this pattern and CODE_DIRS stay one thing.
+    run coordinator/system_lint_verify.py
     # v95: ONE FACT, ONE HOME. The same value declared in two modules is the
     # defect this project records more often than any other — ifs_model's
     # REGISTERS says so twice in its own comments, and every instance so far
-    # was found by a person reading code. Rides check_lint's trigger because
+    # was found by a person reading code. Rides system_lint_verify's trigger because
     # its subject is the same: every module in the tree. Trigger and
     # invocation together, v19's rule.
-    run coordinator/check_one_home.py
-    run coordinator/tests/test_check_one_home.py
-    run coordinator/tests/test_check_lint.py
+    run coordinator/system_unique_home_verify.py
+    run coordinator/tests/test_system_unique_home_verify.py
+    # v123: THE LAYERS and THE CLASS WORD. grammar -> registers -> orchestration -> ui,
+    # no upward import beyond the pairs the verifier names with a reason; and a NEW
+    # public def starts with a class word the BNF defines, today's residue
+    # grandfathered in system_name_grandfather.txt (a ceiling: --prune only shrinks it).
+    # Both read every module, so they ride this trigger, v19's rule.
+    run coordinator/system_layer_verify.py
+    run coordinator/tests/test_system_layer_verify.py
+    run coordinator/system_name_verify.py
+    run coordinator/tests/test_system_name_verify.py
+    run coordinator/tests/test_system_lint_verify.py
 esac
 
-case "$FILES" in *coordinator/check_line_endings.py*\
-|*coordinator/tests/test_check_line_endings.py*)
+case "$FILES" in *coordinator/file_line_endings_verify.py*\
+|*coordinator/tests/test_file_line_endings_verify.py*)
     # v77, 2026-08-25. The CR/NUL gate runs on every commit (the
     # unconditional line at the top), but nothing ran the probe that proves
     # it still REFUSES — and the NUL half was added the day a NUL sat in a
@@ -1443,7 +1654,7 @@ case "$FILES" in *coordinator/check_line_endings.py*\
     # never invoked is the v45 shape: triggered and uninvoked reports
     # nothing.
     NOTE="  pre-commit: the CR/NUL gate touched — asserting it still refuses"
-    run coordinator/tests/test_check_line_endings.py
+    run coordinator/tests/test_file_line_endings_verify.py
 esac
 
 case "$FILES" in *coordinator/gate_report.py*\
@@ -1473,10 +1684,10 @@ esac
 #     and they ride circle.py itself — the file whose edit can break them.
 #
 # (b) work/graph/*.py WAS GATED BY NOTHING AT ALL. No case matched it and
-#     check_lint's CODE_DIRS did not include it, so the script that REFUSES
+#     system_lint_verify's CODE_DIRS did not include it, so the script that REFUSES
 #     to draw a wrong picture was the one file nothing checked. It is in the
 #     lint trigger above now (as an EXTRA_LEG, not a CODE_DIR — see
-#     check_lint's own note on why), and its probe runs here.
+#     system_lint_verify's own note on why), and its probe runs here.
 #
 # (c) THE DIAGRAMS WENT STALE SILENTLY — and this hook answered that by
 #     redrawing and staging them on every commit that moved the module graph.
@@ -1492,14 +1703,58 @@ esac
 #     moved the graph without firing --check (a trigger that had stopped
 #     covering its subject — v45's lesson from the other side), and it grew
 #     from six artifacts to ten in the same pass.
-case "$FILES" in *coordinator/circle.py*|*coordinator/tests/test_close_marker.py*)
+case "$FILES" in *coordinator/circle.py*|*coordinator/circle_close.py*|*coordinator/tests/test_close_marker.py*)
     NOTE="  pre-commit: circle.py's open-time failure reports touched"
     run coordinator/tests/test_close_marker.py
+esac
+
+# v134, B96 (R434, 2026-09-04): the SHORT_TERM record is .toml, through ONE
+# reader/writer. Its suite runs whenever the manager, the suite, or any of the
+# three modules that write or read a record through it move — the close step,
+# the safety net, dreaming — and whenever the legacy-.md contract could shift
+# (ifs_model owns the four headings and R248's mark).
+case "$FILES" in *coordinator/short_term_manager.py*|*coordinator/tests/test_short_term_manager.py*|*coordinator/circle_close.py*|*coordinator/backfill.py*|*coordinator/part_dreaming.py*|*coordinator/ifs_model.py*)
+    NOTE="  pre-commit: the SHORT_TERM record's reader/writer, or a module that writes through it, touched"
+    run coordinator/tests/test_short_term_manager.py
+esac
+
+# v136, B95 (R433, 2026-09-04): the RULING record is one TOML file per ruling
+# under rulings/, through ONE reader/writer. The manager's own verify runs on
+# every commit that touches a ruling file (a parse failure or a stray is a
+# failure of the record, and this is the first reader to say so); its suite
+# runs when the manager, the one-time migration, or the suite itself moves.
+case "$FILES" in *coordinator/ruling_manager.py*|*coordinator/ruling_migrate.py*|*coordinator/tests/test_ruling_manager.py*|*rulings/*)
+    NOTE="  pre-commit: the RULING record, its reader/writer, or its suite touched"
+    run coordinator/ruling_manager.py
+    run coordinator/tests/test_ruling_manager.py
+esac
+
+# v106: coordinator/seam.py had no case at all until this one, and no suite
+# either (audit-register.md Tier 1 #7, 2026-09-01) -- it fired only
+# system_lint_verify/system_unique_home_verify/sanitize/the staleness advisory, so its two
+# stated invariants (the closed UI-signal-channel set; only circle.py's
+# three named sites open the "circle" read_line lane) were never held by
+# anything. Trigger AND invocation land together, v19's rule.
+case "$FILES" in *coordinator/seam.py*|*coordinator/tests/test_seam.py*\
+|*coordinator/circle.py*)
+    NOTE="  pre-commit: seam.py's channel contract touched, or a new
+  circle-lane read_line site"
+    run coordinator/tests/test_seam.py
 esac
 
 case "$FILES" in *work/graph/coordinator_draw.py*|*work/graph/test_coordinator_draw.py*)
     NOTE="  pre-commit: the module diagram's derivations touched"
     run work/graph/test_coordinator_draw.py
+esac
+
+# The subsystem picture derives its centre from coordinator_draw AND the two
+# sibling drawers' function columns, so a change to any of the three can move
+# it — trigger and invocation land together (v19's rule).
+case "$FILES" in *work/graph/llm_orchestration_draw.py*|*work/graph/test_llm_orchestration_draw.py*\
+|*work/graph/coordinator_draw.py*|*work/graph/prompt_grammar_draw.py*\
+|*work/graph/llm_response_data_flow_draw.py*)
+    NOTE="  pre-commit: the subsystem picture's derivations touched"
+    run work/graph/test_llm_orchestration_draw.py
 esac
 
 # THE MODULE-GRAPH REDRAW IS GONE, v101, 2026-08-30. It fired on any commit
@@ -1527,9 +1782,9 @@ esac
 # touching those paths — in all four worktrees and the lab at once, since
 # .git/hooks/ is shared.
 
-case "$FILES" in *coordinator/check_integrity.py*|*coordinator/tests/test_check_integrity.py*)
+case "$FILES" in *coordinator/record_verify.py*|*coordinator/tests/test_record_verify.py*)
     NOTE="  pre-commit: the corruption gate touched — asserting it still refuses"
-    run coordinator/tests/test_check_integrity.py
+    run coordinator/tests/test_record_verify.py
 esac
 
 case "$FILES" in *coordinator/*|*memory/*|*packaging/*|*process_core.md*)
@@ -1542,15 +1797,33 @@ case "$FILES" in *packaging/package.py*|*packaging/test_package.py*|*packaging/s
     run packaging/test_package.py
 esac
 
-case "$FILES" in *coordinator/transaction.py*|*coordinator/circle_audit.py*\
-|*coordinator/tests/test_transaction.py*|*coordinator/tests/test_circle_audit_lock.py*)
-    NOTE="  pre-commit: the audit's transaction/lock machinery touched"
+# v104, 2026-09-01. ADVISORY: packaging/scaffold/ went stale silently for
+# weeks before packaging/conform_packaging.py existed to catch it — nothing
+# ever prompted a re-check. This reminds, at commit time, on the same
+# trigger as the sanitize case above plus .claude/CLAUDE.md itself (the
+# thing conform_packaging.py judges every scaffold file against). It never
+# refuses: resolving a real STALE reading costs a paid model call, which a
+# commit hook does not get to spend. The hard gate is publish.py's own
+# preflight, at the one moment staleness actually reaches a user.
+case "$FILES" in *coordinator/*|*memory/*|*packaging/*|*process_core.md*\
+|*.claude/CLAUDE.md*)
+    NOTE="  pre-commit: scaffold-relevant files touched — checking staleness (advisory)"
+    advise packaging/scaffold_staleness.py --check
+esac
+
+case "$FILES" in *coordinator/TRANSACTION_CLASS.py*|*coordinator/circle_audit.py*\
+|*coordinator/tests/test_TRANSACTION_CLASS.py*|*coordinator/tests/test_circle_audit_lock.py*\
+|*coordinator/atomic_write.py*)
+    # v138, audit-register 2026-09-04 #2: atomic_write.py is THE UNIVERSAL WRITE
+    # PATH (twenty modules) and had no trigger; test_TRANSACTION_CLASS exercises
+    # it, crash states included, so it rides this case.
+    NOTE="  pre-commit: the audit's transaction/lock machinery, or atomic_write, touched"
     # v48. Both probes build their own temp trees (transaction's crash
     # states via a scripted os.replace failure, the lock cases against a
     # rebound circle_audit.LOCK) — nothing here reads or writes work/nightly
     # or the live registers, so this can never race a real run.
     # v52 merge-window fallback, same shape as the --selfcheck one above.
-    run coordinator/tests/test_transaction.py
+    run coordinator/tests/test_TRANSACTION_CLASS.py
     run coordinator/tests/test_circle_audit_lock.py
 esac
 
@@ -1571,13 +1844,26 @@ case "$FILES" in *ui/issue_draw.py*|*ui/tests/test_issue_draw.py*|*coordinator/c
     run ui/tests/test_issue_draw.py
 esac
 
+# v116, 2026-09-03: THE WORKING SET, characterized before it moves (cohesion
+# re-homing stage 10, B99). The probe pins the open-time question, the
+# working_sets register, the three id parsers and both neighbour pulls
+# against their homes today, and re-points to working_set_manager.py when
+# the move landed (10b, v117) — which is when that module joined this pattern
+# (test_hook_template refuses a pattern naming a path that does not exist).
+case "$FILES" in *coordinator/working_set_manager.py*|*coordinator/tests/test_working_set_manager.py*\
+|*coordinator/transcript_store.py*|*memory/issue_index.py*|*ui/issue_draw.py*\
+|*memory/issue_prompt_projection.py*|*coordinator/circle.py*)
+    NOTE="  pre-commit: the working set — the question, its register, the parsers, the pulls"
+    run coordinator/tests/test_working_set_manager.py
+esac
+
 case "$FILES" in *ui/*)
     NOTE="  pre-commit: ui/ touched — running its self-tests"
-    # circling.py's own --selftest needs no real import beyond circle.py
+    # test_circling_selftest.py (--selftest until 2026-09-03) needs no real import beyond circle.py
     # itself, but test_circle_engine.py runs a REAL dry-run CircleEngine
     # session (it imports circle.py, which imports anthropic) — bare
     # `python` here is the system 3.10, not the venv (measured in
-    # check_lint.py's own docstring), so all three are called through the
+    # system_lint_verify.py's own docstring), so all three are called through the
     # venv explicitly rather than relying on what `python` happens to
     # resolve to on this machine.
     #
@@ -1590,7 +1876,7 @@ case "$FILES" in *ui/*)
     # change dispatch behaviour, this leaves the regenerated outputs.txt
     # unstaged afterwards; that is the harness reporting what moved, not a
     # failure.
-    run ui/circling.py --selftest
+    run ui/tests/test_circling_selftest.py
     run ui/tests/test_circle_engine.py
     run ui/tests/test_circling.py --fast
     # v96, 2026-08-29: the Ticker flavor's adaptor probe — bridge.py
@@ -1604,7 +1890,7 @@ case "$FILES" in *ui/*)
     # by hand.
     run ui/tests/test_ticking_index.py
     # v102, 2026-08-30: the palette, and the ONE gate that can see the
-    # Ticker's CSS. check_one_home.py reads only Python, so a hex string
+    # Ticker's CSS. system_unique_home_verify.py reads only Python, so a hex string
     # hand-edited into app.css could drift from the role it was generated
     # from forever with nothing able to notice — --check is what notices.
     # The probe beside it pins the rest: both grounds per role, 4-bit ANSI,
@@ -1623,15 +1909,15 @@ case "$FILES" in *parts/*|*coordinator/roster.py*|*coordinator/tests/test_roster
     # indistinguishable from a part present and silent.
     #
     # circle_audit.py --selfcheck rides the parts/ case above and LOOKS like
-    # this gate. It is ifs_model.selfcheck_tree: register schemas, line
-    # endings, long_term.md dream entries. It never calls roster.verify().
+    # this gate. It is register_gate.record_tree_verify: register schemas, line
+    # endings, long_term.md dream entries. It never calls roster.part_verify().
     run coordinator/tests/test_roster.py
 esac
 
 case "$FILES" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*parts/*)
     NOTE="  pre-commit: who Self is, or what a part's recorded context renders to"
-    # v75. identity.user_name() resolves the Soul's preferred_name first
-    # (R325) and prompt_build.identity_tail() renders [context]
+    # v75. identity.user_name_read() resolves the Soul's preferred_name first
+    # (R325) and prompt_build.part_identity_tail_render() renders [context]
     # answers through their render strings and through nothing else
     # (R329). Both are one probe; a parts/ edit can
     # change what either reads.
@@ -1683,48 +1969,62 @@ case "$FILES" in *coordinator/circle_delta.py*|*coordinator/tests/test_circle_de
     run coordinator/tests/test_circle_delta.py
 esac
 
+case "$FILES" in *coordinator/redaction_manager.py*|*coordinator/stream_redaction.py*|*coordinator/tests/test_redaction.py*)
+    # v103, 2026-09-01. THE THIRD IN THIS SHAPE — v99 (circle_delta) and v100
+    # (phase_clock) were the first two. redaction_manager.py landed with its probe
+    # (55133f1, R422) and no trigger, so test_hook_template.py's stray-suite
+    # check had been failing on master for every commit touching
+    # coordinator/gitrepo.py since — the arm below is what runs that check,
+    # so the omission blocked the one file able to fix it, same as v99.
+    NOTE="  pre-commit: the redaction registry touched"
+    run coordinator/tests/test_redaction.py
+esac
+
 case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*|*coordinator/tests/test_hook_gate.py*)
     NOTE="  pre-commit: the hook's own module touched"
     # v61. Until now editing PRE_COMMIT ran no shell check at commit time:
-    # *coordinator/* fires check_lint, which compiles the PYTHON and cannot
+    # *coordinator/* fires system_lint_verify, which compiles the PYTHON and cannot
     # see the rendered SHELL. _hook_syntax_check() existed and was called by
     # nothing but --git-setup. That is the v37/v38 incident's own shape.
     run coordinator/tests/test_hook_template.py
     run coordinator/tests/test_gitrepo_unstage.py
     run coordinator/tests/test_remote_classify.py
     # v92, 2026-08-28. The three above READ the template; this one RUNS it.
-    # Every assertion about run()/quiet() was a substring search until now,
+    # Every assertion about system_git_run()/quiet() was a substring search until now,
     # which is exactly why v81's swallowed failures survived a green
     # battery — the line the search looked for was present and unreachable.
     run coordinator/tests/test_hook_gate.py
 esac
 
-case "$FILES" in *coordinator/instruments.py*|*self/instruments.toml*|*coordinator/tests/test_instruments.py*)
+case "$FILES" in *coordinator/instrument_manager.py*|*self/instruments.toml*|*coordinator/tests/test_instrument_manager.py*)
     NOTE="  pre-commit: the instruments register or its reader touched"
-    # v92, 2026-08-28. instruments.py and its suite arrived 2026-08-27 with
+    # v92, 2026-08-28. instrument_manager.py and its suite arrived 2026-08-27 with
     # NO trigger at all, so test_hook_template.py had been reporting
-    # `STRAY: test_instruments.py` ever since — into a battery that was
+    # `STRAY: test_instrument_manager.py` ever since — into a battery that was
     # swallowing the report. Two defects that hid each other: the gate could
     # not refuse, and what it was trying to say was that a gate was missing.
     # self/instruments.toml is in the trigger for the reason
     # close_contract.toml and turn_contract.toml are in theirs — it is DATA a
     # human edits, and BLOCK 3's <profile> can be loosened without touching a
     # .py. self/ never ships, so an installed bundle has neither file and
-    # run() skips the suite.
-    run coordinator/tests/test_instruments.py
+    # system_git_run() skips the suite.
+    run coordinator/tests/test_instrument_manager.py
 esac
 
-case "$FILES" in *coordinator/check_circling.py*|*coordinator/circling_contract.toml*|*coordinator/tests/test_check_circling.py*|*docs/BNF.md*)
+case "$FILES" in *coordinator/circling_verify.py*|*coordinator/circling_contract.toml*|*coordinator/tests/test_circling_verify.py*|*docs/BNF.md*)
     NOTE="  pre-commit: the CIRCLING grammar or its guards touched"
     # v90, R368 item 1. docs/BNF.md is IN THE TRIGGER because the
     # grammar lives there and the guards live in the TOML beside the
-    # checker: check_circling asserts the two still name the same set,
+    # checker: circling_verify asserts the two still name the same set,
     # so an edit to EITHER can break the agreement while touching
     # nothing the other case matches.
-    run coordinator/tests/test_check_circling.py
+    run coordinator/tests/test_circling_verify.py
 esac
 
-case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close.py*|*coordinator/tests/test_circle_close.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*)
+case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
+|*coordinator/record_paths.py*)
+    # v138, audit-register 2026-09-04 #2: record_paths.py DECIDES WHERE EVERY
+    # WRITE LANDS and had no trigger; test_write_guard reads it, so it rides here.
     NOTE="  pre-commit: a record-safety module touched"
     # v61. Three modules that decide whether the record survives, none of
     # which had a suite before 2026-08-19: the write guard (nothing imported
@@ -1732,7 +2032,7 @@ case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guar
     # verifier (whose exit code decides whether a close reports clean).
     run coordinator/tests/test_write_guard.py
     run coordinator/tests/test_circle_state.py
-    run coordinator/tests/test_circle_close.py
+    run coordinator/tests/test_circle_close_verify.py
     # v89, R368: the close report read as a POSTCONDITION —
     # `--postcondition` against the transcript each report names.
     # close_contract.toml is DATA, so a commit can loosen every
@@ -1741,9 +2041,9 @@ case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guar
     run coordinator/tests/test_close_postcondition.py
 esac
 
-case "$FILES" in *coordinator/self_schema.py*|*coordinator/tests/test_self_schema.py*)
+case "$FILES" in *coordinator/REGISTER_CLASS.py*|*coordinator/tests/test_REGISTER_CLASS.py*)
     NOTE=""
-    run coordinator/tests/test_self_schema.py
+    run coordinator/tests/test_REGISTER_CLASS.py
 esac
 
 case "$FILES" in *coordinator/command_surface.py*|*coordinator/tests/test_dev_mode.py*)
@@ -1774,6 +2074,35 @@ case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_
     # circle.py's own trigger and found it. Cheap to run, and the exposure is
     # exactly the v45 lesson: a change also needs its TRIGGER checked.
     run coordinator/tests/test_llm_client.py
+esac
+
+# v107, audit-register.md #14. FOUR .claude/skills/ suites existed, ran
+# green standalone, and were invisible to test_hook_template.py's own
+# stray-suite detector -- suites() globbed coordinator/tests/, ui/tests/,
+# work/tools/ and work/graph/, never .claude/skills/ or packaging/. Widened
+# in the SAME commit as these three case blocks (test_hook_template.py's own
+# v45 lesson: a detector fix and the wiring it exposes as missing land
+# together, or the gate goes red on the detector fix alone). Three are
+# wired directly, fast and self-contained; test_pull_main.py stays an ALLOW
+# entry instead — it fires real commits inside temp git repos as part of
+# its own assertions, which would mean every pull-main commit running the
+# whole pre-commit battery nested inside itself.
+case "$FILES" in *.claude/skills/install-package/install.py*\
+|*.claude/skills/install-package/test_install.py*)
+    NOTE="  pre-commit: the install skill touched"
+    run .claude/skills/install-package/test_install.py
+esac
+
+case "$FILES" in *.claude/skills/my_commit/my_commit.py*\
+|*.claude/skills/my_commit/test_my_commit.py*)
+    NOTE="  pre-commit: the my_commit skill touched"
+    run .claude/skills/my_commit/test_my_commit.py
+esac
+
+case "$FILES" in *.claude/skills/publish-package/publish.py*\
+|*.claude/skills/publish-package/test_publish.py*)
+    NOTE="  pre-commit: the publish skill touched"
+    run .claude/skills/publish-package/test_publish.py
 esac
 '''
 
@@ -1822,7 +2151,7 @@ def _backup_push_hook(kind: str, mark: str, when: str, prelude: str = "") -> str
     used for the warning prefix; `when` completes "…after every <when>".
 
     `prelude` is shell that runs BEFORE the backup push, and exists so
-    post-merge can carry the ledger fold without this becoming two
+    post-merge can carry the logbook fold without this becoming two
     generators. THAT PROPERTY IS LOAD-BEARING: these two hooks ARE the
     disk-failure safeguard, and a divergence between them is silent by
     construction, because nothing reads a backup until something has already
@@ -1838,8 +2167,8 @@ def _backup_push_hook(kind: str, mark: str, when: str, prelude: str = "") -> str
 {prelude}
 # Pushes every branch and tag to the local `backup` remote after every {when}.
 # `backup` was added 2026-08-09 pointing at a bare repo on a different
-# physical drive (C:/GitBackups/InnerCircling), so a disk failure on the
-# working copy does not also take the history with it.
+# physical drive, so a disk failure on the working copy does not also
+# take the history with it.
 #
 # THIS HOOK AND ITS TWIN ARE GENERATED FROM ONE FUNCTION in
 # coordinator/gitrepo.py — _backup_push_hook(). Editing this file changes
@@ -1890,7 +2219,7 @@ exit 0
 
 # post-commit v2 — v1 was HAND-INSTALLED, with no template here at all. That
 # is precisely why the post-merge gap survived: the hook nobody could see in
-# the source was the hook nobody checked, and `ensure_hooks()` managed only
+# the source was the hook nobody checked, and `system_git_hooks_ensure()` managed only
 # pre-commit. v2 is byte-equivalent in behaviour to what v1 did; the version
 # bump exists so the installer REPLACES the hand-written file rather than
 # finding a matching mark and leaving two different programs in agreement
@@ -1908,11 +2237,11 @@ POST_COMMIT = _backup_push_hook("post-commit", POST_COMMIT_MARK, "commit")
 POST_MERGE_MARK = "# inner-circling post-merge v3"
 POST_MERGE_FAMILY = "# inner-circling post-merge v"
 
-# v2, R-NEW 2026-08-24: THE LEDGER FOLD RUNS HERE.
+# v2, R-NEW 2026-08-24: THE LOGBOOK FOLD RUNS HERE.
 #
 # `coordinator/assign_ids.py --write` was the one step in the whole
 # branch-and-merge mechanism that a human had to remember, and on 2026-08-24
-# two separate merges both forgot it. check_rulings.py then refused master —
+# two separate merges both forgot it. logbook_ruling_verify.py then refused master —
 # correctly, that is the tripwire — and the repair fell to the operator, who
 # is the person in this project least equipped to run an ordered sequence of
 # git commands. The design was never the problem; its last step being manual
@@ -1935,7 +2264,7 @@ POST_MERGE_FAMILY = "# inner-circling post-merge v"
 #
 # IT CANNOT FAIL THE MERGE. git ignores post-merge's exit status, and the
 # merge has already happened by the time this runs. A failure here is loud
-# and leaves the folded ledgers in the working tree, uncommitted.
+# and leaves the folded logbooks in the working tree, uncommitted.
 _FOLD_STEP = '''
 # --- the ledger fold, before the backup push (see _backup_push_hook) ---
 if [ -x .venv/Scripts/python.exe ]; then
@@ -1997,7 +2326,7 @@ def _hook_syntax_check(log, pre_commit: bool = True) -> None:
     by running --git-setup in a real bundle rather than reasoning about
     it: the execution layer below RUNS the template against this repo,
     and in a tree without coordinator/tests/ that run fails on the
-    template's own first line, so ensure_hooks() raised here — before
+    template's own first line, so system_git_hooks_ensure() raised here — before
     reaching the guard that exists to skip the install. Validating a
     program nobody is about to install, by running it, is the check
     getting in front of its own decision."""
@@ -2038,7 +2367,7 @@ def _hook_syntax_check(log, pre_commit: bool = True) -> None:
         # stdout). With something staged the run would exercise real
         # gates on a mid-edit tree, so the layer is skipped with a
         # warning rather than made to lie.
-        rc_staged, staged = run("diff", "--cached", "--name-only",
+        rc_staged, staged = system_git_run("diff", "--cached", "--name-only",
                                 read_only=True)
         if rc_staged == 0 and not staged.strip():
             try:
@@ -2064,7 +2393,7 @@ def _hook_syntax_check(log, pre_commit: bool = True) -> None:
             pass
 
 
-def ensure_hooks(log) -> None:
+def system_git_hooks_ensure(log) -> None:
     """Install the pre-commit and post-merge hooks if absent, and UPDATE AN
     OUT-OF-DATE ONE. Never overwrites a hook this project did not write — a
     human may have put one there deliberately.
@@ -2109,9 +2438,9 @@ def ensure_hooks(log) -> None:
     # 2026-08-24 it was installed into any tree that ran --git-setup. The
     # template invokes the probe suites and the operator-only checkers BY
     # PATH, with no existence test — `coordinator/tests/*`, `ui/tests/*`,
-    # `work/tools/*`, `packaging/*`, `check_lint.py`, `check_rulings.py`
+    # `work/tools/*`, `packaging/*`, `system_lint_verify.py`, `logbook_ruling_verify.py`
     # and kin — and NONE of those ship in a distributed bundle. Its very
-    # first line, `python coordinator/check_line_endings.py --staged`, is
+    # first line, `python coordinator/file_line_endings_verify.py --staged`, is
     # UNCONDITIONAL, so in a bundle every commit failed at line one.
     #
     # THE WORST OF THAT WAS NOT THE HUMAN'S COMMIT. transcript_store's
@@ -2235,7 +2564,7 @@ def _ensure_one_backup_hook(d: pathlib.Path, name: str, body: str, mark: str,
                f"about this event")
 
 
-def ensure_ignore(log) -> list[str]:
+def system_git_ignore_ensure(log) -> list[str]:
     """Append any missing REQUIRED_IGNORES. Never removes or reorders what is
     already there — the file may hold entries a human added deliberately."""
     p = ROOT / ".gitignore"
@@ -2259,20 +2588,20 @@ def ensure_ignore(log) -> list[str]:
     return added
 
 
-def untrack_ignored(log) -> list[str]:
+def system_git_ignored_untrack(log) -> list[str]:
     """Drop from the INDEX any tracked path that .gitignore now excludes. The
     working file is untouched (`--cached`) and history is untouched — the blob
     stays reachable from older commits. This is the one index-editing operation
     that is safe to automate: nothing is lost, and leaving e.g. an 11MB tool
     database tracked means re-storing it in full on every commit it changes."""
-    rc, out = run("ls-files", "--cached", "--ignored", "--exclude-standard",
+    rc, out = system_git_run("ls-files", "--cached", "--ignored", "--exclude-standard",
                   read_only=True)
     paths = [l for l in out.splitlines() if l.strip()] if rc == 0 else []
     if not paths:
         log("ok", "no tracked path is covered by .gitignore")
         return []
     for chunk in (paths[i:i + 200] for i in range(0, len(paths), 200)):
-        run("rm", "--cached", "--quiet", "--", *chunk, check=True)
+        system_git_run("rm", "--cached", "--quiet", "--", *chunk, check=True)
     log("did", f"un-tracked {len(paths)} ignored path(s): "
                f"{', '.join(sorted({p.split('/')[0] for p in paths}))}")
     log("note", "history still holds their old blobs; that is intentional. "
@@ -2326,7 +2655,7 @@ def _drive_type(path: str) -> tuple[int, str]:
         return 0, "UNKNOWN"
 
 
-def classify_remote(url: str) -> tuple[bool, str]:
+def system_git_remote_classify(url: str) -> tuple[bool, str]:
     """(stays_on_this_machine, why). The `why` is printed either way — a
     remote that passes should say WHY it passed, so a reader can check the
     judgement rather than trust it."""
@@ -2372,16 +2701,16 @@ def classify_remote(url: str) -> tuple[bool, str]:
                    f"machine")
 
 
-def refuse_remote(log) -> bool:
+def system_git_remote_refuse(log) -> bool:
     """True if ANY configured remote could take this material off the machine.
 
     Named for what it does at the call sites, which is refuse. It no longer
     refuses a remote for existing — see the block above."""
     bad = []
-    for name in remotes():
-        rc, url = run("remote", "get-url", name, read_only=True)
+    for name in system_git_remotes_read():
+        rc, url = system_git_run("remote", "get-url", name, read_only=True)
         url = url.strip() if rc == 0 else ""
-        ok, why = classify_remote(url)
+        ok, why = system_git_remote_classify(url)
         if ok:
             log("ok", f"remote {name} -> {url} — stays on this machine, {why}")
         else:
@@ -2411,24 +2740,24 @@ UNCONFIGURED_TEXT = ("I see git is not configured. git is optional; adding "
                      "README.md for details.")
 
 
-def identity_known() -> bool:
+def system_git_identity_is_known() -> bool:
     """Will `git commit` accept an author here? `git var GIT_AUTHOR_IDENT`
     fails exactly when `git commit` would refuse with "Author identity
     unknown", and consults every source git itself does — config at any
     scope, GIT_AUTHOR_*/EMAIL, a host whose address auto-detects.
-    resolve_identity() is NOT this test: $IFS_GIT_NAME in .env satisfies it
+    system_git_identity_resolve() is NOT this test: $IFS_GIT_NAME in .env satisfies it
     without configuring git, and the commit still fails.
 
     Never raises — this sits on the /close path, where an uncaught GitError
     is a crash at the end of every circle (the 2026-08-24 missing-binary
-    lesson in commit_paths() below)."""
+    lesson in system_git_paths_commit() below)."""
     try:
-        return run("var", "GIT_AUTHOR_IDENT", read_only=True)[0] == 0
+        return system_git_run("var", "GIT_AUTHOR_IDENT", read_only=True)[0] == 0
     except GitError:
         return False
 
 
-def report_unconfigured(log) -> None:
+def system_git_unconfigured_report(log) -> None:
     """The kind note, once per process. circle.py's main() resets the flag
     at each run, which makes "once per process" mean once per circle —
     one UI process can run main() more than once (resume)."""
@@ -2439,7 +2768,7 @@ def report_unconfigured(log) -> None:
     log("note", UNCONFIGURED_TEXT)
 
 
-def reset_unconfigured_report() -> None:
+def system_git_unconfigured_report_reset() -> None:
     global _UNCONFIGURED_REPORTED
     _UNCONFIGURED_REPORTED = False
 
@@ -2459,12 +2788,12 @@ def _unstage(rel: list[str], log) -> None:
     """
     if not rel:
         return
-    rc, out = run("reset", "-q", "HEAD", "--", *rel)
+    rc, out = system_git_run("reset", "-q", "HEAD", "--", *rel)
     if rc != 0:
         # Unborn HEAD — there is no commit to reset against, so the index
         # entries are new rather than modified. Dropping them from the index
         # is the equivalent operation, and --cached leaves the files on disk.
-        rc, out = run("rm", "-q", "--cached", "--", *rel)
+        rc, out = system_git_run("rm", "-q", "--cached", "--", *rel)
     if rc == 0:
         log("did", f"unstaged {len(rel)} path(s) after the failed commit")
     else:
@@ -2473,20 +2802,20 @@ def _unstage(rel: list[str], log) -> None:
                     f"anything else, or these will be swept into it.")
 
 
-def commit_paths(paths: list[pathlib.Path], message: str, log,
+def system_git_paths_commit(paths: list[pathlib.Path], message: str, log,
                  tag: str | None = None) -> bool:
     """Stage and commit ONLY the given paths. Never `git add -A`: an automated
     run must not sweep up whatever the human was editing at the time."""
     # NO GIT AT ALL IS A SUPPORTED TREE SINCE 2026-08-24 (the operator:
-    # "Tier 1"), and it did not used to reach this line. is_repo() shells
-    # out, so a machine with no git BINARY raises GitError from run()'s
+    # "Tier 1"), and it did not used to reach this line. system_git_is_repo() shells
+    # out, so a machine with no git BINARY raises GitError from system_git_run()'s
     # OSError arm instead of answering False — uncaught here, uncaught in
-    # transcript_store.commit_circle(), and therefore a CRASH at the end of
+    # transcript_store.circle_commit(), and therefore a CRASH at the end of
     # every /close rather than the warn-and-continue this function is built
     # to give. A missing repository was handled; a missing git was not, and
     # the two look identical to a caller.
     try:
-        repo = is_repo()
+        repo = system_git_is_repo()
     except GitError as e:
         log("warn", f"git is not usable here ({e}) — nothing committed. "
                     f"The files themselves are written; only the history "
@@ -2496,14 +2825,14 @@ def commit_paths(paths: list[pathlib.Path], message: str, log,
         log("warn", "not a git repository — nothing committed. "
                     "Run: python coordinator/circle_audit.py --git-setup")
         return False
-    if not assert_isolated(log) or refuse_remote(log):
+    if not system_git_isolated_assert(log) or system_git_remote_refuse(log):
         return False
     # git IS here but nobody told it who commits — the fresh-install case.
     # Caught BEFORE staging: the raw refusal reads as breakage in a tree
     # where git is optional, and a failed commit would also leave the index
     # for _unstage() to repair. Skipped, with the kind note, once.
-    if not identity_known():
-        report_unconfigured(log)
+    if not system_git_identity_is_known():
+        system_git_unconfigured_report(log)
         return False
     rel = []
     for p in paths:
@@ -2520,23 +2849,23 @@ def commit_paths(paths: list[pathlib.Path], message: str, log,
     # further. Unstaging a path the HUMAN had staged (possibly with content
     # that differs from the working tree) would destroy their work to clean up
     # ours, which is worse than the leak this fixes.
-    rc, out = run("diff", "--cached", "--name-only", "--", *rel,
+    rc, out = system_git_run("diff", "--cached", "--name-only", "--", *rel,
                   read_only=True)
     pre_staged = set(out.splitlines()) if rc == 0 else set(rel)
     ours = [r for r in rel if r not in pre_staged]
-    run("add", "--", *rel, check=True)
-    rc, _ = run("diff", "--cached", "--quiet", read_only=True)
+    system_git_run("add", "--", *rel, check=True)
+    rc, _ = system_git_run("diff", "--cached", "--quiet", read_only=True)
     if rc == 0:
         log("ok", "nothing changed in those paths — no commit made")
         return True
-    rc, out = run("commit", "-m", message, "--only", "--", *rel)
+    rc, out = system_git_run("commit", "-m", message, "--only", "--", *rel)
     if rc != 0:
         log("fail", f"commit failed: {out}")
         _unstage(ours, log)
         return False
-    log("did", f"commit {head()} — {message}")
+    log("did", f"commit {system_git_head_read()} — {message}")
     if tag:
-        rc, out = run("tag", tag)
+        rc, out = system_git_run("tag", tag)
         log("did" if rc == 0 else "warn",
             f"tag {tag}" if rc == 0 else f"tag {tag} not created: {out}")
     return True
@@ -2544,7 +2873,7 @@ def commit_paths(paths: list[pathlib.Path], message: str, log,
 
 # ----------------------------------------------------------------- cli
 def main() -> int:
-    """`--identity` only. A read-only window onto resolve_identity(), so the
+    """`--identity` only. A read-only window onto system_git_identity_resolve(), so the
     question "who will this commit as, and why" can be answered without
     running --git-setup, which writes."""
     import argparse
@@ -2559,7 +2888,7 @@ def main() -> int:
         return 0
     ok = True
     for key, (value, src) in zip(("user.name", "user.email"),
-                                 resolve_identity()):
+                                 system_git_identity_resolve()):
         if value is None:
             ok = False
             print(f"  {key:<12} UNSET  "

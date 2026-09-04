@@ -87,6 +87,14 @@ questions, recorded in its `part.toml` and rendered into its prompt.
 '''
 
 [[class]]
+name = "group"
+description = '''
+A named, reusable roster — a list of existing part directory names,
+invoked by circle.py --group <name> instead of --parts. Deleting a group
+removes only the name, never its member parts.
+'''
+
+[[class]]
 name = "practice"
 description = '''
 How the CIRCLE behaves — the practices you have ruled in, projected into
@@ -134,7 +142,7 @@ What a part is actually sent — the assembled system prompt, block by block.
 # moment they joined USER_SUBSET_COMMANDS, which is the check working.
 #
 # The description says what a person gets, not how it is stored: the register
-# is coordinator/settings.py's business and self/settings.toml is not
+# is coordinator/setting_manager.py's business and self/settings.toml is not
 # something anyone needs to know the name of to use this.
 [[class]]
 name = "settings"
@@ -162,4 +170,21 @@ A name, place or org you have chosen to hide in the CIRCLE pane's redacted
 view — never a part's own name, which this cannot touch. `add`/`update`
 take a canonical label and optional extra forms in quotes; `list`/`delete`
 number the same way every other register here does.
+'''
+
+# ADDED 2026-09-01, the same reason settings and redact-alias joined above:
+# test_help_system.py's "every USER verb is reachable through its class"
+# caught the five /observation-* verbs' absence the moment they joined
+# USER_SUBSET_COMMANDS.
+[[class]]
+name = "observation"
+description = '''
+What SYNTHESIS noticed about the CIRCLE as a whole, addressed to you and
+never projected into any part's prompt — the one place in this project
+explicitly meant to hold personal material. `add` writes your own entry
+directly; `continue` adds a new one onto a prior entry without touching
+it; `retire` hides one from the everyday list without removing it;
+`purge` is the one true delete here — it replaces an entry's TEXT for
+good (asked for twice, to confirm), because this register is where you
+may need something genuinely gone.
 '''

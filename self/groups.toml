@@ -1,0 +1,13 @@
+# Empty delegate for packaging/exceptions.toml's self/ entry -- see
+# packaging/scaffold/self/README.md. The live self/groups.toml holds the
+# operator's own named rosters; this delegate ships none.
+# Must stay valid, loadable TOML matching REGISTER_CLASS.py's own shape --
+# byte-equivalent to what group_add._doc() constructs when the file is
+# absent, so a fresh install reads the same document either way.
+
+register = "groups"
+group = []
+
+[doc]
+preamble = """
+GROUPS -- a named, reusable roster of parts/<dir>/ directory names, so circle.py --group <name> can invoke a whole roster by name. Written by /group-add; read fresh at every circle-open, never cached. A member directory removed after the group was written is circle.py's own "unknown part(s)" refusal to catch at open time, the same refusal --parts already gives — this register does not re-verify itself after the fact."""

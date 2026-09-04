@@ -1,8 +1,8 @@
 # Empty delegate for packaging/exceptions.toml's self/ entry -- see
 # packaging/scaffold/self/README.md. The live self/working_sets.toml
 # holds the operator's own per-circle rows; this delegate ships none.
-# Must stay valid, loadable TOML matching self_schema.py's own shape --
-# transcript_store.record_working_set()'s lazy-create path loads this
+# Must stay valid, loadable TOML matching REGISTER_CLASS.py's own shape --
+# working_set_manager.working_set_record()'s lazy-create path loads this
 # file on a fresh install before ever writing to it.
 
 register = "working_sets"

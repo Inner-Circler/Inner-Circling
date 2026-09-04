@@ -101,7 +101,8 @@ alternates     = true
 # off and because every capture written before this date has no such key.
 #
 # CLOSING IT IS THE OTHER HALF, and is overdue rather than new. This body is
-# composed by _response_record() — OUR code, exactly like `request`, which this
+# composed by LLM_response_disassembler.message_burst() as Reply.record (llm_client's
+# _response_record() until 2026-09-02) — OUR code, exactly like `request`, which this
 # file's own header calls strict for that reason. It was open, so the one place
 # a new response key could appear unannounced was the one place nothing would
 # have said so. `usage` stays open inside its own section: those members are the

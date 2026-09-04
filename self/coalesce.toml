@@ -1,0 +1,12 @@
+register = "coalesce"
+next_id = 1
+hash = ""
+derived = ""
+note = ""
+group = []
+
+[doc]
+preamble = """
+The PROPOSAL COALESCE register (R356, B69): before each circle's vetting queue is shown, one model pass groups pending proposals that are the same ask in different words -- across circles, across authors, across the propose and practice registers -- so Self rules on one strengthened ask instead of clearing near-duplicates by hand. coordinator/proposal_group_manager.py is the one reader and writer.
+
+SHIPPED EMPTY. `next_id` at 1, an empty `group` table and blank `hash`/`derived`/`note` are exactly what coordinator/proposal_group_manager.py builds when this file is absent, so a fresh install reads the same document either way. The model only suggests a grouping; accepting one still enacts each member through that member's own existing approve path in its own register -- this file never holds a proposal or a practice, only the grouping and why."""

@@ -38,7 +38,7 @@ which no format can verify for you:
                   out the same day (R234): the transcript shows Self spoke
                   both, under a bare `Name:` label this gate could only
                   resolve where `.env` was present. The mechanism stands;
-                  its founding premise did not. See `identity.installed_tags`.
+                  its founding premise did not. See `identity.self_installed_tags_read`.
     SPAN          a quote containing another speaker's marker has run past the
                   end of the statement it claims.
     CLOSURE       an edge is legal only when both ends are live.
@@ -72,15 +72,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-ROOT = S.ROOT
+from record_paths import ROOT                                  # noqa: E402  (stage 14: was S.ROOT)
 ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
 # One copy, in the schema (2026-08-19, review tier 5 #44) — these were
 # the first of three lockstep clones the R176 sweep had to edit together.
 # Ruled 2026-08-03 (R061): a `--minimal` circle is a real circle with real
 # parts; only its memory is stripped, and the distinct sandbox_ prefix
 # keeps every claim resting on a stripped-memory room greppable.
-CIRCLES = S.CIRCLES
-SANDBOX_CIRCLES = S.SANDBOX_CIRCLES
+# CIRCLES and SANDBOX_CIRCLES were re-exported from issue_schema here until 2026-09-03 (stage 14,
+# R8) and nothing read them; record_paths.py is the one home for the tree's paths now.
 # Neither `circle_` nor `sandbox_`: a SESSION RECORD, Self's own words from
 # a working session rather than a circle (self/session_2026-08-01_2200.md is
 # the only one that exists). self/sessions/ retired 2026-08-13 — it held
@@ -91,7 +91,7 @@ SELF_DIR = ROOT / "self"
 MIN_QUOTE = 2   # ruled 2026-08-01, deliberately near zero: "Yeah, ouch."
 
 
-def source_of(ref: str) -> pathlib.Path:
+def issue_source_read(ref: str) -> pathlib.Path:
     # The circle_/sandbox_ mapping is the schema's (one copy, tier 5
     # #44); the SELF-DIR arm — a bare ref is a session record under
     # self/ — is this gate's own, because only the gate admits those.
@@ -148,27 +148,27 @@ def _room_find(txt: str, q: str):
     Byte-exact `txt.find(q)` stays the ONLY rule for bracket-free
     sources; the caller reaches here after it fails. This loosens
     matching exactly one statement-span at a time, and only for spans
-    that carry a bracket: the span's room view (markers.strip_remember,
+    that carry a bracket: the span's room view (annotations.remember_strip,
     the one spelling the live loop and the resume parser share) is
     compared whitespace-flattened, and a hit settles attribution too —
     the span's own speaker. Returns (-1, None) when nothing matches."""
-    import markers as MK                 # coordinator/, on sys.path above
+    import annotations as MK             # coordinator/, on sys.path above
     if not MK.REMEMBER_RE.search(txt):
         return -1, None
     fq = " ".join(q.split())
     if not fq:
         return -1, None
-    for a, b, w in speaker_spans(txt):
+    for a, b, w in issue_speaker_spans_read(txt):
         span = txt[a:b]
         if not MK.REMEMBER_RE.search(span):
             continue
-        room = " ".join(MK.strip_remember(span).split())
+        room = " ".join(MK.remember_strip(span).split())
         if fq in room:
             return a, w
     return -1, None
 
 
-def speaker_spans(text: str):
+def issue_speaker_spans_read(text: str):
     """[(start, end, part)]. Regions no marker covers are absent, and are
     reported as UNVERIFIABLE rather than passed."""
     ms = list(SPEAKER_RE.finditer(text))
@@ -195,26 +195,29 @@ def main() -> int:
                          f"is LF, and .gitattributes sets `* -text` because "
                          f"conversion would break every sha256 in the project")
         try:
-            docs[p] = S.load(p)
+            docs[p] = S.issue_read(p)
         except Exception as e:
             # A malformed node no longer parses PARTIALLY. This is the whole
             # point of the format change: the failure is loud and located.
             fails.append(f"{p.name}: will not parse — {e}")
     ids = {d["id"] for d in docs.values()}
     live = {d["id"] for d in docs.values() if d["status"] == "live"}
-    # THE ROOT EXCEPTION, ruled 2026-08-05 (B23). An edge is legal when both
-    # ends are live — OR when the non-live end is a ROOT. A root is a source
-    # the live graph descends from; forbidding an edge to it would mean the
-    # graph cannot say where it came from, which is the one thing a root is
-    # for. Roots are NOT live: they carry no claim, appear in no working set,
-    # and nothing is owed on them (R038).
-    roots = {d["id"] for d in docs.values() if d["status"] == "root"}
-    legal_end = live | roots
-    print(f"  {len(docs)} issue(s), {len(live)} live: {', '.join(sorted(live))}\n")
+    # A ROOT IS LIVE (R429, 2026-09-01) — not a status
+    # beside `live` and not an exception to this check. From 2026-08-05
+    # (B23) to that date, root was its own status and this line read
+    # `legal_end = live | roots`: an edge was legal when both ends were live
+    # OR the non-live end was a root. A root's `status` is now `"live"`
+    # itself, so `live` already contains both roots and this union is gone —
+    # the closure rule is exactly "both ends are live" again, with roots
+    # inside that set rather than beside it.
+    legal_end = live
+    roots = {d["id"] for d in docs.values() if d.get("root")}
+    print(f"  {len(docs)} issue(s), {len(live)} live ({len(roots)} root): "
+          f"{', '.join(sorted(live))}\n")
 
     for p, doc in docs.items():
         nid = doc["id"]
-        fails += S.check(doc, p)
+        fails += S.issue_verify(doc, p)
 
         for ref, what in ((doc.get("opened", ""), "Opened"),
                           (doc.get("label_ruled", ""), "Label ruled")):
@@ -227,7 +230,7 @@ def main() -> int:
             # one; a label ruling always happens in a room.
             if what == "Opened" and re.fullmatch(r"\d{4}-\d{2}-\d{2}", r):
                 continue
-            if not source_of(r).is_file():
+            if not issue_source_read(r).is_file():
                 fails.append(f"{p.name}: {what} names a transcript that does "
                              f"not exist ({r})")
 
@@ -256,7 +259,7 @@ def main() -> int:
             if len(q) < MIN_QUOTE:
                 fails.append(f"{p.name}: quote shorter than {MIN_QUOTE} chars")
                 continue
-            src = source_of(e["source"])
+            src = issue_source_read(e["source"])
             if not src.is_file():
                 fails.append(f"{p.name}: cites missing {e['source']} "
                              f"(looked in {src.parent.name}/)")
@@ -283,7 +286,7 @@ def main() -> int:
                              f"run past the statement it cites: {q[:45]}...")
             who = ("self" if e["source"].startswith("session_") else
                    span_who if span_who is not None else
-                   next((w for a, b, w in speaker_spans(txt) if a <= i < b),
+                   next((w for a, b, w in issue_speaker_spans_read(txt) if a <= i < b),
                         None))
             if who is None:
                 unattributable += 1
@@ -378,7 +381,7 @@ def main() -> int:
                     fails.append(f"{p.name}: attested issue-relationship -> {tgt}: "
                                  f"quote shorter than {MIN_QUOTE} chars")
                 else:
-                    f2 = source_of(m.group(1))
+                    f2 = issue_source_read(m.group(1))
                     if not f2.is_file() or (
                             q not in text_of(f2)
                             and _room_find(text_of(f2), q)[0] < 0):
@@ -401,9 +404,9 @@ def main() -> int:
             # The exception exposed the hole it was supposed to sit beside.
             if st != "retired" and nid in live and tgt not in legal_end:
                 fails.append(f"{p.name}: live {st} issue-relationship -> {tgt}, "
-                             f"which is neither live nor a root. An "
-                             f"issue-relationship is legal only when both ends "
-                             f"are live, or the other end is a root")
+                             f"which is not live. An issue-relationship is "
+                             f"legal only when both ends are live (a root "
+                             f"counts — it is live)")
             # inv 5: direction. The class of error outlives the fix that
             # caused it — 2 of 10 consequence-of edges in the 2026-07-27
             # derivation were written backwards.

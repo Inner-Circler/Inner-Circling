@@ -12,30 +12,38 @@ midterms_project.py — runbook documenting and driving the process by which eac
 ## DESCRIPTION
 This script documents and automates "THE RUN" — the ordered process by which the seven parts' mid-term distillates get produced. The docstring records that the first seven distillates were made by hand, in conversation, because the sandbox at that time had no route to the API; that worked once but is not repeatable, since a process that lives only in a transcript cannot be re-run, checked, or handed to a nightly job. This file is that process written down: the ordered steps, the prompt they use, and the checks that confirm a run was sound.
 
-THE RUN, as laid out in the docstring, proceeds in five stages: (1) SURVEY — `mid_term.py` reports which parts are stale, absent, legacy, or locked, and how many source characters each has; a `locked` part belongs to Self and is skipped. (2) PACK — per part, assemble `long_term.md` (with settled content stripped), `dreams.toml`, every `## Dreamt` section newest-first, and the part's `remember.toml` chain: exactly the bytes the staleness hash covers (`part_relationships.toml` DROPPED as a source 2026-08-22, `mid_term.py` PROMPT v7). (3) DERIVE — one API call per stale part, using the SYSTEM prompt defined in `mid_term.py`. (4) WRITE — `mid_term.write()` stamps the source hash, model, and prompt version into the front matter. (5) VERIFY — confirms every part reads `fresh`, that the prompt block carries the distillate rather than the raw corpus, and that a part with no distillate still has an identity block.
+**The derive is no longer a hand step: `/close` runs it.** `inter_circle.py` calls
+`part_mid_term_manager.part_mid_term_refresh()` at every live close (the REFRESH step of
+`docs/INTER_CIRCLE_DESIGN_V2.md`, wired 2026-08-27), so every part whose sources moved is re-derived
+before the close returns. What this script is FOR now is the survey (which parts are stale, and why),
+the packed text for a person who wants to read exactly what a derivation saw, and the hand re-run —
+`part_mid_term_manager.py --refresh` — for a part whose refresh failed or was skipped. `mid_term.py`, named
+throughout the docstring, is `part_mid_term_manager.py` since 2026-09-03 (R435, B99).
+
+THE RUN, as laid out in the docstring, proceeds in five stages: (1) SURVEY — `part_mid_term_manager.py` reports which parts are stale, absent, legacy, or locked, and how many source characters each has; a `locked` part belongs to Self and is skipped. (2) PACK — per part, assemble `long_term.md` (with settled content stripped), `dreams.toml`, every `## Dreamt` section newest-first, and the part's `remember.toml` chain: exactly the bytes the staleness hash covers (`part_relationships.toml` DROPPED as a source 2026-08-22, `part_mid_term_manager.py` PROMPT v7). (3) DERIVE — one API call per stale part, using the SYSTEM prompt defined in `part_mid_term_manager.py`. (4) WRITE — `part_mid_term_manager.part_mid_term_write()` stamps the source hash, model, and prompt version into the front matter. (5) VERIFY — confirms every part reads `fresh`, that the prompt block carries the distillate rather than the raw corpus, and that a part with no distillate still has an identity block.
 
 The docstring records a cost measurement taken 2026-08-07 across all seven parts (roughly 54,479 input tokens / $0.109, roughly 7,000 output tokens / $0.070, total roughly $0.179, saving roughly $0.116 per circle opened), and states the design intent plainly: the run "should almost never run," because staleness is a content hash — an unchanged day costs nothing and makes no call. The practical trigger is a source moving, which in practice means a circle closed and dreaming wrote a fresh `## Dreamt` section.
 
-The script also carries, verbatim in a module constant, Self's own preferred derivation prompt as given on 2026-08-07 (the second, tightened form, after seeing the first output), plus the added constraint that prior relationship and dreaming semantics must not be lost — the relationship half is superseded 2026-08-22 (`mid_term.py` PROMPT v7 drops relationships as a source entirely; the quote is kept as the record of what was first asked for). The change log of proposed prompt revisions moved to `coordinator/improvements.toml` on 2026-08-09 (it was a hardcoded data list with no code shape to it — the file's own `_improvements()` helper reads it at `--prompt` time). Each entry is tagged LANDED (now in `mid_term.SYSTEM`), DENIED (Self ruled it out, with the reasoning preserved so it is not re-proposed), or DEFERRED (real but unmeasured, awaiting evidence). One DENIED entry records Self's own reasoning at length: a proposal to make every claim traceable to a source phrase was rejected because checking a derivation's claim against another derivation ("the entire system is placing substantial trust in LLM derivations") only proves two derivations agree, not that either is true — summarized in the entry as "a guard that checks derivation against derivation is theatre with a passing exit code."
+The script also carries, verbatim in a module constant, Self's own preferred derivation prompt as given on 2026-08-07 (the second, tightened form, after seeing the first output), plus the added constraint that prior relationship and dreaming semantics must not be lost — the relationship half is superseded 2026-08-22 (`part_mid_term_manager.py` PROMPT v7 drops relationships as a source entirely; the quote is kept as the record of what was first asked for). The change log of proposed prompt revisions moved to `coordinator/improvements.toml` on 2026-08-09 (it was a hardcoded data list with no code shape to it — the file's own `_improvements()` helper reads it at `--prompt` time). Each entry is tagged LANDED (now in `part_mid_term_manager.SYSTEM`), DENIED (Self ruled it out, with the reasoning preserved so it is not re-proposed), or DEFERRED (real but unmeasured, awaiting evidence). One DENIED entry records Self's own reasoning at length: a proposal to make every claim traceable to a source phrase was rejected because checking a derivation's claim against another derivation ("the entire system is placing substantial trust in LLM derivations") only proves two derivations agree, not that either is true — summarized in the entry as "a guard that checks derivation against derivation is theatre with a passing exit code."
 
 ## MAIN
     read the command-line arguments after the script's own path;
     if (the first argument is "--prompt") then {
-        import mid_term;
+        import part_mid_term_manager;
         print Self's own prompt verbatim;
-        print mid_term.SYSTEM (the prompt as actually run, with its
+        print part_mid_term_manager.SYSTEM (the prompt as actually run, with its
             budget placeholder filled in) alongside its prompt version;
         print the IMPROVEMENTS log, each entry's status, title, and
             word-wrapped rationale;
         return 0
     } else if (the first argument is "--pack") then {
-        print pack(<second argument>) — the exact packed source text for
+        print part_mid_term_pack(<second argument>) — the exact packed source text for
             that one part; return 0
     } else if (the first argument is "--verify") then {
-        return verify()'s exit code
+        return part_mid_term_project_verify()'s exit code
     } else {
-        import mid_term;
-        compute survey() — one row per part: tag, staleness state,
+        import part_mid_term_manager;
+        compute part_mid_term_survey() — one row per part: tag, staleness state,
             source character count, dreamt-section count;
         print a table of those rows;
         compute `todo`: the parts whose state is stale, absent, or
@@ -58,42 +66,42 @@ The script also carries, verbatim in a module constant, Self's own preferred der
 - No arguments (default): prints the survey table (per-part staleness state, source size, dreamt-section count) and a summary of how many parts need deriving.
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `sys`, `textwrap`, `__future__.annotations`, and `tomllib` (falling back to the third-party `tomli` on Python 3.10 and older — same fallback pattern used throughout this project's other TOML readers). Sibling modules, imported lazily inside functions rather than at module load: `mid_term` (for `state()`, `sources()`, `write()` semantics, `SYSTEM`, `PROMPT`, `BUDGET`) and `circle` (as `C`, for `PART_TAGS`, `load_shared()`, `block_order()`, `shared_block()`, `system_blocks()`). No third-party packages beyond that fallback, and no external programs are invoked directly by this script.
+Standard library: `pathlib`, `sys`, `textwrap`, `__future__.annotations`, and `tomllib` (falling back to the third-party `tomli` on Python 3.10 and older — same fallback pattern used throughout this project's other TOML readers). Sibling modules, imported lazily inside functions rather than at module load: `part_mid_term_manager` (as `MT` — `mid_term` until 2026-09-03 — for `part_mid_term_state_read()`, `part_mid_term_sources_read()`, `SYSTEM`, `PROMPT`, `BUDGET`), `prompt_build` (as `C` — `circle` until phase 2 stage 2 — for `PART_TAGS`, `group_shared_read()`, `block_order()`, `circle_briefing_build()`, `prompt_part_assemble()`; the retired `load_shared`/`shared_block`/`system_blocks` became that last call 2026-09-02) and `ifs_model` (`IDENTITY_END`, inside the verify). No third-party packages beyond that fallback, and no external programs are invoked directly by this script.
 
 ## EXTERNAL FILES
-Read: `coordinator/improvements.toml`, directly, by `_improvements()` — the suggested-improvements change log, moved out of a hardcoded module constant 2026-08-09. Also, indirectly, whatever `mid_term.state()`, `mid_term.sources()`, and `circle.load_shared()` read from each part's directory (`long_term.md`, `dreams.toml`, `## Dreamt` sections, and `remember.toml`; NOT `part_relationships.toml` as of 2026-08-22, PROMPT v7).
+Read: `coordinator/improvements.toml`, directly, by `_improvements()` — the suggested-improvements change log, moved out of a hardcoded module constant 2026-08-09. Also, indirectly, whatever `part_mid_term_manager.part_mid_term_state_read()`, `part_mid_term_manager.part_mid_term_sources_read()`, and `prompt_build.group_shared_read()` read from each part's directory (`long_term.md`, `dreams.toml`, `## Dreamt` sections, and `remember.toml`; NOT `part_relationships.toml` as of 2026-08-22, PROMPT v7).
 
-Written: none directly by this script. `--pack` only prints to stdout; deriving and writing a distillate (stage 4, `mid_term.write()`) is not invoked from any code path in this file — the docstring frames the actual derive/write calls as made by hand, outside this script, using the packed text this script emits.
+Written: none directly by this script. `--pack` only prints to stdout; deriving and writing a distillate (stage 4, `part_mid_term_manager.part_mid_term_write()`) is not invoked from any code path in this file. The docstring frames the derive/write calls as made by hand, outside this script, using the packed text this script emits — that was true of the first seven distillates; since 2026-08-27 `/close` makes them, through `inter_circle.py`'s `part_mid_term_refresh` step, and `part_mid_term_manager.py --refresh` is the hand re-run.
 
 ## NETWORK ACCESS
-None made directly by this script. It documents and prepares for API calls (the derivation step) but does not itself place any network call; deriving a distillate is described as a separate, manual step using the text `--pack` emits.
+None made directly by this script. It documents and prepares for API calls (the derivation step) but does not itself place any network call; deriving a distillate happens at `/close` (`inter_circle.py`, `part_mid_term_refresh`) or by hand through `part_mid_term_manager.py --refresh`, and `--pack` only shows a person the text such a call is sent.
 
 ## HUMAN I/O
-No stdin. All output is to stdout: the survey table, the prompt/version/improvements dump under `--prompt`, the raw packed text under `--pack`, and the pass/fail report under `--verify`. Exit codes: `main()` returns 0 on every dispatch path except `--verify`, which returns `verify()`'s own result (1 if any structural failure was found, else 0).
+No stdin. All output is to stdout: the survey table, the prompt/version/improvements dump under `--prompt`, the raw packed text under `--pack`, and the pass/fail report under `--verify`. Exit codes: `main()` returns 0 on every dispatch path except `--verify`, which returns `part_mid_term_project_verify()`'s own result (1 if any structural failure was found, else 0).
 
 ## OPERATION
 
-### `survey()`
+### `part_mid_term_survey()`
     {
-        for each part tag in circle.PART_TAGS, ask mid_term.state() for
+        for each part tag in prompt_build.PART_TAGS, ask part_mid_term_manager.part_mid_term_state_read() for
         its staleness state and source-size info, and return one row per
         part: (tag, state, source character count, dreamt-section
         count).
     }
 
-### `pack(part)`
-    { return mid_term.sources(part)'s "text" value — exactly the bytes
+### `part_mid_term_pack(part)`
+    { return part_mid_term_manager.part_mid_term_sources_read(part)'s "text" value — exactly the bytes
       the staleness hash covers for that one part, ready to paste into a
       manual derivation call. }
 
-### `verify()`
+### `part_mid_term_project_verify()`
     {
         load the shared prompt blocks (core, briefing, conclusion) and
-        the canonical block order once via circle.load_shared() and
-        circle.block_order().
+        the canonical block order once via prompt_build.group_shared_read() and
+        prompt_build.block_order().
     }
-    for each part tag in circle.PART_TAGS {
-        get its staleness state via mid_term.state();
+    for each part tag in prompt_build.PART_TAGS {
+        get its staleness state via part_mid_term_manager.part_mid_term_state_read();
         if (state is stale, absent, or legacy) then {
             add it to the pending-derivation list — NOT treated as a
             failure, per the docstring's explicit design note that
@@ -117,4 +125,4 @@ No stdin. All output is to stdout: the survey table, the prompt/version/improvem
     return 1 if any structural failure was recorded, else 0.
 
 ## BUGS
-None found. `verify()`'s own docstring explicitly documents and defends the design choice most likely to look like a bug at a glance — treating "stale" as a queue state rather than a failure — with the historical note that the first version reported every deliberately-staged part as a failure, which would have made a healthy tree look broken on every prompt-version bump.
+None found. `part_mid_term_project_verify()`'s own docstring explicitly documents and defends the design choice most likely to look like a bug at a glance — treating "stale" as a queue state rather than a failure — with the historical note that the first version reported every deliberately-staged part as a failure, which would have made a healthy tree look broken on every prompt-version bump.

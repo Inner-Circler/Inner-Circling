@@ -4,7 +4,7 @@ initialization.py — the first-run dialogs. docs/BNF.md §INITIALIZATION is the
 grammar, docs/Initialization.md the design; the rulings are R323-R332
 (2026-08-23). Everything the grammar names is here:
 
-    run_initialization()          THE STEP: PART_CONTEXT_DIALOG for every part
+    initialization_run()          THE STEP: PART_CONTEXT_DIALOG for every part
                                   with no answer recorded, then
                                   ISSUE_ADD_DIALOG, then one commit of the
                                   paths those writers touched. Holds the four
@@ -13,7 +13,7 @@ grammar, docs/Initialization.md the design; the rulings are R323-R332
     PART_CONTEXT_DIALOG(part)     ask a part's declared [context] questions
                                   on the COMMAND lane, validate each answer
                                   per its data_type/data_max, record the
-                                  answers through roster.write_context().
+                                  answers through roster.part_context_write().
     ISSUE_ADD_DIALOG              the first issue, composed into one
                                   description and written by cmd_issue_add().
     PART_ADD_DIALOG               a new part — NOT an element of the step; it
@@ -49,15 +49,15 @@ what Enter on an untouched prefilled row returns too. To CLEAR an answer type
 nothing is recorded, so empty means skip, as ruled.
 
 NEVER A NAME INTO A PROMPT — R329. This module writes
-answers; what renders is prompt_build.identity_tail()'s business, and a
+answers; what renders is prompt_build.part_identity_tail_render()'s business, and a
 question without a `render` string has no path there.
 
 UNIQUE KEYS ARE REFUSED AT ENTRY — the operator, 2026-08-23: *"Duplicates of
 any UNIQUE KEY member (e.g. part name "Soul", issue id "n0001") must be
 detected and rejected, echo error and loop at the prompt."* A question
-declares `unique_in` (roster.UNIQUE_SPACES) and validate() refuses an answer
+declares `unique_in` (roster.UNIQUE_SPACES) and initialization_validate() refuses an answer
 already in that space. The Soul's preferred_name declares part_tags: it feeds
-identity.user_name(), which roster.verify() treats as Self's reserved name,
+identity.user_name_read(), which roster.part_verify() treats as Self's reserved name,
 so a part's Tag there would refuse every later open.
 """
 
@@ -82,7 +82,7 @@ CLEAR_TOKEN = "-"
 _statements_shown = False
 
 
-def statements() -> dict[str, str]:
+def initialization_statements_read() -> dict[str, str]:
     """The four policy statements, read from initialization.toml at call
     time with {provider}/{model} filled from the transport."""
     import llm_client as LC
@@ -93,7 +93,7 @@ def statements() -> dict[str, str]:
     return st
 
 
-def reset_statements_shown() -> None:
+def initialization_statements_reset() -> None:
     """For a probe: the next dialog prints the two statements again."""
     global _statements_shown
     _statements_shown = False
@@ -143,29 +143,21 @@ def reset_statements_shown() -> None:
 #                         refused — never a traceback, never a silent
 #                         fallback to something nobody chose.
 #
-# The model honours both today: llm_client.preflight_api() makes one real
+# The model honours both today: llm_client.stream_api_preflight() makes one real
 # call before anything at all is written, and circle.py emits the provider's
 # own explanation to "command" and returns 2 — "Nothing was written — no
 # transcript, no working-set entry." A CHECK_AT_USE field whose failure
 # reached only a log would satisfy the first obligation and fail the one that
 # matters to the person sitting there.
-# IMPORTED, NOT COPIED. Declared in roster.py, which gates the DECLARATION;
-# this module enforces it. A tuple written out in both would be one fact in
-# two files — and it was, for a few hours on 2026-08-28, which is exactly how
-# long it takes.
-GATES = R.GATES
-
-# THE BOUND RULES LIVE IN roster.py, NOT HERE. They were briefly declared in
-# both — this module for resolving them, that one for gating a declaration
-# that names one — with a note that a probe would keep the two equal. That is
-# the two-copies-of-one-fact defect this project records more than any other,
-# and the fix is one home rather than a probe over two. roster is the leaf
-# this module already imports, so that direction closes no cycle.
-resolve_bound = R.resolve_bound
-BOUND_RULES = R.BOUND_RULES
+# GATES, BOUND_RULES AND resolve_bound LIVE IN roster.py, NOT HERE — read as
+# R.GATES / R.BOUND_RULES / R.part_bound_resolve at the use. They were briefly
+# declared in both files (a few hours on 2026-08-28), then re-exported here
+# as module aliases until 2026-09-03; a name in two files is one fact in two
+# homes, which is the defect this project records more than any other. roster
+# is the leaf this module already imports, so that direction closes no cycle.
 
 
-def advice(question: dict, answer: str, today=None) -> "str | None":
+def initialization_advice_render(question: dict, answer: str, today=None) -> "str | None":
     """A note to SHOW rather than a refusal — or None. Ruled 2026-08-28:
     someone reporting an age under fifteen is told, gracefully, that circles
     with other people would serve them better, AND IS NOT BLOCKED.
@@ -182,7 +174,7 @@ def advice(question: dict, answer: str, today=None) -> "str | None":
     t = answer.strip()
     if not _is_int(t):
         return None
-    hi = resolve_bound(question.get("advisory_maximum"), today)
+    hi = R.part_bound_resolve(question.get("advisory_maximum"), today)
     if hi is None or int(t) <= hi:
         return None
     return question.get("advisory_note") or ""
@@ -196,7 +188,7 @@ def _is_int(t: str) -> bool:
     return bool(body) and body.isdigit() and body.isascii()
 
 
-def validate(question: dict, answer: str, *, part: str = "") -> str | None:
+def initialization_validate(question: dict, answer: str, *, part: str = "") -> str | None:
     """None when `answer` is acceptable for `question`, else one line saying
     what was wrong — the line the dialog prints before asking again.
 
@@ -211,17 +203,17 @@ def validate(question: dict, answer: str, *, part: str = "") -> str | None:
     of Claude's, named in docs/Initialization.md §3.6: no square bracket in
     a STRING (the annotation grammar — a part quoting its own BLOCK 3 back
     into the room would stage a bracket nobody wrote)."""
-    # THE PURE CHECKS ARE roster.check_value's — one validator, shared with
+    # THE PURE CHECKS ARE roster.part_context_value_verify's — one validator, shared with
     # the settings register and with provider tuning. What stays here is the
     # part that needs LIVE data: uniqueness against the roster or the issue
     # graph, which a leaf module has no business reading.
-    why = R.check_value(question, answer)
+    why = R.part_context_value_verify(question, answer)
     if why is not None:
         return why
     if answer == "":
         return None
     space = question.get("unique_in")
-    if space and answer.strip().lower() in {v.lower() for v in unique_values(space)}:
+    if space and answer.strip().lower() in {v.lower() for v in initialization_unique_values_read(space)}:
         return (f"  {answer.strip()!r} is already "
                 + {"part_tags": "a part's name", "issue_ids": "an issue's id",
                    "issue_labels": "an issue's name"}[space]
@@ -229,14 +221,14 @@ def validate(question: dict, answer: str, *, part: str = "") -> str | None:
     return None
 
 
-def unique_values(space: str) -> set[str]:
+def initialization_unique_values_read(space: str) -> set[str]:
     """Every value already taken in a unique space, read fresh: part_tags is
     the roster's live Tags and alt_tags (re-scanned, not the import-time
     copy — a part added this process counts); issue_ids / issue_labels read
     issues/ through issue_schema, and read as empty if memory/ is not
     importable (a probe outside the tree)."""
     if space == "part_tags":
-        roster, alt, _tails, _probs = R.scan()
+        roster, alt, _tails, _probs = R.part_scan()
         return {t for _d, t in roster} | set(alt)
     if space in ("issue_ids", "issue_labels"):
         try:
@@ -245,7 +237,7 @@ def unique_values(space: str) -> set[str]:
             if mem not in sys.path:
                 sys.path.insert(0, mem)
             import issue_schema as S                                 # noqa: E402
-            docs = [S.load(f) for f in S.nodes()]
+            docs = [S.issue_read(f) for f in S.issue_nodes_read()]
         except Exception:                                           # noqa: BLE001
             return set()
         key = "id" if space == "issue_ids" else "label"
@@ -272,13 +264,13 @@ def part_context_dialog(part: str, *, prefill: bool = False,
     answered with one line saying why and the SAME question, until valid
     or empty — no limit, as ruled."""
     global _statements_shown
-    ctx = R.read_context(part, base)
+    ctx = R.part_context_read(part, base)
     tag = R.TAG_BY_DIR.get(part, part)
     if ctx is None or not ctx["questions"]:
         seam.emit("command", f"  {tag} ({part}) declares no context questions — "
                              f"nothing to ask. (parts/{part}/part.toml [context])")
         return "none"
-    st = statements()
+    st = initialization_statements_read()
     seam.emit("command", "")
     if ctx["purpose"]:
         seam.emit("command", ctx["purpose"])
@@ -307,14 +299,14 @@ def part_context_dialog(part: str, *, prefill: bool = False,
                 raw = current                   # Enter keeps — both surfaces
             elif raw == CLEAR_TOKEN:
                 raw = ""
-            why = validate(q, raw, part=part)
+            why = initialization_validate(q, raw, part=part)
             if why is None:
                 # ACCEPTED, AND THE THRESHOLD MAY STILL SPEAK — ruled
                 # 2026-08-28. An advisory bound does not refuse; it says the
                 # true thing once and the person decides. Shown AFTER the
                 # answer is accepted, so it reads as a suggestion rather than
                 # an error, which is the whole difference.
-                note = advice(q, raw)
+                note = initialization_advice_render(q, raw)
                 if note:
                     seam.emit("command", "")
                     for _ln in note.splitlines():
@@ -330,7 +322,7 @@ def part_context_dialog(part: str, *, prefill: bool = False,
     elif not any(new.values()):
         seam.emit("command", st["skipped"])
         return "skipped"
-    R.write_context(part, new, base)
+    R.part_context_write(part, new, base)
     seam.emit("command", st["completion"])
     return "completed"
 
@@ -352,7 +344,7 @@ def issue_dialog_due() -> bool:
     if mem not in sys.path:
         sys.path.insert(0, mem)
     import issue_schema as S
-    return not S.nodes()
+    return not S.issue_nodes_read()
 
 
 def _ask(qs: list[dict], *, seeds: "dict[str, str] | None" = None,
@@ -380,14 +372,14 @@ def _ask(qs: list[dict], *, seeds: "dict[str, str] | None" = None,
                 raw = seed
             elif raw == CLEAR_TOKEN:
                 raw = ""
-            why = validate(q, raw, part=part)
+            why = initialization_validate(q, raw, part=part)
             if why is None:
                 # ACCEPTED, AND THE THRESHOLD MAY STILL SPEAK — ruled
                 # 2026-08-28. An advisory bound does not refuse; it says the
                 # true thing once and the person decides. Shown AFTER the
                 # answer is accepted, so it reads as a suggestion rather than
                 # an error, which is the whole difference.
-                note = advice(q, raw)
+                note = initialization_advice_render(q, raw)
                 if note:
                     seam.emit("command", "")
                     for _ln in note.splitlines():
@@ -414,7 +406,7 @@ def issue_add_dialog(*, guard=None, write=None,
     open.
 
     `write` is the writer, (label, desc, absence) -> bool; the default is
-    commands.cmd_issue_add(values=...) — the same gate-before-write path
+    commands.command_issue_add(values=...) — the same gate-before-write path
     the verb has. A probe passes a capture."""
     global _statements_shown
     spec = issue_questions()
@@ -423,7 +415,7 @@ def issue_add_dialog(*, guard=None, write=None,
         seam.emit("command", "  (initialization.toml declares no issue "
                              "questions — nothing to ask)")
         return "skipped"
-    st = statements()
+    st = initialization_statements_read()
     seam.emit("command", "")
     if spec.get("purpose"):
         seam.emit("command", spec["purpose"])
@@ -444,7 +436,7 @@ def issue_add_dialog(*, guard=None, write=None,
     if write is None:
         def write(lab, d, a):
             import commands as CMD
-            return CMD.cmd_issue_add("", guard=guard, values=(lab, d, a))
+            return CMD.command_issue_add("", guard=guard, values=(lab, d, a))
     ok = write(label, desc, answers.get("absence", ""))
     if ok and not answers.get("absence", ""):
         seam.emit("command", "  (it reaches a circle once its absence clause "
@@ -485,7 +477,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
     """PART_ADD_DIALOG — R324 (never at a circle start: approval of a part's
     `[proposed: /part-add "<describe>" "<Tag>"]`, or /part-add typed bare),
     R323 (the bracket's strings arrive prefilled — Enter keeps, typing
-    edits), R332 (the validator; part_add.precheck() then holds the roster
+    edits), R332 (the validator; part_add.part_precheck() then holds the roster
     rules). Returns "completed" or "skipped" — skipped at approval leaves
     the proposal PENDING (vetting reads the outcome).
 
@@ -500,7 +492,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
         seam.emit("command", "  (initialization.toml declares no part "
                              "questions — nothing to ask)")
         return "skipped"
-    st = statements()
+    st = initialization_statements_read()
     seam.emit("command", "")
     if spec.get("purpose"):
         seam.emit("command", spec["purpose"])
@@ -520,7 +512,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
     if write is None:
         write = PA.part_add
     while True:
-        name = PA.derive_name(tag) if tag else ""
+        name = PA.part_name_derive(tag) if tag else ""
         # THE MISSING HALF IS ASKED FOR, not refused — the same move the
         # context dialog makes; empty twice running abandons the add.
         if not tag:
@@ -568,23 +560,23 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
 
 
 # ------------------------------------------------------------------ the step
-def pending_part_dialogs(base: pathlib.Path | None = None) -> list[str]:
+def initialization_pending_dialogs_read(base: pathlib.Path | None = None) -> list[str]:
     """The parts whose PART_CONTEXT_DIALOG is due: a declared [context]
     with at least one question and EVERY answer empty (R331 — the trigger
     is "no particulars recorded yet", read from the record). Ordered as
     R324 speaks them — Soul, then Child, then any other declaring part in
     roster order."""
     due = []
-    roster, _alt, _tails, _probs = R.scan(base)
+    roster, _alt, _tails, _probs = R.part_scan(base)
     for d, _t in roster:
-        ctx = R.read_context(d, base)
+        ctx = R.part_context_read(d, base)
         if ctx and ctx["questions"] and not any(ctx["answers"].values()):
             due.append(d)
     head = [d for d in ("soul", "child") if d in due]
     return head + [d for d in due if d not in head]
 
 
-def run_initialization(*, live: bool, resume: bool, yes: bool) -> list[str]:
+def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:
     """The INITIALIZATION step of a circle open — R330: between CHECKPOINT 2
     and the working-set question, COMMAND lane, focus handed to the command
     pane for its duration and back after "Starting your circle...". Returns
@@ -605,7 +597,7 @@ def run_initialization(*, live: bool, resume: bool, yes: bool) -> list[str]:
         return []
     if seam.read_line.__module__ == "seam" and not sys.stdin.isatty():
         return []
-    due_parts = pending_part_dialogs()
+    due_parts = initialization_pending_dialogs_read()
     due_issue = issue_dialog_due()
     if not due_parts and not due_issue:
         return []
@@ -616,9 +608,9 @@ def run_initialization(*, live: bool, resume: bool, yes: bool) -> list[str]:
             written.append(str(R.PARTS_DIR / part / R.MARKER))
     if due_issue:
         import issue_schema as S     # issue_dialog_due() put memory/ on the path
-        before = set(S.nodes())
+        before = set(S.issue_nodes_read())
         issue_add_dialog()
-        new_nodes = sorted(set(S.nodes()) - before)
+        new_nodes = sorted(set(S.issue_nodes_read()) - before)
         written += [str(p) for p in new_nodes]
         if new_nodes and (S.ISSUES / "INDEX.md").is_file():
             written.append(str(S.ISSUES / "INDEX.md"))   # regenerated with the write
@@ -656,7 +648,7 @@ def _commit(paths: list[str]) -> None:
         seam.emit("command", f"{marks.get(kind, '  ')}{msg}")
 
     try:
-        G.commit_paths([_pl.Path(p) for p in paths],
+        G.system_git_paths_commit([_pl.Path(p) for p in paths],
                        f"initialization {datetime.date.today().isoformat()}: "
                        + ", ".join(names), log)
     except Exception as e:                                      # noqa: BLE001
@@ -664,49 +656,12 @@ def _commit(paths: list[str]) -> None:
                              f"answers are safe on disk, commit by hand)")
 
 
-# ------------------------------------------------------------------ the verb
-USAGE = "/part-context-update <part>   — ask that part's context questions again, prefilled"
-
-
-def cmd_part_context_update(rest: str, *, guard=None, interactive: bool = True) -> None:
-    """`/part-context-update <part>` — PART_CONTEXT_DIALOG(part) with the
-    recorded answers prefilled; the edit path for what the first-run
-    dialog recorded (docs/Initialization.md §6). USER table: the data is
-    the person's own. `<part>` is a directory name (`soul`) or a Tag
-    (`Soul`), case-insensitive.
-
-    `interactive` is False where no one can answer a question — the
-    dual pane's no-circle dispatch hands every read an immediate "" — and
-    the dialog would then silently keep everything and report it; better
-    to say where it does work. `guard` present means a circle is open,
-    whose BLOCK 3 was built before this write: said, effective next circle."""
-    word = rest.strip().split()[0] if rest.strip() else ""
-    if not word:
-        seam.emit("command", f"  usage: {USAGE}")
-        declared = [d for d in R.DIR_NAMES if R.read_context(d)]
-        seam.emit("command", "  parts with context questions: "
-                  + (", ".join(declared) if declared else "(none)"))
-        return
-    part = R.DIR_BY_TAG.get(word) or R.DIR_BY_TAG_ALL.get(word)
-    if part is None:
-        by_lower = {d.lower(): d for d in R.DIR_NAMES}
-        by_lower.update({t.lower(): d for d, t in R.TAG_BY_DIR.items()})
-        part = by_lower.get(word.lower())
-    if part is None:
-        seam.emit("command", f"  no part named {word!r} — parts: "
-                             f"{', '.join(R.DIR_NAMES) or '(none)'}")
-        return
-    if not interactive:
-        seam.emit("command", "  /part-context-update asks questions and needs a "
-                             "command pane that can answer them: open a circle "
-                             "first, or run  python coordinator/circle.py "
-                             f"--dev-cmd part-context-update {part}")
-        return
-    outcome = part_context_dialog(part, prefill=True)
-    if outcome == "completed" and guard is not None:
-        seam.emit("command", "  (this circle's prompts were built before this — "
-                             "the change reaches the next circle)")
-
+# ------------------------------------------------------------------ the verbs
+# cmd_part_context_update / _list / _clear and cmd_part_add MOVED to
+# commands.py, 2026-09-03 (cohesion re-homing, stage 5): every cmd> verb
+# lives there (the stage-0 rule) and delegates to the dialogs above.
+# _resolve_part stays — the dialogs' own <part> resolver, which the verbs
+# reach as INIT._resolve_part.
 
 def _resolve_part(word: str) -> "str | None":
     """A typed <part> — directory name or Tag, case-insensitive — to the
@@ -717,88 +672,3 @@ def _resolve_part(word: str) -> "str | None":
         by_lower.update({t.lower(): d for d, t in R.TAG_BY_DIR.items()})
         part = by_lower.get(word.lower())
     return part
-
-
-def cmd_part_context_list(rest: str) -> None:
-    """`/part-context-list [<part>]` — every part that declares context, its
-    questions with the recorded answer beside each ("" shown as —); one
-    part when named. Read-only; console-only (the answers never reach a
-    transcript or a model except through their own render strings)."""
-    word = rest.strip().split()[0] if rest.strip() else ""
-    if word:
-        part = _resolve_part(word)
-        if part is None:
-            seam.emit("command", f"  no part named {word!r}")
-            return
-        targets = [part]
-    else:
-        targets = [d for d in R.DIR_NAMES if R.read_context(d)]
-    if not targets:
-        seam.emit("command", "  no part declares context questions")
-        return
-    for d in targets:
-        ctx = R.read_context(d)
-        tag = R.TAG_BY_DIR.get(d, d)
-        if not ctx:
-            seam.emit("command", f"\n  {tag} ({d}) declares no context questions")
-            continue
-        seam.emit("command", f"\n  {tag} ({d}) — {ctx['purpose'] or '(no purpose)'}")
-        for q in ctx["questions"]:
-            a = ctx["answers"].get(q["key"], "")
-            seam.emit("command", f"    {q['ask']}?  {a if a else '—'}")
-
-
-def cmd_part_context_clear(rest: str, *, interactive: bool = True) -> None:
-    """`/part-context-clear <part>` — empties every recorded answer, after
-    "type 'yes'", re-arming the first-run dialog for the next open (R327's
-    repeat rule works from the record, so clearing the record is what asks
-    again)."""
-    word = rest.strip().split()[0] if rest.strip() else ""
-    if not word:
-        seam.emit("command", "  usage: /part-context-clear <part>")
-        return
-    part = _resolve_part(word)
-    if part is None or not R.read_context(part):
-        seam.emit("command", f"  no part named {word!r} with context questions")
-        return
-    ctx = R.read_context(part)
-    if not any(ctx["answers"].values()):
-        seam.emit("command", f"  {R.TAG_BY_DIR.get(part, part)} has no recorded "
-                             f"answers — nothing to clear")
-        return
-    if not interactive:
-        seam.emit("command", "  /part-context-clear confirms before erasing and "
-                             "needs a command pane that can answer: open a "
-                             "circle first, or run  python coordinator/circle.py "
-                             f"--dev-cmd part-context-clear {part}")
-        return
-    n = sum(1 for v in ctx["answers"].values() if v)
-    ans = seam.read_line(f"  erase {n} recorded answer(s) for "
-                         f"{R.TAG_BY_DIR.get(part, part)} — type 'yes': ",
-                         channel="command").strip().lower()
-    if ans != "yes":
-        seam.emit("command", "  cancelled — nothing erased.")
-        return
-    R.write_context(part, {k: "" for k in ctx["answers"]})
-    seam.emit("command", "  cleared. The first-run dialog asks again at the "
-                         "next open.")
-
-
-def cmd_part_add(rest: str, *, guard=None, interactive: bool = True) -> None:
-    """`/part-add ["<describe>" "<Tag>"]` — PART_ADD_DIALOG, the strings (the
-    same two the taught bracket carries, in the same order) prefilled when
-    given. The typed twin of approval's path (R323/R326's shape)."""
-    if not interactive:
-        seam.emit("command", "  /part-add asks questions and needs a command "
-                             "pane that can answer them: open a circle first, "
-                             "or run  python coordinator/circle.py --dev-cmd "
-                             "part-add")
-        return
-    from commands import _issue_add_args
-    describe, tag, _ = _issue_add_args(rest)
-    seeds = {}
-    if describe:
-        seeds["describe"] = describe
-    if tag:
-        seeds["part_name"] = tag
-    part_add_dialog(seeds=seeds or None)

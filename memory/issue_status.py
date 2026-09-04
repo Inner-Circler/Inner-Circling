@@ -57,13 +57,13 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-ROOT = S.ROOT
+from record_paths import ROOT                                  # noqa: E402  (stage 14: was S.ROOT)
 
 
 def _load_all() -> dict[str, tuple[pathlib.Path, dict]]:
     out = {}
-    for p in S.nodes():
-        d = S.load(p)
+    for p in S.issue_nodes_read():
+        d = S.issue_read(p)
         out[d["id"]] = (p, d)
     return out
 
@@ -97,7 +97,7 @@ def _history_line(to: str, ruled: str, source: str, today: str) -> str:
     # whose provenance text reaches every part's prompt directly
     # (circle.py::build_briefing() via check_issues.block(), since
     # self/circle_briefing.md's retirement the same day). Before R132 this
-    # called ID.user_name(), which is exactly the personalization channel
+    # called ID.user_name_read(), which is exactly the personalization channel
     # that ruling closes for anything prompt-facing. Old entries already
     # written with a personal name are left as they are — this only changes
     # what gets written from here on.
@@ -125,6 +125,19 @@ def main() -> int:
         print(f"  no such issue: {', '.join(sorted(unknown))}")
         return 2
 
+    # A ROOT NEVER MOVES. R429, 2026-09-01: "the
+    # unquestioned alive nodes, nodes that ought never be removed." A root
+    # cannot even be re-affirmed `--to live` — "root" is not a status this
+    # program can set or clear at all (see issue_schema.OPTIONAL's `root`);
+    # this refusal exists so the one thing that COULD move a root (its own
+    # `status` field) never does.
+    rooted = [n for n in sorted(moving) if g[n][1].get("root")]
+    if rooted:
+        print(f"  REFUSED — {', '.join(rooted)} {'is' if len(rooted) == 1 else 'are'} "
+              f"root: a source the live graph descends from, and never "
+              f"retired, demoted, or moved to any other status.")
+        return 2
+
     already = [n for n in sorted(moving) if g[n][1]["status"] == a.to]
     if already:
         print(f"  already `{a.to}`: {', '.join(already)}")
@@ -145,7 +158,7 @@ def main() -> int:
     for nid in sorted(moving):
         old, doc = g[nid]
         was = doc["status"]          # BEFORE the mutation. Read after, it
-        new = S.path_for(nid, a.to)  # printed `lead -> lead` — the same dict
+        new = S.issue_locate(nid, a.to)  # printed `lead -> lead` — the same dict
         doc["status"] = a.to
         hist = doc.get("description_history", "").rstrip("\n")
         doc["description_history"] = f"{hist}\n\n{line}\n"
@@ -178,7 +191,7 @@ def main() -> int:
                 rc = 1
             if rc:                                # untracked, or no repo
                 old.rename(new)
-        S.save(new, doc)
+        S.issue_write(new, doc)
         moves.append((old, new))
 
     if a.dry_run:

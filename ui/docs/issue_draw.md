@@ -32,11 +32,11 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
     } else {
         take argv[1] as a path;
         if (--if-stale was passed AND argv[1] is a directory AND
-            is_stale(argv[1]) is False) then {
+            issue_draw_is_stale(argv[1]) is False) then {
             return exit code 0 having printed nothing and loaded nothing
         }
         if (it is a directory) then {
-            load every issues/*nNNNN.toml node via load_issues();
+            load every issues/*nNNNN.toml node via issue_draw_read();
             use the NAMED output directory OUT_DIR = <repo>/work/graph/
             (never inside issues/ itself), creating it if absent, and
             print the source summary UNLESS --if-stale was passed (at a
@@ -53,7 +53,7 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
         graph;
         if (a working set was named) then {
             trim the graph to those ids plus anything they point at
-            (limit_to_working_set()); report unknown ids and pulled-in
+            (issue_working_set_limit()); report unknown ids and pulled-in
             targets
         }
         compute inbound-edge counts and evidence-depth for every node;
@@ -77,17 +77,17 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
 
 ## COMMAND-LINE ARGUMENTS
 - `<path>` (required, positional): either a directory of `issues/*.toml` node files (the live graph, read fresh from disk) or a path to a `graph.json` sandbox-derivation snapshot file.
-- `--working-set nNNNN,nNNNN,...` (or `--working-set=nNNNN,...`): a comma-separated list of node ids (accepted in any of the spellings `normalise_id()` handles: bare number, `nQQQQ`, or a prefixed filename stem like `L_n9999`) to restrict the drawing to. Any node those named nodes point at is pulled in as well, and reported. Unknown ids are reported and ignored. There is no default restriction — omitting this flag draws every node of every status.
-- `--if-stale`: draw only if the picture is behind the graph — `is_stale()` decides, and a run that decides "no" prints nothing, loads nothing and exits 0. Default: OFF; a bare run always redraws. Ignored when the positional argument is a `graph.json` snapshot rather than a directory, since a snapshot has no picture of its own for the live graph's staleness to be a claim about. This is the form `coordinator/circle.py` uses at a close.
+- `--working-set nNNNN,nNNNN,...` (or `--working-set=nNNNN,...`): a comma-separated list of node ids (accepted in any of the spellings `issue_id_normalise()` handles: bare number, `nQQQQ`, or a prefixed filename stem like `L_n9999`) to restrict the drawing to. Any node those named nodes point at is pulled in as well, and reported. Unknown ids are reported and ignored. There is no default restriction — omitting this flag draws every node of every status.
+- `--if-stale`: draw only if the picture is behind the graph — `issue_draw_is_stale()` decides, and a run that decides "no" prints nothing, loads nothing and exits 0. Default: OFF; a bare run always redraws. Ignored when the positional argument is a `graph.json` snapshot rather than a directory, since a snapshot has no picture of its own for the live graph's staleness to be a claim about. This is the form `coordinator/circle.py` uses at a close.
 - `--live`: retired 2026-08-13. Accepted for backward compatibility (prints a note explaining the replacement) but no longer filters the node set or changes the output filename — the live view it used to produce standalone is now always embedded in `issue_graph.html` as a toggle when no `--working-set` is named. See NOTES.
 
 ## DEPENDENCIES
-Standard library: `itertools`, `json`, `math`, `pathlib`, `random`, `sys`, `collections.Counter`, `__future__.annotations`. Project module: `issue_schema`, in `memory/` — NOT a sibling and not on `sys.path` by default, which is why this script inserts `<repo>/memory` at import time (see BUGS for the eleven days that path was wrong) (imported locally inside `load_issues()` and `_check_vocabulary()` as `S`/`_S`, for `S.load()`, `S.unwrap()`, and `S.EDGE_TYPES` — the last used to assert the drawing's own `EDGE_STYLE` legend table stays in sync with the schema's set of legal edge types, raising `SystemExit` at import time if they disagree).
+Standard library: `itertools`, `json`, `math`, `pathlib`, `random`, `sys`, `collections.Counter`, `__future__.annotations`. Project module: `issue_schema`, in `memory/` — NOT a sibling and not on `sys.path` by default, which is why this script inserts `<repo>/memory` at import time (see BUGS for the eleven days that path was wrong) (imported locally inside `issue_draw_read()` and `_check_vocabulary()` as `S`/`_S`, for `S.issue_read()`, `S.issue_unwrap()`, and `S.EDGE_TYPES` — the last used to assert the drawing's own `EDGE_STYLE` legend table stays in sync with the schema's set of legal edge types, raising `SystemExit` at import time if they disagree).
 
 ## EXTERNAL FILES
-Read: every `issues/*nNNNN.toml` file under the given directory (via `issue_schema.load()`), when the argument is a directory. A `graph.json` file at the given path, when the argument is a file (parsed directly with `json.loads`, bypassing `issue_schema` entirely for that mode).
+Read: every `issues/*nNNNN.toml` file under the given directory (via `issue_schema.issue_read()`), when the argument is a directory. A `graph.json` file at the given path, when the argument is a file (parsed directly with `json.loads`, bypassing `issue_schema` entirely for that mode).
 
-Also read, by `is_stale()` under `--if-stale`: the mtimes of `issue_graph.svg` and `issue_graph.html` themselves, and the mtimes of the same `issues/*nNNNN.toml` glob `load_issues()` walks. Neither file existing counts as stale.
+Also read, by `issue_draw_is_stale()` under `--if-stale`: the mtimes of `issue_graph.svg` and `issue_graph.html` themselves, and the mtimes of the same `issues/*nNNNN.toml` glob `issue_draw_read()` walks. Neither file existing counts as stale.
 
 Written: `issue_graph.svg` and `issue_graph.html` in the output directory — the NAMED constant `OUT_DIR` = `<repo>/work/graph/` when drawing from `issues/`, or beside the given `graph.json` when drawing from a snapshot. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
 
@@ -99,7 +99,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
 
 ## OPERATION
 
-### `load_issues(d)`
+### `issue_draw_read(d)`
     {
         for every issues/*nNNNN.toml file, load it via issue_schema; pull
         its id, label, unwrapped description/absence, evidence list
@@ -144,11 +144,11 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         temperature limiting how far a node can move per iteration.
     }
 
-### `box(nid)` / `wrap_label(lab, width, lines)`
+### `issue_draw_box(nid)` / `issue_label_wrap(lab, width, lines)`
     {
-        box() computes a node's on-canvas footprint (from its evidence-
+        issue_draw_box() computes a node's on-canvas footprint (from its evidence-
         derived radius and wrapped label width) for collision purposes.
-        wrap_label() greedily wraps a label's words into up to 3 lines of
+        issue_label_wrap() greedily wraps a label's words into up to 3 lines of
         30 characters, truncating with an ellipsis if it still overflows;
         the docstring notes this widened from an earlier 24x2 layout that
         truncated 22 of 32 labels.
@@ -209,15 +209,11 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
         switch (since a node selected in "all" may not exist in "live").
     }
 
-### `normalise_id(x)`
-    {
-        strip a leading two-character status prefix if present, strip any
-        leading "n"/"N", and if what remains is all digits, reformat it
-        as a zero-padded nNNNN; otherwise return the trimmed string
-        unchanged.
-    }
+### `issue_id_normalise(x)`, `working_set_argv_parse(argv)` — MOVED to `working_set_manager.py`, 2026-09-03
+    (stage 10). This tool reads them as `WS.*`; --live stays retired here because the shared
+    parser honours it only when handed a graph, and this tool hands none. As it was:
 
-### `parse_working_set(argv)`
+### (was) `working_set_argv_parse(argv)`
     for each argv token {
         if (it is "--working-set" followed by another token) then {
             split that following token on commas and include the ids
@@ -227,11 +223,13 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
     }
     normalise and return every non-empty id collected.
 
-### `limit_to_working_set(g, chosen)`
+### `issue_working_set_limit(g, chosen)`
     {
         partition chosen ids into those present in g (kept) and those not
         (reported as unknown); for every kept node, pull in any edge
-        target not already kept (reported as pulled-in); build a trimmed
+        target not already kept (reported as pulled-in) — the walk is
+        working_set_manager.working_set_pull() since 2026-09-03, handed the
+        DIRECTED neighbours; build a trimmed
         copy of the graph containing only the kept-plus-pulled nodes, with
         every node's edge list filtered to only point at nodes still in
         that set (so no edge is left pointing at a node that was cut).
@@ -241,12 +239,12 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
     {
         stat every issues/*nNNNN.toml file under d and return the largest
         mtime found; return 0.0 when the directory holds no node files at
-        all. The glob is deliberately the same one load_issues() walks: a
+        all. The glob is deliberately the same one issue_draw_read() walks: a
         file this does not count is a file whose change cannot make the
         picture stale.
     }
 
-### `is_stale(d=ISSUES_DIR)`
+### `issue_draw_is_stale(d=ISSUES_DIR)`
     if (issue_graph.html is missing OR issue_graph.svg is missing) then {
         return True — a fresh install has no picture yet, and that is
         exactly the case the shipped-empty work/graph/ creates
@@ -270,8 +268,12 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
     {
         count the loaded nodes by their status field, and count every
         non-retired edge across the graph; return one line reading
-        "<N> issues (<n> live, <n> lead, ...), <M> live relations", with
-        statuses ordered by descending count and then alphabetically.
+        "<N> issues (<n> live, <n> lead, ..., <r> root), <M> live
+        relations", with statuses ordered by descending count and then
+        alphabetically, and the root count appended last (a SUBSET of the
+        live count, not an additional status — R429,
+        2026-09-01 — printed only when at least one node carries the
+        `root` flag).
     }
 
     { Written for the COMMAND PANE at a close, where the reader is the
@@ -290,7 +292,9 @@ in exactly one place. It is worth stating plainly because the same defect had tw
 file: this is what a path written as a number of directory hops costs.
 
 The rest of this page's defects are NOT ASSESSED. Until the 2026-08-27 sweep this was the only one
-of the 38 man pages in `coordinator/docs/` with no `## BUGS` section at all. An absent section and
+of the 38 man pages that existed in `coordinator/docs/` at that time with no `## BUGS` section at
+all (40 as of 2026-09-01 — audit-register.md #43 found "38" read as a live count rather than that
+sweep's own snapshot). An absent section and
 an empty one are different claims — "nobody looked" is not "nothing was found" — so this states
 which it is rather than asserting "None found" on a reading that never happened.
 
@@ -301,7 +305,7 @@ and a live `/close` runs it. A defect here now reaches a recipient's own screen.
 
 ## NOTES
 `graph-live.svg`/`graph-live.html` retired 2026-08-13, along with `--live`'s
-effect on `parse_working_set()`. They were a standalone rendering of the
+effect on `working_set_argv_parse()`. They were a standalone rendering of the
 live-status subgraph, written under a separate filename stem so a `--live`
 run wouldn't clobber the full-graph `graph.html` (that clobbering was itself
 a 2026-08-05 fix). But a default run (no `--working-set` named) already
@@ -313,10 +317,10 @@ last regenerated 2026-08-06 while `graph.html` had moved on to 2026-08-12.
 Passing `--live` today is accepted, does nothing to the output, and prints a
 note pointing at the toggle.
 
-**Run at a close, 2026-08-27 (R365).** `coordinator/circle.py::redraw_issue_graph()`
+**Run at a close, 2026-08-27 (R365).** `coordinator/circle.py::issue_graph_redraw()`
 shells out to `python ui/issue_draw.py issues/ --if-stale` at every LIVE
-`/close`, positioned immediately after `vet_pending_proposals()` and
-immediately before `mark_close_started()`. That position is the whole
+`/close`, positioned immediately after `vetting.proposal_vet()` and
+immediately before `circle_close_mark()`. That position is the whole
 design: both routes by which a circle moves the graph are complete by then
 — the circle's own `issue_cmds` batch, applied a few statements earlier, and
 whatever the vetting checkpoint has just accepted — and nothing after it
@@ -332,7 +336,7 @@ close carries on to collect short_terms. This is a picture; nothing reads it
 back, and the BUGS section above is the reason that contract was written
 rather than assumed. An `/abort` returns before this point and leaves the
 picture stale on purpose; the next live close redraws it, because
-`is_stale()` asks about the files rather than about that circle.
+`issue_draw_is_stale()` asks about the files rather than about that circle.
 
 **Moved from `work/graph/` to `ui/`, 2026-08-27 (R365), and it SHIPS.** It stopped
 being a development tool the day a close started running it: the picture is

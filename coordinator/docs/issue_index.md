@@ -19,22 +19,33 @@ It supports a `--working-set`/`--live` view that restricts which nodes are summa
     parse any --working-set/--live arguments into a chosen id list (using a
     freshly loaded graph to resolve --live);
     load the graph again (fresh, second load);
-    compute the live/leads/roots/closed id lists, and inbound live-edge
-    counts, over the WHOLE graph;
+    compute the live/leads/closed id lists, and — as a SUBSET of live, not
+    a separate bucket, since R429 (2026-09-01) — the
+    root ids (every live node whose `root` flag is set); plus inbound
+    live-edge counts, over the WHOLE graph;
     if (a working set was chosen) then {
-        trim live/leads/roots/closed down to the working-set-plus-pulled-in
-        node ids (working_set()); report unknown ids
+        trim live/leads/closed down to the working-set-plus-pulled-in
+        node ids (issue_working_set_read()); recompute roots as the subset of the
+        trimmed live set; report unknown ids
     }
     compute total live/retired edge counts and the most recent circle any
     live node cites;
-    build the Markdown document body: a header with counts, a Status
-    legend, a note on the live-graph-is-closed invariant, an optional
-    working-set-view banner, a live-nodes table (ranked by circle-count
-    then id) with a leaf marker and a `ruled` marker per row, each live
-    node's description, a Live issue-relationships section, a Gone quiet section (any
-    live node last cited before the graph's most recent circle),
-    a Leads section, a Closed section (grouped by settled/declined/
-    retired), and an Issue-relationship census section;
+    build the Markdown document body: a header with counts ("N live (M
+    root)", not a separate root count added on — R429),
+    a Status legend (five statuses, plus a note explaining root as a
+    permanence FLAG rather than a sixth status — the legend omitted root
+    entirely, and named retired's prefix as R_ instead of X_, from
+    2026-08-05 until this same ruling caught both), a note on the
+    live-graph-is-closed invariant, an optional working-set-view banner, a
+    live-nodes table (ranked by circle-count then id) with a leaf marker
+    and a `ruled` marker per row — root rows additionally marked
+    "**(root)**" after the label, each live node's description, a Live
+    issue-relationships section, a Gone quiet section (any live node last
+    cited before the graph's most recent circle — a root can appear here
+    too, now that it is counted among the live), a Roots section (id and
+    label of every root, new since 2026-09-01), a Leads section, a Closed
+    section (grouped by settled/declined/retired), and an
+    Issue-relationship census section;
 
     if (any of the literal placeholder strings "nNNNN", "nMMMM", "nPPPP"
         appears anywhere in the assembled document body) then {
@@ -48,11 +59,11 @@ It supports a `--working-set`/`--live` view that restricts which nodes are summa
 
 ## COMMAND-LINE ARGUMENTS
 - (no arguments): summarises the whole `issues/` tree, every status.
-- `--working-set nNNNN,nNNNN,...` (or `--working-set=...`, or bare ids following the flag without commas — the parser accepts either): restrict the index to the named nodes plus anything they have a live edge to. Ids may be given as a bare number, `nNNNN`, or a prefixed filename stem (`L_n9999`); `normalise_id()` resolves all three.
+- `--working-set nNNNN,nNNNN,...` (or `--working-set=...`, or bare ids following the flag without commas — the parser accepts either): restrict the index to the named nodes plus anything they have a live edge to. Ids may be given as a bare number, `nNNNN`, or a prefixed filename stem (`L_n9999`); `issue_id_normalise()` resolves all three.
 - `--live`: adds every node whose status is `"live"` to the working set (composable with `--working-set`).
 
 ## DEPENDENCIES
-Standard library: `collections`, `sys`, `datetime`, `pathlib`, `__future__.annotations`. Sibling module: `issue_schema` (as `S`, for `S.nodes()`, `S.load()`, `S.unwrap()` — every field is read through the schema module so this file carries no parsing logic of its own).
+Standard library: `collections`, `sys`, `datetime`, `pathlib`, `__future__.annotations`. Sibling module: `issue_schema` (as `S`, for `S.issue_nodes_read()`, `S.issue_read()`, `S.issue_unwrap()` — every field is read through the schema module so this file carries no parsing logic of its own).
 
 ## EXTERNAL FILES
 Read: every `issues/*nNNNN.toml` node file, via `issue_schema`.
@@ -67,9 +78,9 @@ Stdout only, no stdin. Prints an unknown-id notice when a working set names ids 
 
 ## OPERATION
 
-### `load()`
+### `issue_index_read()`
     {
-        for every node file (via S.nodes()), read it through issue_schema
+        for every node file (via S.issue_nodes_read()), read it through issue_schema
         and build a per-node summary dict: file name, label, unwrapped
         description, status, the set of parts holding evidence, evidence
         count, the sorted set of circle_ sources cited, all edges (typed
@@ -80,11 +91,10 @@ Stdout only, no stdin. Prints an unknown-id notice when a working set names ids 
         been formally ruled.
     }
 
-### `normalise_id(x)`
-    { identical in behaviour to issue_draw.py's function of the same name:
-      strip a status prefix, strip leading n/N, zero-pad a bare digit id. }
+### `issue_id_normalise(x)`, `working_set_argv_parse(argv, g)` — MOVED to `working_set_manager.py`, 2026-09-03
+    (stage 10). One copy for the tree; this tool reads them as `WS.*`. As they were:
 
-### `parse_working_set(argv, g)`
+### (was) `working_set_argv_parse(argv, g)`
     if ("--live" is present) then {
         include every id in g whose status is "live"
     }
@@ -93,17 +103,19 @@ Stdout only, no stdin. Prints an unknown-id notice when a working set names ids 
     }
     normalise and return the collected ids.
 
-### `working_set(g, chosen)`
+### `issue_working_set_read(g, chosen)`
     {
         partition chosen into known (kept) and unknown ids; for every kept
         node, follow its live edges and pull in any endpoint not already
         kept, recording it as pulled. Returns (keep, pulled, unknown).
+        The walk is working_set_manager.working_set_pull() since 2026-09-03;
+        this function supplies the UNDIRECTED neighbours (both endpoints).
     }
 
 ## BUGS
 None found.
 
-WITHDRAWN 2026-08-27 — the `working_set()` / `keep` note recorded here. It reached its own verdict
+WITHDRAWN 2026-08-27 — the `issue_working_set_read()` / `keep` note recorded here. It reached its own verdict
 inside its own sentence ("nothing is actually wrong here; flagged and then dismissed as not a
 defect") and should never have been left standing in a BUGS section: a reader scanning for open
 defects has to read to the end of a paragraph to learn there is none. The values are used, just

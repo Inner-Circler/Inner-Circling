@@ -3,12 +3,12 @@
 IFS inner circle — local coordinator (direct Messages API).
 
 WHAT THIS IS
-    THE DRIVER, NOT THE PROGRAM. A local Python "Scribe" drives the parts as
+    THE DRIVER, NOT THE PROGRAM. A local Python "Coordinator" drives the parts as
     direct, stateless Messages API calls; a part's statement is the HTTP return
     value. There is no agent-teams runtime, no SendMessage, no teammate file
     writes, no sandbox mount in the write path. Almost everything this file once
     held now lives in its own module and is called from here — the turn engine
-    (rounds.py), the annotation grammar (markers.py), the four-block assembly
+    (circle_rounds.py), the annotation grammar (annotations.py), the four-block assembly
     (prompt_build.py), the transport (llm_client.py).
 
     THE AGENT-TEAMS PATH IS GONE, not parallel. This paragraph said that
@@ -19,8 +19,9 @@ WHAT THIS IS
 TWO MODES, AND ONE IS REQUIRED
     --live      Permits writing:
                   circles/circle_<OT>.md
-                  parts/<name>/short_term_<OT>.md   (that name only)
-                  work/logs/                        (via circle_close.py)
+                  parts/<name>/short_term_<OT>.toml (that name only; .md
+                                                    for a resumed pre-B96 close)
+                  work/logs/                        (via circle_close_verify.py)
                 Nothing else, ever. Enforced by assert_write_safe().
     --dry-run   The test rig: no network, no API key needed, every part passes.
                 Writes only under work/sandbox/.
@@ -32,9 +33,9 @@ TWO MODES, AND ONE IS REQUIRED
 
 INTEROP
     Transcript lines use the canonical "[Tag]:" / "[Tag] [To: X]:" form that
-    coordinator/circle_close.py::parts_that_spoke() parses. short_term files carry
+    coordinator/circle_close_verify.py::parts_that_spoke() parses. short_term files carry
     the four canonical sections. At close in --live mode this script shells out
-    to coordinator/circle_close.py --short-term-only --write-report, so the durable
+    to coordinator/circle_close_verify.py --short-term-only --write-report, so the durable
     close report work/logs/close_<OT>.json is produced by the SAME verifier as
     always.
 
@@ -54,7 +55,6 @@ from __future__ import annotations
 
 import argparse
 import atexit
-import concurrent.futures
 import datetime
 # `os` went with the client construction at stage 2 (R382) — its only readers
 # here were the ANTHROPIC_API_KEY check and the .env fallback, both of which
@@ -72,11 +72,11 @@ del _pl
 import identity as ID              # SELF_ID + the display name
 import issue_commands as IC        # /issue-label-update, issue-relationship-add
 import roster as R                 # B29: the one roster every reader shares
-import check_integrity as CI       # the corruption gate, run before anything opens
-from paths import ROOT, SANDBOX, PART_TAGS   # phase-1 step 0: one home
+import record_verify as CI       # the corruption gate, run before anything opens
+from record_paths import ROOT, SANDBOX, PART_TAGS   # phase-1 step 0: one home
                                    # for path constants (2026-08-16)
-import seam                        # the I/O seams + failure ledger
-import settings as SET             # self/settings.toml — the override register
+import seam                        # the I/O seams + failure record
+import setting_manager as SET             # self/settings.toml — the override register
 import phase_clock as PC           # wall-clock per phase + the close heartbeat
                                    # (phase-1 step 1, 2026-08-16)
 from seam import FAILURES, fail    # aliases to the SAME list object and
@@ -87,63 +87,58 @@ import command_surface as CS       # phase-2 stage 0 (2026-08-16): the
                                    # dev_mode is REBOUND — always
                                    # CS.dev_mode, never a from-import.
 from command_surface import KNOWN_CMDS
-from llm_client import (call, METER, prewarm, preflight_api,  # phase-2
-                        MODEL, KEY_MISSING_HELP, build_client,
-                        key_source_note, explain_api_failure,  # stage 1:
+from llm_client import (METER, stream_prewarm, stream_api_preflight,        # phase-2
+                        MODEL, KEY_MISSING_HELP, stream_client_build,
+                        stream_key_source_note, stream_failure_explain,  # stage 1:
                         RATE_CACHE_WRITE_1H,                   # the API
-                        RATE_CACHE_READ, SHORT_TERM_SECTIONS)  # transport
-from prompt_build import (render_messages, load_shared,       # phase-2
-                          build_briefing,                     # stage 2:
-                          shared_block, system_blocks,        # the prompt's
-                          block_order)                        # construction
-import markers as MK               # phase-2 stage 3: the annotation system
-import quote_as_mark as QM         # R155's channel: Self quoting a part
-                                   # IS a ratification. NOT in markers —
+                        RATE_CACHE_READ)                       # transport
+# SHORT_TERM_SECTIONS left this import 2026-09-02: the only reader here was
+# _short_term_call's missing-headings test, which is the disassembler's now.
+from prompt_build import (group_shared_read,                        # phase-2
+                          circle_briefing_build,                     # stage 2:
+                          prompt_part_assemble,                      # the prompt's
+                          block_order,                        # construction
+                          part_attention_finalize)                    # BLOCK 4 phase 2
+import annotations as MK           # phase-2 stage 3: the annotation system
+import quote_as_lands as QM        # R155's channel: Self quoting a part
+                                   # IS a ratification. NOT in annotations —
                                    # that module is the BRACKET grammar
                                    # and this mechanism has no bracket.
-from markers import (apply_self_remember, REMEMBER_RE,
-                     strip_malformed_markers, route_markers,
-                     unruled_proposals, show_unruled_proposals,
-                     stage_propose_proposals)
-apply_remember = MK.apply_remember     # test-surface re-export (called only)
-# Re-exported for the test surface (all CALLED there, never rebound —
-# the alias-assignment form because this file no longer calls them
-# itself, and an unused from-import would fail the pyflakes gate):
-extract_markers = MK.extract_markers
-propose_proposals = MK.propose_proposals
-coalesce_propose_proposals = MK.coalesce_propose_proposals
-convergence_queue = MK.convergence_queue
-_normalize_edge = MK._normalize_edge
+from annotations import (remember_self_apply, REMEMBER_RE,
+                     annotation_malformed_strip, annotation_route)
+from propose_lifecycle import (proposal_unruled_list,      # stage 8, 2026-09-03:
+                               proposal_unruled_show,  # the PROPOSE LIFECYCLE
+                               proposal_stage)  # left annotations.py
+# The test-surface re-exports this file carried (apply_remember, extract_
+# annotations, statement_line, three help_system names, and last the four
+# propose names) are all gone since 2026-09-03: every suite calls the owner.
 import help_system as HS           # phase-2 stage 5 (built 4th)
-from help_system import help_text, junk_help
-# Test-surface re-exports (called, never rebound):
-object_classes = HS.object_classes
-object_class_help_text = HS.object_class_help_text
-_HELP_ONE_LINERS = HS._HELP_ONE_LINERS
+from help_system import command_help_render, junk_help
 import vetting as VT               # phase-2 stage 4 (built 6th)
-from vetting import vet_pending_proposals
-from rounds import (run_round, run_blind_round,    # phase-2 stage 7:
-                    token_table)                   # the turn engine
+from vetting import proposal_vet
+from circle_rounds import (circle_round_run, circle_blind_round_run,    # phase-2 stage 7:
+                    part_token_table)                   # the turn engine
 # (graph_now/_propose_approve/_propose_command_shape are deliberately
 # NOT re-exported: the tests patch and call them on their owners —
-# vetting and markers — per the late-binding contract.)
-from commands import (dispatch_dev_cmd,                   # phase-2
-                      resolve_statement,                   # stage 6
-                      show_statements)                     # (built 5th)
+# vetting and annotations — per the late-binding contract.)
+from commands import (command_dev_dispatch,                   # phase-2
+                      statement_resolve,                   # stage 6
+                      statement_show)                     # (built 5th)
 # The cmd_* implementations are NO LONGER imported here — B61,
 # 2026-08-21: the Self> loop delegates every non-circle-dependent verb
-# to dispatch_dev_cmd() and branches nothing it also handles. See the
+# to command_dev_dispatch() and branches nothing it also handles. See the
 # loop, and coordinator/tests/test_dispatch_partition.py.
 from transcript_store import (               # phase-1 step 3 — the
-    write_lf, open_transcript, append,       # transcript's persistence
-    discard_empty_open, record_working_set,  # and parsing layer; these
-    load_for_resume,                         # are the names this file
-    commit_sandbox, commit_circle,           # still calls itself
-    run_verifier,
+    circle_transcript_open, circle_transcript_append,                 # transcript's persistence
+    circle_transcript_discard_empty,                      # and parsing layer; these
+    circle_transcript_resume_read,                         # are the names this file
+    circle_sandbox_commit, circle_commit,           # still calls itself
+    circle_close_verifier_run,
 )
 import transcript_store as TS
+import working_set_manager as WS   # stage 10, 2026-09-03: the question + its register
+import circle_close as CC          # stage 12, 2026-09-03: the close step
 import token_count as TC
-statement_line = TS.statement_line     # test-surface re-export (called only)
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -189,7 +184,7 @@ def read_line(prompt: str = "", channel: str = "command",
     # once, for an argument most of them have no opinion about.
     # timed_read: every second at a prompt lands under the one
     # waiting_on_self span, so no phase ever carries human time (2026-08-30).
-    return PC.timed_read(seam.read_line, prompt, channel, prefill=prefill)
+    return PC.stream_timed_read(seam.read_line, prompt, channel, prefill=prefill)
 
 
 def read_line_no_annotation(prompt: str, where: str,
@@ -204,7 +199,7 @@ def read_line_no_annotation(prompt: str, where: str,
     Self> loop below is the prompt where an annotation IS valid, and it
     does not come through here.
 
-    REJECT THE WHOLE LINE, NEVER STRIP IT. strip_malformed_markers() is
+    REJECT THE WHOLE LINE, NEVER STRIP IT. annotation_malformed_strip() is
     the other shape and is the right one for speech: remove the broken
     span, keep the statement. A topic is not a statement, so there is no
     remainder worth keeping - stripping would open the circle under a
@@ -212,17 +207,17 @@ def read_line_no_annotation(prompt: str, where: str,
     ruling says "say so and return to the prompt": a loop, not a repair.
 
     WHY THE TOPIC NEEDED THIS AT ALL. It is appended to the transcript
-    with `is_topic`, and prompt_build.render_messages() skips only `cmd`
+    with `is_topic`, and prompt_build.prompt_messages_render() skips only `cmd`
     entries - so a topic renders to EVERY part as a user turn. A
     `[remember: ...]` typed there was neither captured (no
     apply_self_remember on that path) nor stripped (no
-    strip_malformed_markers either), and reached all seven parts
+    strip_malformed_annotations either), and reached all seven parts
     verbatim: the exact opposite of the private note it asks for, and
     E06's contamination through a door nothing was watching.
 
     Warnings go to the COMMAND channel, following the two complaints that
     already exist about these prompts' input - the working set's own
-    unknown-node notice, and strip_malformed_markers()'s - rather than
+    unknown-node notice, and annotation_malformed_strip()'s - rather than
     putting a diagnostic into the room's pane.
 
     EOFError/KeyboardInterrupt PROPAGATE UNTOUCHED, so each call site's
@@ -234,7 +229,7 @@ def read_line_no_annotation(prompt: str, where: str,
         prefill = ""          # offered once; a re-ask after an annotation
                               # is a different question from a re-ask after
                               # an invalid id, and must not re-seed the line
-        found = MK.annotations_in(raw)
+        found = MK.annotation_find(raw)
         if not found:
             return raw
         more = f" (+{len(found) - 1} more)" if len(found) > 1 else ""
@@ -259,178 +254,13 @@ def read_line_no_annotation(prompt: str, where: str,
         emit("command", f"     Nothing was recorded. Type the {where} again.")
 
 
-# THE WORDS ARE THE OPERATOR'S — R330, 2026-08-23: *"Ensure
-# the working set question is presented in terms of "Do you have specific
-# issues you would like to focus on today ('?' to review) ? ""*. It was
-# `CIRCLE issues (blank = none, 'all', '?'): ` — a legend, not a question. The
-# GRAMMAR below is unchanged: blank is still no issues, `none` and `all` are
-# still accepted; `all` is simply no longer advertised. `?` lists and re-asks,
-# as it always did. The dual pane's blank-answer echo read its legend out of
-# the old prompt's "blank = ..." and now takes its "(blank)" fallback.
-#
-# THE LEGEND RETURNED, IN HIS WORDS — R344,
-# 2026-08-25 (D61 a): *"blank for no, 'all', or a comma separated list of
-# line numbers"* — added after he typed "16" at a numbered-in-his-head
-# listing that carried no numbers and no hint of what an answer looks like.
-# The `?` listing is numbered now and digits-only tokens ARE line numbers;
-# issue ids keep their `n` prefix and still work.
-WORKING_SET_PROMPT = ("\nDo you have specific issues you would like to focus "
-                      "on today ('?' to review) ? (blank for no, 'all', or a "
-                      "comma separated list of line numbers) ")
-
-
-def ask_working_set(IP, prompt: str = WORKING_SET_PROMPT):
-    """The working set, asked until it is answerable. FINDING 2, 2026-08-20.
-
-        (blank)   NO issues at all — the prologue and nothing else
-        none      the same, said out loud
-        all       the whole live graph
-        ?         the live issues, NUMBERED, then ask again
-        1, 3...   line numbers into that listing (R344, D61 a: a
-                  digits-only token is a line number, the order the
-                  id order `?` prints)
-        nNNNN...  those issues, validated
-
-    NOT ASKED AT ALL WHEN THERE IS NOTHING TO CHOOSE FROM — R330,
-    2026-08-23: *"If there are no issues[], do not ask the working
-    set question."* main() tests `IP.live_nodes()` first and takes the blank
-    answer (None) silently; a fresh installation that recorded no issue reaches
-    the topic question directly. This function is unchanged by that — the
-    decision is the caller's, so a driver that wants the question can still
-    call it.
-
-    THE DEFAULT FLIPPED — R-NEW, 2026-08-22, Self ruled: *"issues are important to
-    include only when specifically discussing some set of issue and
-    issue-relations — so the default ought to be to NOT include them,
-    issues=none, rather than issues=all."* Blank used to mean the whole graph.
-    Nothing about the GRAMMAR changed — `none`, `all` and an id list all mean
-    exactly what they meant, and `chosen is None` was already the ruled
-    spelling for "no issues" (finding 2, 2026-08-20). Only which answer blank
-    maps to changed.
-
-    Measured, and the reason it is not merely a preference: with the whole
-    graph in block 2, the Child was identified by a blind reader 44% of the
-    time; with the `## Issues` section removed, 72% (n=25, p=0.045). The graph
-    costs the parts their own distinctness, so it should be paid for when the
-    circle is about those issues and not otherwise.
-
-    "ISSUE", NEVER "NODE", IN ANYTHING THIS PROMPTS OR PRINTS — RULED
-    2026-08-21, after the lab's second day: *"'node' is graph speak, can be
-    applied to all of our graphed anything, it is ambiguous. 'issue ids'
-    are what a user must see, specific to this application. Ruling: do not
-    surface 'node'. Replace it with the class of node being referenced."*
-    The code below still says node where it means the graph; the operator
-    reads "issue".
-
-    Returns a list of ids, `[]` for the whole graph (`all`), or None for no
-    issues (blank or `none`). THE THREE ANSWERS ARE STILL DIFFERENT and the
-    types still say so: `[]` means "no FOCUS, project everything", None means
-    "no issues in this circle at all". What changed in R-NEW is only which of
-    them BLANK selects — `none` is now the synonym for blank, and `all` is the
-    word that must be typed.
-
-    AN INVALID ID DOES NOT OPEN A CIRCLE. It printed `unknown node(s)
-    ignored:` and carried on — so on 2026-08-20 a `/status` typed one
-    prompt too early became the working set, was "ignored", and the circle
-    opened anyway with no focus at all. Nothing is ignored now: the invalid
-    ones are named and the question is asked again.
-
-    THE VALID ONES COME BACK ALREADY TYPED, which is the ruled behaviour —
-    "position the cursor at the end so that the user can correct the
-    entries; an enter alone would submit the list of just those that are
-    valid". `prefill` is an affordance the dual pane honours and a plain
-    terminal cannot, so the same subset is ALSO printed in words: the
-    coordinator never depends on the reader having a cursor.
-
-    `?` RESETS THE LINE rather than prefilling it — you asked what exists,
-    you did not offer an answer."""
-    prefill = ""
-    while True:
-        try:
-            raw = read_line_no_annotation(prompt, "working set",
-                                          channel="circle", prefill=prefill)
-        except (EOFError, KeyboardInterrupt):
-            emit("command", "\n  (no working set — this circle carries no issues)")
-            return None
-        word = raw.strip().lower()
-        if word in ("", "none"):
-            emit("command", "  none — this circle carries no issues at all.")
-            return None
-        if word == "all":
-            emit("command", "  all — the whole live graph.")
-            return []
-        if word == "?":
-            try:
-                g = IP.graph()
-            except Exception as e:                             # noqa: BLE001
-                emit("command", f"  (the graph will not load: {e})")
-                g = {}
-            emit("circle", f"\n  {len(g)} live issue(s)")
-            for i, nid in enumerate(sorted(g), 1):
-                label = (g[nid]["doc"].get("label") or "(no label)")
-                emit("circle", f"    {i:>2}  {nid}  {label[:64]}")
-            prefill = ""
-            continue
-        pairs = IP.parse_working_set_pairs(raw)
-        # A DIGITS-ONLY TOKEN IS A LINE NUMBER — R344
-        # (D61 a), 2026-08-25. The order is the `?` listing's own: the live
-        # graph in id order, so "1, 3" means the first and third rows whether
-        # or not `?` was actually typed this time. An id keeps its `n` prefix
-        # — before this, a bare "16" normalised to id 0016 and the refusal
-        # named an issue id at someone answering with a line number.
-        if any(t.isdigit() for t, _ in pairs):
-            try:
-                order = sorted(IP.graph())
-            except Exception as e:                             # noqa: BLE001
-                emit("command", f"  (the graph will not load: {e})")
-                return []
-            bad = [t for t, _ in pairs
-                   if t.isdigit() and not 1 <= int(t) <= len(order)]
-            if bad:
-                emit("command", "  not on the listing: " + ", ".join(bad)
-                     + f" — {len(order)} issue(s); ? lists them numbered")
-                keep = [t for t, _ in pairs if t not in bad]
-                prefill = " ".join(keep)
-                emit("command", "     asking again"
-                     + (f" — keeping: {prefill}" if prefill else ""))
-                continue
-            pairs = [(t, order[int(t) - 1]) if t.isdigit() else (t, nid)
-                     for t, nid in pairs]
-        ids = [nid for _, nid in pairs]
-        try:
-            focus, _, unknown = IP.resolve(ids)
-        except Exception as e:                                 # noqa: BLE001
-            emit("command", f"  (the graph will not load: {e})")
-            return []
-        if not unknown:
-            return ids
-        # ECHO WHAT WAS TYPED, not what it normalised to. normalise_id()
-        # strips a leading `n` and any `X_` status prefix, so `nZZZZ` comes
-        # back as `ZZZZ` — and a refusal naming a string the operator never
-        # typed is a refusal they have to decode before they can act on it.
-        # First-wins: two spellings of one id are one id, and the first is
-        # the one they read.
-        as_typed: dict[str, str] = {}
-        for tok, nid in pairs:
-            as_typed.setdefault(nid, tok)
-        # "not issue ids", and what one looks like — 2026-08-21. This said
-        # "not in the graph: ..." / "none of those were node ids." and the
-        # operator's own words were *"I do not know what 'node ids' refers
-        # to"*: the refusal named the graph's concept, not the thing he was
-        # being asked for. He was being asked for ISSUE ids.
-        emit("command", "  not issue ids: "
-             + ", ".join(as_typed.get(u, u) for u in unknown))
-        # ...and the line comes back in their spelling too. It re-parses to
-        # the same ids, so nothing is lost by keeping it theirs.
-        prefill = " ".join(as_typed.get(f, f) for f in focus)
-        emit("command", "     asking again"
-             + (f" — the valid ones are: {prefill}" if prefill
-                else " — an issue id looks like n0010; ? lists them, Enter "
-                     "alone (or none) is no issues, all is the whole graph."))
-
+# THE WORKING SET QUESTION — WORKING_SET_PROMPT and working_set_ask(), with the R330/R344
+# history above them — MOVED to working_set_manager.py, 2026-09-03 (cohesion re-homing
+# stage 10). main() calls WS.working_set_ask(IP, read_line=read_line_no_annotation): the
+# reader is a parameter, so R225's annotation refusal at this prompt stays this file's.
 
 # ------------------------------------------------------------------ paths
-# ROOT and SANDBOX (and PART_TAGS, further down) moved to paths.py,
+# ROOT and SANDBOX (and PART_TAGS, further down) moved to record_paths.py,
 # 2026-08-16 — phase 1 step 0 of the coordinator partitioning; imported
 # at the top of this file. HERE stays: it is this module's own location,
 # not a tree constant.
@@ -443,26 +273,26 @@ HERE = pathlib.Path(__file__).resolve().parent
 #   SELF_DISPLAY   ID.DISPLAY, fixed "Self". Written into the transcript as
 #                  [Self]: and into every prompt block that names Self.
 #                  Never reads configuration.
-#   CONSOLE_NAME   ID.user_name(), from $IFS_USER_NAME in .env. Shown only
+#   CONSOLE_NAME   ID.user_name_read(), from $IFS_USER_NAME in .env. Shown only
 #                  at the console prompt and in /help — never written to a
 #                  transcript, never sent to a model.
 #
 # THIS IS A DISPLAY NAME ONLY. Every comparison uses ID.SELF_ID.
 SELF_DISPLAY = ID.DISPLAY
-CONSOLE_NAME = ID.user_name()
+CONSOLE_NAME = ID.user_name_read()
 
 # MODEL MOVED to llm_client.py, 2026-08-16 (phase 2 stage 1), with
 # CACHE_TTL, the RATE_* table and SHORT_TERM_SECTIONS — the transport
 # owns its model id and rates; the names this file still uses are
 # imported at the top.
 # MAX_SINCE_SELF stopped being imported here 2026-08-20: /status's own
-# since-Self loop moved INTO token_table (the round column), so this
+# since-Self loop moved INTO part_token_table (the round column), so this
 # file no longer names the ceiling anywhere.
 # MAX_TOKENS, MAX_SINCE_SELF and (below) TRUNCATION_MARKER MOVED to
 # rounds.py, 2026-08-16 (phase 2 stage 7) — ceiling, per-Self cap and
 # the truncation contract are round semantics; comments included.
 
-# PART_TAGS (parts/<dir> -> transcript tag, B29) moved to paths.py with
+# PART_TAGS (parts/<dir> -> transcript tag, B29) moved to record_paths.py with
 # its comment, 2026-08-16 — imported at the top of this file.
 
 # All seven parts attend. The agent-teams path spawns all seven every circle
@@ -496,13 +326,13 @@ DEFAULT_PARTS = R.DIR_NAMES
 # cache-control marker belongs with the block assembly that stamps it.
 
 
-# ------------------------------------------------------------------ failure ledger
+# ------------------------------------------------------------------ failure record
 # MOVED to seam.py, 2026-08-16 (phase 1 step 1), so extracted modules
 # can report a data failure without importing this file. FAILURES and
 # fail are imported at the top — the same list object and the same
-# function; report_failures() below still reads the one ledger.
+# function; circle_failures_report() below still reads the one record.
 
-# TRUNCATION_MARKER MOVED to rounds.py with ask_statement (stage 7).
+# TRUNCATION_MARKER MOVED to rounds.py with part_statement_ask (stage 7).
 
 
 # ------------------------------------------------------------------ write guard
@@ -517,115 +347,39 @@ DEFAULT_PARTS = R.DIR_NAMES
 # identity read-layer (read_ro/strip_settled/strip_to_identity),
 # circle_objectives construction (build_briefing + ISSUE_MODEL),
 # the four-block assembly (ORDER/block_order/system_blocks/
-# load_shared/shared_block) and the transcript-to-messages view
-# (render_messages) - verbatim, comments included. The names this
-# file still calls are imported at the top.
+# load_shared) and the transcript-to-messages view (render_messages)
+# - verbatim, comments included. shared_block()+system_blocks()'s
+# two-step dance was RETIRED 2026-09-02 in favour of one call,
+# prompt_part_assemble() (prompt_build.py) — see role_context.py/
+# role_attention.py's own module docstrings. The names this file
+# still calls are imported at the top.
 
 # --------------------------------------------- the turn engine
 # MOVED to rounds.py, 2026-08-16 (phase 2 stage 7, the last
-# extraction): _TO_RE/_SELFNAME_RE + ask_statement, the blind round
-# (BLIND_CLOSE/REVEAL_OPEN/run_blind_round), token_table,
-# addressed_since and run_round — verbatim, comments included.
-# main() imports run_round/run_blind_round/token_table at the top.
+# extraction): _TO_RE/_SELFNAME_RE + part_statement_ask, the blind round
+# (BLIND_CLOSE/REVEAL_OPEN/circle_blind_round_run), part_token_table,
+# part_addressed_since and circle_round_run — verbatim, comments included.
+# main() imports circle_round_run/circle_blind_round_run/part_token_table at the top.
 
 
 # ------------------------------------------------------------------ close
-# THE CLOSE ASKS FOR TWO THINGS NOW, ruled 2026-08-19 (R255): the four
-# short_term sections, and — after them, last — the part's one
-# `[remember: "..."]` for the circle. The two are collected in ONE reply
-# rather than a second call per part because the part is already holding
-# the whole circle in mind at exactly this moment, and a second call would
-# pay for that context twice.
-#
-# THE ORDERING IS LOAD-BEARING, not stylistic. markers.split_close_remember()
-# is deliberately lenient about "]" so a 1000-word memory containing one
-# cannot be silently truncated mid-sentence; the price of that lenience is
-# that everything after the opener is the memory. Saying "last" here, in
-# process_core.md, annotation and standing guidance alike, is what makes that safe — and
-# collect_short_terms() still re-checks the four headings after the split
-# and falls back to the strict parse if any went missing.
-SHORT_TERM_PROMPT = (
-    "The circle is closing. Write your short_term record of THIS circle, in "
-    "exactly these four sections, in this order, with these exact headings:\n\n"
-    "## What I said\n## What I observed in others\n"
-    "## Shifts toward other parts\n## Current emotional state\n\n"
-    "Write substantively under each heading — this is your own memory of the "
-    "circle, and dreaming reads it when the circle closes. No preamble, "
-    "no closing remarks, "
-    "no other headings. Begin with '## What I said'.\n\n"
-    "THEN, if you have one, write your one remember for this circle — "
-    "LAST, after '## Current emotional state', on its own line:\n\n"
-    '[remember: "<what you are choosing to carry forward>"]\n\n'
-    "It is a private note to your own future self: never shown to Self, to "
-    "another part, or to the room, and it is the only thing you write "
-    "tonight that you will read again. Up to 1000 words. Write it in your "
-    "own voice, about what you are keeping rather than what happened. "
-    "One per circle — if you already used yours in a round, this one is "
-    "dropped. Writing none is a real answer and costs you nothing."
-)
-
-# THE CLOSE BUDGET, named 2026-08-28 (R379). It was the bare
-# literal `5000` in collect_short_terms()'s retry loop, and a value with no name
-# is a value nothing can configure — a settings override is resolved BY NAME.
-#
-# 5000, not 2000 (R255): four substantive sections plus a remember of up to 1000
-# words does not fit in 2000, and the failure mode is not a short answer — it is
-# stop == "max_tokens", which that loop RETRIES, so an under-budget close would
-# have paid for two truncated calls per part and then written the second one
-# anyway.
-#
-# NOT rounds.MAX_TOKENS, which is the ceiling for one STATEMENT. These are two
-# different requests with two different shapes; they were never one number.
-SHORT_TERM_MAX_TOKENS = SET.value("short_term_max_tokens", 5000)
-
 # THE CLOSE AIM AND THE HEARTBEAT — ruled 2026-08-30, the operator: "After
 # circle /close, I want to aim for no more than 5 minutes, and progress must
 # be being reported in the command pane at least every 10 seconds, even if
 # its just a spinner." The aim is REPORTED, never enforced: a slow close must
 # not fail a close that otherwise held (the spend report's own rule).
-CLOSE_AIM_SECONDS = SET.value("close_aim_seconds", 300)
-CLOSE_HEARTBEAT_SECONDS = SET.value("close_heartbeat_seconds", 10)
+CLOSE_AIM_SECONDS = SET.setting_value_read("close_aim_seconds", 300)
+CLOSE_HEARTBEAT_SECONDS = SET.setting_value_read("close_heartbeat_seconds", 10)
 
 
-CLOSING_MARK = "closing_{ot}.json"
-
-
-def _close_mark(ot: str) -> pathlib.Path:
-    return ROOT / "work" / "logs" / CLOSING_MARK.format(ot=ot)
-
-
-def mark_close_started(ot: str) -> None:
-    """Write the START-OF-CLOSE marker. LIVE closes only; callers gate it.
-
-    THE ONE CASE _interrupted_closes() COULD NOT SEE, and its own docstring
-    named the fix: "a marker written at the START of a close, which nothing
-    writes today". A close that died before writing ANY short_term is
-    indistinguishable from an /abort and from a circle still in progress, so
-    the all-missing case had to be exempted — and after 45 minutes
-    circle_state stops speaking to it too, leaving it reported by nothing.
-
-    IT IS NEVER DELETED. A close report supersedes it: transcript_store writes
-    close_<OT>.json as the last act of a completed close, and every reader here
-    checks that first. A deletion step is one more thing that can fail on the
-    path whose failures this exists to catch."""
-    import json
-    from atomic_write import atomic_write
-    m = _close_mark(ot)
-    m.parent.mkdir(parents=True, exist_ok=True)
-    atomic_write(m, json.dumps(
-        {"open_time": ot,
-         "started": datetime.datetime.now().isoformat(timespec="seconds")},
-        indent=2) + "\n")
-
-
-def redraw_issue_graph() -> None:
+def issue_graph_redraw() -> None:
     """Redraw the picture of the issue graph, if the graph has moved since
     it was last drawn. LIVE closes only; the caller gates it.
 
     WHY AT A CLOSE. A circle is the one thing that moves this graph, and it
     moves it by two routes, both of which are complete by the time this
     runs: a ruling Self types at cmd> or embeds as an annotation, applied
-    by issue_commands.apply() over the circle's own batch; and a
+    by issue_commands.issue_command_apply() over the circle's own batch; and a
     `[proposed: ...]` row a part offered, accepted at the vetting
     checkpoint and applied by that same function through vetting.py.
     Drawing at the close rather than at each
@@ -668,311 +422,39 @@ def redraw_issue_graph() -> None:
         emit("command", out)
 
 
-def _close_began(ot: str) -> bool:
-    """Did a close START for this circle? See mark_close_started()."""
-    return _close_mark(ot).is_file()
-
-
-def _failed_phase2(base: pathlib.Path) -> list[str]:
-    """[open_time] for every circle whose dreaming/synthesis failed and has
-    not been re-run since. Reported at open, 2026-08-23, ruled (R312).
-
-    THE GAP. inter_circle writes work/logs/dream_error_<OT>.json, prints the
-    re-run line and exits non-zero — at that close, once. Nothing mentioned it
-    ever again: the transcript is committed and complete, every short_term is
-    written, so _interrupted_closes() is right to stay quiet and circle_state
-    has nothing to say either. The circle simply never moved anyone's identity,
-    silently, from then on.
-
-    THE TAG IS THE RESOLUTION, not the file. already_processed() reads
-    `dream/<OT>` as the durable evidence a run succeeded — all-or-nothing
-    staging means a failed run leaves nothing else behind — so a re-run that
-    works clears this report without anyone tidying up a log. Asked through
-    gitrepo.tag_name() so a lab tree asks about its own `dream/lab/<OT>`.
-
-    QUIET ON ANYTHING IT CANNOT READ, the same rule as _interrupted_closes():
-    this runs in the open path, and git being unavailable is not a reason to
-    refuse to start a circle."""
-    logs = ROOT / "work" / "logs"
-    if not logs.is_dir():
-        return []
-    out = []
-    for f in sorted(logs.glob("dream_error_*.json")):
-        ot_i = f.stem[len("dream_error_"):]
-        if ot_i.endswith("_raw"):
-            continue
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{4}", ot_i):
-            continue
-        if not (base / f"circle_{ot_i}.md").is_file():
-            continue
-        # EITHER MARKER RESOLVES IT, 2026-08-24. Since the operator ruled
-        # git optional, a completed phase 2 records itself in
-        # work/logs/dream_<OT>.json as well as (or, in a tree with no git
-        # history, instead of) the tag — so this asks the file first and
-        # never reaches git in a bundle.
-        if (logs / f"dream_{ot_i}.json").is_file():
-            continue                                     # processed
-        try:
-            import gitrepo as _G
-            rc, tags = _G.run("tag", "-l", _G.tag_name("dream", ot_i),
-                              read_only=True)
-            if rc != 0 or tags.strip():
-                continue                 # processed, or git could not tell
-        except Exception:                                        # noqa: BLE001
-            continue
-        out.append(ot_i)
-    return out
-
-
-def _interrupted_closes(base: pathlib.Path) -> list[tuple[str, list[str]]]:
-    """[(open_time, parts that spoke with no short_term)] for every LIVE
-    circle whose close was interrupted. Reported at open, 2026-08-20.
-
-    THE TEST IS THE RESUME GATE'S, NOT circle_state'S, and that is the
-    whole point of the function. circle_state asks "has this transcript
-    been quiet for 45 minutes" — a heuristic for "is someone still in
-    there", which an interrupted close passes cleanly the moment it is
-    older than the window. On 2026-08-20 a live close died with four of
-    seven short_terms written; by the time anyone looked, circle_state
-    called it finished and the next open would have said nothing.
-
-    A CLOSE REPORT MEANS FINISHED. transcript_store writes it as the last
-    act of a completed close, so its presence ends the question no matter
-    what the parts directory looks like.
-
-    QUIET ON ANYTHING IT CANNOT READ. This runs in the open path, before
-    a circle exists; an unparseable old transcript is not a reason to
-    refuse to start a new one, and the audit is where that belongs.
-
-    THE CASE NOTHING SAW IS SEEN SINCE 2026-08-23, and this paragraph
-    said otherwise until 2026-08-27. A close that died before writing ANY
-    short_term used to be indistinguishable here from an /abort, and
-    indistinguishable to circle_state once the transcript had been quiet
-    45 minutes — reported by neither, after that window. It asked for a
-    marker written at the START of a close; mark_close_started() is that
-    marker, and the all-missing branch below consults it.
-
-    THE RESIDUE IS HISTORY, and it does not shrink: a circle that closed
-    BEFORE the marker existed has none, so for those the old exemption
-    stands exactly as it did, and circle_audit.py's transcript safety net
-    is still the only thing that catches them — by hand. The exemption
-    itself is deliberate and stays: without a marker, all-missing is what
-    a circle actually in progress looks like, which is what
-    circle_state's own warning is for."""
-    out: list[tuple[str, list[str]]] = []
-    for f in sorted(base.glob("circle_*.md")):
-        ot_i = f.stem[len("circle_"):]
-        if not re.fullmatch(r"\d{4}-\d{2}-\d{2}_\d{4}", ot_i):
-            continue
-        if (ROOT / "work" / "logs" / f"close_{ot_i}.json").is_file():
-            continue
-        try:
-            _, _, tr = TS.parse_transcript(f.read_text(encoding="utf-8"))
-        except (OSError, ValueError):
-            continue
-        spoke = {e["speaker"] for e in tr if e["speaker"] in PART_TAGS}
-        if not spoke:
-            continue
-        missing = sorted(p for p in spoke
-                         if not (ROOT / "parts" / p /
-                                 f"short_term_{ot_i}.md").is_file())
-        # ALL of them missing usually means an OPEN circle or an /abort, not
-        # an interrupted close — nobody has started closing yet, so nothing
-        # has been written. circle_state's own warning above is what speaks
-        # to that ordinary case.
-        #
-        # THE REAL SIGNAL IS mark_close_started(), NOT COMPLETION ORDER.
-        # This comment used to read "collect_short_terms writes in roster
-        # order, so a genuine interrupt leaves SOME written" — true once,
-        # false since B89 (2026-08-31, R420) parallelized short_terms
-        # collection, where an interrupt can just as easily leave ALL of
-        # them missing. It was already unnecessary the day it stopped being
-        # true: mark_close_started(), written 2026-08-23 the instant a close
-        # BEGINS — before any short_term is collected, serial or not — settles
-        # the ambiguity on its own. With the marker on disk the circle is
-        # neither open nor aborted, so all-missing is a real interrupted
-        # close and is reported; without one — every circle closed before
-        # the marker existed — the exemption stands exactly as it always did.
-        # `missing` itself was always a plain per-part file-existence check,
-        # never order-dependent to begin with.
-        if missing and (len(missing) < len(spoke) or _close_began(ot_i)):
-            out.append((ot_i, [PART_TAGS[p] for p in missing]))
-    return out
-
-
-def _dest_for(part: str, ot: str, guard) -> pathlib.Path:
-    return (SANDBOX / "parts" / part / f"short_term_{ot}.md") if not guard.live \
-        else (ROOT / "parts" / part / f"short_term_{ot}.md")
-
-
-def _short_term_call(part: str, sysblocks, transcript, dry: bool):
-    """Runs on a WORKER THREAD (B77's own discipline, R420): the Messages
-    API call only, own client per worker (R170's rule — costs nothing,
-    answers no thread-safety question). Returns (text, stop, missing,
-    notes) — `notes` are lines the caller emits once this part's future
-    completes, so no two parts' console lines can interleave.
-
-    One loop, two attempts (2026-08-19, review tier 5 #47): the retry used
-    to be a verbatim copy-paste of the first call four lines apart, so any
-    change to the request — budget, prompt, a stop-reason check — had to
-    land twice or the retry silently issued the old one. Semantics
-    unchanged: attempt 1 retries on a missing section OR truncation; the
-    retry's own result is judged on sections alone, exactly as before."""
-    notes: list[str] = []
-    worker_client = build_client()
-    text, stop, missing = "", None, SHORT_TERM_SECTIONS
-    for attempt in (1, 2):
-        # SHORT_TERM_MAX_TOKENS, not a literal here — see its own comment
-        # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
-        text, stop = call(
-            worker_client, part, sysblocks[part],
-            render_messages(part, transcript, SHORT_TERM_PROMPT),
-            SHORT_TERM_MAX_TOKENS, dry,
-            kind="short_term",
-        )
-        missing = [h for h in SHORT_TERM_SECTIONS if h not in text]
-        if not (missing or stop == "max_tokens") or attempt == 2:
-            break
-        notes.append(f"  {part:<12} FAILED "
-                    f"({'truncated' if stop == 'max_tokens' else 'missing ' + missing[0]}) "
-                    f"— retrying")
-    return text, stop, missing, notes
-
-
-def collect_short_terms(client, parts, sysblocks, transcript, ot, guard, dry) -> list[str]:
-    spoke = {e["speaker"] for e in transcript}
-    written, failed, todo = [], [], []
-    for part in parts:
-        if part not in spoke:
-            emit("command", f"  {part:<12} did not speak — no short_term")
-            continue
-        dest = _dest_for(part, ot, guard)
-        if dest.is_file():
-            # An interrupted close already wrote this one — the resume
-            # gate let the circle back in for exactly this case. The
-            # first write is the record; re-deriving would overwrite it
-            # with a second telling (and pay for the call again). Listed
-            # in `written` so commit_circle stages it — the interrupt
-            # died before any commit.
-            emit("command", f"  {part:<12} kept — written before the interrupt")
-            written.append(part)
-            continue
-        todo.append(part)
-    if not todo:
-        return written
-
-    # THE CALLS RUN IN PARALLEL — B89/R420, 2026-08-31, on mid_term.refresh()'s
-    # own proven pattern (B77): ONLY _short_term_call() (the API request, its
-    # own client) runs on a worker thread. Every write — apply_remember /
-    # apply_close_remember (both touch `guard`), the file write, and every
-    # emit() — happens back HERE, on this thread, one finished part at a
-    # time via as_completed(), so nothing mutates a file or prints a line
-    # from a worker and no two parts' output can interleave.
-    #
-    # CTRL-C: deliberately NOT special-cased. `with ... as ex:` shuts down
-    # with its default wait=True, so an interrupt here lets in-flight calls
-    # (each already the sole cost — nothing is written until this thread
-    # sees the result) finish before propagating to the KeyboardInterrupt
-    # handler at the call site, same as dreaming's and mid_term.refresh()'s
-    # own pools. Slower to actually stop than the old serial code; no
-    # half-written file or discarded-but-unaccounted spend either way.
-    #
-    # THE ORDER GUARANTEE THIS REPLACES IS GONE ON PURPOSE. Until this
-    # change, _interrupted_closes() could infer a genuine interrupt from
-    # "some but not all" written, because collect_short_terms() wrote in
-    # roster order. It no longer does — see that function's own comment,
-    # corrected alongside this one — and does not need to: mark_close_started()
-    # (2026-08-23) already marks a close as begun independently of order,
-    # and the missing-set test there was always a plain per-part file check,
-    # never order-dependent to begin with.
-    emit("command", f"  {len(todo)} part(s) to write, in parallel:")
-    with concurrent.futures.ThreadPoolExecutor(len(todo)) as ex:
-        futs = {ex.submit(_short_term_call, p, sysblocks, transcript, dry): p
-               for p in todo}
-        for f in concurrent.futures.as_completed(futs):
-            part = futs[f]
-            text, stop, missing, notes = f.result()
-            for n in notes:
-                emit("command", n)
-            if missing:
-                failed.append(part)
-                emit("command", f"  {part:<12} FAILED — not written")
-                continue
-
-            # THE REMEMBER COMES OUT BEFORE THE FILE IS WRITTEN (R255). A
-            # short_term is read by dreaming and by circle_audit; a remember
-            # reaches only this part's own BLOCK 4. Leaving the bracket in the
-            # .md would put a private note into the one document another
-            # process reads on the part's behalf.
-            #
-            # FALLBACK ON A LOST SECTION. split_close_remember() takes
-            # everything after the opener, which is what makes a "]" inside a
-            # long memory safe; if a part wrote the bracket mid-reply instead
-            # of last, that would swallow a heading. So the split is checked,
-            # not trusted: if any of the four went missing, the strict ASK_RE
-            # path (apply_remember) runs instead — it keeps the sections and
-            # gives up only the lenience.
-            #
-            # THE CHECK RUNS BEFORE ANY WRITE, and that ordering is the whole
-            # correctness of the fallback. split_close_remember() is PURE, so
-            # it can be consulted first. Deciding afterwards — writing the
-            # lenient record, then noticing a heading had gone — would leave
-            # the swallowed-heading version on file AND have the strict retry
-            # refuse itself as a second use this circle, since has_remembered()
-            # would already be True. One cap, read once, spent once.
-            if [h for h in SHORT_TERM_SECTIONS
-                    if h not in MK.split_close_remember(text)[0]]:
-                text, recorded = apply_remember(
-                    guard, part, PART_TAGS[part], text)
-            else:
-                text, recorded = MK.apply_close_remember(
-                    guard, part, PART_TAGS[part], text)
-            if recorded:
-                emit("command", f"  {part:<12} remember written")
-            header = (f"# Short-term — {PART_TAGS[part]} — "
-                      f"{ot[:10]} {ot[11:]}\n\n*(Written by the local coordinator.)*\n\n")
-            dest = _dest_for(part, ot, guard)
-            guard.check(dest)
-            dest.parent.mkdir(parents=True, exist_ok=True)
-            write_lf(dest, header + text.strip() + "\n")
-            written.append(part)
-            emit("command", f"  {part:<12} wrote {dest}")
-    if failed:
-        fail(f"short_term NOT WRITTEN for: {', '.join(failed)} — these parts spoke "
-             f"but have no record; the nightly transcript safety net will have to "
-             f"backfill them from circles/circle_{ot}.md")
-    return written
-
-
-# MOVED to transcript_store.py, 2026-08-16 (phase 1 step 3):
-# commit_sandbox, commit_circle and run_verifier - the durable close
-# records. collect_short_terms above STAYS here: it calls the
-# Messages API per part, which makes it close orchestration, not
-# persistence (phase-1 review).
+# THE CLOSE STEP — SHORT_TERM_PROMPT and its cap, the start-of-close marker
+# (CLOSING_MARK, circle_close_mark, _close_began), the open-time reports
+# (_failed_phase2, _interrupted_closes), _dest_for, _short_term_call,
+# short_term_collect, _prompt_blocks_changed and circle_resumable_list — MOVED to
+# circle_close.py, 2026-09-03 (cohesion re-homing stage 12, B5/C: that file
+# IS the close step; the verifier it shelled out to is circle_close_verify.py).
+# This file reads them as CC. commit_sandbox, commit_circle and run_verifier —
+# the durable close records — are transcript_store's since 2026-08-16.
 
 
 # -------------------------------------------------------------- statements
 # MOVED to commands.py, 2026-08-16 (phase 2 stage 6, built fifth):
-# statements()/resolve_statement()/show_statements() — the 1-based
+# statements()/statement_resolve()/statement_show() — the 1-based
 # numbering /issue-evidence-list shows and `/issue-evidence-add` resolves
 # against. Imported at the top of this file.
 
 # --------------------------------------------- the annotation system
-# MOVED to markers.py, 2026-08-16 (phase 2 stage 3): ASK_RE and the
-# whole bracket grammar (_propose_command_shape/extract_markers —
+# MOVED to annotations.py, 2026-08-16 (phase 2 stage 3): ASK_RE and the
+# whole bracket grammar (_propose_command_shape/extract_annotations —
 # PRACTICE_KINDS and BPID_RE went with the six retired keywords,
 # 2026-08-20), REMEMBER's write path (REMEMBER_RE/
 # apply_remember/apply_self_remember), the malformed/retired strip
-# (strip_malformed_markers; RETIRED_REQUEST_RE and
+# (strip_malformed_annotations; RETIRED_REQUEST_RE and
 # NEAR_MISS_PROPOSED_RE are gone — an unrecognised bracket is dialog
 # text now), live routing
-# (route_markers), unruled_proposals, the close-time coalescing
+# (route_annotations), proposal_unruled_list, the close-time coalescing
 # (_norm_text/
-# propose_proposals/coalesce_propose_proposals/_normalize_edge/
-# convergence_queue), the staging writer (
-# stage_propose_proposals), show_unruled_proposals and _wrap58 - verbatim,
-# comments and R202 included. The names this file still calls are
-# imported at the top; test-only names are re-exported beside them.
+# proposal_collect/proposal_coalesce/_normalize_edge/
+# proposal_convergence_queue — RETIRED 2026-09-04, B98), the staging writer (
+# proposal_stage), proposal_unruled_show and _wrap58 - verbatim,
+# comments and R202 included. The propose half of that moved AGAIN on
+# 2026-09-03, to propose_lifecycle.py (cohesion re-homing stage 8). The
+# names this file still calls are imported at the top.
 # Vetting MOVED to vetting.py, 2026-08-16 (phase 2 stage 4, built
 # sixth): graph_now (per Self's ruling — _propose_approve is its one
 # consumer), _practice_describe/_practice_approve/_propose_describe/
@@ -1004,63 +486,21 @@ def collect_short_terms(client, parts, sysblocks, transcript, ot, guard, dry) ->
 # file still calls are imported at the top; test-only names are
 # re-exported beside them.
 
-def _prompt_blocks_changed(orig: pathlib.Path, new: pathlib.Path,
-                           parts: list[str]) -> list[str]:
-    """Parts whose EMITTED PROGRAM differs between two captures.
-
-    Compares the manifests' per-block sha256, never the capture files, whose
-    headers legitimately differ. Returns every part on any error — an unreadable
-    manifest must read as "cannot show it is the same", not as "it is"."""
-    try:
-        import prompt_capture as PC
-        a = PC.block_shas(PC.read_manifest(orig))
-        b = PC.block_shas(PC.read_manifest(new))
-    except Exception:
-        return list(parts)
-    out = []
-    for p in parts:
-        ha, hb = a.get(p, []), b.get(p, [])
-        if not ha or ha != hb:
-            out.append(p)
-    return out
-
-
-def list_resumable() -> int:
-    """Circles with a transcript and no close report — including a close
-    Ctrl-C interrupted mid-collection (some short_terms written, some
-    speaking parts still without; until 2026-08-19 any short_term at all
-    hid the circle here, the same over-wide test the --resume gate used).
-    A circle whose every speaking part has its short_term is a finished
-    close from before close reports existed, and stays hidden. Read-only."""
-    rows = []
-    for f in sorted((ROOT / "circles").glob("circle_*.md")):
-        ot = f.stem[len("circle_"):]
-        if (ROOT / "work" / "logs" / f"close_{ot}.json").is_file():
-            continue
-        done = {p.parent.name
-                for p in (ROOT / "parts").glob(f"*/short_term_{ot}.md")}
-        try:
-            topic, tr, _, _ = load_for_resume(f, ot, DEFAULT_PARTS)
-            spoke = {e["speaker"] for e in tr if e["speaker"] in PART_TAGS}
-            if done and not (spoke - done):
-                continue                     # closed, pre-close-report era
-            n = sum(1 for e in tr if e["speaker"] in PART_TAGS)
-            note = f"{n} statement(s)"
-            if done:
-                note += (f" — close interrupted, "
-                         f"{len(spoke - done)} short_term(s) missing")
-            rows.append((ot, note, (topic or "(no topic)")[:40]))
-        except ValueError as e:
-            rows.append((ot, "NOT RESUMABLE", str(e).split("\n")[0][:40]))
-    if not rows:
-        emit("command", "\n  no unclosed circles.")
-        return 0
-    emit("command", f"\n  {len(rows)} circle(s) with no close report:\n")
-    for ot, n, why in rows:
-        emit("command", f"    {ot}")
-        emit("command", f"        {n}")
-        emit("command", f"        {why}")
-    return 0
+def _dev_bool(v: str) -> bool:
+    """--dev's VALUE FORM, added alongside the bare flag: `--dev=true` /
+    `--dev=false`, so a caller that already has a boolean (e.g. circling.py
+    forwarding its own --dev=... token verbatim) can say so explicitly
+    rather than only being able to assert it present. `--dev` bare still
+    means true (nargs="?", const=True below) — the original R286 door is
+    unchanged. No other flag in this file takes `=value`; this is the one
+    exception, because a caller forwarding a value needs to forward
+    "false" too, and store_true has no way to say that."""
+    s = v.strip().lower()
+    if s == "true":
+        return True
+    if s == "false":
+        return False
+    raise argparse.ArgumentTypeError(f"--dev expects true or false, got {v!r}")
 
 
 # --------------------------------------------------------------------------
@@ -1071,7 +511,7 @@ def list_resumable() -> int:
 # dispatch_dev_cmd and cmd_issue_object — verbatim, the STAGE 2
 # ruling and R161 comments included. Until B61 (2026-08-21) this file
 # still CALLED ten of them by name from its own Self> loop, one branch
-# each, duplicating dispatch_dev_cmd()'s chain; the loop now delegates
+# each, duplicating command_dev_dispatch()'s chain; the loop now delegates
 # to that one dispatcher and only dispatch_dev_cmd/resolve_statement/
 # show_statements are imported. test_dispatch_partition.py keeps it so.
 
@@ -1088,13 +528,13 @@ def main() -> int:
     # state in gitrepo, and one UI process can run main() more than once.
     try:
         import gitrepo
-        gitrepo.reset_unconfigured_report()
+        gitrepo.system_git_unconfigured_report_reset()
     except ImportError:
         pass
     ap = argparse.ArgumentParser(description="IFS circle — local coordinator")
     ap.add_argument("--live", action="store_true",
-                    help="write to circles/ and parts/<name>/short_term_<OT>.md "
-                         "and run coordinator/circle_close.py at close")
+                    help="write to circles/ and parts/<name>/short_term_<OT>.toml "
+                         "and run coordinator/circle_close_verify.py at close")
     ap.add_argument("--dry-run", action="store_true",
                     help="no network, no API key needed; every part passes")
     ap.add_argument("--parts", default=",".join(DEFAULT_PARTS),
@@ -1106,6 +546,12 @@ def main() -> int:
                          f"{len(DEFAULT_PARTS)} part(s) in parts/). "
                          f"A reduced roster is for TESTING — omitted parts are "
                          f"absent from the circle and stay unaware of it.")
+    ap.add_argument("--group", default=None,
+                    help="open on a NAMED roster (coordinator/group_add.py, "
+                         "self/groups.toml) instead of --parts — a "
+                         "deliberately different roster, not a reduced one, "
+                         "so the REDUCED LIVE ROSTER warning below does not "
+                         "fire for it. Mutually exclusive with --parts.")
     ap.add_argument("--recall-arm", default="off",
                     choices=["off", "delivered", "withheld"],
                     help="tier A recall (remember_expand.py, "
@@ -1114,7 +560,7 @@ def main() -> int:
                          "computes and logs the packs without delivering "
                          "them — the trial's control arm.")
     ap.add_argument("--no-prewarm", action="store_true",
-                    help="skip prewarm() — the sequential, zero-output-token "
+                    help="skip stream_prewarm() — the sequential, zero-output-token "
                          "calls that write each part's cached prompt prefix "
                          "before the opening round. Without it, the opening "
                          "round pays the cache-write cost on the first real "
@@ -1143,11 +589,14 @@ def main() -> int:
                          "The transcript must round-trip byte-for-byte or the "
                          "resume is refused. No topic prompt and no opening "
                          "round: the circle continues where it stopped.")
-    ap.add_argument("--dev", action="store_true",
-                    help="open with dev mode ON — the DEV-table verbs and the "
-                         "help hierarchy answer at this terminal's Self> "
-                         "prompt. Default: off. The standalone terminal's only "
-                         "door since 2026-08-21: /dev at the circle prompt is "
+    ap.add_argument("--dev", nargs="?", const=True, default=False, type=_dev_bool,
+                    help="open with dev mode ON — the DEV-table verbs, the "
+                         "help hierarchy, and the coalesce/pre-warm/opening-"
+                         "round progress lines all answer at this terminal's "
+                         "Self> prompt. Default: off (also settable "
+                         "explicitly as --dev=false). Bare --dev, same as "
+                         "--dev=true. The standalone terminal's only door "
+                         "since 2026-08-21: /dev at the circle prompt is "
                          "gone (dev is the command pane's own unlisted verb).")
     ap.add_argument("--list-resumable", action="store_true",
                     help="show circles that have a transcript but no close report")
@@ -1172,18 +621,25 @@ def main() -> int:
     # and always hidden" — so the standalone terminal, which has no cmd>,
     # takes its dev state from this flag. The dual pane's command pane has
     # its own unlisted `dev`, and --dev-cmd forces dev on for its one call.
+    #
+    # SCOPE WIDENED, 2026-09-01 (the operator, this session): dev_mode used
+    # to gate only DEV_SUBSET_COMMANDS and the /help browsing surface (docs/BNF.md).
+    # It now ALSO gates the coalesce/prompt-capture/pre-warm/opening-round
+    # progress lines below and in llm_client.stream_prewarm()/circle_rounds.circle_blind_round_run
+    # — one switch for "developer view," not two. BNF.md's dev-mode section
+    # is updated to match.
     if args.dev:
         CS.dev_mode = True
 
     if args.list_resumable:
-        return list_resumable()
+        return CC.circle_resumable_list()
 
     if args.dev_cmd is not None:
         if not args.dev_cmd:
             emit("command", "  usage: --dev-cmd VERB [args...], e.g. "
                   "--dev-cmd practice-list")
             return 2
-        head = CS.normalise_head(args.dev_cmd[0])
+        head = CS.command_head_normalise(args.dev_cmd[0])
         rest_text = " " + " ".join(args.dev_cmd[1:]) if len(args.dev_cmd) > 1 else ""
         # "Bypasses dev_mode entirely" (help text above) was written but
         # never enforced — dev_mode defaults False at process start, so
@@ -1193,7 +649,7 @@ def main() -> int:
         # the old comment documented died with the global itself —
         # CS.dev_mode is a plain attribute write now.)
         CS.dev_mode = True
-        if not dispatch_dev_cmd(head, rest_text):
+        if not command_dev_dispatch(head, rest_text):
             emit("command", f"  {head} needs a live circle — not available via "
                   "--dev-cmd. Open one (or use circling's command pane while "
                   "one is running) for /issue-evidence-list, /issue-label-update, "
@@ -1210,7 +666,7 @@ def main() -> int:
     # downstream as no engagement rather than as a fault. Refused, not
     # warned, and refused for a sandbox run too: a probe that opens on six
     # parts and reports success is the failure this guards.
-    roster_problems = R.verify()
+    roster_problems = R.part_verify()
     if roster_problems:
         emit("command", "\n  !! THE ROSTER DOES NOT VERIFY — no circle opened.")
         for p in roster_problems:
@@ -1236,7 +692,22 @@ def main() -> int:
         return 2
 
 
-    parts = [p.strip() for p in args.parts.split(",") if p.strip()]
+    used_group = args.group is not None
+    if used_group and args.parts != ",".join(DEFAULT_PARTS):
+        emit("command", "--group and --parts were both given — use one, not "
+                        "both.")
+        return 2
+    if used_group:
+        import group_add as GA
+        resolved = GA.group_resolve(args.group)
+        if resolved is None:
+            emit("command", f"no group named {args.group!r} — "
+                            f"/group-list (or group_add.group_rows_read()) shows what "
+                            f"exists")
+            return 2
+        parts = resolved
+    else:
+        parts = [p.strip() for p in args.parts.split(",") if p.strip()]
     bad = [p for p in parts if p not in PART_TAGS or not (ROOT / "parts" / p).is_dir()]
     if bad:
         emit("command", f"unknown part(s): {', '.join(bad)}")
@@ -1247,22 +718,27 @@ def main() -> int:
     # A reduced roster is a testing affordance. In a LIVE circle it has a real
     # cost: an omitted part is absent from the transcript, writes no short_term,
     # and dreaming reads "no short_term for this circle" as no
-    # engagement (inter_circle.dream_one()) — indistinguishable from
+    # engagement (part_dreaming.part_dream()) — indistinguishable from
     # a part who was present and chose silence. It gets no dream entry and no
     # relationship update. It learns of the circle only indirectly, through
     # whatever the issue graph's state has become by the next circle it attends.
     missing_roster = [p for p in DEFAULT_PARTS if p not in parts]
-    if args.live and missing_roster:
+    # A NAMED GROUP IS DELIBERATE, NEVER "REDUCED" — the warning below exists
+    # to catch an ACCIDENTALLY partial --parts roster in a live IFS circle;
+    # --group ifs-that-cuts-someone or a genuinely different roster (an
+    # engineering group, say) chose its own membership on purpose and gets no
+    # scare, per docs/CIRCLE_TYPES_DESIGN.md.
+    if args.live and missing_roster and not used_group:
         emit("command", "\n  !! REDUCED LIVE ROSTER")
         emit("command", f"     absent: {', '.join(PART_TAGS[p] for p in missing_roster)}")
         emit("command", "     These parts will not be present, will write no short_term, and")
-        emit("command", "     the nightly will record no engagement for them. They will learn")
+        emit("command", "     dreaming will record no engagement for them. They will learn")
         emit("command", "     of this circle only indirectly, via the issue graph's state next")
-        emit("command", "     time they attend. Prefer sandbox mode for partial rosters.")
+        emit("command", "     time they attend. Prefer --dry-run for partial rosters.")
         if not args.yes and read_line("     type 'yes' to proceed: ").strip().lower() != "yes":
             emit("command", "     cancelled.")
             # 2, NOT 1. Exit 1 means a circle RAN and its record is
-            # incomplete — the thing the nightly must be told about. A
+            # incomplete — the thing dreaming/reconcile must be told about. A
             # cancelled open produced no record at all, and a caller that
             # cannot tell those apart learns nothing from either. Was 1
             # until 2026-08-09, when the contract was written down and the
@@ -1288,7 +764,8 @@ def main() -> int:
             emit("command", f"--resume wants an open time like 2026-08-02_1259, got {ot!r}")
             return 2
         closed = ROOT / "work" / "logs" / f"close_{ot}.json"
-        done = sorted((ROOT / "parts").glob(f"*/short_term_{ot}.md"))
+        import short_term_manager as STM
+        done = STM.short_term_glob(ROOT / "parts", ot)      # either suffix (B96)
         if args.live and closed.is_file():
             emit("command", f"\n  circle_{ot} is already closed — refusing to reopen it.")
             emit("command", f"     close report: {closed.relative_to(ROOT)}")
@@ -1305,10 +782,10 @@ def main() -> int:
             # older-era close from before close reports existed. The
             # transcript itself tells the two apart: an interrupted close
             # has a SPEAKING part with no short_term; a finished one does
-            # not. collect_short_terms() keeps the already-written files,
+            # not. short_term_collect() keeps the already-written files,
             # so resuming an interrupted close collects only the missing.
             try:
-                _, _, tr0 = TS.parse_transcript(
+                _, _, tr0 = TS.circle_transcript_parse(
                     circle_path(ot).read_text(encoding="utf-8"))
             except (OSError, ValueError) as e:
                 emit("command", f"\n  circle_{ot} has short_terms but its "
@@ -1339,10 +816,10 @@ def main() -> int:
         # THE TWO FAILURES STAY DISTINGUISHABLE, because they need different
         # answers from a person: the package missing is an install, and the
         # key missing is R330's whole page of how to get one and where to put
-        # it. build_client() raises for the second and lets the first through
+        # it. stream_client_build() raises for the second and lets the first through
         # as ImportError.
         try:
-            client = build_client()
+            client = stream_client_build()
         except ImportError:
             emit("command", "pip install anthropic")
             return 2
@@ -1360,7 +837,7 @@ def main() -> int:
     emit("command", f"\nIFS circle coordinator — {mode} — "
           f"{ot or 'open time assigned when the topic is entered'}")
     # B56(1), 2026-08-19: NAME THE TREE, at open. Named as the one thing to
-    # watch on 2026-08-04 and never built. paths.ROOT is derived from
+    # watch on 2026-08-04 and never built. record_paths.ROOT is derived from
     # __file__, so a circle run inside a worktree already reads and writes
     # only that worktree — which is what makes running a LIVE circle in a lab
     # tree by mistake both possible and, until this line, invisible.
@@ -1369,7 +846,7 @@ def main() -> int:
     # (B56(5)) asks it too and two copies of "am I in a lab" would be the
     # three-copies problem B57(2) just finished undoing.
     import gitrepo as _G
-    in_main_checkout = _G.in_main_checkout()
+    in_main_checkout = _G.system_git_is_main_checkout()
     emit("command", f"tree: {ROOT}"
          + ("" if in_main_checkout else "   (A WORKTREE, not the main checkout)"))
     if args.live and not in_main_checkout:
@@ -1386,7 +863,7 @@ def main() -> int:
         emit("command", f"transcript: {path}")
     if not args.live:
         # B32 + R176: the old text said "work/ is write-protected", which was
-        # already false (work/logs/ is written via circle_close.py) and became
+        # already false (work/logs/ is written via circle_close_verify.py) and became
         # doubly so when sandbox output moved UNDER work/. Name the one root
         # that is actually writable instead of listing what is not.
         emit("command", "sandbox mode: writes land under work/sandbox/ only; "
@@ -1410,13 +887,21 @@ def main() -> int:
     # printing them where they are found would put them under the alt-screen
     # and lose them. This is the first point in the open where a surface
     # certainly exists.
-    SET.flush_corrections(lambda t: emit("command", t))
+    SET.setting_corrections_flush(lambda t: emit("command", t))
 
-    emit("command", "\nintegrity check:", end=" ", flush=True)
+    # LABEL AND RESULT ARE ONE emit() CALL, for both checks below — never two
+    # joined by end=" "/flush=True. The dual-pane adapter (ui/circling.py
+    # CircleEngine._emit) queues one pane line per emit() call and has no
+    # notion of "still on the previous line", so a partial-line label
+    # followed by a separate result call renders as two lines there even
+    # though a real terminal shows them joined. Emitting the whole
+    # "<check>: <result>" string in a single call is what makes the two
+    # environments agree, so the check's outcome must be known before
+    # anything is emitted for it.
     with PC.PHASES.span("open.integrity_check"):
-        _findings, _seen = CI.sweep()
+        _findings, _seen = CI.record_sweep()
     if _findings:
-        emit("command", "FAILED")
+        emit("command", "\nintegrity check: FAILED")
         emit("command", f"\n  !! {len(_findings)} operational file(s) are corrupted. "
                         f"The circle was NOT opened.\n")
         for _f in _findings:
@@ -1427,26 +912,27 @@ def main() -> int:
                         "entry, no API call.\n     Repair or restore the file(s) "
                         "above, then open again.")
         return 2
-    emit("command", f"ok ({_seen} files)")
+    emit("command", f"\nintegrity check: ok ({_seen} files)")
 
     # THE API CHECK, as early as it can be run: the client exists, and nothing
     # has been typed or written. See the preflight block above for the ruling.
-    if note := key_source_note():
+    # No blank line ahead of it: the integrity check above already opened
+    # this section, and the two checks read as one block, not two.
+    if note := stream_key_source_note():
         emit("command", f"\n  !! {note}")
     if client is not None:
-        emit("command", "\napi check:", end=" ", flush=True)
         # The span wraps the WHOLE check — test_providers.py greps this file
         # for the walrus line verbatim, so the timing goes around it, not
         # through it.
         with PC.PHASES.span("open.api_check"):
-            if why := preflight_api(client, args.dry_run):
-                emit("command", "FAILED")
+            if why := stream_api_preflight(client, args.dry_run):
+                emit("command", "api check: FAILED")
                 emit("command", f"\n  !! {why}")
                 emit("command", "\n     Nothing was written — no transcript, no working-set "
                       "entry.\n     Fix the key and open again; the topic has not "
                       "been asked for yet.")
                 return 2
-        emit("command", "ok")
+        emit("command", "api check: ok")
 
     # IS A CIRCLE ALREADY OPEN? CLAUDE.md has required this before any write
     # under circles/ since 2026-08-06 (LOG.md E12) and circle.py — the one
@@ -1464,7 +950,7 @@ def main() -> int:
         try:
             import circle_state
             base = ((ROOT if args.live else SANDBOX) / "circles").resolve()
-            openc = [c for c in circle_state.open_circles()
+            openc = [c for c in circle_state.circle_open_read()
                      if _within(c["path"].resolve(), base)]
         except Exception as e:                                   # noqa: BLE001
             openc = [{"path": pathlib.Path("(unknown)"),
@@ -1478,7 +964,7 @@ def main() -> int:
         # The resume gate already knows the real test — a part SPOKE, has
         # no short_term, and there is no close report — so ask it here,
         # where it can still be acted on.
-        interrupted = _interrupted_closes(base) if args.live else []
+        interrupted = CC._interrupted_closes(base) if args.live else []
         for ot_i, missing_i in interrupted:
             emit("command", f"\n  !! circle_{ot_i}: its CLOSE was interrupted.")
             emit("command", f"     {len(missing_i)} part(s) spoke and have no "
@@ -1492,7 +978,7 @@ def main() -> int:
         # above — transcript committed, every short_term written — so nothing
         # here spoke to it after the close that printed the re-run line. See
         # _failed_phase2(); the `dream/<OT>` tag is what clears it.
-        for ot_f in _failed_phase2(base):
+        for ot_f in CC._failed_phase2(base):
             emit("command", f"\n  !! circle_{ot_f}: its DREAMING did not run.")
             emit("command", "     The circle itself is complete and committed; "
                   "nothing was")
@@ -1519,23 +1005,26 @@ def main() -> int:
     # whose prompts were already warmed under today's register: re-vetting
     # here would change BLOCK 1 out from under an in-flight transcript.
     # NEXT.md D14,
-    # 2026-08-17: no longer `and args.live` — vet_pending_proposals() now
+    # 2026-08-17: no longer `and args.live` — proposal_vet() now
     # runs in sandbox too, describing and validating without ruling.
     if not args.resume:
         # THE COALESCE REFRESH, R356 (B69) — hash-guarded, so it makes a
         # model call only when the pending set changed since it last ran.
         # It lives HERE, at the real checkpoints, and NOT inside
-        # vet_pending_proposals(): the suites drive that loop live against
+        # proposal_vet(): the suites drive that loop live against
         # temp registers, and a refresh inside it sent a real model call
         # from a test run (E22). Live only; fails open — a suggestion pass
         # must never block a circle's open.
         if args.live:
             try:
-                import coalesce as CG
-                CG.refresh_if_stale(say=lambda m: emit("command", m))
+                import proposal_group_manager as CG
+                # ROUTINE CHATTER, dev-gated (2026-09-01) — the exception
+                # branch below stays unconditional: a failure is not chatter.
+                CG.proposal_group_refresh(
+                    say=lambda m: emit("command", m) if CS.dev_mode else None)
             except Exception as e:
                 emit("command", f"  coalesce: skipped ({e})")
-        vet_pending_proposals("before this circle's prompts are warmed", args.live)
+        proposal_vet("before this circle's prompts are warmed", args.live)
 
         # THE SETTINGS FOLD, 2026-08-28 (R379). A change to
         # anything that shapes a prompt block, the model, or a budget a block
@@ -1551,12 +1040,12 @@ def main() -> int:
         # RESUMED circle must keep the settings its own transcript began
         # under — `if not args.resume` above is what gives it that.
         try:
-            import settings as _SET
-            folded = _SET.fold_pending()
+            import setting_manager as _SET
+            folded = _SET.setting_pending_fold()
             if folded:
                 emit("command", "\nsettings now in force for this circle:")
                 for k in folded:
-                    emit("command", f"  {k} = {_SET.active().get(k)}")
+                    emit("command", f"  {k} = {_SET.setting_active_read().get(k)}")
         except Exception as e:                                 # noqa: BLE001
             # FAILS OPEN, like the coalesce refresh above it. A settings file
             # that cannot be folded must not stop a circle opening; the
@@ -1572,7 +1061,7 @@ def main() -> int:
     # nothing is due; it ends with "Starting your circle..." and the focus
     # handover ("state" tokens) when anything fired.
     import initialization as INIT
-    INIT.run_initialization(live=args.live, resume=args.resume, yes=args.yes)
+    INIT.initialization_run(live=args.live, resume=args.resume, yes=args.yes)
 
     # THE ANSWER NAMES THE CONSOLE THE SAME CIRCLE IT IS GIVEN. CONSOLE_NAME
     # was bound once, at import — BEFORE the dialog above records
@@ -1584,10 +1073,10 @@ def main() -> int:
     # both read the attribute at each render, so both follow. transcript_
     # store's copy is rebound too — it compares historic Self tags with it.
     global CONSOLE_NAME
-    CONSOLE_NAME = ID.user_name()
+    CONSOLE_NAME = ID.user_name_read()
     TS.CONSOLE_NAME = CONSOLE_NAME
 
-    core = load_shared()
+    core = group_shared_read()
     # ONE BUILD, AFTER the working set is chosen — RULED 2026-08-19 (R244;
     # 2026-08-18 review #58, second half). The open used to build every
     # part's blocks for the whole graph BEFORE asking, then rebuild them
@@ -1599,28 +1088,32 @@ def main() -> int:
     # --resume does not re-ask. Leaving this at `[]` would have made resume the
     # one path that still silently brought the whole graph in.
     chosen: "list[str] | None" = None
-    import issue_projection as IP
+    import issue_prompt_projection as IP
     # NO LIVE ISSUE, NO QUESTION — R330, 2026-08-23: *"If
     # there are no issues[], do not ask the working set question."* The
     # answer blank would give, taken silently: None is "no issues in this
-    # circle at all", the ruled spelling (finding 2, 2026-08-20). Leads,
-    # roots and settled issues do not count — live_nodes() is what BLOCK 2
-    # projects, so an empty one means there was nothing to choose from.
+    # circle at all", the ruled spelling (finding 2, 2026-08-20). Leads and
+    # settled issues do not count — live_nodes() is what BLOCK 2 projects,
+    # so an empty one means there was nothing to choose from. A root DOES
+    # count now (R429, 2026-09-01: a root is live) — so
+    # in THIS tree, which already carries two roots that can never be
+    # retired, live_nodes() can no longer be empty and this question is
+    # asked at every future circle open. It stays empty-checked, not
+    # deleted, for a fresh install with no issues/ at all.
     if not args.resume and IP.live_nodes():
-        chosen = ask_working_set(IP)
+        chosen = WS.working_set_ask(IP, read_line=read_line_no_annotation)
     with PC.PHASES.span("open.prompt_build"):
-        briefing, unknown = build_briefing(chosen)
+        briefing, unknown = circle_briefing_build(chosen)
         if unknown:
             emit("command", f"  unknown issue id(s) ignored: {', '.join(unknown)}")
         if chosen:
-            focus, per, _ = IP.resolve(chosen)
+            focus, per, _ = IP.issue_resolve(chosen)
             emit("circle", f"  focus {', '.join(focus) or '—'}"
                   + (f" · related {', '.join(per)}" if per
                      else " · NO LIVE ISSUE-RELATIONSHIP reaches these"))
         sysblocks, notes = {}, {}
         for p in parts:
-            shared, notes[p] = shared_block(p, briefing)
-            sysblocks[p] = system_blocks(p, core, shared)
+            sysblocks[p], notes[p] = prompt_part_assemble(p, core, briefing)
     # The per-part briefing note used to print here unconditionally, every
     # open — a development artifact once circling made
     # it one of the first things on screen. REVISED 2026-08-10: moved to
@@ -1679,8 +1172,8 @@ def main() -> int:
     # off would itself reveal the gate (R199).
     if args.live and CS.dev_mode:
         try:
-            import topics as TOP
-            n_open = len(TOP.open_topics())
+            import topic_manager as TOP
+            n_open = len(TOP.topic_open_read())
         except Exception as e:                                   # noqa: BLE001
             n_open = 0
             emit("command", f"  (topics unreadable: {e})")
@@ -1706,7 +1199,7 @@ def main() -> int:
         if not _opened or not _opened["armed"]:
             return
         _opened["armed"] = False
-        if discard_empty_open(path, ot, _opened["head"], args.live):
+        if circle_transcript_discard_empty(path, ot, _opened["head"], args.live):
             emit("command", f"\n  circle_{ot} discarded — nothing was ever said.")
             emit("command", "     transcript and working-set entry removed; the record "
                   "is unchanged.")
@@ -1716,7 +1209,7 @@ def main() -> int:
             if _cap["dir"] is not None:
                 try:
                     import prompt_capture as _PC
-                    n = _PC.discard(_cap["dir"])
+                    n = _PC.prompt_capture_discard(_cap["dir"])
                     if n:
                         emit("command", f"     prompt capture removed "
                                         f"({n} file(s)).")
@@ -1726,7 +1219,7 @@ def main() -> int:
     resumed = None
     if args.resume:
         try:
-            resumed = load_for_resume(path, ot, parts)
+            resumed = circle_transcript_resume_read(path, ot, parts)
         except ValueError as e:
             emit("command", f"\n  !! {e}")
             return 2
@@ -1768,13 +1261,19 @@ def main() -> int:
         # circle; this is the same refusal for a LIVE one, which is the case
         # that loses data rather than merely confusing a reader.
         if path.exists():
+            # SAME BUG SHAPE AS #25's fix below (audit-register.md, found
+            # independently while regression-testing that fix): this check
+            # runs for --dry-run too (path is circle_path(ot), which is
+            # SANDBOX-relative there), so the resume hint must match.
+            resume_flag = "--live" if args.live else "--dry-run"
             emit("command", f"\n  !! {path} already exists — refusing to overwrite it.")
             emit("command", "     Two circles opened in the same minute share an open")
             emit("command", "     time. Wait for the clock to turn over, or resume that")
-            emit("command", f"     one: python coordinator\\circle.py --live --resume {ot}")
+            emit("command", f"     one: python coordinator\\circle.py {resume_flag} "
+                            f"--resume {ot}")
             return 2
-        open_transcript(guard, path, ot, topic)
-        record_working_set(ot, chosen, topic, args.live)
+        circle_transcript_open(guard, path, ot, topic)
+        WS.working_set_record(ot, chosen, topic, args.live)
         emit("command", f"\ntranscript: {path}")
 
         # ARMED HERE, DISARMED once the opening round has run. Registered at
@@ -1796,16 +1295,22 @@ def main() -> int:
     # topic is known and BEFORE the capture below, because the capture
     # records BLOCK 4 as sent and the pack is part of the emitted program.
     # Off unless the trial arm says otherwise; its own module guarantees a
-    # failure here cannot cost the open.
-    import remember_expand as REX
-    REX.apply(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm)
+    # failure here cannot cost the open. part_attention_finalize() is BLOCK 4's own
+    # Phase 2 (role_attention.py's module docstring) — it delegates to
+    # remember_expand.remember_expand_apply() rather than reimplementing it. Called through
+    # prompt_build.py's own re-export, 2026-09-02, on direct instruction
+    # that only prompt_build.py execute any of the four sole assemblers —
+    # this was the one real call site still importing role_attention.py
+    # itself, since 2026-09-02's own block-3/4 extraction shipped it that
+    # way.
+    part_attention_finalize(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm)
     # PART-INITIATED RECALL (recall_index.py, R402) arms from the same
     # flag, and clears here because CircleEngine runs this main() inside a
     # long-lived UI process — module state must not survive one circle
     # into the next.
     import recall_index as RC
-    RC.clear()
-    RC.set_arm(args.recall_arm)
+    RC.recall_clear()
+    RC.recall_arm_set(args.recall_arm)
     pdir = None
     try:
         import prompt_capture
@@ -1816,7 +1321,7 @@ def main() -> int:
             while (cap_root / f"{ot}_resume_{k}").exists():
                 k += 1
             cap_ot = f"{ot}_resume_{k}"
-        pdir = prompt_capture.write(cap_ot, sysblocks, notes, args.live,
+        pdir = prompt_capture.prompt_capture_write(cap_ot, sysblocks, notes, args.live,
                                     names=block_order())
         _cap["dir"] = pdir
         if pdir and args.resume:
@@ -1826,7 +1331,7 @@ def main() -> int:
             # program" — the first live resume (2026-08-02) diffed whole
             # capture files and reported every part CHANGED on a header
             # line alone.
-            changed = _prompt_blocks_changed(cap_root / ot, pdir, parts)
+            changed = CC._prompt_blocks_changed(cap_root / ot, pdir, parts)
             if changed:
                 # The emitted program is the thing a part actually runs. If it
                 # moved between sittings, the second half of this circle is not
@@ -1842,13 +1347,14 @@ def main() -> int:
         # briefing.md, the old --minimal extra, is GONE with the old layout:
         # Block2_circle_objectives.md IS the constructed briefing, once, as
         # its own document — what that file existed to provide.
-        if pdir:
-            n = sum(f.stat().st_size for f in pdir.glob("*") if f.is_file())
-            emit("command", f"\nprompts captured: {pdir.relative_to(ROOT)}  "
-                  f"({n / 1024:.0f} KB, {len(parts)} part(s), verified byte-for-byte; "
-                  f"every request will be recorded there)")
-        else:
-            emit("command", "\nprompts NOT captured — dry-run")
+        if CS.dev_mode:
+            if pdir:
+                n = sum(f.stat().st_size for f in pdir.glob("*") if f.is_file())
+                emit("command", f"\nprompts captured: {pdir.relative_to(ROOT)}  "
+                      f"({n / 1024:.0f} KB, {len(parts)} part(s), verified byte-for-byte; "
+                      f"every request will be recorded there)")
+            else:
+                emit("command", "\nprompts NOT captured — dry-run")
     except Exception as e:
         # A capture failure must not cost a circle, but it must be loud and it
         # must make the run non-zero: the emitted program is the thing no other
@@ -1856,20 +1362,21 @@ def main() -> int:
         fail(f"prompt capture FAILED: {e}")
     try:
         import prompt_capture
-        prompt_capture.open_turn_log(pdir, ot)
+        prompt_capture.prompt_turn_log_open(pdir, ot)
     except Exception as e:                                   # noqa: BLE001
         fail(f"per-turn capture could not be opened: {e}")
 
     if not args.no_prewarm:
-        emit("command", "\npre-warming caches:")
+        if CS.dev_mode:
+            emit("command", "\npre-warming caches:")
         try:
             with PC.PHASES.span("open.prewarm"):
-                prewarm(client, parts, sysblocks, args.dry_run)
+                stream_prewarm(client, parts, sysblocks, args.dry_run)
         except Exception as e:                                   # noqa: BLE001
             # The 2026-08-09 traceback's exact site. Seven API calls, and a
             # failure in any of them used to print a stack trace over a
             # transcript that was already on disk.
-            emit("command", f"\n  !! PRE-WARM FAILED — {explain_api_failure(e)}")
+            emit("command", f"\n  !! PRE-WARM FAILED — {stream_failure_explain(e)}")
             discard_unspoken()
             return 2
 
@@ -1919,14 +1426,16 @@ def main() -> int:
     if resumed:
         _, transcript, since_self, state = resumed
     elif args.no_blind:
-        emit("command", "\nopening round — SEQUENTIAL (prior protocol, --no-blind).")
+        if CS.dev_mode:
+            emit("command", "\nopening round — SEQUENTIAL (prior protocol, --no-blind).")
         with PC.PHASES.span("round"):
-            run_round(client, parts, sysblocks, transcript, since_self, state,
+            circle_round_run(client, parts, sysblocks, transcript, since_self, state,
                       guard, path, args.dry_run, live=args.live)
     else:
-        emit("command", "\nopening round — BLIND (parallel; CIRCLE_DESIGN §1).")
+        if CS.dev_mode:
+            emit("command", "\nopening round — BLIND (parallel; CIRCLE_DESIGN §1).")
         with PC.PHASES.span("round"):
-            run_blind_round(client, parts, sysblocks, transcript, since_self,
+            circle_blind_round_run(client, parts, sysblocks, transcript, since_self,
                             state, guard, path, args.dry_run, live=args.live)
 
     # DISARMED. Past this point the circle has had its opening round, and
@@ -1976,7 +1485,7 @@ def main() -> int:
             break
         # A RECALL IS A PART'S, NOT SELF'S — RULED 2026-08-30, the operator,
         # verbatim: *"refuse it."* Asked as a decision because nothing
-        # enforced it: apply_recall() is called from rounds.py alone, so a
+        # enforced it: apply_recall() is called from circle_rounds.py alone, so a
         # `[recall: ...]` typed here was neither executed, nor stripped, nor
         # refused. withheld() was False for it, so render_messages() spoke it
         # to all seven parts as ordinary Self speech and the raw line entered
@@ -2009,12 +1518,12 @@ def main() -> int:
         # space in "/close " is the token boundary: it admits "/close ..."
         # without also admitting "/closeout" or similar.
         if cmd == "/close" or cmd.startswith("/close "):
-            props = unruled_proposals(transcript, issue_cmds)
+            props = proposal_unruled_list(transcript, issue_cmds)
             if props and not closing_confirmed:
                 # Ruled 2026-08-04: surfaced at close, for Self to rule on
                 # or pass. Shown ONCE — a second /close proceeds, so a
                 # proposal can never block a circle from ending.
-                show_unruled_proposals(props)
+                proposal_unruled_show(props)
                 closing_confirmed = True
                 # THE UI IS TOLD WHICH /close THIS WAS — 2026-08-21, the lab
                 # circle 2026-08-21_1139: the dual pane moved the operator to
@@ -2077,9 +1586,9 @@ def main() -> int:
             if not arg:
                 emit("circle", HS.circle_pane_help())
             elif arg == "all":
-                emit("command", help_text(""))
+                emit("command", command_help_render(""))
             else:
-                emit("command", help_text(arg))
+                emit("command", command_help_render(arg))
             continue
         if cmd == "/status":
             # /tokens FOLDED IN HERE, 2026-08-20, and the seven identical
@@ -2097,7 +1606,7 @@ def main() -> int:
             # which is a different job from telling Self the size.
             emit("command", f"\n  {ROOT.name}  ({'LIVE' if args.live else 'dry-run'})"
                   f"\n  {len(parts)} parts")
-            emit("command", token_table(parts, sysblocks, since_self,
+            emit("command", part_token_table(parts, sysblocks, since_self,
                                         client, MODEL, args.dry_run))
             emit("command", f"\n  running cost ${METER.cost():.4f} over {METER.calls} calls")
             continue
@@ -2107,7 +1616,7 @@ def main() -> int:
             # recognizes beyond speech itself (circling_and_evolving.md
             # §5, §9). Not a rename: /round keeps working unchanged.
             with PC.PHASES.span("round"):
-                run_round(client, parts, sysblocks, transcript, since_self,
+                circle_round_run(client, parts, sysblocks, transcript, since_self,
                           state, guard, path, args.dry_run, live=args.live)
             continue
         # NO /dev BRANCH, 2026-08-21 (R286): "dev should not
@@ -2119,7 +1628,7 @@ def main() -> int:
         # terminal opens with --dev. A `/dev` typed here now falls through
         # to UNKNOWN COMMAND like any other slash word, and is never spoken.
         if (not CS.dev_mode and cmd.startswith("/")
-                and CS.normalise_head(cmd.split(" ", 1)[0])
+                and CS.command_head_normalise(cmd.split(" ", 1)[0])
                 not in CS.USER_SUBSET_COMMANDS):
             # R266, 2026-08-20: DEV MODE ADDS, IT NEVER TAKES AWAY. This
             # refused EVERY remaining "/" verb with dev off, which made the
@@ -2146,7 +1655,7 @@ def main() -> int:
         # Exact, like the verbs beside it: the loop owns it because it
         # reads the live transcript, which no dispatcher has.
         if cmd == "/issue-evidence-list":
-            show_statements(transcript)
+            statement_show(transcript)
             continue
         # THE SLASH IS REQUIRED HERE, and this line is why — 2026-08-20.
         # `head` was the RAW first token until normalise_head() arrived with
@@ -2160,11 +1669,11 @@ def main() -> int:
         #
         # R268's neighbour, in the coordinator rather than the pane: a
         # standalone command in circle dialog is not a command.
-        head = (CS.normalise_head(cmd.split(" ", 1)[0])
+        head = (CS.command_head_normalise(cmd.split(" ", 1)[0])
                 if cmd.startswith("/") else "")
         # ONE DISPATCHER — B61, 2026-08-21 (the operator: "tidy now"). Ten verbs
         # used to be branched here by hand, each a copy of the branch
-        # commands.dispatch_dev_cmd() already had for it, and nothing
+        # commands.command_dev_dispatch() already had for it, and nothing
         # asserted the two agreed; /recall shipped in one and not the other
         # (its history is on the dispatcher's docstring). Every verb that
         # does not need THIS circle — the registers, the listings, the
@@ -2183,30 +1692,30 @@ def main() -> int:
         def _record_practice_cmd() -> None:
             transcript.append({"speaker": ID.SELF_ID, "display": SELF_DISPLAY,
                                "text": cmd, "cmd": True})
-            append(guard, path, f"[{SELF_DISPLAY}]: {cmd}")
-        if head and dispatch_dev_cmd(
+            circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {cmd}")
+        if head and command_dev_dispatch(
                 head, cmd.split(" ", 1)[1] if " " in cmd else "",
                 record=_record_practice_cmd,
                 guard=guard):
             continue
         if head in IC.HEADS:
-            c, why = IC.parse(cmd, circle_ref)
+            c, why = IC.issue_command_parse(cmd, circle_ref)
             if c is None:
                 emit("command", f"  {why}")
                 continue
             if c["verb"] == "issue-evidence-add":
-                # IC.parse() stays pure — it only knows the statement
+                # IC.issue_command_parse() stays pure — it only knows the statement
                 # NUMBER. Resolving it against the live transcript (same
                 # numbering /issue-evidence-list shows) belongs here, the same way
-                # IC.precheck() below needs the live graph passed in.
-                stmt_e, why3 = resolve_statement(transcript, c["stmt"])
+                # IC.issue_precheck() below needs the live graph passed in.
+                stmt_e, why3 = statement_resolve(transcript, c["stmt"])
                 if stmt_e is None:
                     emit("command", f"  {why3}")
                     continue
                 c["part"] = stmt_e["speaker"]
                 c["quote"] = stmt_e["text"]
                 c["source"] = circle_ref
-            if why2 := IC.precheck(c, VT.graph_now()):
+            if why2 := IC.issue_precheck(c, VT.issue_graph_now_read()):
                 emit("command", f"  {why2}")
                 continue
             c["index"] = len(transcript)
@@ -2217,8 +1726,8 @@ def main() -> int:
             # needed: the file is what the gate will verify the edge against.
             transcript.append({"speaker": ID.SELF_ID, "display": SELF_DISPLAY,
                                "text": cmd, "cmd": True})
-            append(guard, path, f"[{SELF_DISPLAY}]: {cmd}")
-            emit("command", f"  recorded — {IC.describe(c)}"
+            circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {cmd}")
+            emit("command", f"  recorded — {IC.issue_describe(c)}"
                   f"   ({len(issue_cmds)} pending, applied at close)")
             continue
         # UNKNOWN SLASH-COMMANDS ARE REFUSED, NOT SPOKEN.
@@ -2230,7 +1739,7 @@ def main() -> int:
         # contaminated the one measurement marks exist to protect. See
         # work/instrument/LOG.md E06.
         if cmd.startswith("/"):
-            head = CS.normalise_head(cmd.split(" ", 1)[0])
+            head = CS.command_head_normalise(cmd.split(" ", 1)[0])
             emit("command", f"  UNKNOWN COMMAND {head} — not sent to the room. "
                   f"Known: {', '.join(KNOWN_CMDS)}")
             emit("command", f"  (to say this to the parts, retype it without the "
@@ -2239,42 +1748,42 @@ def main() -> int:
         if not cmd:
             continue
         raw = cmd
-        cmd, self_remembered = apply_self_remember(guard, SELF_DISPLAY, cmd)
+        cmd, self_remembered = remember_self_apply(guard, SELF_DISPLAY, cmd)
         if self_remembered:
             emit("command", "  (remember recorded to self/remember.toml — "
                   "stripped, private)")
         if cmd:
-            cmd = strip_malformed_markers(cmd, SELF_DISPLAY)
+            cmd = annotation_malformed_strip(cmd, SELF_DISPLAY)
         if not cmd:
             # STILL A PASS — no since_self reset, no state["last"], no round
             # run; Self said nothing the room can hear. RULED 2026-08-18, the
-            # same as a part's remember-only turn in rounds.py, and the RECORD
+            # same as a part's remember-only turn in circle_rounds.py, and the RECORD
             # keeps the bracket the same way: one withheld entry, one file
             # line, `remember_only` re-derived on resume. See that comment,
-            # and transcript_store.withheld().
+            # and transcript_store.circle_transcript_is_withheld().
             #
-            # A whole line that was only a MALFORMED non-remember marker still
+            # A whole line that was only a MALFORMED non-remember annotation still
             # writes nothing at all — there is no record to complete, which is
             # what `REMEMBER_RE.search(raw)` distinguishes.
-            record = strip_malformed_markers(raw.strip(), SELF_DISPLAY,
+            record = annotation_malformed_strip(raw.strip(), SELF_DISPLAY,
                                              quiet=True)
             if record and REMEMBER_RE.search(raw):
                 transcript.append({"speaker": ID.SELF_ID,
                                    "display": SELF_DISPLAY, "text": "",
                                    "raw": record, "remember_only": True})
-                append(guard, path, f"[{SELF_DISPLAY}]: {record}")
+                circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {record}")
             continue
         # THE ROOM AND THE RECORD PART COMPANY HERE, exactly as they do for
-        # a part in rounds.py — see that comment for the whole of it. Self's
+        # a part in circle_rounds.py — see that comment for the whole of it. Self's
         # own remember is no more the room's business than a part's: `cmd`
         # (stripped) is what the transcript entry, every rebuilt prompt and
-        # route_markers() get; `record` (bracket intact) is what the
+        # annotation_route() get; `record` (bracket intact) is what the
         # transcript FILE gets. Ruled 2026-08-14, built 2026-08-18.
         record = cmd
         if REMEMBER_RE.search(raw):
-            record = strip_malformed_markers(raw.strip(), SELF_DISPLAY,
+            record = annotation_malformed_strip(raw.strip(), SELF_DISPLAY,
                                              quiet=True)
-        # QUOTE-AS-MARK — R155, routed to an unvetted REMEMBER 2026-08-19
+        # QUOTE-AS-LANDS — R155, routed to an unvetted REMEMBER 2026-08-19
         # (R251). BEFORE the append, and that ordering is
         # the mechanism, not a preference: `transcript` must hold only
         # PRIOR statements for "a prior statement in this circle" to
@@ -2282,17 +1791,17 @@ def main() -> int:
         # valid because the list only ever grows. Reads `cmd` — the
         # ROOM's text — so an already-stripped bracket can never be
         # mistaken for quoted material.
-        QM.apply_quote_as_mark(guard, transcript, cmd)
+        QM.lands_quote_apply(guard, transcript, cmd)
         entry = {"speaker": ID.SELF_ID, "display": SELF_DISPLAY, "text": cmd}
         if record != cmd:
             entry["raw"] = record
         transcript.append(entry)
-        append(guard, path, f"[{SELF_DISPLAY}]: {record}")
-        route_markers(SELF_DISPLAY, cmd, live=args.live)
+        circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {record}")
+        annotation_route(SELF_DISPLAY, cmd, live=args.live)
         since_self = {p: 0 for p in parts}     # Self spoke — reset, per process_core
         state["last"] = None
         with PC.PHASES.span("round"):
-            run_round(client, parts, sysblocks, transcript, since_self, state,
+            circle_round_run(client, parts, sysblocks, transcript, since_self, state,
                       guard, path, args.dry_run, live=args.live)
 
     # ---- the circle's graph rulings -------------------------------------
@@ -2303,7 +1812,7 @@ def main() -> int:
     if issue_cmds and not aborted:
         cdir = (ROOT / "circles") if args.live else (SANDBOX / "circles")
         crec = cdir / f"commands_{ot}.toml"
-        crec.write_text(IC.dump(issue_cmds, circle_ref), encoding="utf-8",
+        crec.write_text(IC.issue_dump(issue_cmds, circle_ref), encoding="utf-8",
                         newline="\n")
         # COMMAND CHANNEL, 2026-08-21 — the operator, reading his close:
         # *"Proper output is in the wrong pane (circle), put it in command."*
@@ -2313,9 +1822,9 @@ def main() -> int:
         emit("command", f"\n  {len(issue_cmds)} graph ruling(s): "
               f"{crec.relative_to(ROOT)}")
         for c in issue_cmds:
-            emit("command", f"    {IC.describe(c)}")
+            emit("command", f"    {IC.issue_describe(c)}")
         if args.live:                     # ruled 2026-08-04: automatic
-            ok, msg = IC.apply(issue_cmds)
+            ok, msg = IC.issue_command_apply(issue_cmds)
             emit("command", f"  {msg}")
             if not ok:
                 emit("command", "  the transcript and the record are intact; fix and "
@@ -2332,29 +1841,30 @@ def main() -> int:
         emit("circle", f"\naborted. transcript kept: {path}")
         if args.live and any(e["speaker"] in PART_TAGS for e in transcript):
             emit("command", "  NOTE: no short_terms were collected. Parts that spoke have no")
-            emit("command", "  record of this circle. The nightly transcript safety net will")
-            emit("command", "  backfill them from the transcript before dreaming.")
+            emit("command", "  record of this circle, and nothing backfills them")
+            emit("command", "  automatically — an /abort never reaches dreaming. Repair by hand:")
+            emit("command", "    circle_audit.py --backfill --commit")
         emit("command", METER.report())
-        return report_failures()
+        return circle_failures_report()
 
     # THE SEPARATE PRACTICE STAGING CALL IS GONE, 2026-08-20 (B60). A
     # practice is proposed as `[proposed: /practice-add ...]` and a better
     # option as `[proposed: /better-option-add ...]`, so both are staged by
     # the ONE call below and RUN at approval. Its malformed report went with
     # it: a malformed annotation is now reported at the moment it is spoken,
-    # by strip_malformed_markers(), which is where R231 asked for it and is
+    # by annotation_malformed_strip(), which is where R231 asked for it and is
     # strictly earlier than /close.
     #
     # R202, 2026-08-16: ONE staging call replaces the separate request/
     # relation ones — `[proposed: <command>]` covers every future now
     # (spelled `[propose <text>]` until R273).
-    # ADDITIVE, ALONGSIDE the existing show_unruled_proposals()/`/issue
+    # ADDITIVE, ALONGSIDE the existing proposal_unruled_show()/`/issue
     # issue-relationship-add` path below (unchanged) for an
     # issue-relationship-add attempt specifically — #32, Self's
     # explicit scope. issue_cmds is complete by this point (the Self>
     # loop has ended), so this can safely dedupe against every /issue
     # issue-relationship-add Self already typed this circle.
-    staged_propose_ids = stage_propose_proposals(ot, transcript, issue_cmds,
+    staged_propose_ids = proposal_stage(ot, transcript, issue_cmds,
                                                   args.live)
     if staged_propose_ids:
         # COMMAND, not circle: this is Coordinator reporting an operation
@@ -2369,7 +1879,7 @@ def main() -> int:
     # too, same as it will at the next priming (docs/BNF.md
     # PRACTICE LIFECYCLE, Vetting).
     # NEXT.md D14, 2026-08-17: no longer `if args.live:` around the vetting
-    # call — vet_pending_proposals() itself now handles sandbox (describe +
+    # call — proposal_vet() itself now handles sandbox (describe +
     # validate, never rule). The topics report below stays live-only; it is
     # unrelated to vetting and out of this ruling's scope.
     # the coalesce refresh, same guard and same reasons as the open
@@ -2378,11 +1888,12 @@ def main() -> int:
     # the operator's "once, at circle end" ruling names (R356).
     if args.live:
         try:
-            import coalesce as CG
-            CG.refresh_if_stale(say=lambda m: emit("command", m))
+            import proposal_group_manager as CG
+            CG.proposal_group_refresh(
+                say=lambda m: emit("command", m) if CS.dev_mode else None)
         except Exception as e:
             emit("command", f"  coalesce: skipped ({e})")
-    confirmed_this_close = vet_pending_proposals("at close", args.live,
+    confirmed_this_close = proposal_vet("at close", args.live,
                                                 ruled=issue_cmds)
     # THE OPEN-TOPICS NOTICE MOVED TO THE NEXT CIRCLE'S OPEN, 2026-08-20,
     # on the operator's finding: "This output suggests that /topic-* commands are
@@ -2407,7 +1918,7 @@ def main() -> int:
     # line with its cmd>-typed rulings already applied, so the picture is
     # left stale — and the next live close redraws it, because what is
     # tested is the FILES against the picture, not this circle against
-    # itself. See issue_draw.is_stale().
+    # itself. See issue_draw.issue_draw_is_stale().
     # THE CLOSE STOPWATCH AND THE HEARTBEAT (2026-08-30) start HERE — after
     # the vetting checkpoint, which is human time, and before the first
     # automated step. Everything below is what the <=5-minute aim covers,
@@ -2419,7 +1930,7 @@ def main() -> int:
 
     if args.live:
         with PC.PHASES.span("close.redraw_graph"):
-            redraw_issue_graph()
+            issue_graph_redraw()
 
     # THE START-OF-CLOSE MARKER, 2026-08-23. Written HERE and not at the
     # `/close` verb: everything above this line can still return without
@@ -2428,12 +1939,12 @@ def main() -> int:
     # is the last statement before the first short_term could be written, which
     # is exactly the window _interrupted_closes() could not see into.
     if args.live:
-        mark_close_started(ot)
+        CC.circle_close_mark(ot)
     emit("command", "\ncollecting short_terms:")
     try:
         with PC.PHASES.span("close.short_terms"):
-            written = collect_short_terms(client, parts, sysblocks, transcript,
-                                          ot, guard, args.dry_run)
+            written = CC.short_term_collect(client, parts, sysblocks, transcript,
+                                             ot, guard, args.dry_run)
     except KeyboardInterrupt:
         # The second Ctrl-C on 2026-08-02 landed here and left a traceback, no
         # short_terms and no close report. The transcript was never at risk —
@@ -2442,37 +1953,59 @@ def main() -> int:
         fail("close INTERRUPTED — short_terms incomplete")
         emit("command", "\n  !! close interrupted. THE TRANSCRIPT IS INTACT — every")
         emit("command", "     statement was written as it was made; nothing is lost.")
-        emit("command", f"     resume:   python coordinator\\circle.py --live --resume {ot}")
-        emit("command", "     or leave it: the nightly's transcript safety net backfills")
-        emit("command", "     every part that spoke but has no short_term.")
+        # THE MODE MUST MATCH THIS SESSION'S OWN, 2026-09-01 (audit-register.md
+        # #25) — a hardcoded --live here told a --dry-run session to resume
+        # with --live, which circle_path() (above) resolves to ROOT/circles/
+        # instead of the SANDBOX the transcript actually lives under. The
+        # identical shape D-c (R428) fixed two lines below, on the one line
+        # its approved scope did not touch.
+        resume_flag = "--live" if args.live else "--dry-run"
+        emit("command", f"     resume:   python coordinator\\circle.py {resume_flag} "
+                        f"--resume {ot}")
+        if args.live:
+            emit("command", "     or repair by hand:  circle_audit.py --backfill --commit")
+        # else: circle_audit.py --backfill only ever touches a LIVE close's
+        # short_terms (backfill_step() is step 0 of a LIVE process_circle) —
+        # a dry-run circle never reaches dreaming, so --resume is the only
+        # real repair here.
         PC.PHASES.stop_heartbeat()
         emit("command", METER.report())
-        return report_failures()
+        return circle_failures_report()
     if args.live:
         with PC.PHASES.span("close.verifier"):
-            run_verifier(ot)
+            circle_close_verifier_run(ot)
         with PC.PHASES.span("close.commit_circle"):
-            commit_circle(ot, written)
+            circle_commit(ot, written)
         # PHASE 2 — dreaming then synthesis, synchronous, AFTER the circle's
         # own commit (R167: a phase-2 failure leaves the circle safely
         # committed; R168: failures write a report, get one diagnostic
         # call, and hand back — no automated catch-up). LIVE ONLY:
         # SYNTHESIS writes self/, which no sandbox may touch.
-        emit("command", "\nphase 2 — dreaming and synthesis "
-              "(coordinator/inter_circle.py):")
+        if CS.dev_mode:
+            emit("command", "\nphase 2 — dreaming and synthesis "
+                  "(coordinator/inter_circle.py):")
         import inter_circle as ICP
-        if ICP.process_circle(ot, live=True, confirmed=confirmed_this_close,
-                              say=lambda s: emit("command", s)):
+        # THE WHOLE NARRATIVE IS TECHNICAL DETAIL, gated together
+        # (2026-09-01) — dreaming/synthesis progress, staging + gate,
+        # mid_term refresh, git-commit mechanics, even the failure
+        # diagnosis text process_circle() prints on its own way out. Safe
+        # to gate as one block because the FAILURE case has its own
+        # unconditional signal regardless: the fail() call right below,
+        # which fires whenever process_circle() returns non-zero whether
+        # or not its own narration was ever shown.
+        if ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
+                              say=lambda s: emit("command", s) if CS.dev_mode
+                                            else None):
             fail("phase 2 (dreaming/synthesis) did not complete — the "
                  "circle itself is committed; see work/logs/"
                  f"dream_error_{ot}.json and re-run by hand")
     else:
         emit("command", "  (sandbox mode: verifier not run — it reads the live tree)")
-        commit_sandbox(ot)
+        circle_sandbox_commit(ot)
         emit("command", "  (sandbox mode: no dreaming/synthesis — phase 2 "
               "writes self/, live circles only)")
     emit("command", METER.report())
-    write_spend_report(ot, guard.live)
+    circle_spend_report_write(ot, guard.live)
     # THE DELTA REPORT (circle_stats, 2026-08-30) — what this circle changed
     # across the registers, both segments. AFTER write_spend_report so the
     # spend it cites is on file; LIVE ONLY, because its anchors are the two
@@ -2482,17 +2015,17 @@ def main() -> int:
         try:
             import circle_delta as CD
             with PC.PHASES.span("close.delta_report"):
-                CD.at_close(ot, lambda s: emit("command", s))
+                CD.circle_delta_at_close(ot, lambda s: emit("command", s))
         except Exception as e:                                 # noqa: BLE001
             emit("command", f"  circle_delta skipped "
                             f"({type(e).__name__}: {e})")
     PC.PHASES.stop_heartbeat()
     PC.PHASES.report_close(lambda s: emit("command", s), CLOSE_AIM_SECONDS)
     emit("circle", f"\nclosed. transcript: {path}")
-    return report_failures()
+    return circle_failures_report()
 
 
-def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
+def circle_spend_report_write(ot: str, live: bool) -> "pathlib.Path | None":
     """work/logs/spend_<OT>.json — WHAT THIS CIRCLE COST, per provider and
     model. 2026-08-28, the operator: "provider/model costs should be
     independently tracked and inspectable".
@@ -2504,7 +2037,7 @@ def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
     why "what does the inter-circle half actually cost" could not be answered
     from the record at all.
 
-    WRITTEN HERE BECAUSE THE METER LIVES HERE. circle_close.py writes the
+    WRITTEN HERE BECAUSE THE METER LIVES HERE. circle_close_verify.py writes the
     close report from a SEPARATE PROCESS, shelled out to, and has no access
     to this process's meter — so the two records stay separate rather than
     one pretending to hold the other's facts.
@@ -2529,7 +2062,7 @@ def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
         return None                    # a sandbox circle spends nothing real
     try:
         import json
-        from atomic_write import atomic_write     # local, as elsewhere here
+        from atomic_write import record_atomic_write     # local, as elsewhere here
         payload = {"open_time": ot,
                    "written_at": datetime.datetime.now().isoformat(timespec="seconds"),
                    "close_aim_seconds": CLOSE_AIM_SECONDS,
@@ -2537,7 +2070,7 @@ def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
                    **METER.snapshot()}
         dest = ROOT / "work" / "logs" / f"spend_{ot}.json"
         dest.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write(dest, json.dumps(payload, indent=2) + "\n")
+        record_atomic_write(dest, json.dumps(payload, indent=2) + "\n")
         emit("command", f"  spend recorded: {dest.name}")
         return dest
     except Exception as e:                                     # noqa: BLE001
@@ -2547,9 +2080,9 @@ def write_spend_report(ot: str, live: bool) -> "pathlib.Path | None":
         return None
 
 
-def report_failures() -> int:
+def circle_failures_report() -> int:
     """Exit 0 only when the circle produced a complete record. Anything in the
-    ledger — a truncated statement, an unwritten short_term, a non-zero verifier —
+    record — a truncated statement, an unwritten short_term, a non-zero verifier —
     is a data problem that must be visible to whatever ran this script."""
     if not FAILURES:
         return 0

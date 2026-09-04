@@ -37,8 +37,10 @@ work/nightly/
 # Tool working databases — rewritten constantly, ~11MB each time
 .fileintel/
 
-# Run logs — derived, one per run
-work/logs/nightly*.log
+# Run logs — derived, one per run (circle_audit.py, renamed from
+# nightly.py 2026-08-19 — R228 removed the batch shape, this file
+# retired from scripts/ into coordinator/ the same day)
+work/logs/circle_audit*.log
 
 # TWO MEMOS, NOT RECORDS — 2026-08-26. Both are written by a live circle,
 # both were tracked by nothing, and so both sat dirty in the working tree
@@ -138,6 +140,8 @@ work/graph/coordinator_graph_live_simple.svg
 work/graph/coordinator_graph_live_simple.html
 work/graph/prompt_grammar.svg
 work/graph/prompt_grammar.html
+work/graph/llm_orchestration.svg
+work/graph/llm_orchestration.html
 
 # The Ticker flavor (ui/ticker, branch Ticker_Research): toolchain output.
 # node_modules and target are per-checkout builds; dist is vite's bundle;

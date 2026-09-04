@@ -8,11 +8,11 @@ issue_gate.py — the invariant gate for the issue graph: verifies claims about 
     python memory/issue_gate.py <dir>
 
 ## DESCRIPTION
-Where `issue_schema.py` checks that a node document is shaped the way the schema says it should be, `issue_gate.py` checks that the *claims* the graph makes are actually true, by cross-referencing every node against the transcripts it cites. The module's docstring frames this as "everything that was never about syntax," and lists eight invariants it enforces: VERBATIM (every evidence quote appears exactly, byte-for-byte, in the transcript it cites — the docstring cites catching an em-dash silently swapped for a colon), ATTRIBUTION (a quote was actually said by the part it is filed under, catching a case where Self's own words sat filed under a part's name for a month), SPAN (a quote must not run past a speaker-marker boundary into someone else's statement), CLOSURE (a live edge is legal only when both ends are live, or the far end is a root), ATTESTATION (an attested edge must carry a real quote from a real circle; a proposed one must name who is being asked to confirm it), DIRECTION (a `leads-to`/`narrower-than` edge whose own basis text describes the target as the *derived* thing is pointing backwards), EVIDENCE (a live node must cite something — Self is quoted directly ruling out "possible issues" recorded without evidence), and AGREEMENT (`held_by` and the set of parts actually giving evidence must name the same parties).
+Where `issue_schema.py` checks that a node document is shaped the way the schema says it should be, `issue_gate.py` checks that the *claims* the graph makes are actually true, by cross-referencing every node against the transcripts it cites. The module's docstring frames this as "everything that was never about syntax," and lists eight invariants it enforces: VERBATIM (every evidence quote appears exactly, byte-for-byte, in the transcript it cites — the docstring cites catching an em-dash silently swapped for a colon), ATTRIBUTION (a quote was actually said by the part it is filed under, catching a case where Self's own words sat filed under a part's name for a month), SPAN (a quote must not run past a speaker-marker boundary into someone else's statement), CLOSURE (a live edge is legal only when both ends are live — a root counts, since a root IS live), ATTESTATION (an attested edge must carry a real quote from a real circle; a proposed one must name who is being asked to confirm it), DIRECTION (a `leads-to`/`narrower-than` edge whose own basis text describes the target as the *derived* thing is pointing backwards), EVIDENCE (a live node must cite something — Self is quoted directly ruling out "possible issues" recorded without evidence), and AGREEMENT (`held_by` and the set of parts actually giving evidence must name the same parties).
 
 Since the TOML migration (2026-08-03), roughly half of what this file used to check — declared-vs-parsed counts, backslash-escaped Markdown artifacts, malformed edge-type regexes, section ordering — is now enforced structurally by the TOML format itself and by `issue_schema.check()`, so this file's remaining job is entirely the semantic, cross-file verification a schema cannot express. The script never writes anything; running it against an arbitrary directory (rather than the live `issues/`) is explicitly supported as a preview mode that does not touch that directory.
 
-The root exception (ruled 2026-08-05, B23) treats a `root`-status node as a legal edge target even though roots are not themselves "live" — a root is explicitly the source the live graph descends from and carries no claim of its own, so forbidding edges to it would make the graph unable to say where it came from.
+**ROOT IS LIVE, NOT AN EXCEPTION (R429, 2026-09-01, correcting R089/B23 of 2026-08-05).** A root's own `status` is `"live"` — the closure rule needs no special case for it any more; "both ends are live" already includes every root. This also fixed a real, independently-existing bug: the closure check only ever fired when an edge's SOURCE had literal `status == "live"`, so an edge sourced FROM a root (e.g. n0009's `protects` edge to n0002) was never validated at all under the old exception. Now that a root's status genuinely is `"live"`, that check fires for it like any other node.
 
 ## MAIN
     for each *nNNNN.toml file under ISSUES, sorted {
@@ -26,12 +26,15 @@ The root exception (ruled 2026-08-05, B23) treats a `root`-status node as a lega
         if (loading raises) then { record "will not parse" with the error
             and skip further checks on this file }
     }
-    compute the set of all ids, the set of live ids, and the set of root
-    ids; a legal edge target is (live ids UNION root ids);
-    print a one-line summary of node/live counts;
+    compute the set of all ids, the set of live ids (root nodes included,
+    since a root's status is "live"), and the set of root ids (nodes whose
+    `root` flag is set, tracked for the summary count only — it is not a
+    separate legal-edge-target set any more); a legal edge target is simply
+    the live ids;
+    print a one-line summary of node/live/root counts;
 
     for each successfully-loaded document {
-        run issue_schema.check() and fold in its shape failures;
+        run issue_schema.issue_verify() and fold in its shape failures;
 
         for its "opened" and "label_ruled" references, if present {
             if (the transcript file they name does not exist) then {
@@ -59,7 +62,7 @@ The root exception (ruled 2026-08-05, B23) treats a `root`-status node as a lega
             if (the quote is not found verbatim in the source text) then {
                 if (the source carries [remember: ...] brackets) then {
                     retry per statement-span against the span's ROOM view
-                    (markers.strip_remember, whitespace-flattened) — the
+                    (annotations.remember_strip, whitespace-flattened) — the
                     2026-08-14 room/record split stores issue-evidence-add
                     quotes as room text while the FILE keeps the bracket,
                     so a mid-statement bracket made a true quote fail
@@ -122,7 +125,7 @@ The root exception (ruled 2026-08-05, B23) treats a `root`-status node as a lega
             }
             if (status is not retired, and this node is live, and the
                 target is not a legal end) then {
-                record a closure failure — neither live nor a root
+                record a closure failure — the target is not live
             }
             if (edge type is leads-to or narrower-than, and a reversed-
                 direction phrasing pattern matches the edge's basis text
@@ -153,10 +156,10 @@ The root exception (ruled 2026-08-05, B23) treats a `root`-status node as a lega
 - `<dir>` (optional, positional): checks the given directory instead, as a preview — nothing is written regardless.
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.load()`, `S.check()`); `roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name).
+Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.issue_read()`, `S.issue_verify()`); `roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name).
 
 ## EXTERNAL FILES
-Read: every `*nNNNN.toml` file under the target issues directory. For each node's evidence and edge citations, the transcript files they name — `circles/circle_<ref>.md` for a `circle_`-prefixed reference, `work/sandbox/circles/circle_<ref>.md` for a `sandbox_`-prefixed one, or `self/<ref>.md` otherwise (via `source_of()`), cached in-memory per path once read (`_CACHE`) to avoid re-reading a transcript for every evidence entry that cites it.
+Read: every `*nNNNN.toml` file under the target issues directory. For each node's evidence and edge citations, the transcript files they name — `circles/circle_<ref>.md` for a `circle_`-prefixed reference, `work/sandbox/circles/circle_<ref>.md` for a `sandbox_`-prefixed one, or `self/<ref>.md` otherwise (via `issue_source_read()`), cached in-memory per path once read (`_CACHE`) to avoid re-reading a transcript for every evidence entry that cites it.
 
 Written: nothing. The module's own docstring states it is "Read-only," and no file-write call appears anywhere in it.
 
@@ -168,12 +171,12 @@ Stdout only, no stdin. Prints a node/live-count summary, verification counts, ad
 
 ## OPERATION
 
-### `source_of(ref)`
+### `issue_source_read(ref)`
     {
         map a citation reference string to its transcript file path. The
         circle_/sandbox_ mapping is issue_schema.circle_transcript() —
         ONE copy since 2026-08-19 (review, tier 5 #44: this gate,
-        issue_projection._transcript() and check_budget's constants were
+        issue_prompt_projection._transcript() and quote_verify's constants were
         three lockstep clones the R176 sweep had to edit together). The
         SELF-DIR arm — a bare ref resolves to a session record under
         self/ — stays this gate's own, because only the gate admits

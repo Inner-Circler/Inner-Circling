@@ -42,7 +42,7 @@ THE QUERY IS STRIPPED FROM THE ROOM AND KEPT IN THE RECORD — the remember
 bracket's own discipline (docs/BNF.md, REMEMBER): the transcript FILE
 keeps the bracket, no part ever sees another part's query, and a
 statement that was ENTIRELY a recall is a pass the room hears as one
-(transcript_store.withheld(), third member). THE REPLY IS PRIVATE: it
+(transcript_store.circle_transcript_is_withheld(), third member). THE REPLY IS PRIVATE: it
 rides at the tail of the asking part's next request — never a prompt
 block (blocks are static per circle, capture-verified), never the room —
 latest result wins, and it expires at /close. What a part wants to keep
@@ -65,7 +65,7 @@ first-ever build — and nothing is indexed at open or close.
 THE CACHES ARE DERIVED, NEVER THE RECORD: work/recall_index/*.ndjson,
 gitignored, one re-embed to rebuild.
 
-A FAILURE HERE CANNOT COST A STATEMENT: apply_recall() catches
+A FAILURE HERE CANNOT COST A STATEMENT: recall_apply() catches
 everything, answers the part with the error privately, and the turn
 proceeds.
 """
@@ -80,8 +80,9 @@ HERE = pathlib.Path(__file__).resolve().parent          # coordinator/
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "memory"))         # the issue-graph code
 
+import annotations as MK                                # noqa: E402
 import embed_store as ES                                # noqa: E402
-import paths as P                                       # noqa: E402
+import record_paths as P                                       # noqa: E402
 import seam                                             # noqa: E402
 
 try:
@@ -119,7 +120,7 @@ MAX_EXCERPTS = 3
 # THE BUDGET IS TIER A's, SHARED ON PURPOSE: remember_expand's EXPAND_CAP
 # (1200 chars) was sized as what one recall delivery may put in front of a
 # part, and this reply is the same delivery through a different door — one
-# fact, one owner (check_one_home's rule; the 4000-pair lesson). The
+# fact, one owner (system_unique_home_verify's rule; the 4000-pair lesson). The
 # per-excerpt window derives from it rather than declaring its own number.
 from remember_expand import EXPAND_CAP as TOTAL_CHARS  # noqa: E402
 EXCERPT_CHARS = TOTAL_CHARS // MAX_EXCERPTS
@@ -142,37 +143,33 @@ def _norm(text: str) -> str:
     return text.translate(_TRANSLATE).casefold()
 
 
-def _is_quoted(text: str, start: int, end: int) -> bool:
-    """True when text[start:end] (a RECALL_RE match) sits inside a pair of
-    backticks — a part QUOTING the syntax to describe it, never a part
-    ISSUING it. Confirmed 2026-08-31_1013 (B82): Philosopher answered "can
-    you see a recall operation?" with `` `[recall: ...]` `` — illustrative,
-    not a request — and the old code ran it as a real (meaningless) query
-    anyway, then stripped the bracket from what the other six parts saw
-    that round, breaking the sentence live in their own context. Every
-    GENUINE invocation this circle was unwrapped; this is the cheap,
-    evidenced signal that tells the two apart."""
-    return (start > 0 and text[start - 1] == "`"
-            and end < len(text) and text[end] == "`")
+# _is_quoted WAS DEFINED HERE, PRIVATELY, UNTIL 2026-09-01 (B82's own
+# module). It moved to annotations.annotation_is_quoted() (audit-register.md Tier 1
+# #3) once the identical gap turned up for `remember:`/`proposed:` — a
+# second private copy would have been the exact two-recognizer drift
+# annotations.py's own module docstring warns about ("ONE TAUGHT SPELLING,
+# TWO RECOGNIZERS... the cost of drift is a bracket one recognizes and the
+# other fails to strip reaches the room"). Read as MK.annotation_is_quoted() at each
+# call; the local `_is_quoted` alias went 2026-09-03.
 
 
 def _executable_matches(text: str) -> list[re.Match]:
     """Every RECALL_RE match in `text` that is NOT backtick-quoted — the
-    ones apply_recall() may actually run."""
+    ones recall_apply() may actually run."""
     return [m for m in RECALL_RE.finditer(text)
-           if not _is_quoted(text, m.start(), m.end())]
+           if not MK.annotation_is_quoted(text, m.start(), m.end())]
 
 
-def strip_recall(text: str) -> str:
+def recall_strip(text: str) -> str:
     """Remove every EXECUTABLE recall bracket, valid or malformed alike,
     and tidy the whitespace the removal left behind — the same three tidy
-    operations as markers.strip_remember(), for the same reason: the live
+    operations as annotations.remember_strip(), for the same reason: the live
     path and the resume path must produce byte-identical room text. A
     backtick-quoted bracket is prose ABOUT the syntax, not a use of it, and
     is left exactly as written (B82) — nothing here is stripped from a
     part's own description of the feature."""
     def _sub(m: re.Match) -> str:
-        return m.group(0) if _is_quoted(text, m.start(), m.end()) else ""
+        return m.group(0) if MK.annotation_is_quoted(text, m.start(), m.end()) else ""
     cleaned = RECALL_RE.sub(_sub, text)
     cleaned = re.sub(r"[ \t]{2,}", " ", cleaned)
     cleaned = re.sub(r"\n{3,}", "\n\n", cleaned)
@@ -191,7 +188,7 @@ def _valid_quote(s: str) -> str | None:
     return None
 
 
-def parse(body: str) -> dict:
+def recall_parse(body: str) -> dict:
     """The bracket's content -> {scopes, exact, semantic, ids, practices,
     phrases, errors}. Scope keywords are claimed only while they LEAD —
     'mine', 'room', 'issues' are common words, and [recall: what is mine
@@ -264,17 +261,22 @@ def _closed(ot: str, root: pathlib.Path) -> bool:
     return (root / "work" / "logs" / f"close_{ot}.json").is_file()
 
 
-def records_for(scope: str, part: str, root: pathlib.Path) -> list:
+def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
     """The chunk records one scope holds for one part. Every record:
     {id, text, scope, kind, ot?, speaker?}. Defensive throughout — a
     missing file is an empty corpus, never a crash."""
     recs: list = []
     if scope == "mine":
         pdir = root / "parts" / part
-        for f in sorted(pdir.glob("short_term_*.md")):
+        # Both suffixes since B96 (R434): a .toml is chunked in the .md shape
+        # it renders to, so a section's `kind` is its heading either way.
+        import short_term_manager as STM
+        for f in STM.short_term_paths_read(pdir):
             ot = f.stem.removeprefix("short_term_")
-            recs += _sections(f.read_text(encoding="utf-8"),
-                              f"st:{ot}", {"scope": "mine", "ot": ot})
+            rec = STM.short_term_read(f, part)
+            text = (STM.short_term_prose_render(rec) if rec["format"] == STM.FORMAT_NEW
+                    else f.read_text(encoding="utf-8"))
+            recs += _sections(text, f"st:{ot}", {"scope": "mine", "ot": ot})
         lt = pdir / "long_term.md"
         if lt.is_file():
             recs += _sections(lt.read_text(encoding="utf-8"),
@@ -302,7 +304,7 @@ def records_for(scope: str, part: str, root: pathlib.Path) -> list:
             if not _closed(ot, root):
                 continue
             try:
-                _ot, _topic, entries = TS.parse_transcript(
+                _ot, _topic, entries = TS.circle_transcript_parse(
                     f.read_text(encoding="utf-8"))
             except Exception:                             # noqa: BLE001
                 continue
@@ -310,10 +312,10 @@ def records_for(scope: str, part: str, root: pathlib.Path) -> list:
             # _split_remember/_split_recall already stripped every private
             # bracket from e["text"], so another part's note cannot enter
             # this corpus; a bracket-only turn has empty text and is
-            # skipped with the scribe notes.
+            # skipped with the Coordinator notes.
             for i, e in enumerate(entries):
                 body = (e.get("text") or "").strip()
-                if body and e.get("speaker") != "__scribe__":
+                if body and e.get("speaker") != "__coordinator__":
                     recs.append({"id": f"rm:{ot}#{i}", "text": body,
                                  "scope": "room", "kind": "statement",
                                  "ot": ot,
@@ -330,8 +332,8 @@ def records_for(scope: str, part: str, root: pathlib.Path) -> list:
             for f in sorted((root / "issues")
                             .glob("[RSDX]_n[0-9][0-9][0-9][0-9].toml")):
                 try:
-                    doc = ISC.load(f)
-                    body = ISC.render(doc).strip()
+                    doc = ISC.issue_read(f)
+                    body = ISC.issue_render(doc).strip()
                 except Exception:                         # noqa: BLE001
                     body = f.read_text(encoding="utf-8").strip()
                 nid = re.search(r"n\d{4}", f.stem)
@@ -369,14 +371,14 @@ def _provenance(r: dict) -> str:
     return " · ".join(b for b in bits if b)
 
 
-def execute(part: str, q: dict, root: pathlib.Path | None = None,
+def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
             embedder=None) -> str:
     """One query, one private reply text. Raises nothing on a sound stack;
     embed_store's IndexUnavailable propagates to apply_recall's catch."""
     root = root or P.ROOT
     recs: list = []
     for s in q["scopes"]:
-        recs += records_for(s, part, root)
+        recs += recall_records_read(s, part, root)
     hits: list = []                     # (rank_key, excerpt_kind, record)
     seen: set = set()
 
@@ -402,9 +404,9 @@ def execute(part: str, q: dict, root: pathlib.Path | None = None,
                 take(r, (1, i), crumb)
     sem_query = q["semantic"] or " ".join(q["phrases"])
     if sem_query and embedder is not False:
-        embedder = embedder or ES.real_embedder()
+        embedder = embedder or ES.memory_embedder_read()
         cache = CACHE_DIR / f"{part}.ndjson"
-        for r in ES.rank(sem_query, recs, embedder, cache, MAX_EXCERPTS * 3):
+        for r in ES.memory_rank(sem_query, recs, embedder, cache, MAX_EXCERPTS * 3):
             if r["score"] >= FLOOR:
                 take(r, (2, -r["score"]), None)
 
@@ -442,44 +444,44 @@ _ROUND_ASKED: set = set()               # parts whose recall ran this round
 _ARM = "off"                            # set by circle.py from --recall-arm
 
 
-def clear() -> None:
+def recall_clear() -> None:
     """At circle open. CircleEngine runs circle.py inside a long-lived UI
     process, so module state can outlive a circle — this cannot."""
     _PENDING.clear()
     _ROUND_ASKED.clear()
 
 
-def new_round() -> None:
+def recall_round_reset() -> None:
     """At each round's start — the one-recall-per-round cap's boundary."""
     _ROUND_ASKED.clear()
 
 
-def set_arm(arm: str) -> None:
+def recall_arm_set(arm: str) -> None:
     global _ARM
     _ARM = arm or "off"
 
 
-def pending_text(part: str) -> str | None:
+def recall_pending_read(part: str) -> str | None:
     """A PEEK — does not consume. Tests and diagnostics read this; the room
-    prompt uses pop_pending() instead, so a reply is never delivered twice
+    prompt uses recall_pending_pop() instead, so a reply is never delivered twice
     (B82)."""
     return _PENDING.get(part)
 
 
-def pop_pending(part: str) -> str | None:
+def recall_pending_pop(part: str) -> str | None:
     """Read AND CLEAR this part's private reply in one step — the one call
     render_messages() actually reaches for. Its own docstring already said
     the delivery is singular ("the latest <recall_result>... appended to
     the tail"); until B82 (2026-08-31) nothing enforced that, and a reply
     rode along unexpired on every one of a part's later turns for the rest
-    of the circle. A retry within the SAME turn (rounds.ask_statement's
+    of the circle. A retry within the SAME turn (circle_rounds.part_statement_ask's
     truncation path) captures the popped value once and reuses it for both
     attempts — it is one delivery, not two, even though the API is called
     twice."""
     return _PENDING.pop(part, None)
 
 
-def apply_recall(part: str, display: str, text: str, *,
+def recall_apply(part: str, display: str, text: str, *,
                  live: bool) -> tuple[str, bool]:
     """Recognize, execute, and silently remove every EXECUTABLE RECALL
     annotation in ONE statement before it can reach the ROOM — a
@@ -494,7 +496,7 @@ def apply_recall(part: str, display: str, text: str, *,
     matches = _executable_matches(text)
     if not matches:
         return text, False
-    room = strip_recall(text)
+    room = recall_strip(text)
     try:
         if not live:
             reply = ("<recall_result>\nrecall is unavailable in a dry-run "
@@ -508,14 +510,14 @@ def apply_recall(part: str, display: str, text: str, *,
         else:
             body = matches[-1].group(0)  # latest EXECUTABLE bracket wins
             body = body[body.index(":") + 1:-1]
-            q = parse(body)
+            q = recall_parse(body)
             if q["errors"]:
                 reply = ("<recall_result>\nyour recall could not run:\n- "
                          + "\n- ".join(q["errors"])
                          + "\n</recall_result>")
             else:
                 t0 = time.monotonic()
-                reply = execute(part, q)
+                reply = recall_execute(part, q)
                 _ROUND_ASKED.add(part)
                 seam.emit("command",
                           f"  [{display} recalled — answered in "

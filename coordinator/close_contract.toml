@@ -2,7 +2,7 @@
 #
 # R368, 2026-08-27. The second DERIVED checker. work/logs/close_<OT>.json has
 # been written at every close since 2026-07-26 and read by exactly one thing:
-# `circle_close.py --reconcile`, which asks whether the short_terms it recorded
+# `circle_close_verify.py --reconcile`, which asks whether the short_terms it recorded
 # are still on disk. That is a durability question. This asks the prior one —
 # WAS THE REPORT A TRUE STATEMENT ABOUT THE CLOSE WHEN IT WAS WRITTEN?
 #
@@ -11,7 +11,7 @@
 # truth for who spoke. Reading one against the other costs nothing and was
 # never done.
 #
-# circle_close.check_postcondition() is the one reader. Every rule below is
+# circle_close_verify.circle_close_postcondition_verify() is the one reader. Every rule below is
 # checked against every report; nothing here is aspirational.
 
 [report]
@@ -34,6 +34,11 @@ result = ["pass", "fail"]
 
 [part]
 required = ["part", "statements", "present", "bytes", "sha256", "status"]
+# `file` — the NAME the close hashed, extension included: `short_term_<OT>.toml`
+# since R434 (B96, 2026-09-04), `.md` for a resumed pre-B96 close. OPTIONAL
+# because every report before that date has no such key and hashed the .md;
+# --reconcile falls back to that name when the key is absent.
+optional = ["file"]
 closed   = true
 
 [part.types]
@@ -41,6 +46,7 @@ part       = "str"
 statements = "int"
 present    = "bool"
 status     = "str"
+file       = "str"
 
 # ---------------------------------------------------------------------------
 # THE POSTCONDITIONS. Each is a claim the close made about itself, checked
@@ -56,7 +62,7 @@ there is not a postcondition of anything."""
 [[postcondition]]
 id   = "statements_agree_with_the_transcript"
 says = """Every part's `statements` equals what the transcript says that part
-spoke, re-derived NOW through circle_close.parts_that_spoke() — the one reader
+spoke, re-derived NOW through circle_close_verify.parts_that_spoke() — the one reader
 of a transcript's speaker tags, never a second regex. A disagreement means the
 transcript moved after the close, or the report was written from stale state.
 This is the check the whole file exists for."""

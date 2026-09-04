@@ -9,9 +9,9 @@
 # git is this project's rollback target (NIGHTLY_DESIGN.md §6), and three separate
 # mechanisms compare these files by exact bytes and sha256:
 #
-#   * scripts/circle_close.py  writes each short_term's sha256 into
-#     work/logs/close_<OT>.json at close, and --reconcile re-verifies it before the
-#     nightly dreams. A checkout that "helpfully" rewrote LF to CRLF would report
+#   * coordinator/circle_close_verify.py  writes each short_term's sha256 into
+#     work/logs/close_<OT>.json at close, and --reconcile re-verifies it before
+#     dreaming. A checkout that "helpfully" rewrote LF to CRLF would report
 #     RECONCILE-DRIFT on files nobody had touched -- and the documented response to
 #     DRIFT is to backfill from the transcript, i.e. to overwrite a good record.
 #

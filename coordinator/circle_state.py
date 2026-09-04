@@ -7,7 +7,7 @@ circle_state.py — is a circle open right now?
     from circle_state import is_circle_in_progress
 
 AMENDED INTO EXISTENCE 2026-08-05. Self: *"Amend the standing caution 'do
-not read circles/' in CLAUDE.md to point to a test is_circle_in_progress()
+not read circles/' in CLAUDE.md to point to a test circle_is_in_progress()
 which returns true/false."*
 
 THE PROBLEM IT REPLACES. The transcript is written statement by statement —
@@ -51,7 +51,7 @@ if hasattr(sys.stdout, "reconfigure"):
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
-import settings as SET                                        # noqa: E402
+import setting_manager as SET                                        # noqa: E402
 LIVE = ROOT / "circles"
 SANDBOX = ROOT / "work" / "sandbox" / "circles"  # moved, R176, 2026-08-15
 LOGS = ROOT / "work" / "logs"
@@ -63,7 +63,7 @@ LOGS = ROOT / "work" / "logs"
 # the seconds below are derived and are what the code compares against. The
 # two must never both be settable — one derived value cannot disagree with
 # itself.
-QUIET_MINUTES = SET.value("quiet_minutes", 45)
+QUIET_MINUTES = SET.setting_value_read("quiet_minutes", 45)
 QUIET_SECONDS = QUIET_MINUTES * 60
 
 
@@ -72,7 +72,7 @@ def _closed(ot: str) -> bool:
     return (LOGS / f"close_{ot}.json").is_file()
 
 
-def open_circles(now: float | None = None) -> list[dict]:
+def circle_open_read(now: float | None = None) -> list[dict]:
     """Every transcript that may still be being written. Empty is the good
     answer, and the caller may then read freely."""
     now = time.time() if now is None else now
@@ -98,17 +98,17 @@ def open_circles(now: float | None = None) -> list[dict]:
     return out
 
 
-def is_circle_in_progress() -> bool:
+def circle_is_in_progress() -> bool:
     """True if reading `circles/` might catch a partial. FAILS CLOSED."""
     try:
-        return bool(open_circles())
+        return bool(circle_open_read())
     except Exception:                                        # noqa: BLE001
         return True
 
 
 def main() -> int:
     try:
-        found = open_circles()
+        found = circle_open_read()
     except Exception as e:                                   # noqa: BLE001
         print(f"  COULD NOT TELL — {e}\n  Treat this as a circle in "
               f"progress. Ask Self.")

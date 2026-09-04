@@ -73,12 +73,13 @@ The guard is careful in one specific direction: it must never answer "not proces
 
 ## DEPENDENCIES
 
-Every register module it writes through — the remember register, topics, circle history, the self-observation log, best practices — plus `mid_term` for the re-derivation, `transaction` for staging, `ifs_model` for the gate, `roster`, `self_schema`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
+Every register module it writes through — `remember_manager`, `topic_manager`, `circle_history_manager`, `self_observation_manager`, `practice_manager` — plus `part_mid_term_manager` for the re-derivation, `TRANSACTION_CLASS` for staging, `backfill` for step 0, `part_dreaming` and `circle_synthesis` for the two model passes, `llm_client` and `LLM_response_disassembler`, `setting_manager`, `phase_clock`, `prompt_capture`, `roster`, `REGISTER_CLASS`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
 
 ## EXTERNAL FILES
 
     circles/circle_<OT>.md               READ — the transcript, the primary input
-    parts/<name>/short_term_<OT>.md      READ, and repaired by the backfill step
+    parts/<name>/short_term_<OT>.toml    READ, and repaired by the backfill step
+                                         (.md before 2026-09-04, R434)
     parts/<name>/remember.toml           WRITTEN — one memory per part, at most
     parts/<name>/mid_term.md             RE-DERIVED for the parts whose sources moved
     self/topics.toml                     WRITTEN — synthesis's candidates
@@ -114,10 +115,10 @@ Per part it reports the character counts of what it was given, what it produced,
 ### backfill_step(ot, say)
 Step 0 of every live run: any part that spoke but has no well-formed note is rebuilt from the transcript, so it reaches dreaming as a part that participated rather than one that had nothing to say.
 
-### dream_one(part, ot, transcript)
+### part_dream(part, ot, transcript) — MOVED to part_dreaming.py, 2026-09-03 (stage 11)
 One part's dreaming call. Returns a payload describing at most one memory — with its salience, and whether it continues an earlier one — plus the character counts, anything truncated or suspect, the output token count and the stop reason. It writes nothing.
 
-### synthesise(ot, transcript, payloads, ...)
+### circle_synthesise(ot, transcript, payloads, ...) — MOVED to circle_synthesis.py, 2026-09-03 (stage 11)
 The one circle-wide call, over the five inputs named above. Returns the material for the circle-level registers; like dreaming, it writes nothing.
 
 ### process_circle(ot, live, confirmed, say)

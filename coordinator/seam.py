@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-seam.py — the coordinator's I/O seams, and its failure ledger. Phase 1
+seam.py — the coordinator's I/O seams, and its failure record. Phase 1
 step 1 of the coordinator partitioning (2026-08-16); until then both
 lived at the top of circle.py.
 
@@ -65,7 +65,9 @@ def read_line(prompt: str = "", channel: str = "command",
     # without thought therefore lands in the private lane rather than
     # leaking a Coordinator prompt into the room's pane. Only three sites
     # in this project are circle lane, and each says so explicitly:
-    # circle.py's working-set, topic, and CONSOLE_NAME speaking prompts.
+    # working_set_manager.py's working-set question (circle.py's until
+    # 2026-09-03, stage 10) and circle.py's topic and CONSOLE_NAME
+    # speaking prompts. test_seam.py and bnf_conformance.py both count.
     #
     # `prefill` IS AN AFFORDANCE, NOT A CONTRACT, added 2026-08-20 for
     # finding 2. It asks the reader to open with `prefill` ALREADY TYPED and
@@ -82,7 +84,7 @@ def read_line(prompt: str = "", channel: str = "command",
     return _real_input(prompt)
 
 
-# ------------------------------------------------------------------ failure ledger
+# ------------------------------------------------------------------ failure record
 # Every entry here means the current circle produced an incomplete or
 # damaged record. circle.main() exits non-zero while this is non-empty,
 # so an unattended run can never look clean when it is not. Nothing
@@ -92,7 +94,7 @@ def read_line(prompt: str = "", channel: str = "command",
 # (transcript_store.py's verifier and commit paths first) must be able
 # to report a data failure without importing the orchestrator. The list
 # is only ever MUTATED IN PLACE — appended by fail(), read by
-# circle.report_failures() — never reassigned, which is what makes
+# circle.circle_failures_report() — never reassigned, which is what makes
 # circle.py's `from seam import FAILURES` a safe alias to this same
 # object.
 FAILURES: list[str] = []

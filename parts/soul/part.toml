@@ -56,7 +56,9 @@ alt_tags = []
 # (docs/Initialization.md). The initialization dialog asks these at a circle
 # start while every answer below is empty, records the answers in the
 # `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
-# its `render` sentence, in my own voice — `prompt_build.identity_tail()`.
+# its `render` sentence, in my own voice —
+# `parts_prompt_projection.part_identity_tail_render()` (prompt_build's
+# identity_tail() until 2026-09-02).
 #
 # `data_type` / `data_max` ride with each question (R332) and
 # are read at call time: hand-tune a number here and the next dialog enforces

@@ -6,12 +6,12 @@ Verifies — and, for lost short_terms, repairs — the per-circle records that
 /close and coordinator/inter_circle.py produce.
 
 WHAT EXISTS TODAY
-    0  preflight   lock, leftover-journal, git preconditions, check_integrity.py
+    0  preflight   lock, leftover-transaction, git preconditions, record_verify.py
     1  survey      circles inter_circle.py has not processed (no dream/<OT> tag)
-    2  reconcile   circle_close.py --reconcile per circle + transcript safety net
+    2  reconcile   circle_close_verify.py --reconcile per circle + transcript safety net
     3  backfill    reconstruct a lost short_term from the transcript
     6  validate    ifs_model invariants: self-check, baseline, or staged candidate
-    7  commit      journalled os.replace sweep (transaction.py)
+    7  commit      write-ahead os.replace sweep (TRANSACTION_CLASS.py)
     8  verify      re-read every committed file, compare sha256
     9  record      git commit of this run's own paths, committed.json, log line
 
@@ -23,7 +23,7 @@ WHAT EXISTS TODAY
     built to replace.
 
     Without --commit this script writes only under work/circle_audit/ (its
-    lock, snapshots, run log) and work/nightly/ (transaction.py's own
+    lock, snapshots, run log) and work/nightly/ (TRANSACTION_CLASS.py's own
     staging root, shared with inter_circle.py and NOT renamed with this
     file). With --backfill --commit it writes short_terms, and nothing else
     — enforced by the staging set, the invariant gate, and the transaction.
@@ -39,7 +39,7 @@ WHAT EXISTS TODAY
 EXIT CODES
     0  everything checked passed
     1  a check FAILED (or preflight refused to start)
-    2  a leftover commit JOURNAL exists — manual decision required (§3.3)
+    2  a leftover commit TRANSACTION exists — manual decision required (§3.3)
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 # The audit's OWN artifacts (lock, baselines, run log) live here. Staging and
-# journals stay under work/nightly/ — that is transaction.py's root, shared
+# transaction files stay under work/nightly/ — that is TRANSACTION_CLASS.py's root, shared
 # with inter_circle.py, and renaming it is a separate decision.
 WORK = ROOT / "work" / "circle_audit"
 LOCK = WORK / ".lock"
@@ -68,12 +68,14 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import ifs_model as M                                       # noqa: E402
+import register_gate as RG              # noqa: E402  the gate (stage 9, 2026-09-03)
 import backfill as BF                                       # noqa: E402  (B54)
+import short_term_manager as STM                            # noqa: E402  (B96)
 import gitrepo as G                                         # noqa: E402
-import transaction as T                                     # noqa: E402
+import TRANSACTION_CLASS as T                                     # noqa: E402
 import roster as R                                          # noqa: E402
-import self_schema as SS                                    # noqa: E402
-import self_observation_log as SO                           # noqa: E402
+import REGISTER_CLASS as SS                                    # noqa: E402
+import self_observation_manager as SO                           # noqa: E402
                                    # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
@@ -88,13 +90,12 @@ CIRCLE_RE = re.compile(r"^circle_(\d{4}-\d{2}-\d{2}_\d{4})\.md$")
 # B29: derived from roster.py. Deliberately roster.TAGS (current
 # spellings only), NOT the _ALL set — this reader only ever sees circles
 # this audit is processing, which postdate the 2026-08-07 Soul tag
-# rename, unlike circle_close.py which also walks historical transcripts.
+# rename, unlike circle_close_verify.py which also walks historical transcripts.
 # The GRAMMAR is roster.statement_re, the one builder (2026-08-19, review
 # tier 3 #35 — this file's own copy accepted arbitrary spacing and had
-# drifted from circle_close's; only the tag set differs now, and that
+# drifted from circle_close_verify's; only the tag set differs now, and that
 # difference is the documented intent above).
 STATEMENT_RE = R.statement_re(R.TAGS)
-TAG_TO_DIR = R.DIR_BY_TAG
 
 # Exactly what an audit run is allowed to have left uncommitted. Anything
 # dirty outside this set was not this tool. Rewritten at the 2026-08-19
@@ -104,11 +105,11 @@ TAG_TO_DIR = R.DIR_BY_TAG
 # append (--stage-synthetic); inter_circle.py git-commits its own writes
 # inside /close, so its output never sits uncommitted between runs.
 AUDIT_OUTPUT_RE = re.compile(
-    r"^(parts/[a-z_]+/short_term_[\d_-]+\.md"
+    r"^(parts/[a-z_]+/short_term_[\d_-]+\.(?:md|toml)"
     r"|self/self_observation_log\.toml)$")
 
 
-def hr(title: str) -> None:
+def circle_audit_hr_render(title: str) -> None:
     print(f"\n{'-' * 72}\n{title}\n{'-' * 72}")
 
 
@@ -130,14 +131,14 @@ class Run:
 
 
 # ------------------------------------------------------------------ phase 0
-def git(*args: str) -> tuple[int, str]:
+def circle_audit_git_run(*args: str) -> tuple[int, str]:
     """ALWAYS read-only (--no-optional-locks). Every call through here is
     a QUESTION — version, git-dir, status — and `git status` otherwise
     refreshes and rewrites the index, taking `.git/index.lock` to do it.
     This module has no writing caller of its own (commits go through
-    gitrepo.commit_paths), so the flag is unconditional.
+    gitrepo.system_git_paths_commit), so the flag is unconditional.
 
-    A thin shell over gitrepo.run() since 2026-08-19 (review, tier 5
+    A thin shell over gitrepo.system_git_run() since 2026-08-19 (review, tier 5
     #45): this used to be a hand-rolled duplicate of run()'s subprocess
     mechanics — same flag, same encoding, same errors="replace" lesson
     re-pasted by hand — and the copies had already drifted (30s vs 120s
@@ -147,15 +148,15 @@ def git(*args: str) -> tuple[int, str]:
     at run()'s 120s timeout) degrades to the same (127, message) tuple
     every caller already checks."""
     try:
-        return G.run(*args, read_only=True)
+        return G.system_git_run(*args, read_only=True)
     except G.GitError as e:
         return 127, str(e)
 
 
-def git_setup(run: Run, name: str | None, email: str | None) -> int:
+def circle_audit_git_setup(run: Run, name: str | None, email: str | None) -> int:
     """Idempotent bootstrap. Everything routine; nothing irreversible. Safe to
     re-run at any time — it only adds what is missing."""
-    hr("git setup")
+    circle_audit_hr_render("git setup")
     marks = {"ok": "  OK   ", "did": "  DID  ", "warn": "  WARN ",
              "note": "         ", "fail": "  FAIL "}
 
@@ -164,23 +165,23 @@ def git_setup(run: Run, name: str | None, email: str | None) -> int:
         if kind == "fail":
             run.failures.append(msg)
 
-    if not G.available():
+    if not G.system_git_is_available():
         log("fail", "git is not on PATH")
         return 1
-    log("ok", G.run("--version")[1].splitlines()[0])
-    if not G.ensure_repo(log) or G.refuse_remote(log):
+    log("ok", G.system_git_run("--version")[1].splitlines()[0])
+    if not G.system_git_repo_ensure(log) or G.system_git_remote_refuse(log):
         return 1
     # refuse_remote() reports each remote it PASSES, with the reason, so the
     # blanket line that used to sit here is both redundant and — since
-    # 2026-08-09 — false. See gitrepo.classify_remote.
+    # 2026-08-09 — false. See gitrepo.system_git_remote_classify.
     log("ok", "no remote can take this material off the machine")
-    G.ensure_config(log, name, email)
-    G.ensure_attributes(log)
-    G.ensure_hooks(log)
-    G.ensure_ignore(log)
-    G.untrack_ignored(log)
+    G.system_git_config_ensure(log, name, email)
+    G.system_git_attributes_ensure(log)
+    G.system_git_hooks_ensure(log)
+    G.system_git_ignore_ensure(log)
+    G.system_git_ignored_untrack(log)
 
-    dirty = G.dirty()
+    dirty = G.system_git_is_dirty()
     if not dirty:
         log("ok", "working tree clean — nothing to commit")
     else:
@@ -196,29 +197,29 @@ def git_setup(run: Run, name: str | None, email: str | None) -> int:
     return 1 if run.failures else 0
 
 
-def check_git(run: Run, may_commit: bool) -> None:
+def circle_audit_git_verify(run: Run, may_commit: bool) -> None:
     """git preconditions. ENFORCED only when the run could write to the live tree
     — git is the revert target for writes, so a read-only run does not need it."""
     level = run.fail if may_commit else run.warn
-    rc, out = git("--version")
+    rc, out = circle_audit_git_run("--version")
     if rc != 0:
         level(f"git unavailable ({out}) — there is no revert target")
         return
     run.ok(out.splitlines()[0])
-    if git("rev-parse", "--git-dir")[0] != 0:
+    if circle_audit_git_run("rev-parse", "--git-dir")[0] != 0:
         level("not a git repository — run the §6 bootstrap in NIGHTLY_DESIGN.md; "
               "without it a bad night cannot be rolled back")
         return
     # NOTHING LEAVES THIS MACHINE (docs/NIGHTLY_DESIGN.md §6). This block used
     # to fail on any remote at all, which is not the same rule and cost a
-    # circle its commit on 2026-08-09 — see gitrepo.classify_remote. It now
+    # circle its commit on 2026-08-09 — see gitrepo.system_git_remote_classify. It now
     # delegates, so there is ONE classifier and not two that can disagree.
     try:
         import gitrepo as _G
-        _G.refuse_remote(lambda k, m: (run.fail if k == "fail" else run.ok)(m))
+        _G.system_git_remote_refuse(lambda k, m: (run.fail if k == "fail" else run.ok)(m))
     except ImportError:
         run.fail("gitrepo.py not importable — cannot classify git remotes")
-    rc, status = git("status", "--porcelain")
+    rc, status = circle_audit_git_run("status", "--porcelain")
     if rc != 0:
         level(f"git status failed: {status}")
         return
@@ -249,7 +250,7 @@ def check_git(run: Run, may_commit: bool) -> None:
         print(f"          {p}")
 
 
-def dream_tags() -> tuple[list[str], str | None]:
+def circle_audit_dream_tags_read() -> tuple[list[str], str | None]:
     """(every OT inter_circle.py has processed, or None-error). The dream/<OT>
     git tag is the durable marker inter_circle's phase-2 commit writes, and
     already_processed() reads — ONE definition of "processed", theirs.
@@ -257,15 +258,15 @@ def dream_tags() -> tuple[list[str], str | None]:
     On a git failure this returns ([], the error) rather than a bare empty
     list: an empty answer read as "nothing processed" would report every
     circle unprocessed because git hiccuped — the same lesson
-    inter_circle.already_processed() carries, pointed the other way."""
-    rc, out = git("tag", "-l", "dream/*")
+    inter_circle.circle_is_processed() carries, pointed the other way."""
+    rc, out = circle_audit_git_run("tag", "-l", "dream/*")
     if rc != 0:
         return [], f"git tag -l dream/* -> {rc}: {out}"
     return sorted(t.split("/", 1)[1] for t in out.split()
                   if t.startswith("dream/")), None
 
 
-def check_circle_open(run: Run, writing: bool) -> None:
+def circle_audit_open_verify(run: Run, writing: bool) -> None:
     """Refuse to snapshot while a circle may be open. /close's phase 2
     (inter_circle.py) dreams and commits synchronously inside the close, so a
     snapshot taken mid-circle captures a tree that is neither before nor
@@ -273,7 +274,7 @@ def check_circle_open(run: Run, writing: bool) -> None:
     that looks like real findings. Replaces check_cowork_nightly, the
     manifest-watching guard for the scheduled task R228 removed."""
     import circle_state as CS
-    if not CS.is_circle_in_progress():
+    if not CS.circle_is_in_progress():
         run.ok("no circle is in progress")
         return
     msg = "a circle may be open (circle_state.py, which fails closed)"
@@ -284,19 +285,21 @@ def check_circle_open(run: Run, writing: bool) -> None:
         run.warn(msg)
 
 
-def check_journal(run: Run) -> bool:
-    """A JOURNAL means a previous commit was interrupted mid-swap (§3.3). Refuse
+def circle_audit_transaction_verify(run: Run) -> bool:
+    """A TRANSACTION means a previous commit was interrupted mid-swap (§3.3). Refuse
     to do anything until a human decides finish-or-roll-back."""
-    found = T.find_journals(ROOT)
+    found = T.transaction_read(ROOT)
     if not found:
         return False
     for j in found:
-        run.fail(f"leftover commit JOURNAL: {j.relative_to(ROOT).as_posix()} — a "
+        # j.name is TRANSACTION, or JOURNAL for a crash that predates the
+        # rename (B100, 2026-09-04) — the report says which it found.
+        run.fail(f"leftover commit {j.name}: {j.relative_to(ROOT).as_posix()} — a "
                  f"previous commit was interrupted part-way through the file swap")
         try:
-            _, states = T.journal_report(j)
+            _, states = T.transaction_report(j)
         except (OSError, ValueError) as e:
-            print(f"          journal unreadable: {e}")
+            print(f"          transaction file unreadable: {e}")
             continue
         tally: dict[str, int] = {}
         for _, s in states:
@@ -308,9 +311,9 @@ def check_journal(run: Run) -> bool:
                 print(f"            {s.upper():<7} {rel}")
     print("\n  The live tree is part-swapped. Both repairs are deterministic —")
     print("  every file's state is known from its sha256:")
-    print("    python coordinator\\circle_audit.py --journal-status")
-    print("    python coordinator\\circle_audit.py --journal-finish     # complete it")
-    print("    python coordinator\\circle_audit.py --journal-rollback   # undo it")
+    print("    python coordinator\\circle_audit.py --transaction-status")
+    print("    python coordinator\\circle_audit.py --transaction-finish     # complete it")
+    print("    python coordinator\\circle_audit.py --transaction-rollback   # undo it")
     return True
 
 
@@ -325,20 +328,20 @@ def _logger(run: Run):
     return log
 
 
-def journal_command(run: Run, action: str) -> int:
-    hr(f"journal — {action}")
-    found = T.find_journals(ROOT)
+def circle_audit_transaction_command_read(run: Run, action: str) -> int:
+    circle_audit_hr_render(f"transaction — {action}")
+    found = T.transaction_read(ROOT)
     if not found:
-        run.ok("no JOURNAL present; nothing to resolve")
+        run.ok("no TRANSACTION file (nor a pre-rename JOURNAL) present; nothing to resolve")
         return 0
     log = _logger(run)
     for j in found:
         try:
-            jdoc, states = T.journal_report(j)
+            jdoc, states = T.transaction_report(j)
         except ValueError as e:
-            # A journal that will not parse: report it (with the repair
-            # guidance journal_report carries), keep reporting any OTHER
-            # journals, and fail the command — never a raw traceback out
+            # A transaction file that will not parse: report it (with the repair
+            # guidance transaction_report carries), keep reporting any OTHER
+            # transaction files, and fail the command — never a raw traceback out
             # of the one tool built to diagnose exactly this state.
             run.fail(str(e))
             continue
@@ -347,14 +350,14 @@ def journal_command(run: Run, action: str) -> int:
             print(f"    {s.upper():<7} {rel}")
         if action == "status":
             continue
-        ok = (T.journal_finish(j, log) if action == "finish"
-              else T.journal_rollback(j, log))
+        ok = (T.transaction_finish(j, log) if action == "finish"
+              else T.transaction_rollback(j, log))
         if not ok:
             return 1
     return 1 if run.failures else 0
 
 
-def take_lock(run: Run) -> bool:
+def circle_audit_lock_take(run: Run) -> bool:
     WORK.mkdir(parents=True, exist_ok=True)
     if LOCK.is_file():
         try:
@@ -373,13 +376,13 @@ def take_lock(run: Run) -> bool:
     return True
 
 
-def release_lock() -> None:
+def circle_audit_lock_release() -> None:
     """Unlink the lock ONLY if this process wrote it. Until 2026-08-19 this
     was an unconditional unlink, and main()'s phase-0 failure path calls it
     — so a run that LOST the lock race (take_lock refused, phase0 False)
     deleted the winning run's live lock on its way out, and a third run
     could then start phases 7-9 concurrently with the first. A lock that
-    does not parse is left in place: take_lock() already treats an
+    does not parse is left in place: circle_audit_lock_take() already treats an
     unreadable lock as stale after LOCK_STALE_SEC, so it self-heals."""
     try:
         info = json.loads(LOCK.read_text(encoding="utf-8"))
@@ -390,29 +393,29 @@ def release_lock() -> None:
         pass
 
 
-def phase0(run: Run, may_commit: bool, writing: bool = False) -> bool:
-    hr("phase 0 — preflight")
-    if check_journal(run):
+def circle_audit_phase0_run(run: Run, may_commit: bool, writing: bool = False) -> bool:
+    circle_audit_hr_render("phase 0 — preflight")
+    if circle_audit_transaction_verify(run):
         return False
-    if not take_lock(run):
+    if not circle_audit_lock_take(run):
         return False
-    check_circle_open(run, writing)
-    check_git(run, may_commit)
+    circle_audit_open_verify(run, writing)
+    circle_audit_git_verify(run, may_commit)
     # WAS scripts/preflight_check.py until 2026-08-18. That script was the
     # agent-teams-era circle-open guard; its agent/team/temp checks died with that
     # runtime, and the one part still worth running — the NUL/UTF-8/JSON sweep —
-    # is now coordinator/check_integrity.py, which also covers .toml and issues/
+    # is now coordinator/record_verify.py, which also covers .toml and issues/
     # and runs at circle open as well as here. Still a subprocess rather than an
     # import: phase 0 reports a returncode, and a gate that can take the whole
     # audit down with it on an unexpected raise is not a gate.
-    script = ROOT / "coordinator" / "check_integrity.py"
+    script = ROOT / "coordinator" / "record_verify.py"
     if not script.is_file():
         run.fail(f"missing {script.relative_to(ROOT).as_posix()}")
     else:
         p = subprocess.run([sys.executable, str(script)], cwd=str(ROOT),
                            capture_output=True, text=True, encoding="utf-8")
         tail = [l for l in p.stdout.splitlines() if l.strip()][-1:] or [""]
-        (run.ok if p.returncode == 0 else run.fail)(f"check_integrity.py: {tail[0].strip()}")
+        (run.ok if p.returncode == 0 else run.fail)(f"record_verify.py: {tail[0].strip()}")
         if p.returncode != 0:
             for line in p.stdout.splitlines()[1:]:
                 if line.strip():
@@ -421,7 +424,7 @@ def phase0(run: Run, may_commit: bool, writing: bool = False) -> bool:
 
 
 # ------------------------------------------------------------------ phase 1
-def phase1(run: Run) -> list[str]:
+def circle_audit_phase1_run(run: Run) -> list[str]:
     """Unprocessed = in scope and carrying no dream/<OT> tag. The scope EPOCH
     is the oldest dream tag: circles older than it are the retired batch
     nightly's era, out of audit scope by ruling (2026-08-19). Deleting the
@@ -429,8 +432,8 @@ def phase1(run: Run) -> list[str]:
     re-run path — therefore shifts the epoch backward and pulls legacy
     circles into scope; a deliberate first-circle re-dream is the only
     honest reason to do that."""
-    hr("phase 1 — survey")
-    tags, err = dream_tags()
+    circle_audit_hr_render("phase 1 — survey")
+    tags, err = circle_audit_dream_tags_read()
     if err:
         run.fail(f"survey refused: {err} — cannot tell which circles are "
                  f"processed, and guessing would report every circle "
@@ -467,22 +470,20 @@ def phase1(run: Run) -> list[str]:
 # spoke_in / the backfill prompt / missing_short_terms MOVED to backfill.py,
 # B54 2026-08-19 — the detect and repair halves were entangled with this
 # file's phase structure and callable by nothing else, while the path that
-# needed them most (inter_circle.process_circle(), every live /close) had no
-# way to reach either. One implementation, two drivers.
-spoke_in = BF.spoke_in
-BACKFILL_PROMPT = BF.BACKFILL_PROMPT
-BACKFILL_MAX_TOKENS = BF.BACKFILL_MAX_TOKENS
+# needed them most (inter_circle.circle_process(), every live /close) had no
+# way to reach either. One implementation, two drivers — read through BF.
+# (the three module aliases that stood here went 2026-09-03).
 
 
-def phase2(run: Run, unprocessed: list[str]) -> None:
+def circle_audit_phase2_run(run: Run, unprocessed: list[str]) -> None:
     """Reconcile each unprocessed circle, then apply the transcript safety net:
     any part that SPOKE but has no well-formed short_term must be backfilled
     before dreaming reads it as no-engagement. A silent part is exempt."""
-    hr("phase 2 — reconcile + transcript safety net")
+    circle_audit_hr_render("phase 2 — reconcile + transcript safety net")
     if not unprocessed:
         run.ok("nothing to reconcile")
         return
-    cc = ROOT / "coordinator" / "circle_close.py"
+    cc = ROOT / "coordinator" / "circle_close_verify.py"
     for ot in unprocessed:
         print(f"\n  circle_{ot}")
         p = subprocess.run([sys.executable, str(cc), "--reconcile", "--open-time", ot],
@@ -494,20 +495,20 @@ def phase2(run: Run, unprocessed: list[str]) -> None:
             run.fail(f"circle_{ot}: RECONCILE-DRIFT — short_terms recorded at close "
                      f"are absent or changed on disk; phase 3 must backfill them")
 
-        counts = spoke_in(ROOT / "circles" / f"circle_{ot}.md")
+        counts = BF.part_spoke_read(ROOT / "circles" / f"circle_{ot}.md")
         if not counts:
             run.fail(f"circle_{ot}: transcript has no parseable statements")
             continue
         need = []
         for part, n in sorted(counts.items()):
-            st = ROOT / "parts" / part / f"short_term_{ot}.md"
-            text, findings = M.check_file(st.as_posix(), M.read_bytes(st))
-            if text is None:
-                need.append((part, n, findings[0].message if findings else "missing"))
-                continue
-            absent = [h for h in M.SHORT_TERM_SECTIONS if h not in text]
-            if absent:
-                need.append((part, n, f"malformed (no '{absent[0]}')"))
+            # Either suffix, through the one reader (B96, R434): a missing file
+            # verifies as MISSING under the .toml name it would have.
+            st = BF.short_term_backfill_path(part, ot)
+            findings = STM.short_term_verify(st.relative_to(ROOT).as_posix(),
+                                             M.record_bytes_read(st), part, ot)
+            bad = [x for x in findings if x.level == "FAIL"]
+            if bad:
+                need.append((part, n, f"{bad[0].code}: {bad[0].message}"))
         if need:
             for part, n, why in need:
                 run.fail(f"circle_{ot}: {part} spoke {n}x but short_term is {why} "
@@ -521,10 +522,10 @@ def phase2(run: Run, unprocessed: list[str]) -> None:
 
 
 # ------------------------------------------------------------------ phase 6
-def snapshot(dest: pathlib.Path) -> pathlib.Path:
+def circle_audit_snapshot(dest: pathlib.Path) -> pathlib.Path:
     dest.mkdir(parents=True, exist_ok=True)
     n = 0
-    for p in M._tree_files(ROOT):
+    for p in RG._tree_files(ROOT):
         if not p.is_file():
             continue
         out = dest / p.relative_to(ROOT)
@@ -542,21 +543,21 @@ def snapshot(dest: pathlib.Path) -> pathlib.Path:
     # a clean window rather than as a comparison that never had anything to
     # compare.
     import circle_state as CS
-    tags, err = dream_tags()
+    tags, err = circle_audit_dream_tags_read()
     (dest / "SNAPSHOT.json").write_text(json.dumps({
         "taken": datetime.datetime.now().isoformat(timespec="seconds"),
         "files": n,
         "latest_dream_tag": (tags[-1] if tags else None) if not err else None,
         "dream_tag_error": err,
-        "circle_in_progress": CS.is_circle_in_progress(),
+        "circle_in_progress": CS.circle_is_in_progress(),
         "circles_on_disk": len(list((ROOT / "circles").glob("circle_*.md"))),
-        "sha256": {p.relative_to(dest).as_posix(): M.sha(p.read_bytes())
+        "sha256": {p.relative_to(dest).as_posix(): M.record_sha(p.read_bytes())
                    for p in sorted(dest.rglob("*.md"))},
     }, indent=2) + "\n", encoding="utf-8", newline="")
     return dest
 
 
-def describe_window(run: Run, baseline: pathlib.Path) -> None:
+def circle_audit_window_describe(run: Run, baseline: pathlib.Path) -> None:
     """Say plainly whether inter_circle.py actually processed a circle between
     the snapshot and now. 'No differences' means two completely different
     things depending on the answer, and only one of them is good news."""
@@ -571,7 +572,7 @@ def describe_window(run: Run, baseline: pathlib.Path) -> None:
         run.warn(f"SNAPSHOT.json unreadable ({e})")
         return
     then = info.get("latest_dream_tag")
-    tags, err = dream_tags()
+    tags, err = circle_audit_dream_tags_read()
     if err:
         run.warn(f"cannot read dream/<OT> tags now ({err}) — the window below "
                  f"is unknown")
@@ -596,17 +597,17 @@ def describe_window(run: Run, baseline: pathlib.Path) -> None:
                f"— the comparison below is meaningful")
 
 
-def phase6(run: Run, baseline: pathlib.Path | None) -> None:
-    hr("phase 6 — validate" + (f" (baseline: {baseline})" if baseline else " (self-check)"))
+def circle_audit_phase6_run(run: Run, baseline: pathlib.Path | None) -> None:
+    circle_audit_hr_render("phase 6 — validate" + (f" (baseline: {baseline})" if baseline else " (self-check)"))
     if baseline:
-        describe_window(run, baseline)
+        circle_audit_window_describe(run, baseline)
         print()
-    findings = (M.compare_trees(baseline, ROOT) if baseline
-                else M.selfcheck_tree(ROOT))
+    findings = (RG.record_tree_compare(baseline, ROOT) if baseline
+                else RG.record_tree_verify(ROOT))
     for f in findings:
         if f.level != "OK" or baseline:
             print(f)
-    nf, nw, no = M.summarise(findings)
+    nf, nw, no = RG.register_summarise(findings)
     print(f"\n  {nf} FAIL · {nw} WARN · {no} OK")
     for f in findings:
         if f.level == "FAIL":
@@ -625,16 +626,16 @@ def phase6(run: Run, baseline: pathlib.Path | None) -> None:
 
 
 
-def missing_short_terms(unprocessed: list[str]) -> list[tuple[str, str, int]]:
+def circle_audit_short_terms_missing_read(unprocessed: list[str]) -> list[tuple[str, str, int]]:
     """(open_time, part, statements) for every part that SPOKE and has no
     well-formed record, across these circles. The per-circle answer is
-    backfill.needs_backfill(); this is the sweep shape phase 3 wants."""
+    backfill.short_term_needs_backfill(); this is the sweep shape phase 3 wants."""
     return [(ot, part, n)
             for ot in unprocessed
-            for part, n, _why in BF.needs_backfill(ot)]
+            for part, n, _why in BF.short_term_needs_backfill(ot)]
 
 
-def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
+def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
     """Reconstruct lost short_terms from the transcript, into staging.
 
     The transcript is the authoritative account of what was said, so a part that
@@ -642,8 +643,8 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
     2026-07-26 for four parts of circle_2026-07-26_1112, now mechanised — with the
     same rule: write ONLY the short_term. Never long_term.md, never any other
     per-part file."""
-    hr("phase 3 — backfill")
-    todo = missing_short_terms(unprocessed)
+    circle_audit_hr_render("phase 3 — backfill")
+    todo = circle_audit_short_terms_missing_read(unprocessed)
     if not todo:
         run.ok("every part that spoke has a well-formed short_term")
         return 0
@@ -651,25 +652,35 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
         run.warn(f"circle_{ot}: {part} spoke {n}x with no usable record")
     if dry:
         print(f"\n  --dry-run: {len(todo)} backfill(s) would be generated, "
-              f"~${BF.estimate_cost(len(todo)):.2f} at today's rates")
+              f"~${BF.short_term_backfill_cost_estimate(len(todo)):.2f} at today's rates")
         return 0
 
     import prompt_build as C   # the prompt construction (phase 2 stage 2;
                                # was circle) — same identity assembly as a circle
     import llm_client as LC                  # MODEL's owner (phase 2 stage 1)
-    client = LC.build_client()               # one builder, 2026-08-28 (stage 1)
+    client = LC.stream_client_build()               # one builder, 2026-08-28 (stage 1)
     # PRE-EXISTING BREAK, fixed 2026-08-13 (found while removing the retired
     # OC register): load_shared() stopped returning a 3-tuple and
     # shared_block()'s third positional arg became `minimal`, some time
-    # before this file's own last edit; nothing had executed phase3() since,
-    # so check_lint.py's compile-only pass never caught it. Mirrors the
+    # before this file's own last edit; nothing had executed circle_audit_phase3_run() since,
+    # so system_lint_verify.py's compile-only pass never caught it. Mirrors the
     # identical fix already applied in midterms_project.py:146-147.
-    core = C.load_shared()
-    briefing, _ = C.build_briefing([], False)
+    #
+    # BROKE AGAIN, fixed 2026-09-01 (audit-register.md Tier 1 #2): R360
+    # (2026-08-27) retired --minimal and dropped build_briefing()'s and
+    # shared_block()'s trailing `minimal` parameter entirely; this file's own
+    # trailing `False` was never updated to match, so both calls raised
+    # TypeError the moment circle_audit_phase3_run() ran past its own --dry-run preview
+    # (:655's early return). --dry-run itself never reached this line, which
+    # is exactly why system_lint_verify and every --dry-run rehearsal stayed green.
+    #
+    # shared_block() ITSELF RETIRED 2026-09-02, replaced by one call,
+    # assemble_part() — see prompt_build.py's own docstring.
+    core = C.group_shared_read()
+    briefing, _ = C.circle_briefing_build([])
     done = 0
     for ot, part, n in todo:
-        shared, _ = C.shared_block(part, briefing, False)
-        system = C.system_blocks(part, core, shared)
+        system, _ = C.prompt_part_assemble(part, core, briefing)
 
         def _call(system_, user_, max_tokens):
             """circle_audit's own client, in the one shape backfill.py takes.
@@ -680,14 +691,14 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
             LIST OF BLOCKS here, not a string — this is the one caller that
             assembles a real part prompt — and call_once passes it through
             untouched, as the transport always has."""
-            return LC.call_once(system_, user_, max_tokens,
+            return LC.stream_call_once(system_, user_, max_tokens,
                                 kind="backfill", client=client)
 
-        text, err = BF.reconstruct(part, ot, C.PART_TAGS[part], system, _call)
+        text, err = BF.short_term_backfill(part, ot, C.PART_TAGS[part], system, _call)
         if err:
             run.fail(f"{part}/{ot}: {err} Nothing staged for this part.")
             continue
-        rel = f"parts/{part}/short_term_{ot}.md"
+        rel = BF.short_term_backfill_path(part, ot).relative_to(ROOT).as_posix()
         tx.stage(rel, text.encode("utf-8"))
         run.ok(f"staged {rel} ({len(text.split())} words, RECONSTRUCTED)")
         done += 1
@@ -695,7 +706,7 @@ def phase3(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
 
 
 # ------------------------------------------------------------------ phases 7-9
-def stage_synthetic(tx: T.Transaction, run: Run) -> None:
+def circle_audit_synthetic_stage(tx: T.Transaction, run: Run) -> None:
     """A stand-in for phases 3-5, so the transaction can be exercised end
     to end with no model calls and no cost: one legal append to the
     observation log, gated as any real change would be.
@@ -709,7 +720,7 @@ def stage_synthetic(tx: T.Transaction, run: Run) -> None:
     guaranteed phase-6 FAIL FROZEN and --stage-synthetic could never
     reach phases 7-9 at all — the docstring and the mechanism had swapped
     truths. The multi-file swap, the crash states between replaces, and
-    both journal repairs are covered by coordinator/tests/test_transaction.py
+    both transaction file repairs are covered by coordinator/tests/test_TRANSACTION_CLASS.py
     against throwaway trees; what THIS path uniquely rehearses is the
     real tree, the real gate, and the real phase-6-through-9 plumbing,
     which one observation-log append exercises whole."""
@@ -721,18 +732,18 @@ def stage_synthetic(tx: T.Transaction, run: Run) -> None:
     # rehearsal itself rather than on what it is rehearsing. CONSEQUENCE,
     # stated because it is real: a synthetic run that reaches phases 7-9
     # CONSUMES an SO- id. The text says so, so the record self-identifies.
-    doc, _rec = SO.render_new(
+    doc, _rec = SO.self_observation_new_render(
         SO._doc(), f"synthetic-{today}",
         f"Synthetic transaction test: {today}. Not an observation — "
         f"circle_audit.py --stage-synthetic wrote this to rehearse phases "
         f"6-9 against the real tree and the real gate.")
     tx.stage("self/self_observation_log.toml",
-             SS.dumps(doc, SO.TABLE, SO.ORDER).encode("utf-8"))
+             SS.register_dumps(doc, SO.TABLE, SO.ORDER).encode("utf-8"))
     run.ok(f"staged {len(tx.staged())} synthetic file(s) "
            f"(stand-in for phases 3-5)")
 
 
-def phase7_9(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
+def circle_audit_phase7_9_run(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
     """7 commit · 8 verify · 9 record. Nothing here runs if phase 6 failed."""
     if any(f.level == "FAIL" for f in findings):
         run.fail("phase 6 found FAILures — refusing to commit. The live tree is "
@@ -743,7 +754,7 @@ def phase7_9(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
         run.ok("staged output is identical to the live tree — nothing to commit")
         return True
 
-    hr("phase 7 — commit")
+    circle_audit_hr_render("phase 7 — commit")
     log = _logger(run)
     print(f"  {len(changed)} file(s) to replace:")
     for rel in changed:
@@ -755,19 +766,19 @@ def phase7_9(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
     # INTENT rather than against a re-read of itself.
     tx.record_committed()
 
-    hr("phase 8 — verify")
+    circle_audit_hr_render("phase 8 — verify")
     if not tx.verify(log):
         run.fail("post-commit verification failed — see the rollback copies")
         return False
 
-    hr("phase 9 — record")
+    circle_audit_hr_render("phase 9 — record")
     if do_git:
-        G.commit_paths([ROOT / r for r in changed],
+        G.system_git_paths_commit([ROOT / r for r in changed],
                        f"circle_audit {tx.run_id}: {len(changed)} file(s)", log,
                        tag=f"audit/{tx.run_id}")
     else:
         run.warn("--no-git: committed to disk but not to git")
-    log_run("commit", "ok", f"{len(changed)} file(s) committed")
+    circle_audit_run_log("commit", "ok", f"{len(changed)} file(s) committed")
     return True
 
 
@@ -776,7 +787,7 @@ RUN_LOG = ROOT / "work" / "logs" / "circle_audit.log"
 KEEP_BASELINES = 14
 
 
-def resolve_baseline(arg: str | None) -> pathlib.Path | None:
+def circle_audit_baseline_resolve(arg: str | None) -> pathlib.Path | None:
     """--baseline last  ->  the newest work/circle_audit/baseline_* directory,
     so a caller need not know the timestamp the snapshot run chose."""
     if not arg:
@@ -788,7 +799,7 @@ def resolve_baseline(arg: str | None) -> pathlib.Path | None:
     return pathlib.Path(arg)
 
 
-def prune_baselines(keep: int = KEEP_BASELINES) -> int:
+def circle_audit_baselines_prune(keep: int = KEEP_BASELINES) -> int:
     old = sorted((d for d in WORK.glob("baseline_*") if d.is_dir()),
                  key=lambda d: d.name)[:-keep]
     for d in old:
@@ -820,7 +831,7 @@ class Tee:
         self.f.close()
 
 
-def log_run(mode: str, result: str, detail: str) -> None:
+def circle_audit_run_log(mode: str, result: str, detail: str) -> None:
     """One line per run, so a week of audit runs can be read at a glance."""
     RUN_LOG.parent.mkdir(parents=True, exist_ok=True)
     with open(RUN_LOG, "a", encoding="utf-8", newline="\n") as f:
@@ -829,7 +840,7 @@ def log_run(mode: str, result: str, detail: str) -> None:
 
 
 # Task Scheduler install/uninstall (TASK_XML, TASKS, task_defs(), install_tasks(),
-# uninstall_tasks()) REMOVED WHOLESALE 2026-08-15 — see RULINGS.md and
+# uninstall_tasks()) REMOVED WHOLESALE 2026-08-15 — see rulings/ and
 # docs/NIGHTLY_DESIGN.md's own §7 retirement note. It existed to snapshot/validate
 # around the separate, since-retired ifs-nightly Cowork task; nothing schedules
 # dreaming/synthesis any more (docs/INTER_CIRCLE_DESIGN.md's Placement ruling —
@@ -859,7 +870,7 @@ def main() -> int:
                          "never rewrites history, never stages the whole tree.")
     # NO DEFAULTS HERE. Identity is configuration: the flag, else
     # $IFS_GIT_NAME/$IFS_GIT_EMAIL (shell or .env), else git's own
-    # user.name/user.email, else unset — gitrepo.resolve_identity().
+    # user.name/user.email, else unset — gitrepo.system_git_identity_resolve().
     # See docs/configuration.md.
     ap.add_argument("--git-name", default=None,
                     help="git user.name for --git-setup. Default: "
@@ -889,11 +900,19 @@ def main() -> int:
                          "the run stops after validation and writes nothing.")
     ap.add_argument("--no-git", action="store_true",
                     help="with --commit: write to disk but do not git-commit")
-    ap.add_argument("--journal-status", action="store_true")
-    ap.add_argument("--journal-finish", action="store_true",
+    ap.add_argument("--transaction-status", action="store_true",
+                    help="report an interrupted swap's per-file state")
+    ap.add_argument("--transaction-finish", action="store_true",
                     help="complete an interrupted swap from staging")
-    ap.add_argument("--journal-rollback", action="store_true",
+    ap.add_argument("--transaction-rollback", action="store_true",
                     help="undo an interrupted swap from the rollback copies")
+    # The --journal-* spellings (until B100, 2026-09-04; R446, R448) are
+    # accepted HIDDEN for one release: each prints a one-line note and does
+    # exactly what its --transaction-* twin does. Separate arguments, not
+    # extra option strings, so main() can tell which spelling fired.
+    for legacy in ("status", "finish", "rollback"):
+        ap.add_argument(f"--journal-{legacy}", dest=f"journal_{legacy}_legacy",
+                        action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--log", action="store_true",
                     help="mirror all output to "
                          "work/logs/circle_audit_<timestamp>.log")
@@ -909,16 +928,18 @@ def main() -> int:
     print(f"circle audit — phases 0-2, 6 — {started:%Y-%m-%d %H:%M}")
     print(f"project: {ROOT}")
 
-    for flag, action in (("journal_status", "status"), ("journal_finish", "finish"),
-                         ("journal_rollback", "rollback")):
-        if getattr(args, flag):
-            return journal_command(run, action)
+    for action in ("status", "finish", "rollback"):
+        if getattr(args, f"journal_{action}_legacy"):
+            print(f"  note  --journal-{action} is --transaction-{action} since 2026-09-04 "
+                  f"(R448); the old spelling is accepted for one release")
+        if getattr(args, f"transaction_{action}") or getattr(args, f"journal_{action}_legacy"):
+            return circle_audit_transaction_command_read(run, action)
 
     if args.git_setup:
-        return git_setup(run, args.git_name, args.git_email)
+        return circle_audit_git_setup(run, args.git_name, args.git_email)
 
     if args.selfcheck:
-        phase6(run, None)
+        circle_audit_phase6_run(run, None)
         return 1 if run.failures else 0
 
     # --validate IS READ NOW, 2026-08-27. It was a documented argparse flag
@@ -951,25 +972,27 @@ def main() -> int:
     # exactly the runs that swap files (--backfill --commit,
     # --stage-synthetic --commit) got "git unavailable / not a repository /
     # dirty tree" as warnings and proceeded with no revert target.
-    if not phase0(run, may_commit=bool(args.commit),
+    if not circle_audit_phase0_run(run, may_commit=bool(args.commit),
                   writing=bool(args.snapshot)):
-        release_lock()
-        return 2 if any("JOURNAL" in f for f in run.failures) else 1
+        circle_audit_lock_release()
+        # matched on the stable phrase, not the file's name: the leftover may
+        # be a TRANSACTION or a pre-rename JOURNAL, and both are exit 2
+        return 2 if any("leftover commit" in f for f in run.failures) else 1
     try:
         if args.snapshot:
             dest = (WORK / f"baseline_{started:%Y-%m-%d_%H%M}") \
                 if args.snapshot == "auto" else pathlib.Path(args.snapshot)
-            hr("snapshot")
-            snapshot(dest)
+            circle_audit_hr_render("snapshot")
+            circle_audit_snapshot(dest)
             info = json.loads((dest / "SNAPSHOT.json").read_text(encoding="utf-8"))
             run.ok(f"{info['files']} files -> {dest}")
-            log_run("snapshot", "ok", f"{info['files']} files -> {dest.name}")
+            circle_audit_run_log("snapshot", "ok", f"{info['files']} files -> {dest.name}")
             print(f"\n  Validate against it later:")
             print(f"    python coordinator\\circle_audit.py --baseline last")
             return 0
 
-        unprocessed = phase1(run)
-        phase2(run, unprocessed)
+        unprocessed = circle_audit_phase1_run(run)
+        circle_audit_phase2_run(run, unprocessed)
 
         if args.backfill:
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")
@@ -981,21 +1004,21 @@ def main() -> int:
                          f"backfill for an ALREADY-PROCESSED circle repairs the "
                          f"record but does not re-run its dreaming — see process.md "
                          f"'short_term backfill'.")
-            phase3(run, tx, scope, args.dry_run)
+            circle_audit_phase3_run(run, tx, scope, args.dry_run)
             if tx.staged():
-                hr("phase 6 — validate (staged candidate vs live)")
+                circle_audit_hr_render("phase 6 — validate (staged candidate vs live)")
                 findings = tx.validate()
                 for f in findings:
                     if f.level != "OK":
                         print(f)
-                nf, nw, no = M.summarise(findings)
+                nf, nw, no = RG.register_summarise(findings)
                 print(f"\n  {nf} FAIL · {nw} WARN · {no} OK "
-                      f"(long_term/relationships/self untouched, as expected)")
+                      f"(long_term/self untouched, as expected)")
                 for f in findings:
                     if f.level == "FAIL":
                         run.failures.append(f"{f.path}: {f.code}")
                 if args.commit:
-                    phase7_9(run, tx, findings, do_git=not args.no_git)
+                    circle_audit_phase7_9_run(run, tx, findings, do_git=not args.no_git)
                 else:
                     run.ok(f"{len(tx.staged())} backfill(s) staged in "
                            f"{tx.staging.relative_to(ROOT).as_posix()} — "
@@ -1005,48 +1028,48 @@ def main() -> int:
             # dream/synthesise live in inter_circle.py) — --stage-synthetic
             # substitutes a legal change so phases 6-9 can be exercised.
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")
-            hr("stage (synthetic)")
+            circle_audit_hr_render("stage (synthetic)")
             if args.stage_synthetic:
-                stage_synthetic(tx, run)
+                circle_audit_synthetic_stage(tx, run)
             if not tx.staged():
                 run.fail("nothing staged — use --stage-synthetic to exercise "
                          "the transaction, or --backfill for a real repair")
             else:
-                hr("phase 6 — validate (staged candidate vs live)")
+                circle_audit_hr_render("phase 6 — validate (staged candidate vs live)")
                 findings = tx.validate()
                 for f in findings:
                     if f.level != "OK":
                         print(f)
-                nf, nw, no = M.summarise(findings)
+                nf, nw, no = RG.register_summarise(findings)
                 print(f"\n  {nf} FAIL · {nw} WARN · {no} OK")
                 for f in findings:
                     if f.level == "FAIL":
                         run.failures.append(f"{f.path}: {f.code}")
                 if args.commit:
-                    phase7_9(run, tx, findings, do_git=not args.no_git)
+                    circle_audit_phase7_9_run(run, tx, findings, do_git=not args.no_git)
                 else:
                     run.ok("validation only — pass --commit to run phases 7-9")
         else:
-            base = resolve_baseline(args.baseline)
+            base = circle_audit_baseline_resolve(args.baseline)
             if args.baseline and base is None:
                 run.fail("--baseline last: no work/circle_audit/baseline_* "
                          "snapshot exists")
             elif base and not base.is_dir():
                 run.fail(f"baseline directory not found: {base}")
                 base = None
-            phase6(run, base)
+            circle_audit_phase6_run(run, base)
         if args.prune_baselines:
-            n = prune_baselines()
+            n = circle_audit_baselines_prune()
             run.ok(f"pruned {n} old snapshot(s), keeping {KEEP_BASELINES}")
     finally:
-        release_lock()
+        circle_audit_lock_release()
 
-    log_run("validate" if args.baseline else "check",
+    circle_audit_run_log("validate" if args.baseline else "check",
             "FAIL" if run.failures else "ok",
             f"{len(unprocessed)} unprocessed circle(s); "
             + (f"{len(run.failures)} failure(s)" if run.failures else "all checks passed"))
 
-    hr("result")
+    circle_audit_hr_render("result")
     if run.failures:
         print(f"  {len(run.failures)} FAILURE(S):")
         for f in run.failures:

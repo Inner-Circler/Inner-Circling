@@ -1,41 +1,67 @@
 # Inner Circling — Overview
 
-**An IFS Multi-Agent System.** Self's Internal Family Systems inner circle, implemented as asynchronous AI agents.
+**An IFS system for one person's inner circle.** Self's Internal Family
+Systems inner circle, run by a local Python coordinator that calls the
+Messages API directly.
 
-Canonical source: this markdown file (the `.docx` is a generated export). Updated 2026-07-01.
+Canonical source: this markdown file. Updated 2026-09-01.
 
 ## What this is
 
-Seven named parts of Self's psyche meet in open, asynchronous circles. Each part is a Claude AI agent with its own memory, perspective, and voice. The system is grounded in Richard Schwartz's Internal Family Systems model and Adam Phillips's critique of self-criticism.
+Named parts of Self's psyche meet in a circle. Each part speaks in its own
+voice, grounded in Richard Schwartz's Internal Family Systems model and
+Adam Phillips's critique of self-criticism.
 
 *Parts hold the pain. Self holds the values. The pain did not corrupt the goodness.*
 
-## The parts
+**There is no agent runtime.** A circle is one local program, one process,
+holding the single canonical transcript. Each part's statement is one
+stateless call to the Messages API — the program builds that part's whole
+context fresh from the transcript and that part's own identity file every
+time it is asked to speak. No part is a persistent process, and nothing
+runs in the background between its turns.
 
-| Part | Core quality | Most values |
-|------|--------------|-------------|
-| Judge | Discernment | Honesty — the clean mirror held with humility |
-| Mourner | Sacred grief | Remembrance — being witnessed in what mattered |
-| Idealist | Aspiration | Beauty and meaning — evidence a thing was worth it |
-| Philosopher | Meaning-making | Belonging — simply being held, not earned |
-| Child | Wonder | Safe-to-be-quiet — the room warm enough to come out |
-| Learner | Hope/Curiosity | Courage and risk — curiosity that costs something |
-| Soul | Foundational substrate — pre-verbal, pre-part. Acknowledged but does not speak in routine circles. | |
+## The parts you receive, and the ones you will add
 
-## How circles work
+This installation ships two parts: **Soul** (the foundational substrate —
+acknowledged, present in every circle, speaks rarely and on its own
+terrain) and **Child** (wonder — the youngest part, closest to original
+vulnerability). Every other part is yours to add, one at a time, as your
+own circle surfaces it — parts are never manufactured in a batch to fill
+out a roster.
 
-Self posts `CIRCLE: [topic]`. Each part reads its context files — `long_term.md`, `part_relationships.toml`, the circle briefing — then speaks asynchronously as ready. Each part may make up to 2 statements per Self turn; no part speaks twice in a row; 100 words max. All statements are public; parts may address each other directly. Domination is named by parts; Self evaluates and enforces.
+An earlier draft of this document described a specific seven-part roster
+as if it shipped with the product. That was one person's own roster, not
+a set you are expected to reproduce. Look at `parts/child/` and
+`parts/soul/` for the shape a part takes, and see `/part-add` in the
+rulebook (`coordinator/process_core.md`) for how a new one joins.
 
-Behind the scenes, each part runs as one persistent teammate for the circle's duration: the Scribe (the lead session) spawns it once, relays Self's words and other parts' statements to it, and prints its replies. The circle closes with `/circle_close`: transcript written, every part writes its short-term file and stands down, teardown verified.
+## How a circle works
 
-## The nightly cycle
+Self posts a topic. Each part's prompt is built fresh, in four blocks: the
+shared rulebook and circle practices; what the issue graph currently owes;
+that part's own long-term identity, distilled; and anything addressed to
+that part alone. Statements are public and parts may address each other
+directly; no part speaks twice in a row. Each statement aims for a short
+length and is hard-capped at a configurable word count — see
+`coordinator/process_core.md` and the `statement_max_words` setting in
+`self/settings.toml` (`coordinator/setting_manager.py`, `/settings-list`) for
+the live numbers. Domination is named by parts; Self evaluates and enforces.
 
-One scheduled task (`ifs-nightly`, 1:11 AM) runs both steps, serialized — dreaming completes before synthesis begins.
+The circle closes with `/close`: each part's closing reflection is
+recorded, the transcript is written and verified, and the circle is
+committed.
 
-| Step | Task | What it does |
-|------|------|--------------|
-| 1 | Part Dreaming | Each part reviews the short-term files from circles since the last run, refreshes each dream entry's recency (*Last mentioned*), flags entries unengaged for 5+ circles for review, settles those the circle lets go, appends a new entry to `long_term.md` if warranted, and updates `part_relationships.toml`. |
-| 2 | Self Synthesis | Self reads all parts plus the circle transcripts (ground truth), updates `self.md` and the observation log, rewrites the circle briefing (resolved questions), and writes the nightly narrative and phase arc. |
+## What happens when a circle closes
+
+Processing is **synchronous**, not scheduled. The moment `/close` finishes
+writing the transcript, the same run immediately: each part reviews what
+happened in this circle and may update its own long-term identity, in
+parallel across every part (dreaming); then one pass looks across the
+whole circle for practices that should apply to everyone (synthesis).
+There is no separate scheduled task and nothing runs overnight — if this
+step fails, `/close` reports it and nothing about it is left
+half-written.
 
 ## Goals
 

@@ -1,18 +1,18 @@
 #!/usr/bin/env python3
 """
 llm_client.py — the Messages-API transport: the model id and its
-rates, the usage meter, the one call() wrapper, Self's retry ladder,
+rates, the usage meter, the one stream_call() wrapper, Self's retry ladder,
 the key diagnostics, the preflight, and the cache pre-warm. Phase 2
 stage 1 of the coordinator partitioning (2026-08-16); until then all
 of it lived in circle.py. Verbatim move — bodies and comments
 unchanged, except console output goes through `seam.emit` by attribute
 access (the seam contract in seam.py).
 
-TRANSPORT ONLY, deliberately: ask_statement() stays in circle.py (for
+TRANSPORT ONLY, deliberately: part_statement_ask() stays in circle.py (for
 rounds, stage 7) — it is round-logic wearing an API call, and the
 phase-2 review's correction of the original plan's "llm_client is
 self-contained" claim was exactly this line. What it needs of the
-coordinator is small and named: paths.PART_TAGS, seam, settings, providers
+coordinator is small and named: record_paths.PART_TAGS, seam, settings, providers
 (the vendor seam, R382), and ifs_model for the four short_term headings it
 must not keep a second copy of.
 
@@ -26,36 +26,45 @@ from __future__ import annotations
 import threading
 import time
 
+import command_surface as CS
 import seam
-import settings as SET
+import setting_manager as SET
 import providers as _providers
-from paths import PART_TAGS
+import LLM_response_disassembler as RD
+from record_paths import PART_TAGS
 # `os` and `ROOT` left with the provider at stage 2 — the only readers here
 # were the credential diagnostics, and a credential's name and its file are
 # the vendor's, not the transport's.
 
-# EVERY LITERAL BELOW IS STILL THE DOCUMENTED DEFAULT. settings.value()
+# EVERY LITERAL BELOW IS STILL THE DOCUMENTED DEFAULT. setting_manager.setting_value_read()
 # returns it unless self/settings.toml overrides that key, and an absent
 # register — a fresh clone, a worktree, a shipped bundle — means every one of
-# these stands exactly as written. See coordinator/settings.py.
-MODEL = SET.value("model", "claude-sonnet-5")   # parts run on sonnet (cost tiering)
-PROVIDER = SET.value("provider", "Anthropic")   # who MODEL's requests go to — named
+# these stands exactly as written. See coordinator/setting_manager.py.
+MODEL = SET.setting_value_read("model", "claude-sonnet-5")   # parts run on sonnet (cost tiering)
+PROVIDER = SET.setting_value_read("provider", "Anthropic")   # who MODEL's requests go to — named
                                         # in the initialization dialogs' privacy
                                         # statement
 CACHE_TTL = "1h"                        # circles have pauses longer than 5m
 
 # Verified 2026-07-26 from platform.claude.com/docs — Claude Sonnet 5,
-# USD per MTok. NOTE: these rise on 2026-09-01 to 3.00 / 6.00 / 0.30 / 15.00 —
-# which is what made them settable: until 2026-08-28 the only way to record
-# that rise was to edit this file.
-RATE_IN = SET.value("rate_in", 2.00)
-RATE_CACHE_WRITE_1H = SET.value("rate_cache_write_1h", 4.00)   # 2x base
-RATE_CACHE_READ = SET.value("rate_cache_read", 0.20)           # 0.1x base
-RATE_OUT = SET.value("rate_out", 10.00)
+# USD per MTok. STILL CORRECT — re-verified 2026-09-01 (audit-register.md
+# #27) directly against platform.claude.com/docs/en/about-claude/pricing:
+# Anthropic made the $2/$10 introductory rate permanent on 2026-08-10/11
+# and CANCELLED the 3.00/6.00/0.30/15.00 rise this comment used to warn
+# about here — a warning this project's own tree kept past the date the
+# warning itself expired, which is precisely the audit's own finding: a
+# tripwire firing on stale ground rather than a real drift. What made
+# these settable (2026-08-28) still stands: a real future price change is
+# a self/settings.toml [[model]] row or a flat-setting override, not a
+# Python edit.
+RATE_IN = SET.setting_value_read("rate_in", 2.00)
+RATE_CACHE_WRITE_1H = SET.setting_value_read("rate_cache_write_1h", 4.00)   # 2x base
+RATE_CACHE_READ = SET.setting_value_read("rate_cache_read", 0.20)           # 0.1x base
+RATE_OUT = SET.setting_value_read("rate_out", 10.00)
 
 # THE SHORT AUXILIARY CALL'S CEILING — one home, 2026-08-28. coalesce and
 # inter_circle each held a bare 4000, and I called that a coincidence when
-# check_one_home flagged it. It is not: coalesce's own comment cites
+# system_unique_home_verify flagged it. It is not: coalesce's own comment cites
 # DERIVE_MAX_TOKENS's lesson (R354), so the two were sized by the SAME
 # reasoning and landed on the same number for the same reason — thinking bills
 # against the cap, so even a call whose visible output is a few lines needs
@@ -65,13 +74,14 @@ RATE_OUT = SET.value("rate_out", 10.00)
 # paragraphs" for a diagnostic — and neither is what sets this number. The
 # thinking is. If one of them ever needs its own ceiling it declares one, and
 # that is then a visible decision rather than a silent divergence.
-AUX_MAX_TOKENS = SET.value("auxiliary_max_tokens", 4000)
+AUX_MAX_TOKENS = SET.setting_value_read("auxiliary_max_tokens", 4000)
 
 # WHETHER THE CAPTURE KEEPS WHAT THE MODEL THOUGHT — R386,
 # *"keep them if a new boolean setting record_thinking = true"*, ruling on the
 # finding that thinking arrives on every statement and was being dropped twice:
-# by providers.read() for the transcript and by _response_record() below for the
-# archive. THE TRANSCRIPT DROP STAYS. Thinking never enters the room, and that
+# by providers.read() for the transcript and by _response_record() (now
+# LLM_response_disassembler.message_burst(), which takes this setting as an argument)
+# for the archive. THE TRANSCRIPT DROP STAYS. Thinking never enters the room, and that
 # was not what was ruled on. This is the archive alone.
 #
 # DEFAULT ON, because the ruling was to keep them and a default of off would
@@ -83,13 +93,13 @@ AUX_MAX_TOKENS = SET.value("auxiliary_max_tokens", 4000)
 # tokens" was measured. The count was on file and the reasoning was not.
 # Estimated at 79 KB per circle against 820 KB today, from circle
 # 2026-08-21_1139's 20,341 thinking tokens at four characters each.
-RECORD_THINKING = SET.value("record_thinking", True)
+RECORD_THINKING = SET.setting_value_read("record_thinking", True)
 
 # THE PROVIDER — stage 2 of the socket (R382). Everything vendor-shaped moved
 # to providers.py; this module keeps the POLICY: Self's retry ladder, the one
 # Meter, the capture hook, and the two entry points every caller already uses.
 #
-# RESOLVED ONCE, AT IMPORT, FROM THE SETTING. providers.active() REFUSES a
+# RESOLVED ONCE, AT IMPORT, FROM THE SETTING. providers.stream_provider_active() REFUSES a
 # name the registry does not know rather than defaulting to one — a provider
 # is a closed set in code (R383) and the settings register validates against
 # that same registry before storing, so a name arriving here that is unknown
@@ -98,7 +108,7 @@ RECORD_THINKING = SET.value("record_thinking", True)
 # The names below stay bound in THIS module on purpose: circle.py and the
 # suites import KEY_MISSING_HELP, explain_api_failure and key_source_note from
 # here, and stage 2 is a refactor — moving an implementation, not a caller.
-PROVIDER_IMPL = _providers.active(PROVIDER)
+PROVIDER_IMPL = _providers.stream_provider_active(PROVIDER)
 KEY_MISSING_HELP = PROVIDER_IMPL.missing_key_help
 
 # `--dry-run` SELECTS A PROVIDER — stage 3 (R382). It is not in REGISTRY and
@@ -119,10 +129,10 @@ def _impl(dry: bool):
 # other setting, so a change takes effect at the next circle: that is what
 # `applies = next_circle` means, and a tuning change alters both the wire and
 # the ceilings, so it must not move under a transcript in flight.
-TUNING = SET.tuning(PROVIDER_IMPL)
+TUNING = SET.setting_tuning_read(PROVIDER_IMPL)
 
 
-def ceiling(base: int, dry: bool = False) -> int:
+def stream_ceiling_read(base: int, dry: bool = False) -> int:
     """An output ceiling, scaled by whatever the provider's tuning does to it.
 
     ONE DIAL MOVES BOTH — the operator, 2026-08-28: *"Turning up thinking must
@@ -136,12 +146,12 @@ def ceiling(base: int, dry: bool = False) -> int:
     return base if scale == 1.0 else max(1, int(round(base * scale)))
 
 # The short_term record's four canonical sections — the dry provider returns
-# them as its canned short_term, and circle.py's collect_short_terms() checks
+# them as its canned short_term, and circle_close.py's short_term_collect() checks
 # a real response carries all four.
 #
 # IMPORTED, NOT COPIED (2026-08-28). This module and ifs_model each wrote the
 # same four strings out, and the two were read by different consumers —
-# circle.py took this copy, circle_close.py took that one. ifs_model owns a
+# circle.py took this copy, circle_close_verify.py took that one. ifs_model owns a
 # short_term's SHAPE (its own comment beside RECONSTRUCTED_MARK says so, in
 # the words "the literal lives here, in the module that owns a short_term's
 # shape, so the writer and the reader cannot drift apart"), so it owns these.
@@ -196,9 +206,14 @@ def _row(rate_in: float, rate_out: float) -> tuple:
 # inside the provider. The accounting still has to tell the two apart the day
 # one is used.
 #
-# Rates verified against Anthropic's published list 2026-08-30. They rise on
-# 2026-09-01 — which is what `[[model]]` below exists for: a price change is a
-# TOML edit, not a Python edit.
+# Rates verified against Anthropic's published list 2026-08-30, and
+# RE-VERIFIED 2026-09-01 (audit-register.md #27) — every row here still
+# matches platform.claude.com/docs/en/about-claude/pricing exactly.
+# Sonnet 5's row does NOT rise to 3.00/6.00/0.30/15.00 on 2026-09-01 as
+# this comment used to warn: Anthropic made the $2/$10 introductory rate
+# permanent on 2026-08-10/11 and cancelled that rise. `[[model]]` below
+# still exists for whenever a REAL price change does land — a price
+# change is a TOML edit, not a Python edit.
 _BUILTIN_RATES: dict[tuple, tuple] = {
     ("claude-fable-5", _STANDARD): _row(10.00, 50.00),
     ("claude-opus-5", _STANDARD): _row(5.00, 25.00),
@@ -219,18 +234,18 @@ _BUILTIN_RATES: dict[tuple, tuple] = {
 DEFAULT_RATES = (RATE_IN, RATE_CACHE_WRITE_1H, RATE_CACHE_READ, RATE_OUT)
 
 
-def model_rates() -> dict:
+def stream_model_rates_read() -> dict:
     """The built-in table with `self/settings.toml`'s `[[model]]` rows laid
     over it. Read fresh so a corrected price takes effect at once, the same
     immediacy the four rate settings were declared with — these price a
     report, they do not spend anything."""
     table = dict(_BUILTIN_RATES)
-    table.update(SET.model_rate_rows())
+    table.update(SET.setting_model_rate_rows_read())
     return table
 
 
-def rates_for(model: str, speed: str = _STANDARD) -> tuple:
-    return model_rates().get((model, speed), DEFAULT_RATES)
+def stream_rates_read(model: str, speed: str = _STANDARD) -> tuple:
+    return stream_model_rates_read().get((model, speed), DEFAULT_RATES)
 
 
 class _Bucket:
@@ -305,10 +320,10 @@ class Meter:
         cannot silently reprice history — the 2026-09-01 rise is exactly the
         event that would otherwise do it."""
         out = []
-        # ONE read of the table for the whole report — model_rates() merges
+        # ONE read of the table for the whole report — stream_model_rates_read() merges
         # the register's rows over the built-ins on every call, and a report
         # must price every row against the same table it flags them against
-        table = model_rates()
+        table = stream_model_rates_read()
         for (prov, model, speed), b in sorted(self.by.items()):
             r_in, r_cw, r_cr, r_out = table.get((model, speed), DEFAULT_RATES)
             out.append({
@@ -332,7 +347,7 @@ class Meter:
         every cached token billed as uncached input, per bucket's own rate."""
         total = 0.0
         for (_p, model, speed), b in self.by.items():
-            r_in, _cw, _cr, r_out = rates_for(model, speed)
+            r_in, _cw, _cr, r_out = stream_rates_read(model, speed)
             total += ((b.t_in + b.t_cw + b.t_cr) * r_in
                       + b.t_out * r_out) / 1_000_000
         return total
@@ -340,8 +355,9 @@ class Meter:
     def report(self) -> str:
         rows = self.rows()
         hit = self.t_cr / max(1, self.t_cr + self.t_cw)
+        ttl = PROVIDER_IMPL.cache_ttl(TUNING, CACHE_TTL)   # the operator's, when set
         head = (f"\n--- usage: {self.calls} calls across {len(rows)} "
-                f"model(s), TTL {CACHE_TTL} ---\n")
+                f"model(s), TTL {ttl} ---\n")
         body = ""
         # THE BREAKDOWN IS THE POINT, not a total: a total cannot be checked
         # against anything, and with two models it cannot even be right.
@@ -365,7 +381,7 @@ class Meter:
         )
 
     def snapshot(self) -> dict:
-        """The durable record's payload — see circle.write_spend_report()."""
+        """The durable record's payload — see circle.circle_spend_report_write()."""
         return {"calls": self.calls, "cost": self.cost(),
                 "no_cache_cost": self.no_cache_cost(), "by_model": self.rows()}
 
@@ -374,14 +390,14 @@ METER = Meter()
 
 
 # ------------------------------------------------------------------ API
-def call(client, part: str, blocks: list[dict], msgs: list[dict],
+def stream_call(client, part: str, blocks: list[dict], msgs: list[dict],
          max_tokens: int, dry: bool, kind: str = "statement"):
     """`kind` is "statement" or "short_term" — WHICH REQUEST THIS IS, said
     outright by the caller.
 
     IT USED TO BE INFERRED FROM max_tokens, AND THE INFERENCE HAD GONE
     STALE. The dry-run branch below read `max_tokens > 1000` as "this is
-    the short_term request"; rounds.MAX_TOKENS was under that when it was
+    the short_term request"; circle_rounds.MAX_TOKENS was under that when it was
     written and is 2500 today, so EVERY dry-run STATEMENT came back as the
     four short_term section headings and the statement branch was dead
     code. Measured 2026-08-20: `grep "dry run statement from"` matches no
@@ -396,7 +412,7 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
     # is recorded are the same object (R277, 2026-08-21): `**req` below is
     # exactly the keyword form it replaced.
     impl = _impl(dry)
-    req = impl.request(MODEL, ceiling(max_tokens, dry), blocks, msgs)
+    req = impl.request(MODEL, stream_ceiling_read(max_tokens, dry), blocks, msgs)
     # TRANSLATED, NEVER SPLICED — the provider turns our word (`effort`) into
     # its own wire path (`output_config.effort`). At the default the mapping
     # returns {} and the request is byte-identical to what it was before
@@ -412,10 +428,9 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
     # implementation to be honest against.
     offline_text = impl.canned(kind, PART_TAGS[part], SHORT_TERM_SECTIONS)
     if offline_text is not None:
-        _record_turn(part, kind, req,
-                     {"text": offline_text, "stop_reason": "end_turn",
-                      "usage": None}, dry_run=True)
-        return offline_text, "end_turn"
+        reply = RD.Reply.canned(offline_text)
+        _record_turn(part, kind, req, reply.record, dry_run=True)
+        return reply
     # SELF'S LADDER COVERS THIS CALL TOO, since 2026-08-20
     # (R264). It did not, and that is
     # the whole of the crash that ruling was written for: a LIVE /close
@@ -425,7 +440,7 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
     # costs a retry -- while every statement and every short_term, the
     # calls made once there IS a record to lose, went bare.
     #
-    # _no_sdk_retries COMES WITH IT, and is not optional. The SDK's own
+    # _retry_free(client) COMES WITH IT, and is not optional. The SDK's own
     # max_retries=2 was the only retry behaviour here; leaving it on
     # underneath the ladder would turn a ruled 3 attempts into 9 and a
     # ruled 20 seconds of waiting into something nobody chose -- exactly
@@ -439,7 +454,7 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
     # The label is what with_backoff prints while waiting, so it names
     # the part AND which of its two requests is being retried.
     try:
-        resp = with_backoff(
+        resp = stream_backoff_wrap(
             f"{PART_TAGS[part]} {kind}",
             lambda: PROVIDER_IMPL.send(_retry_free(client), req),
         )
@@ -448,19 +463,19 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
         # and no response. Then the caller sees exactly what it saw before.
         _record_turn(part, kind, req, None, error=f"{type(e).__name__}: {e}")
         raise
-    turn = PROVIDER_IMPL.read(resp)
-    METER.add(turn.usage, model=MODEL)
-    _record_turn(part, kind, req, _response_record(resp))
-    # THE VENDOR'S OWN WORD IS RETURNED, not the normalised one: rounds.py and
-    # circle.py both test `stop == "max_tokens"`, and stage 2 moves an
-    # implementation rather than a caller. `turn.stop` carries the normalised
-    # value for whatever reads it next.
-    return turn.text, turn.raw_stop
+    # ONE BURST, RETURNED WHOLE (2026-09-02): the Reply the disassembler
+    # makes is what the Meter reads, what the capture records, and what the
+    # caller gets — circle_rounds.py and circle.py test `reply.truncated` rather
+    # than the vendor's own word, which this used to return as a bare tuple.
+    reply = RD.message_burst(PROVIDER_IMPL, resp, record_thinking=RECORD_THINKING)
+    METER.add(reply.usage, model=MODEL)
+    _record_turn(part, kind, req, reply.record)
+    return reply
 
 
 # ------------------------------------------------- the other model call
 # EVERY MODEL CALL THAT IS NOT A PART'S TURN, 2026-08-28 (stage 1 of the
-# provider socket). call() above is the CIRCLE's call: it takes a part, its
+# provider socket). stream_call() above is the CIRCLE's call: it takes a part, its
 # four cached blocks and the rendered transcript. Everything else this
 # project asks a model — dreaming, synthesis, the mid_term distillate, the
 # coalesce grouping, a dream fold, a transcript backfill — has one shape,
@@ -482,9 +497,9 @@ def call(client, part: str, blocks: list[dict], msgs: list[dict],
 #               was no single place the request passed through.
 #
 # The fix is one function, not five better copies of one. It is also where
-# the provider seam lands in stage 2: this signature and call()'s are the
+# the provider seam lands in stage 2: this signature and stream_call()'s are the
 # whole surface a provider has to satisfy.
-def build_client():
+def stream_client_build():
     """THE ONE PLACE A CLIENT IS CONSTRUCTED — the provider's business since
     stage 2. Kept as a name here because five call sites reach it, and stage
     2 moves an implementation, not a caller."""
@@ -498,9 +513,11 @@ def _retry_free(client):
     return PROVIDER_IMPL.retry_free(client)
 
 
-def call_once(system, user: str, max_tokens: int, *, kind: str,
+def stream_call_once(system, user: str, max_tokens: int, *, kind: str,
               client=None, record: bool = False, part: str | None = None):
-    """One non-circle model call. Returns (text, usage, stop_reason).
+    """One non-circle model call. Returns the Reply, burst
+    (LLM_response_disassembler.Reply) — it returned (text, usage,
+    stop_reason) until 2026-09-02, and every caller re-shaped that tuple.
 
     `system` is a plain string for four of the five callers and a LIST OF
     BLOCKS for circle_audit's backfill, which assembles a real part prompt.
@@ -529,30 +546,28 @@ def call_once(system, user: str, max_tokens: int, *, kind: str,
     # project's own model instead of the string "fake", which is what the
     # two hand-rolled copies of this would have done.
     if client is None:
-        client = build_client()
+        client = stream_client_build()
     model = getattr(client, "model", None) or MODEL
-    req = PROVIDER_IMPL.request(model, ceiling(max_tokens), system,
+    req = PROVIDER_IMPL.request(model, stream_ceiling_read(max_tokens), system,
                                 [{"role": "user", "content": user}])
     req.update(PROVIDER_IMPL.wire_tuning(TUNING))
     try:
-        resp = with_backoff(
+        resp = stream_backoff_wrap(
             kind, lambda: PROVIDER_IMPL.send(_retry_free(client), req))
     except Exception as e:                                     # noqa: BLE001
         if record:
             _record_turn(part, kind, req, None,
                          error=f"{type(e).__name__}: {e}")
         raise
-    turn = PROVIDER_IMPL.read(resp)
-    text, usage = turn.text, turn.usage
-    if usage is not None:
+    reply = RD.message_burst(PROVIDER_IMPL, resp, record_thinking=RECORD_THINKING)
+    if reply.usage is not None:
         # ONE meter, so a close can price itself — and the MODEL is PASSED,
         # not assumed, because this is the path the inter-circle work takes
         # and that is exactly where a second model would first appear.
-        METER.add(usage, model=model)
-    stop = turn.raw_stop
+        METER.add(reply.usage, model=model)
     if record:
-        _record_turn(part, kind, req, _response_record(resp))
-    return text, usage, stop
+        _record_turn(part, kind, req, reply.record)
+    return reply
 
 
 # ------------------------------------------------------------------ per-turn record
@@ -570,44 +585,11 @@ def call_once(system, user: str, max_tokens: int, *, kind: str,
 # — loud, and it makes the run non-zero — and the statement goes on: the
 # emitted program is the thing no other record holds, but a circle is the
 # thing the record is FOR.
-def _usage_dict(u) -> "dict | None":
-    if u is None:
-        return None
-    try:
-        return u.model_dump()                           # the SDK's pydantic object
-    except AttributeError:
-        return {k: getattr(u, k) for k in
-                ("input_tokens", "output_tokens",
-                 "cache_creation_input_tokens", "cache_read_input_tokens")
-                if hasattr(u, k)}
-
-
-def _response_record(resp) -> dict:
-    """The reply as a plain dict: the RAW text — before rounds.ask_statement
-    strips a sign-off, a [To: ...] or a bracket, and before "[pass]" becomes
-    silence — the stop reason, the usage, and the service's own id/model.
-
-    AND THE THINKING, when RECORD_THINKING is on. The provider supplies it,
-    because where reasoning sits in a reply is its business and not this
-    module's; `{}` back means either the setting is off or the service has no
-    thinking to give. THE KEY'S PRESENCE IS THE RECORD OF THE SETTING: when
-    recording is on the key is written even if the model thought nothing, so
-    an empty string means "asked, none came" and an absent key means "not
-    asked". A reader a year from now cannot otherwise tell those apart, and
-    the first captures will straddle the change."""
-    out = {
-        "id": getattr(resp, "id", None),
-        "model": getattr(resp, "model", None),
-        "stop_reason": getattr(resp, "stop_reason", None),
-        "text": "".join(b.text for b in getattr(resp, "content", [])
-                        if getattr(b, "type", None) == "text"),
-        "usage": _usage_dict(getattr(resp, "usage", None)),
-    }
-    if RECORD_THINKING:
-        out.update(PROVIDER_IMPL.thinking_record(resp))
-    return out
-
-
+# THE RESPONSE DICT ITSELF — id, model, stop_reason, the RAW text, the usage,
+# and the thinking when RECORD_THINKING is on — is built by
+# LLM_response_disassembler.message_burst() as `Reply.record`, 2026-09-02; it was
+# _response_record()/_usage_dict() here, a second reader of the wire beside
+# the provider's own.
 def _record_turn(part: "str | None", kind: str, req: dict,
                  response: "dict | None", dry_run: bool = False,
                  error: "str | None" = None) -> None:
@@ -620,7 +602,7 @@ def _record_turn(part: "str | None", kind: str, req: dict,
 
 
 # ------------------------------------------------------------------ API preflight
-# RULED 2026-08-09, after a rotated key raised 401 inside prewarm() and left
+# RULED 2026-08-09, after a rotated key raised 401 inside stream_prewarm() and left
 # circles/circle_2026-08-09_1507.md behind — a header, a topic, a working-set
 # entry, and nothing else:
 #
@@ -648,7 +630,7 @@ def _transient(e: Exception) -> bool:
     return PROVIDER_IMPL.transient(e)
 
 
-def with_backoff(what: str, fn):
+def stream_backoff_wrap(what: str, fn):
     """Run fn(), retrying transient failures on Self's ladder. Re-raises the
     fatal ones at once and the last transient one after the third attempt."""
     for i, wait in enumerate((*BACKOFF, None)):
@@ -663,24 +645,7 @@ def with_backoff(what: str, fn):
             time.sleep(wait)
 
 
-def _no_sdk_retries(client):
-    """The vendor's own retries off — the provider's job since stage 2.
-    Kept as a name because the suite asserts this seam by patching it."""
-    return PROVIDER_IMPL.retry_free(client)
-
-
-def _env_file_key() -> "str | None":
-    """The key literally written in .env — the provider's, since only it
-    knows what its credential is called."""
-    return PROVIDER_IMPL._env_file_key()
-
-
-def _mask(k: str) -> str:
-    """Enough to tell two keys apart, not enough to be one."""
-    return PROVIDER_IMPL._mask(k)
-
-
-def key_source_note() -> "str | None":
+def stream_key_source_note() -> "str | None":
     """A warning about WHICH credential is in use, or None — the provider's,
     since only it knows what its credential is called and where else it may
     be written. Printed at OPEN whenever it would otherwise be a silent trap:
@@ -695,7 +660,7 @@ def key_source_note() -> "str | None":
 # lives with the provider and every word of it changes when the provider does.
 
 
-def explain_api_failure(e: Exception) -> str:
+def stream_failure_explain(e: Exception) -> str:
     """The message a human gets instead of a traceback — the provider's, since
     it classifies that vendor's own exception hierarchy and status codes.
     MODEL is passed in because the 404 branch names it and the provider does
@@ -703,7 +668,7 @@ def explain_api_failure(e: Exception) -> str:
     return PROVIDER_IMPL.explain(e, MODEL)
 
 
-def preflight_api(client, dry: bool) -> str | None:
+def stream_api_preflight(client, dry: bool) -> str | None:
     """One real messages.create against MODEL before anything is written.
     Returns None on success, a printable explanation on failure.
 
@@ -719,15 +684,16 @@ def preflight_api(client, dry: bool) -> str | None:
                        None, [{"role": "user", "content": "ping"}])
     req.pop("system", None)              # no system prompt on a bare ping
     try:
-        r = with_backoff("api check",
+        r = stream_backoff_wrap("api check",
                          lambda: PROVIDER_IMPL.send(_retry_free(client), req))
     except Exception as e:                                       # noqa: BLE001
-        return explain_api_failure(e)
-    METER.add(PROVIDER_IMPL.read(r).usage, model=MODEL)
+        return stream_failure_explain(e)
+    METER.add(RD.message_burst(PROVIDER_IMPL, r, record_thinking=False).usage,
+              model=MODEL)
     return None
 
 
-def prewarm(client, parts: list[str], sysblocks: dict, dry: bool) -> None:
+def stream_prewarm(client, parts: list[str], sysblocks: dict, dry: bool) -> None:
     """max_tokens=0 pre-warm: writes each part's cached prefix before the circle
     opens, so the first real turn is a cache read. Bills zero output tokens.
     Sequential on purpose — a cache entry is not available to a concurrent
@@ -738,7 +704,8 @@ def prewarm(client, parts: list[str], sysblocks: dict, dry: bool) -> None:
     API calls, reached AFTER the transcript was on disk."""
     impl = _impl(dry)
     if impl.offline:
-        seam.emit("command", "  (dry run: pre-warm skipped)")
+        if CS.dev_mode:
+            seam.emit("command", "  (dry run: pre-warm skipped)")
         return
     # A SERVICE WITH NO PROMPT CACHE HAS NOTHING TO WARM, and says so rather
     # than paying for seven calls that buy nothing. The Meter's cache columns
@@ -746,26 +713,28 @@ def prewarm(client, parts: list[str], sysblocks: dict, dry: bool) -> None:
     # takes the branch above instead, so its message stays the one people are
     # used to seeing.
     if not impl.supports_cache:
-        seam.emit("command",
-                  f"  (pre-warm skipped: {impl.name} has no prompt "
-                  f"cache to warm)")
+        if CS.dev_mode:
+            seam.emit("command",
+                      f"  (pre-warm skipped: {impl.name} has no prompt "
+                      f"cache to warm)")
         return
     for p in parts:
         req = impl.request(MODEL, impl.prewarm_max_tokens,
                            sysblocks[p],
                            [{"role": "user", "content": "warmup"}])
         try:
-            r = with_backoff(f"pre-warm {p}",
+            r = stream_backoff_wrap(f"pre-warm {p}",
                              lambda req=req: impl.send(
                                  _retry_free(client), req))
         except Exception as e:
             _record_turn(p, "prewarm", req, None,
                          error=f"{type(e).__name__}: {e}")
             raise
-        usage = impl.read(r).usage
-        METER.add(usage, model=MODEL)
-        _record_turn(p, "prewarm", req, _response_record(r))
-        seam.emit("command",
-                  f"  warmed {p:<12} "
-                  f"{getattr(usage, 'cache_creation_input_tokens', 0) or 0:>7,} "
-                  f"tok written")
+        reply = RD.message_burst(impl, r, record_thinking=RECORD_THINKING)
+        METER.add(reply.usage, model=MODEL)
+        _record_turn(p, "prewarm", req, reply.record)
+        if CS.dev_mode:
+            seam.emit("command",
+                      f"  warmed {p:<12} "
+                      f"{getattr(reply.usage, 'cache_creation_input_tokens', 0) or 0:>7,} "
+                      f"tok written")

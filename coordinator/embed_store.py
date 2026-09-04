@@ -39,7 +39,7 @@ class IndexUnavailable(Exception):
     """The local stack is not usable; the message says what fixes it."""
 
 
-def real_embedder():
+def memory_embedder_read():
     """texts -> list of vectors, through fastembed. Lazy: the import and
     the model load happen on first search, never at process start."""
     try:
@@ -58,11 +58,11 @@ def real_embedder():
     return lambda texts: [[float(x) for x in v] for v in model.embed(texts)]
 
 
-def sha_of(text: str) -> str:
+def memory_sha(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
-def load_cache(path: pathlib.Path) -> dict:
+def memory_cache_read(path: pathlib.Path) -> dict:
     """id -> row, last one wins; rows for another model are dropped so a
     model change re-embeds everything rather than mixing spaces."""
     rows = {}
@@ -81,48 +81,48 @@ def load_cache(path: pathlib.Path) -> dict:
     return rows
 
 
-def write_cache(path: pathlib.Path, rows: dict) -> None:
+def memory_cache_write(path: pathlib.Path, rows: dict) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text("".join(json.dumps(r) + "\n" for r in rows.values()),
                     encoding="utf-8", newline="")
 
 
-def cosine(a: list, b: list) -> float:
+def memory_cosine(a: list, b: list) -> float:
     dot = sum(x * y for x, y in zip(a, b))
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(x * x for x in b))
     return dot / (na * nb) if na and nb else 0.0
 
 
-def refresh(records: list, embedder, cache_path: pathlib.Path) -> dict:
+def memory_refresh(records: list, embedder, cache_path: pathlib.Path) -> dict:
     """id -> cache row for every record, embedding only what is missing or
     whose text moved. Writes the cache only when something was embedded.
     Records are dicts carrying at least `id` and a text field named either
     `body` (the journal's spelling) or `text` (the recall corpora's)."""
     def _txt(r: dict) -> str:
         return r.get("body", r.get("text", ""))
-    rows = load_cache(cache_path)
+    rows = memory_cache_read(cache_path)
     todo = [r for r in records
             if r["id"] not in rows
-            or rows[r["id"]]["sha"] != sha_of(_txt(r))]
+            or rows[r["id"]]["sha"] != memory_sha(_txt(r))]
     if todo:
         vecs = embedder([_txt(r) for r in todo])
         for r, v in zip(todo, vecs):
-            rows[r["id"]] = {"id": r["id"], "sha": sha_of(_txt(r)),
+            rows[r["id"]] = {"id": r["id"], "sha": memory_sha(_txt(r)),
                              "model": EMBED_MODEL, "vec": v}
         live = {r["id"] for r in records}
         rows = {i: row for i, row in rows.items() if i in live}
-        write_cache(cache_path, rows)
+        memory_cache_write(cache_path, rows)
     return rows
 
 
-def rank(query: str, records: list, embedder,
+def memory_rank(query: str, records: list, embedder,
          cache_path: pathlib.Path, limit: int) -> list:
     """Cosine-ranked copies of the records, each with a `score` in [0, 1].
     Raises IndexUnavailable when the local stack cannot run."""
     if not query.strip() or not records:
         return []
-    rows = refresh(records, embedder, cache_path)
+    rows = memory_refresh(records, embedder, cache_path)
     qvec = embedder([QUERY_PREFIX + query])[0]
     scored = []
     for r in records:
@@ -130,7 +130,7 @@ def rank(query: str, records: list, embedder,
         if row is None:
             continue
         out = dict(r)
-        out["score"] = round(max(0.0, min(1.0, cosine(qvec, row["vec"]))), 4)
+        out["score"] = round(max(0.0, min(1.0, memory_cosine(qvec, row["vec"]))), 4)
         scored.append(out)
     scored.sort(key=lambda r: r["score"], reverse=True)
     return scored[:limit]

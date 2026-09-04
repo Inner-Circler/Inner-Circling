@@ -1,7 +1,7 @@
 # issues/
 
-**TOML, one file per node.** `coordinator/issue_schema.py` is the only
-reader and writer; `coordinator/issue_gate.py` is the invariant gate.
+**TOML, one file per node.** `memory/issue_schema.py` is the only
+reader and writer; `memory/issue_gate.py` is the invariant gate.
 
 An issue is something OWED — a thing the circle has recognised and not
 yet resolved. Nodes carry a label, a description, evidence quoted from
@@ -28,4 +28,4 @@ correspond to anyone else's — an id in someone else's notes means
 nothing here.
 
 Prose lives in `"""` blocks, hard-wrapped; a single newline is soft.
-Run `issue_gate.py` after any hand edit.
+Run `memory/issue_gate.py` after any hand edit.

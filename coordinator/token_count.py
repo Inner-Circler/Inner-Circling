@@ -55,8 +55,8 @@ HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
 import seam                                                    # noqa: E402
-from atomic_write import atomic_write                          # noqa: E402
-from paths import ROOT                                         # noqa: E402
+from atomic_write import record_atomic_write                          # noqa: E402
+from record_paths import ROOT                                         # noqa: E402
 
 CACHE_PATH = ROOT / "work" / "token_counts.json"
 
@@ -76,7 +76,7 @@ _ENVELOPE_KEY = "envelope"
 CHARS_PER_TOKEN = 3.0
 
 
-def estimate(text: str) -> int:
+def prompt_tokens_estimate(text: str) -> int:
     """The fallback, named so a caller cannot use it by accident."""
     return int(len(text) / CHARS_PER_TOKEN)
 
@@ -102,7 +102,7 @@ def _load() -> dict:
 def _save(d: dict) -> None:
     try:
         CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
-        atomic_write(CACHE_PATH, json.dumps(d, indent=1, sort_keys=True) + "\n")
+        record_atomic_write(CACHE_PATH, json.dumps(d, indent=1, sort_keys=True) + "\n")
     except OSError:
         pass          # a lost cache costs one re-count; never a failed circle
 
@@ -126,7 +126,7 @@ def block_tokens(client, blocks: list[dict], model: str,
     produced, so any transport failure degrades to the estimate and reports
     itself once."""
     if dry or client is None:
-        return [estimate(b.get("text", "")) for b in blocks], False
+        return [prompt_tokens_estimate(b.get("text", "")) for b in blocks], False
 
     cache = _load()
     dirty = False
@@ -147,7 +147,7 @@ def block_tokens(client, blocks: list[dict], model: str,
         seam.emit("command",
                   f"  (token counts estimated — the counting service said "
                   f"{type(e).__name__})")
-        return [estimate(b.get("text", "")) for b in blocks], False
+        return [prompt_tokens_estimate(b.get("text", "")) for b in blocks], False
     if dirty:
         _save(cache)
     return out, True

@@ -2,14 +2,21 @@ anthropic==0.109.2
 python-dotenv==1.2.2
 tomli==2.2.1; python_version < "3.11"
 tomli-w==1.2.0
+# fastembed serves a part's [recall: ...] search of its own past
+# (coordinator/recall_index.py via coordinator/embed_store.py). Its first
+# use fetches an embedding model (~65 MB) into fastembed's own local cache,
+# once; everything after is offline. Without it, a recall replies with the
+# install command instead of results -- nothing crashes.
+fastembed==0.8.0
 
 # pyflakes IS NOT HERE, and its absence is the decision. It is this
 # project's static gate, run by coordinator/system_lint_verify.py from the
-# pre-commit hook -- and NEITHER OF THOSE SHIPS. system_lint_verify.py is a
-# development tool, and the hook battery is not installed in a tree
-# without coordinator/tests/ (see coordinator/gitrepo.py). Requiring it
-# here would have you install a package nothing in this copy runs, under
-# a comment naming a file you do not have. Removed 2026-08-24.
+# pre-commit hook -- and system_lint_verify.py DOES NOT SHIP. The hook
+# battery is installed in this bundle too (--git-setup) and runs the gates
+# that ship; a script it does not find, this one included, is skipped
+# rather than failing the commit (coordinator/gitrepo.py). Requiring
+# pyflakes here would have you install a package nothing in this copy
+# runs. Removed 2026-08-24.
 #
 # If you fork this and want the gate, it is `pip install pyflakes` and
 # the module is in the project's own history.

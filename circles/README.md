@@ -7,13 +7,15 @@ One file per circle, `circle_<OT>.md`, where `<OT>` is the open time
 order it was made, tagged with who made it.
 
 ```
-[Judge]: ...
-[Mourner] [To: Child]: ...
+[Soul]: ...
+[Child] [To: Soul]: ...
 [Self]: ...
 ```
 
-`[Self]` is you. The tag is your configured display name — see
-`docs/configuration.md`; it is a display name only, and the code compares
+`[Self]` is you, and the tag is fixed: every transcript writes `[Self]:`
+for what you say, always. The display name you are asked for at first run
+is for the console only — the `Self>` prompt, `/help` — and never reaches a
+transcript or a model (`coordinator/docs/identity.md`). The code compares
 on an internal id that never changes.
 
 **This directory is empty on purpose.** A system that has not held a

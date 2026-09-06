@@ -43,10 +43,11 @@ shared rulebook and circle practices; what the issue graph currently owes;
 that part's own long-term identity, distilled; and anything addressed to
 that part alone. Statements are public and parts may address each other
 directly; no part speaks twice in a row. Each statement aims for a short
-length and is hard-capped at a configurable word count — see
-`coordinator/process_core.md` and the `statement_max_words` setting in
-`self/settings.toml` (`coordinator/setting_manager.py`, `/settings-list`) for
-the live numbers. Domination is named by parts; Self evaluates and enforces.
+length and is hard-capped at a configurable word count — 150 unless you
+change the `statement_max_words` setting (`/settings-list` shows every
+setting and its current value; a fresh install has none changed, so
+`self/settings.toml` does not exist until you change one). Domination is
+named by parts; Self evaluates and enforces.
 
 The circle closes with `/close`: each part's closing reflection is
 recorded, the transcript is written and verified, and the circle is

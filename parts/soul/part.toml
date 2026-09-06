@@ -1,7 +1,7 @@
 # part.toml — the presence of THIS FILE is what makes a directory a part.
 #
 # `roster.py` scans `parts/` and reads only this. A directory WITHOUT one is
-# not a part, and is reported by `roster.verify()` rather than silently
+# not a part, and is reported by `roster.part_verify()` rather than silently
 # skipped — a part that vanishes from the roster is a part that is absent
 # from the circle, writes no short_term, and reads as no engagement.
 #
@@ -22,10 +22,10 @@ tag = "Soul"
 # the part's own file rather than in shipped code.
 alt_tags = []
 
-# This part's own speaking rules, appended in BLOCK 3 every circle (R303;
-# arrived R246 as `--minimal`'s block-4 suffix — that mode retired R360).
-# Absent (every other part's case, including the shipped Child's) means no
-# suffix.
+# HISTORY of a key that is no longer here. `identity_tail` — this part's own
+# speaking rules, appended in BLOCK 3 every circle (R303; arrived R246 as
+# `--minimal`'s block-4 suffix, a mode retired R360) — lived in this file
+# until 2026-08-22 and does not any more; see below.
 #
 # RULED 2026-08-19 (R246): *"put it in a part.toml field"*. This text used
 # to be a literal in `prompt_build.py` keyed by the part NAME "soul" — so
@@ -44,8 +44,8 @@ alt_tags = []
 # unchanged: it names the categories a Soul is made of -- timeframe, parent
 # genetics, gender, race, cultural and economic and religious and
 # educational context -- without filling them, because they differ for
-# every user. The initialization dialog fills them HERE, per installation,
-# by asking -- it opens in the command pane the first time a live circle is
+# every user. The initialization dialog fills the [context] section below,
+# per installation, by asking -- it opens in the command pane the first time a live circle is
 # opened (R331/R332); the bundle's README.md walks through it under "Your
 # first live run asks you some questions."
 #
@@ -55,7 +55,7 @@ alt_tags = []
 
 # ---------------------------------------------------------------- [context]
 # WHAT THE SOUL WANTS TO KNOW ABOUT ITS HUMAN — R331, 2026-08-23
-# (docs/Initialization.md). The initialization dialog asks these at a circle
+# (R331). The initialization dialog asks these at a circle
 # start while every answer below is empty, records the answers in the
 # `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
 # its `render` sentence, in my own voice —
@@ -70,7 +70,7 @@ alt_tags = []
 # `given_name` and `preferred_name` DECLARE NO `render`, DELIBERATELY —
 # R329: they are PII (R132), recorded here and never
 # rendered into a prompt; `preferred_name` names the console prompt instead
-# (identity.user_name(), R325). A question without a render string
+# (identity.user_name_read(), R325). A question without a render string
 # has no path into BLOCK 3 at all. Adding one here is a person choosing to
 # contradict R132 in their own tree.
 #
@@ -146,13 +146,13 @@ key       = "preferred_name"
 ask       = "What do you prefer to be called"
 data_type = "STRING"
 data_max  = 40
-# THE ONE CONTEXT ANSWER THE MECHANISM READS — identity.user_name() takes it
-# for the console prompt, and roster.verify() treats it as Self's reserved
+# THE ONE CONTEXT ANSWER THE MECHANISM READS — identity.user_name_read() takes it
+# for the console prompt, and roster.part_verify() treats it as Self's reserved
 # name. So it declares HOW it is kept valid, which every mechanism-facing
 # field must (2026-08-28). Every other question here reaches a model or
 # reaches nothing, and neither needs one.
 gate      = "UNIQUE_IN"
-unique_in = "part_tags"        # a part's Tag would collide (roster.verify)
+unique_in = "part_tags"        # a part's Tag would collide (roster.part_verify)
 
 # >>> context.answers
 [context.answers]

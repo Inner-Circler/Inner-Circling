@@ -1,18 +1,21 @@
 # Self — System Overview
-Last updated: (set by the first synthesis run)
+Last updated: never — no code sets this line; synthesis replaces the whole file
+when a circle moves the account of Self, and whatever it writes here stands
 
 <!--
-Hand-genericized delegate for packaging/exceptions.toml's self/ entry — see
-packaging/scaffold/self/README.md. The live self/self.md is written in and about
+Hand-genericized delegate, shipped in place of the operator's own file — see
+README.md beside this one. The live self/self.md is written in and about
 the operator's own voice: who Self is for this installation, and the
 psychological context the parts are speaking into. None of that ships. What
 ships is the SHAPE — the two sections synthesis expects to find and rewrite,
 with a note in each saying what belongs there.
 
-Fill these in yourself before the first circle, or leave them and let the first
-synthesis run write them — synthesis replaces the shipped seed on that first
-run. Either is fine; an empty file is not, because synthesis reads this
-document back as its own prompt input before deciding what to write.
+Fill these in yourself before the first circle, or leave them and let synthesis
+write them — it replaces this file whole, but only at a close where the circle
+genuinely moved the account of Self, carrying every untouched section forward
+verbatim; a circle that moved nothing leaves the seed standing. Either is fine;
+an empty file is not, because synthesis reads this document back as its own
+prompt input before deciding what to write.
 -->
 
 ## Who Self is
@@ -25,12 +28,14 @@ generally.
 Worth stating here if it is true for you: that your own parts speak through you
 during circles, that the parts may gently surface it when they notice, and that
 the ambiguity between operator-as-Self and operator-as-part is a feature rather
-than a defect. The parts read this section; it is how they know what they are
-speaking into.
+than a defect. Synthesis reads this file after each circle, to keep the account
+of Self current; the parts never read it — what reaches a part is its own
+identity and the circle's shared blocks. So write here what the account of Self
+should carry forward, not instructions to the parts.
 
 ## Psychological context
 
-Whatever context helps the parts calibrate. This installation's live file uses a
+Whatever context helps synthesis keep the account of Self true. This installation's live file uses a
 short table of dimensions and a values summary, but nothing in the code requires
 that shape — it is prose to the reader, and the reader is a language model.
 

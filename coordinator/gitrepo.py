@@ -551,7 +551,7 @@ def system_git_attributes_ensure(log) -> None:
 # .claude/skills/run-inner-circling/driver.py + its new suite,
 # test_driver.py — the argv-assembly probe the register named as missing,
 # alongside its sibling skills' own cases just above.
-HOOK_MARK = "# inner-circling pre-commit v145"
+HOOK_MARK = "# inner-circling pre-commit v147"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1214,6 +1214,9 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/tests/test_topic_manager.py*|*coordinator/inter_circle.py*\
 |*coordinator/part_dreaming.py*|*coordinator/circle_synthesis.py*\
 |*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history_manager.py*\
+|*packaging/scaffold/self/*|*coordinator/tests/test_scaffold_delegates.py*\
+|*coordinator/JOURNAL_CLASS.py*|*coordinator/tests/test_journal_class.py*\
+|*coordinator/tests/test_circle_history_manager.py*\
 |*coordinator/tests/test_part_dreaming_grounding.py*\
 |*coordinator/self_observation_manager.py*\
 |*coordinator/tests/test_self_observation_manager.py*\
@@ -1369,6 +1372,17 @@ case "$FILES" in *parts/*|*self/*\
     # that fakes a model call now hands back its Reply, so the module rides
     # the case those suites already trigger.
     run coordinator/tests/test_llm_response_disassembler.py
+    # v146, 2026-09-06 (B109): every packaging/scaffold/self/*.toml delegate loads to
+    # the document its manager builds when the file is absent. Deterministic and free,
+    # where the ~$1 LLM audit that had been the only check is neither -- it waved a
+    # header comment into proposals.toml that broke exactly this.
+    run coordinator/tests/test_scaffold_delegates.py
+    # v146 also: B105 (2026-09-05) landed these two suites on a worktree branch and
+    # never wired them in; the fast-forward merge fired no pre-commit, so nothing
+    # noticed until test_hook_template.py ran for this very edit -- the "triggered
+    # and uninvoked" defect v45 named, one more time.
+    run coordinator/tests/test_journal_class.py
+    run coordinator/tests/test_circle_history_manager.py
     # test_remember_manager.py/test_strip_malformed_markers.py were missing from
     # this list — both exercise circle.py's annotation system directly
     # (apply_remember/apply_self_remember/extract_markers/route_markers/
@@ -2143,6 +2157,15 @@ case "$FILES" in *.claude/skills/publish-package/publish.py*\
 |*.claude/skills/publish-package/test_publish.py*)
     NOTE="  pre-commit: the publish skill touched"
     run .claude/skills/publish-package/test_publish.py
+esac
+
+# v147, 2026-09-06 (B110): the publish gate's content check done by the session (R459),
+# as a driver. Its one danger is recording a check that did not happen; the probe holds
+# every refusal that prevents it.
+case "$FILES" in *.claude/skills/scaffold-check/scaffold_check.py*\
+|*.claude/skills/scaffold-check/test_scaffold_check.py*)
+    NOTE="  pre-commit: the scaffold-check skill touched"
+    run .claude/skills/scaffold-check/test_scaffold_check.py
 esac
 
 # B103, audit-register 2026-09-04 #5: 850 lines that open a real circle,

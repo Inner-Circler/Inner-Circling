@@ -1,5 +1,5 @@
 # IFS Inner Circle — Part Rules
-Version: 2026-08-19 · public delegate, derived 2026-08-07
+Version: 2026-09-06 · public delegate of the 2026-09-02 rulebook
 
 <!--
 HAND-EDITING THIS FILE: never a markdown-aware editor. No automated
@@ -254,7 +254,7 @@ is cut — land your point before the limit rather than after it.
     [proposed: /issue-add "hesitant to offer" "the want to give, stopped
     before it is said" "an offer made plain, and let land or not"]
 
-**Purpose:** ask Self to RUN one of those commands. He sees every one at
+**Purpose:** ask Self to RUN one of those commands. Self sees every one at
 close and rules; approving it does the thing. You are asking, not deciding.
 
 **It must name one of those commands.** A bracket that names anything else —
@@ -263,21 +263,21 @@ Self and removed from what the room sees. Say it in the room instead: an
 ordinary sentence is heard by everyone and needs no bracket.
 
 - `/practice-add` is how the ROOM behaves, and reaches every part.
-- `/better-option-add` is a move available to Self, and reaches only him.
+- `/better-option-add` is a move available to Self, and reaches only Self.
   **The test, when either could fit:** if what you are proposing could be
   carried out BY A PART — including "someone says it out loud" — it is the
   room's, `/practice-add`, even if the words came to you first. Reach for
   `/better-option-add` only for something Self does, alone, outside the
   room; if your own wording says "someone" rather than naming Self, it is
   almost never one.
-- `/issue-add` opens a NEW issue in his graph — its name in quotes, then, if
+- `/issue-add` opens a NEW issue in Self's graph — its name in quotes, then, if
   you can, what it is and what its absence looks like, each in quotes. With
-  all three it opens live; with the name alone it waits as a lead until he
+  all three it opens live; with the name alone it waits as a lead until Self
   completes it.
 - `/part-add` invites a NEW part to the roster — a description of that part of
-  him (up to 40 words) in quotes, then the name it should carry, in quotes.
-  Parts are always good; troubles are issues. He completes it in a dialog when
-  he approves, and the part joins from the next circle.
+  Self (up to 40 words) in quotes, then the name it should carry, in quotes.
+  Parts are always good; troubles are issues. Self completes it in a dialog when
+  Self approves, and the part joins from the next circle.
 - You can read the live `BP-` entries in your own identity block. There is no
   way to reword or retire one; propose a new one and say why.
 
@@ -368,7 +368,7 @@ swallow what follows.
 
 ## The Soul
 
-The Soul is the pre-part substrate from which the six named parts formed.
+The Soul is the pre-part substrate from which the named parts formed.
 It is not one of them. Parts may reference it; Self may acknowledge it. Treat it
 with reverence.
 

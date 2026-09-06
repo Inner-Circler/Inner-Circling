@@ -1,8 +1,8 @@
-# Empty delegate for packaging/exceptions.toml's self/ entry -- see
-# packaging/scaffold/self/README.md. The live self/groups.toml holds the
+# Empty delegate, shipped in place of the operator's own register -- see
+# README.md beside this file. The live self/groups.toml holds the
 # operator's own named rosters; this delegate ships none.
 # Must stay valid, loadable TOML matching REGISTER_CLASS.py's own shape --
-# byte-equivalent to what group_manager._doc() constructs when the file is
+# it loads to what group_manager._doc() constructs when the file is
 # absent, so a fresh install reads the same document either way.
 
 register = "groups"

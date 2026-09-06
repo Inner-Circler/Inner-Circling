@@ -46,17 +46,41 @@ settings.toml            what you change when the code would
                          first time you change one
                          (/settings-update); absent means
                          every setting is at its default
+instruments.toml         what a published, scored
+                         psychological instrument measured
+                         about you, read by
+                         instrument_manager.py into ONE
+                         part's Block 3 -- the part the
+                         register itself names. Optional by
+                         design and never shipped: absent
+                         means that block is simply empty
+dreams.toml              Self's own dream corpus and the
+                         standing summary derived over it
+                         (dream_history_manager.py, run by
+                         hand: --bootstrap, --fold). Never
+                         shipped -- one person's dreams --
+                         and nothing at /close reads it. The
+                         tool itself assumes the file is
+                         there: run without one, it stops
+                         with a file-not-found
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,
-`circle_history_manager.py`, `circle_journal_manager.py`, `remember_manager.py`,
-`self_observation_manager.py`, `proposal_group_manager.py`,
-`redaction_manager.py` and `group_manager.py` each construct their own empty shape — `next_id = 1` (or,
-for `redaction_manager.py`, four separate `next_*` counters) plus an empty table —
-when their file is absent, and these delegates are byte-equivalent to that.
-So a fresh install reads the same document whether it received the delegate or no
-file at all — the delegate exists so the file is *there*, valid and loadable,
-rather than conjured on first write.
+`circle_history_manager.py`, `circle_journal_manager.py`, `self_observation_manager.py`,
+`proposal_manager.py`, `redaction_manager.py` and `group_manager.py` each construct their own
+empty shape when their file is absent — a `next_id = 1` counter (four `next_*` counters for
+`redaction_manager.py`; none at all for `group_manager.py`) plus an empty table — and each
+delegate here loads to that same document, allowing only a longer `[doc]` preamble ("SHIPPED
+EMPTY ..." prose appended to the builder's own text). Three exceptions, named so nobody "fixes"
+them: `remember_manager.py` builds only `remember = []` when the file is absent — no register
+name, no counter — while its delegate carries both, which its reader neither needs nor minds;
+and `best_practices.toml` and `coalesce.toml` each carry a preamble their builders
+(`practice_manager.py`, `proposal_group_manager.py`) do not construct. In the project's own
+tree a probe holds every delegate to exactly this rule at every commit
+(`coordinator/tests/test_scaffold_delegates.py`, B109); the suites do not ship, so nothing in
+this copy re-checks it. The delegates are not byte-for-byte what the code would write — some carry a header
+comment — they are equivalent in what a fresh install *reads*. The delegate exists so the file
+is *there*, valid and loadable, rather than conjured on first write.
 
 `self.md` is the one exception: it is prose, so it ships hand-genericized rather
 than empty — the two sections synthesis expects, with a note in each saying what
@@ -95,7 +119,8 @@ document, not a register.
 on the same rule as the two below. The live `self/issues_narrative.md` was
 retired 2026-08-14 once its entries were migrated into the issue graph, and
 `issue_projection.narrative()` — the only thing that ever opened it — was
-deleted at B46, 2026-08-17. The delegate outlived its reader by eight days,
+deleted at B46, 2026-08-17 (that module is `memory/issue_prompt_projection.py`
+since 2026-09-03). The delegate outlived its reader by eight days,
 and shipped a header that told every new user `build_briefing()` concatenates
 the file into BLOCK 2 at each circle open. It had not since B46. Worse, that
 sentence was *written into it* on 2026-08-18, a day after the code went: the

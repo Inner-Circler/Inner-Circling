@@ -1,6 +1,6 @@
 # work/manifests/
 
-Empty delegate for packaging/exceptions.toml's work/ entry. This delegate
+Empty delegate, shipped so the directory exists. This delegate
 ships the directory with nothing in it; git does not track empty
 directories, so this README is what keeps the directory present in a
 clone.

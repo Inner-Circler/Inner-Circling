@@ -1,7 +1,7 @@
 # part.toml — the presence of THIS FILE is what makes a directory a part.
 #
 # `roster.py` scans `parts/` and reads only this. A directory WITHOUT one is
-# not a part, and is reported by `roster.verify()` rather than silently
+# not a part, and is reported by `roster.part_verify()` rather than silently
 # skipped — a part that vanishes from the roster is a part that is absent
 # from the circle, writes no short_term, and reads as no engagement.
 #
@@ -24,7 +24,7 @@ alt_tags = []
 
 # ---------------------------------------------------------------- [context]
 # WHAT THE CHILD WANTS TO KNOW ABOUT ITS HUMAN'S CHILDHOOD — R331,
-# 2026-08-23 (docs/Initialization.md). The initialization dialog asks these at
+# 2026-08-23 (R331). The initialization dialog asks these at
 # a circle start while every answer below is empty, records the answers in the
 # `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
 # its `render` sentence, in my own voice —

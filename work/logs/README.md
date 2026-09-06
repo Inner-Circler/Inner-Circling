@@ -1,0 +1,29 @@
+# work/logs/
+
+Ships with one empty file, `circle_audit.log`, so the directory exists; git does
+not track empty directories. Everything else here is written by the program as
+you use it, one file per circle, named by the circle's open time (`<OT>`):
+
+```
+closing_<OT>.json       the start-of-close marker, written the moment a live
+                        /close begins and never deleted — a close that died
+                        part-way leaves this file with no close_<OT>.json
+                        beside it, which is how the next open tells the two
+                        apart.
+close_<OT>.json         the close verifier's report — a size and a sha256 for
+                        each part that spoke. Written at every /close, before
+                        dreaming runs, so it never carries a dreaming finding.
+spend_<OT>.json         what the circle's own model calls cost.
+delta_<OT>.json         what this one circle changed across the registers —
+                        `circle_delta.py`'s memo. Written only while the
+                        `circle_stats` setting is on.
+dream_<OT>.json         the dreaming/synthesis run's own record.
+dream_error_<OT>.json   written only when that run fails. The close names this
+                        file and prints the command to re-run the processing;
+                        read it first — a failed run wrote nothing, and the
+                        re-run is clean.
+circle_audit.log        the audit's own log (`circle_audit.py`), appended to
+                        each time you run it.
+```
+
+Nothing here reaches a part's prompt. These are records for you.

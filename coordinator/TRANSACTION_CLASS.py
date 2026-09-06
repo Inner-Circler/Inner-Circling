@@ -107,7 +107,8 @@ def _fsync_dir(p: pathlib.Path) -> None:
 class Transaction:
     """One inter_circle.py run's staged output and its commit — the
     directory it stages into (work/nightly/) keeps its historical name
-    from when this ran on a nightly schedule (retired 2026-07-28, R228);
+    from when this ran on a nightly schedule (retired 2026-08-18, R228; the
+    last scheduled run was 2026-07-28);
     the run itself is now synchronous, at every completing live /close."""
 
     def __init__(self, root: pathlib.Path, run_id: str):

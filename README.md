@@ -67,6 +67,15 @@ Some further judgement, offered rather than enforced:
 **Your name never leaves the machine, including to the LLM.** You
 are asked your name strictly to personalize the feel in circles.
 
+**You can hide names on screen without touching the record.** The circle
+pane has a redacted view: names, places and organisations you list are
+shown as stable opaque ids while the transcript on disk, and what the
+model receives, stay exactly as written. `/redact-alias-add`,
+`/redact-alias-update`, `/redact-alias-delete` and `/redact-alias-list`
+keep the list, in `self/redaction.toml`; part names are never eligible.
+It is presentation only — a screen someone else might see — not privacy
+from the model, which is the paragraph below.
+
 **The records are yours and they stay on your disk.** Every transcript,
 every part record, every issue node is a plain file in this directory.
 Nothing uploads them. **Nothing is published to GitHub or anywhere else**
@@ -283,11 +292,15 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Four packages arrive, all named in `requirements.txt`: the Anthropic
-client, `python-dotenv`, and `tomli` / `tomli-w` to read and write the
-TOML the registers are kept in — `tomli` only on Python 3.10, which has
-no `tomllib` of its own. Nothing else is fetched, then or later: **a
-circle makes no network call except to the model provider.**
+Five packages arrive, all named in `requirements.txt`: the Anthropic
+client, `python-dotenv`, `tomli` / `tomli-w` to read and write the TOML
+the registers are kept in — `tomli` only on Python 3.10, which has no
+`tomllib` of its own — and `fastembed`, which serves a part's
+`[recall: ...]` search of its own past. **A circle makes no network call
+except to the model provider, with one exception you can see coming:** the
+first `[recall: ...]` ever used fetches `fastembed`'s embedding model
+(~65 MB) into a local cache, once; after that it is offline. Nothing else
+is fetched, then or later.
 
 Every command in this file begins `.venv\Scripts\python` for exactly this
 reason: it names the interpreter that has those packages. Plain `python`
@@ -338,9 +351,7 @@ change the record** — the transcript writes `[Self]:` for everything you
 say, always. It is the *fallback*: once the first-run dialog records a
 preferred name against the Soul, that answer wins and editing `.env`
 changes nothing. `coordinator/docs/identity.md` gives the full resolution
-order and the Windows-specific reason this variable exists at all;
-`docs/configuration.md` lists every other value this project reads from
-its environment.
+order and the Windows-specific reason this variable exists at all.
 
 ### git is not GitHub, and GitHub is not needed or used here
 
@@ -392,9 +403,11 @@ never rewrites history, and never adds a destination to upload to:
 .venv\Scripts\python coordinator\circle_audit.py --git-setup
 ```
 
-It will tell you it is not installing the pre-commit battery. That is
-correct: those checks run the project's own probe suites, which are not
-part of this bundle. Run the gates below by hand instead.
+It installs the pre-commit battery, and says so: the gates that ship —
+the corruption sweep, the issue gate, the self-check, the practices check,
+the projection — run at every commit, and the project's own probe suites,
+which are not part of this bundle, are skipped one by one rather than by
+refusing the commit. The gates below are the same checks, run by hand.
 
 Check what will be used, changing nothing:
 
@@ -439,7 +452,9 @@ This is how you start a real live circle:
 - The upper 'circle' pane is where you speak and listen in circle dialog.
 - The lower 'command' pane is where you administer circle records.
 - Type TAB to switch the active pane.
-- Type 'help' in either pane to see what can be done there.
+- Type `/help` in the circle pane, or `help` in the command pane, to see
+  what can be done there — in the circle pane a bare word is said to the
+  room, so the verb needs its slash.
 
 **Your first live run asks you some questions.** 
 
@@ -453,7 +468,7 @@ your next live open. Once answered it stops asking; this command re-runs
 it whenever you want:
 
 ```
-/part-context-update      # re-enter personal answers (at cmd>) 
+/part-context-update <part>   # re-enter that part's personal answers (at cmd>)
 ```
 
 **Every live run begins with two questions.** 
@@ -812,20 +827,28 @@ the close verifier runs at every /close
     part that spoke
 ```
 
-One is worth running now and then, whether or not you edited anything:
+One is worth running after you edit anything by hand, or when a close went
+wrong:
 
 ```
 .venv\Scripts\python coordinator\circle_audit.py
-    the periodic audit: the same checks, plus a reconcile of each close
-    report against what is on disk, plus the repair that backfills a
-    part's record of a circle from the transcript when the write was lost
+    the audit: the same checks, plus a reconcile of each close report
+    against what is on disk for every circle not yet dreamed. It REPORTS a
+    part's lost record of a circle; it does not rebuild one.
+.venv\Scripts\python coordinator\circle_audit.py --backfill --commit
+    the repair: rebuilds a lost record from the transcript and writes it.
+    Without --commit it only stages the rebuild for you to read.
 ```
 
-**That last repair is why the audit exists at all.** A part that spoke but
-lost its record of the circle is *invisible*, not noisy — the loop reads
-an absent file as a part that stayed silent, which is a legal outcome. So
-nothing fails; that part's identity simply does not move. Run the audit
-before you conclude a part has gone quiet.
+**A part that spoke but lost its record of the circle would otherwise be
+*invisible*, not noisy** — an absent file reads as a part that stayed silent,
+which is a legal outcome. So a completing close rebuilds that record from the
+transcript itself, as its first step, before dreaming and synthesis run (B54);
+and if the close dies after that point, the re-run command it prints does the
+same rebuild before it dreams. The audit's copy of the repair is for the two
+cases that path never reaches: an `/abort`, which never gets as far as
+dreaming, and a record lost *after* its circle was already dreamed
+(`--backfill --all-circles`).
 
 ## Licence
 

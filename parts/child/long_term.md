@@ -35,4 +35,4 @@ Honesty became the sixth shared goal on 2026-06-17, and the operator asked each 
 
 ## required end
 
-*(The historic dream corpus moved to `dreams.toml`, 2026-08-12 — see RULINGS.md.)*
+*(The historic dream corpus moved to `dreams.toml`, 2026-08-12.)*

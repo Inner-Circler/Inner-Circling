@@ -8,8 +8,8 @@ prompt, and provide the projections `prompt_build.py` builds Block 2 from.
 
 B9. Was "the same shape as check_better_options.py: one module that both
 projects and verifies" — no longer. RETIRED 2026-08-11: self/circle_briefing.md
-is gone, and with it the one thing this module used to WRITE. `prompt_build.py`'s
-`build_briefing()` (moved out of `circle.py` in phase 2 stage 2, 2026-08-16)
+is gone, and with it the one thing this module used to WRITE. `group_attention.py`'s
+`circle_briefing_build()` (moved out of `circle.py` in phase 2 stage 2, 2026-08-16)
 calls straight into `issue_block_render()`, `project_working_set()` and
 `issue_relationship_brief()` at
 prompt-assembly time — `narrative()` RETIRED alongside it, B46, 2026-08-17,
@@ -115,7 +115,7 @@ def issue_prologue_read() -> str:
     one part of BLOCK 2 present unconditionally. FAILS CLOSED on a
     missing file: a briefing assembled without it is a different
     experiment wearing the same name -- the same guarantee group_attention.
-    py's build_briefing() enforced directly before this move; the check
+    py's circle_briefing_build() enforced directly before this move; the check
     itself moved here with the read, 2026-09-02."""
     if not ISSUE_MODEL.is_file():
         raise RuntimeError(
@@ -593,7 +593,7 @@ def main() -> int:
     """SHAPE + PROVENANCE over the live graph directly. Run bare by the
     pre-commit hook on any commit touching parts/ or self/ (which holds
     best_practices.toml since 2026-08-16) — this is the gate that keeps
-    build_briefing() and project_working_set()
+    circle_briefing_build() and project_working_set()
     from ever handing a part a blank Label or an unverifiable ruling claim.
 
     RETIRED 2026-08-11, alongside self/circle_briefing.md: the PRESENCE check

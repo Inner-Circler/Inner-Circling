@@ -664,10 +664,10 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
     # shared_block()'s third positional arg became `minimal`, some time
     # before this file's own last edit; nothing had executed circle_audit_phase3_run() since,
     # so system_lint_verify.py's compile-only pass never caught it. Mirrors the
-    # identical fix already applied in midterms_project.py:146-147.
+    # identical fix already applied in part_mid_term_project.py:159-160.
     #
     # BROKE AGAIN, fixed 2026-09-01 (audit-register.md Tier 1 #2): R360
-    # (2026-08-27) retired --minimal and dropped build_briefing()'s and
+    # (2026-08-27) retired --minimal and dropped circle_briefing_build()'s and
     # shared_block()'s trailing `minimal` parameter entirely; this file's own
     # trailing `False` was never updated to match, so both calls raised
     # TypeError the moment circle_audit_phase3_run() ran past its own --dry-run preview

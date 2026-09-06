@@ -47,6 +47,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
+import JOURNAL_CLASS                                               # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -90,51 +91,60 @@ _PREAMBLE = (
     "register gate enforces append-only.")
 
 
+# The shared LEDGER/JOURNAL core (B105, 2026-09-05 — JOURNAL_CLASS.py). LAMBDA, NOT A VALUE:
+# path_fn re-reads PATH from THIS module's own globals on every call, so the probe suites'
+# rebind of `circle_history_manager.PATH` (a module attribute) keeps working exactly as it did
+# before this existed.
+_JC = JOURNAL_CLASS.JournalClass(
+    table=TABLE, id_prefix="CH-", cap=CAP, cap_label="HISTORY",
+    register="circle_history", preamble=_PREAMBLE, path_fn=lambda: PATH)
+
+
 def _doc() -> dict:
-    if PATH.is_file():
-        return SS.register_read(PATH)
-    return {"register": "circle_history", "next_id": 1,
-            "doc": {"preamble": _PREAMBLE}, TABLE: []}
+    return _JC.doc()
 
 
 def circle_history_read() -> list[dict]:
-    return _doc().get(TABLE, [])
+    return _JC.read()
 
 
 def circle_history_latest_read() -> dict | None:
-    es = sorted(circle_history_read(), key=lambda r: r.get("date", ""))
-    return es[-1] if es else None
+    return _JC.latest()
+
+
+def _rel() -> str:
+    """PATH for printing. `PATH.relative_to(ROOT)` raises when PATH has been rebound to a
+    temp file, which is exactly what a probe suite does to the constant above — so a module
+    whose PATH is documented as rebindable must not assume PATH is still under ROOT.
+    self_observation_manager.py and circle_journal_manager.py both already carry this fix
+    (their own docstrings named this module as the one that "predates it and still assumes" —
+    found true, and fixed here, when B105's own new direct test rebound PATH the same way)."""
+    try:
+        return PATH.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(PATH)
 
 
 def circle_history_new_render(doc: dict, circle: str, text: str) -> tuple[dict, dict]:
     """PURE — one new entry for the phase-2 driver, chained to the newest
     prior entry when one exists. REFUSES oversize (ValueError) rather than
-    truncating; the caller reports and the prior entry stays current."""
-    import copy
+    truncating; the caller reports and the prior entry stays current. Row
+    construction (id mint, date stamp, chain, cap refusal) delegates to
+    JOURNAL_CLASS.py's shared new_render() (B105); this module still owns its
+    own text normalization — whitespace-collapsed to one paragraph, unlike
+    self_observation_manager.py's verbatim multi-line OBSERVATION text."""
     text = " ".join(text.split())
-    if len(text) > CAP:
-        raise ValueError(f"HISTORY is {len(text):,} chars, cap is {CAP} — "
-                         f"refused, not truncated")
-    doc = copy.deepcopy(doc)
-    recs = doc.setdefault(TABLE, [])
-    n = doc.get("next_id", 1)
-    rec = {"id": f"CH-{n:04d}", "date": SS.register_now(), "circle": circle,
-           "text": text}
-    if recs and recs[-1].get("id"):
-        rec["chain"] = recs[-1]["id"]
-    recs.append(rec)
-    doc["next_id"] = n + 1
-    return doc, rec
+    return _JC.new_render(doc, {"circle": circle, "text": text}, chain=True)
 
 
 def main() -> int:
     a = sys.argv[1:]
     if "--init" in a:
         if PATH.is_file():
-            print(f"  {PATH.relative_to(ROOT)} already exists — untouched")
+            print(f"  {_rel()} already exists — untouched")
             return 0
         SS.register_write(PATH, _doc(), TABLE, ORDER)
-        print(f"  wrote {PATH.relative_to(ROOT)} (empty register)")
+        print(f"  wrote {_rel()} (empty register)")
         return 0
     if "--show" in a:
         rec = circle_history_latest_read()

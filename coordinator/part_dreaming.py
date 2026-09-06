@@ -14,6 +14,9 @@ part's pass IS. Every function below is the verbatim body it had there; only the
                          and the driver's diagnostic read it here (PD._call), and the probes
                          rebind it here
     _report_chars        the dev-mode footprint line every call reports through
+    circle_capsule_build   ONE call per circle (never per part) — the shared room capsule
+                         part_dream()'s prompt reads beside a part's own lines (R451, D86 a,
+                         2026-09-04: the per-part Dreaming input; docs/MEMORY_DESIGN.md)
     part_dream            the pass: a PAYLOAD, writes nothing
     part_dream_grounding_check   B91 (2026-09-04): is the MEMORY grounded in this part's own
                          material? SUSPECT notes, never a refusal, never a content change
@@ -82,15 +85,17 @@ DREAM_GROUNDING_MIN_OVERLAP = SET.setting_value_read("dream_grounding_min_overla
 DREAMING_PROMPT_V1 = """\
 You are {part}'s dreaming pass for the circle that just closed ({ot}).
 
-Below: your own identity as the circle sees it (your distillate); the closed circle's
-transcript; your own short_term for it, if you spoke; and — if one exists — the most
+Below: your own identity as the circle sees it (your distillate); your own lines from the
+closed circle — every statement you made and every line another part addressed to you,
+verbatim, in original order, each with the one line said just before it kept for reply
+context; a short shared capsule of what else happened in the room, the same words every
+part reads; your own short_term for it, if you spoke; and — if one exists — the most
 recent memory in your own chain (a note your dreaming pass left for you last time,
 including how charged it was, if you said so).
 
-The transcript is the WHOLE circle — every part's lines, each tagged with who said
-it, not only yours. Write only about what YOU said or experienced. If no short_term
-for you appears above, you did not speak this circle; nothing in the transcript is
-yours to claim in your own voice, however vivid, and MEMORY should be empty.
+Write only about what YOU said or experienced. If no short_term for you appears above, you
+did not speak this circle; nothing above is yours to claim in your own voice, however
+vivid, and MEMORY should be empty.
 
 Write AT MOST ONE memory to carry forward to your own next circle. This is not a
 summary of the circle — it is a note from you, to your future self, in your own voice,
@@ -127,6 +132,52 @@ RESOLUTION
 # _usage_dict here was a second copy of llm_client's, with a different
 # answer (ints only vs. the whole model_dump()); the disassembler keeps both
 # under names that say which is which.
+# --------------------------------------------------------- the room capsule
+# ONE model call per circle, never per part (R451, D86 a, 2026-09-04) — every
+# part reads the SAME capsule text; a difference between two parts' dreams
+# can never be traced to a different capsule, because there is only one.
+CAPSULE_CAP = SET.setting_value_read("dream_capsule_cap", 1200)   # chars, the shared paragraph
+CAPSULE_MAX_TOKENS = SET.setting_value_read("dream_capsule_max_tokens", 1500)
+
+ROOM_CAPSULE_PROMPT_V1 = """\
+Below is the full transcript of one circle that just closed. Write ONE short paragraph, at
+most {cap} characters, giving a plain, high-level account of what happened in the room:
+what was discussed, what shifted, what stayed unresolved.
+
+Every part reads this SAME paragraph as its only view of the room beyond its own lines and
+what was said to it — write it so a part who did not see who said what can still follow the
+shape of the circle, without repeating any one part's words verbatim and without singling
+any one part out.
+
+OUTPUT FORMAT, exactly. One section header, alone on its own line, at column 0:
+
+CAPSULE
+    Your paragraph, plain prose, under {cap} characters.
+"""
+
+
+def circle_capsule_build(ot: str, transcript: str, say=lambda _s: None) -> str:
+    """The shared room capsule part_dream()'s prompt reads beside a part's own lines. Called
+    ONCE by the driver, before the seven parallel part_dream() calls — never inside the pool,
+    or seven capsules would race to be "the" one every part reads.
+
+    BEST-EFFORT, by design: this is peripheral awareness, not identity material (the design's
+    own words), so a failure here degrades to an empty capsule and a `say()` note rather than
+    failing the whole dreaming pass over it."""
+    system = ROOM_CAPSULE_PROMPT_V1.format(cap=CAPSULE_CAP)
+    try:
+        reply = _call(system, f"# Transcript of circle {ot}\n{transcript}",
+                      CAPSULE_MAX_TOKENS, kind="capsule", record=True)
+        sections, err = RD.message_sections_read(reply.text, ("CAPSULE",))
+        if sections is None:
+            say(f"  capsule: unparseable ({err}) — dreaming proceeds without one")
+            return ""
+        return sections["CAPSULE"].strip()
+    except Exception as e:                                            # noqa: BLE001
+        say(f"  capsule: call failed ({e}) — dreaming proceeds without one")
+        return ""
+
+
 def _block_stats(blocks: list[str]) -> list[tuple[str, int]]:
     """(label, char count) for each block in a prompt built from '# label'
     sections — DREAMING's and SYNTHESIS's user messages, each a list of
@@ -280,26 +331,51 @@ def _content_words(text: str) -> set[str]:
             if len(w) >= 3 and w.lower() not in _STOPWORDS}
 
 
-def _own_lines(part: str, transcript: str) -> "str | None":
+def _own_lines(part: str, transcript: str, with_context: bool = False) -> "str | None":
     """Everything in the transcript that is THIS part's own material: its
     statements (`raw` over `text`, as circle_transcript_line_render prefers —
     a remember bracket is still the part's own words) and every line
     addressed to it, resolved through the roster's own Tag -> dir map so an
-    alt_tag addressee counts. None when the transcript does not parse: the
-    parser is strict by design, and a transcript it refuses cannot ground
-    anything either way, so the heuristic stands aside rather than guess."""
+    alt_tag addressee counts. VERBATIM, in original order. None when the
+    transcript does not parse: the parser is strict by design, and a
+    transcript it refuses cannot ground anything either way, so the
+    heuristic stands aside rather than guess.
+
+    `with_context=True` ALSO pulls in the one entry immediately before each
+    kept line, for reply context (R451, D86 a, 2026-09-04: "own lines,
+    verbatim, with one line of reply context each") — a context line pulled
+    in twice, or already a kept line itself, is not duplicated. That is
+    part_dream()'s ACTUAL PROMPT INPUT below.
+
+    part_dream_grounding_check() calls this WITHOUT context (the default):
+    a context line is, by construction, another entry's material — usually
+    another part's — and folding it into the OVERLAP CORPUS would let a
+    memory built from that other part's own line read as grounded merely
+    because it sits next to something addressed here. B91's heuristic exists
+    to catch exactly that borrowing, so its corpus stays strict."""
     try:
         _ot, _topic, entries = TS.circle_transcript_parse(transcript)
     except ValueError:
         return None
-    own = []
-    for e in entries:
+    keep: set[int] = set()
+    order: list[int] = []
+    for i, e in enumerate(entries):
         if e.get("is_topic") or e.get("cmd"):
             continue
         mine = e.get("speaker") == part
         to_me = R.DIR_BY_TAG_ALL.get(e.get("to") or "") == part
-        if mine or to_me:
-            own.append(e.get("raw") or e.get("text") or "")
+        if not (mine or to_me):
+            continue
+        if with_context:
+            j = i - 1
+            while j >= 0 and (entries[j].get("is_topic") or entries[j].get("cmd")):
+                j -= 1
+            if j >= 0 and j not in keep:
+                keep.add(j); order.append(j)
+        if i not in keep:
+            keep.add(i); order.append(i)
+    order.sort()
+    own = [entries[i].get("raw") or entries[i].get("text") or "" for i in order]
     return "\n".join(own)
 
 
@@ -339,17 +415,25 @@ def part_dream_grounding_check(part: str, memory: str, st_text: "str | None",
 
 
 # ---------------------------------------------------------------- dreaming
-def part_dream(part: str, ot: str, transcript: str) -> dict:
+def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
     """ONE part's dreaming pass — returns a PAYLOAD, writes nothing.
     A silent part (no short_term, maybe no statements) still dreams: the
     designed outcome for it is an unchanged document and an empty MEMORY,
-    which is legal and non-SUSPECT."""
+    which is legal and non-SUSPECT.
+
+    `capsule` IS THE SHARED ROOM CAPSULE (R451, D86 a, 2026-09-04) —
+    circle_capsule_build()'s one-per-circle text, identical for every part;
+    the driver computes it once and passes it in. Defaults to "" so a direct
+    call (a suite, a hand re-run before a capsule exists) still runs: an
+    empty capsule renders as an empty section, never a refusal."""
     tag = R.TAG_BY_DIR[part]
     distillate, _why = MT.part_mid_term_block_render(part)
     st_path = STM.short_term_locate(ROOT / "parts" / part, ot)
     prior = RM.remember_newest_dreamt_read(part)
+    own = _own_lines(part, transcript, with_context=True)
     user = [f"# Your identity distillate\n{distillate or '(none on file)'}",
-            f"# Transcript of circle {ot}\n{transcript}"]
+            f"# Your own lines from circle {ot}\n{own or '(you have none this circle)'}",
+            f"# What else happened in the room\n{capsule or '(no capsule this run)'}"]
     st_text: "str | None" = None          # None = no short_term = did not speak (B91)
     if st_path is not None:
         # WHAT THE PART SEES DOES NOT CHANGE WITH THE FORMAT (B96, R434): a

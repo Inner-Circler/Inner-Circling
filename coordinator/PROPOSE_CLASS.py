@@ -19,7 +19,7 @@ denied rows are KEPT, only `state` says which), the staging-field drop
 on resolution, and the save (post-mutate hook, then REGISTER_CLASS.register_write).
 
 WHAT IT DOES NOT: register-specific row shapes (each register's
-stage()), check_best_practices' op dispatch (add/revise/delete), its
+stage()), practice_manager's op dispatch (add/revise/delete), its
 addressees, render_stage, delete and _routing_check — practice/
 better_option folding was explicitly OUT of R202's scope (ruled: build
 the propose mechanism now, rule on folding practice separately, later),

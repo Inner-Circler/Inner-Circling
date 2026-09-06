@@ -1,8 +1,10 @@
 #!/usr/bin/env python3
 """
-group_add.py — the GROUP register: a named, reusable roster of `parts/<dir>/`
+group_manager.py — the GROUP register: a named, reusable roster of `parts/<dir>/`
 directory names, so `circle.py --group <name>` can invoke a whole roster by
-name instead of retyping `--parts <list>` every time.
+name instead of retyping `--parts <list>` every time. (group_add.py until
+2026-09-05 — the module standard's `<CLASS>_manager.py` naming, R435/R436/
+R442, A23/R449; the function names below already carried the class word.)
 
 WHY THIS EXISTS. `circle.py --parts <list>` already selects an arbitrary
 subset of whatever `parts/` holds (roster.py, R123) — the mechanism was

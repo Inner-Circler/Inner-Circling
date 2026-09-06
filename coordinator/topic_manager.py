@@ -42,7 +42,7 @@ PROJECTION MOVED OUT, 2026-09-02 — see topic_prompt_projection.py. It renders
 every OPEN topic, newest first, windowed to BUDGET chars — recency is
 the only priority lever, remember_manager.py's own discipline — under a header
 that states shown/omitted, so the room knows when older topics have
-aged out of view. group_attention.py's build_briefing() calls it to
+aged out of view. group_attention.py's circle_briefing_build() calls it to
 build BLOCK 2's fifth part: a topic is a thread carried from a past
 circle. (--minimal promised these absent; that mode retired R360.) This
 file keeps BUDGET (topic_prompt_projection.py reads it as TOP.BUDGET) since
@@ -62,7 +62,7 @@ self.md decomposition seeded 25 open rows on 2026-08-15, so block() emits
 ~2,573 chars and BLOCK 2 is NOT byte-identical to before this file existed.
 This docstring said the opposite until that migration ran, and nothing
 caught it — the claim was true when written and quietly stopped being
-true. docs/BNF.md's build_briefing production carries part 5 as of the
+true. docs/BNF.md's circle_briefing_build production carries part 5 as of the
 same day, for the same reason.
 """
 

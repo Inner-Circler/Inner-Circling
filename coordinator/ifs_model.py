@@ -23,7 +23,7 @@ WHY THIS FIRST
     not uniform — one part's file can carry sections another part's doesn't
     (relationships.md, retired 2026-08-22, was the original example here),
     self.md accumulates one "## Dream synthesis <date>" heading
-    per night, settled headers come in two shapes ("was review 15", "was
+    per SYNTHESIS run, settled headers come in two shapes ("was review 15", "was
     review") — so any hardcoded schema would be wrong on contact. Comparing
     against what is actually there is both stricter and more honest.
 
@@ -50,11 +50,11 @@ import roster as R                                            # noqa: E402
 
 PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 
-# self/ files the nightly writes. append_only ones must keep the prior content as
+# self/ files SYNTHESIS writes. append_only ones must keep the prior content as
 # a byte PREFIX -- the single cheapest guard against a rewrite-instead-of-append.
 #
 # "circle_briefing.md": "rewritten" REMOVED 2026-08-11: the file itself is
-# retired. circle.py's build_briefing() constructs circle_objectives directly
+# retired. group_attention.py's circle_briefing_build() constructs circle_objectives directly
 # from issue_model.md and the live issues/*.toml graph (and, until B46
 # 2026-08-17, issues_narrative.md)
 # at prompt-assembly time -- there is no self/ file left for the nightly to
@@ -126,7 +126,7 @@ def record_is_reconstructed(text: str | None) -> bool:
     its answer."""
     return bool(text) and RECONSTRUCTED_MARK in text
 
-# Fields the nightly's deterministic bookkeeping is ALLOWED to change on an
+# Fields SYNTHESIS's deterministic bookkeeping is ALLOWED to change on an
 # existing dream entry. Anything else changing is a model having edited history.
 MUTABLE_FIELDS = {"last mentioned", "review flagged", "settled"}
 
@@ -467,7 +467,7 @@ def record_long_term_compare(path: str, base_text: str, cand_text: str) -> list[
     if b.preamble != c.preamble:
         out.append(_f("FAIL", "PREAMBLE-CHANGED", path,
                       f"content above {DREAM_SECTION!r} was modified; the "
-                      "foundational identity sections are not the nightly's to touch"))
+                      "foundational identity sections are not SYNTHESIS's to touch"))
 
     # -- append-only
     if c.total < b.total:

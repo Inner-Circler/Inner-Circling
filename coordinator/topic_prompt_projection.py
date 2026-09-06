@@ -2,7 +2,7 @@
 """
 topic_prompt_projection.py — the BLOCK 2 projection of the TOPIC register: what
 (topics_projection.py until 2026-09-03 — F5 under R435: a PROMPT projection says so in its name)
-group_attention.py's build_briefing() carries forward from
+group_attention.py's circle_briefing_build() carries forward from
 coordinator/topic_manager.py's open rows.
 
     python coordinator/topic_prompt_projection.py    the projection, as sent

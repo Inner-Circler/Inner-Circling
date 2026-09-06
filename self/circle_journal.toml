@@ -1,0 +1,7 @@
+register = "circle_journal"
+next_id = 1
+journal = []
+
+[doc]
+preamble = """
+CIRCLE_JOURNAL -- one incrementally-revised, chain-linked entry per processed circle: the prior entry folded with this circle's own fresh CIRCLE_HISTORY text and the high-salience remember rows parts surfaced, deduplicated. Reaches Block 1, shared and cached across every part. Accumulate, never prune; the register gate enforces append-only."""

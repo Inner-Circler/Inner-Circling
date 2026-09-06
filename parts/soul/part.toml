@@ -44,8 +44,10 @@ alt_tags = []
 # unchanged: it names the categories a Soul is made of -- timeframe, parent
 # genetics, gender, race, cultural and economic and religious and
 # educational context -- without filling them, because they differ for
-# every user. An initialisation process fills them HERE, per installation,
-# by asking. That process does not exist yet; the key and its reader do.
+# every user. The initialization dialog fills them HERE, per installation,
+# by asking -- it opens in the command pane the first time a live circle is
+# opened (R331/R332); the bundle's README.md walks through it under "Your
+# first live run asks you some questions."
 #
 # A bundle that ships with this key absent is correct: an uninitialised
 # Soul has universal content and no particulars, which is exactly true of

@@ -138,7 +138,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "Written immediately — /abort does not undo it", "command"),
     ("/better-option-add <how Self moves>",
      "the same register, addressed to Self rather than\n"
-     "the circle — how SELF moves, not how the room\n"
+     "the circle — how Self moves, not how the room\n"
      "behaves. R133 merged the two files into one.\n"
      "Written immediately — /abort does not undo it", "command"),
     ("/practice-list",
@@ -146,7 +146,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "addressed to Self (the rows addressed to Self are\n"
      "/better-option-list's, since 2026-08-21)", "command"),
     ("/better-option-list",
-     "how SELF moves — the rows of the same register\n"
+     "how Self moves — the rows of the same register\n"
      "addressed to Self, numbered on their own. Always\n"
      "visible (the operator, 2026-08-21)", "command"),
     ("/practice-delete <n>",
@@ -655,7 +655,7 @@ def command_pane_verb_read(text: str) -> str | None:
     MUST be ignored no-ops."*
 
     HOISTED HERE 2026-08-30 from ui/circling.py's AppState._pane_verb — the
-    Ticker flavor's bridge feeds the engine's circle lane directly, below
+    Ticker flavor's bridge feeds the engine's circle channel directly, below
     the TUI's pane layer, so the ruling was enforced for one flavor and
     bypassed by the other: with dev on, `/practice-add ...` typed into the
     window's room wrote a practice, the exact regression D55(2) closed.

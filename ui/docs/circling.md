@@ -129,7 +129,7 @@ Related pages:
                     Anything after it is passed through to the circle itself.
                     Default: off — a bare run is the demonstration.
     --live          make it real: the parts actually think, and the record is
-                    your own. Default: off — practice mode, nothing real is
+                    your own. Default: off — dry-run, nothing real is
                     written. It must appear before --circle's own arguments.
     --selftest      check the program without needing a terminal. Worth running
                     before trusting a session.

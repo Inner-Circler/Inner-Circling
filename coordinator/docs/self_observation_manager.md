@@ -71,6 +71,8 @@ may need genuinely gone.
 
 **Some old records have no circle.** Twenty-nine migrated entries are day-scoped rather than circle-scoped, because the retired nightly ran per night over whatever circles had accumulated. They carry midnight UTC of the day their own header line named — the only precision the Markdown file ever held. Every record written since has a circle, and the listing prints `(day-scoped)` where one is absent.
 
+**Row construction now delegates to `JOURNAL_CLASS.py` (B105, 2026-09-05)**, for `self_observation_new_render()`, `self_observation_manual_render()` and `self_observation_continue_render()` alike — the same shared "mint an id, stamp a date, optionally chain, optionally refuse oversize" core `circle_history_manager.py`, `circle_journal_manager.py` and (for one function) `remember_manager.py` also use. Everything that makes this register its own — no cap, verbatim multi-line text, which optional fields to include and under what condition, the explicit target-id existence check `self_observation_continue_render()` runs before chaining, and `self_observation_retire()`/`self_observation_purge()`'s in-place mutation of an existing row (a different shape from "append new," and the only register with a use for it) — stays exactly where it was. No public name or behavior changed.
+
 ## MAIN
 
     Read the command-line arguments.
@@ -107,7 +109,7 @@ Matched by presence, not position; anything unrecognised falls through to the li
 
 ## DEPENDENCIES
 
-`REGISTER_CLASS` for load, save and timestamps. `pathlib`, `sys`, `copy`. The parent directory is added to the import path on import.
+`REGISTER_CLASS` for load, save and timestamps. `JOURNAL_CLASS` for the shared row-construction core (B105, used by the three render functions; `self_observation_retire()`/`self_observation_purge()` still deep-copy directly, since they mutate an existing row rather than append one). `pathlib`, `sys`, `copy`. The parent directory is added to the import path on import.
 
 ## EXTERNAL FILES
 

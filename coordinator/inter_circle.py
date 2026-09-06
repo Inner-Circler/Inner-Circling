@@ -83,6 +83,7 @@ import remember_manager as RM                                          # noqa: E
 import topic_manager as TOP                                           # noqa: E402
 import circle_history_manager as CH                                    # noqa: E402
 import self_observation_manager as SO                              # noqa: E402
+import circle_journal_manager as CJ                                 # noqa: E402  B94 stage 4
 import practice_manager as PM                             # noqa: E402
 import part_mid_term_manager as MT                                          # noqa: E402
 import TRANSACTION_CLASS as T                                        # noqa: E402
@@ -285,9 +286,9 @@ def short_term_backfill_step(ot: str, say) -> int:
     say(f"\n  transcript safety net — {len(todo)} part(s) spoke with no usable "
         f"record. Reconstructing before dreaming; this adds {len(todo)} model "
         f"call(s) to this close.")
-    # SAME STALE-`False`-ARGUMENT BREAK AS circle_audit.py/midterms_project.py
+    # SAME STALE-`False`-ARGUMENT BREAK AS circle_audit.py/part_mid_term_project.py
     # (audit-register.md Tier 1 #2, fixed there 2026-09-01) — R360
-    # (2026-08-27) dropped build_briefing()'s and shared_block()'s trailing
+    # (2026-08-27) dropped circle_briefing_build()'s and shared_block()'s trailing
     # `minimal` parameter entirely; this call site's own trailing `False`
     # was never updated to match, so both calls would have raised TypeError
     # the moment needs_backfill() ever found real work — which nothing had,
@@ -498,6 +499,9 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         if rc0:
             return rc0
     parts = R.DIR_NAMES
+    with PC.PHASES.span("inter.capsule"):
+        capsule = PD.circle_capsule_build(ot, transcript, say)     # R451, D86 a: ONE call,
+                                                                  # shared by every part below
     say(f"\ndreaming — {len(parts)} parts, in parallel ({LC.MODEL}):")
     payloads: list[dict] = []
     errors: list[str] = []
@@ -506,7 +510,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             say(f"  {p}: started")
         with PC.PHASES.span("inter.dreaming"), \
                 concurrent.futures.ThreadPoolExecutor(len(parts)) as ex:
-            futs = {ex.submit(PD.part_dream, p, ot, transcript): p for p in parts}
+            futs = {ex.submit(PD.part_dream, p, ot, transcript, capsule): p for p in parts}
             for f in concurrent.futures.as_completed(futs):
                 pay = f.result()
                 payloads.append(pay)
@@ -591,6 +595,18 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             doc, _rec = CH.circle_history_new_render(CH._doc(), ot, secs["HISTORY"])
             _stage_toml(tx, "self/circle_history.toml", doc, CH.TABLE,
                         CH.ORDER)
+        # CIRCLE JOURNAL — B94 stage 4, 2026-09-04 (D90/R454, D92/R455; the operator:
+        # "add it now" (R456), confirming the /review-item's recommended answer after
+        # Claude's report of the standalone trial's findings, work/ablations/2026-09-04/).
+        # Same pattern as HISTORY just above; circle_journal_new_render() REFUSES over
+        # CJ.CAP rather than truncating, but circle_synthesise() already truncated a
+        # still-over-cap reply before returning, so this call is never expected to
+        # raise — see that module's own CAP-crunch handling.
+        if syn.get("circle_journal"):
+            doc, _rec = CJ.circle_journal_new_render(
+                CJ._doc(), ot, syn["circle_journal"],
+                provenance=syn.get("circle_journal_provenance"))
+            _stage_toml(tx, "self/circle_journal.toml", doc, CJ.TABLE, CJ.ORDER)
         if syn.get("observation"):
             # A REGISTER since 2026-08-19 (R256) — was a raw
             # append to self/self_observation_log.md, whose "## Circle <OT>

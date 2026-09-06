@@ -95,8 +95,8 @@ def _history_line(to: str, ruled: str, source: str, today: str) -> str:
     # THE FIXED DISPLAY NAME, not the configured one. R132, 2026-08-11: a
     # literal name is forbidden PII, and this line is written INTO a node
     # whose provenance text reaches every part's prompt directly
-    # (circle.py::build_briefing() via check_issues.block(), since
-    # self/circle_briefing.md's retirement the same day). Before R132 this
+    # (group_attention.circle_briefing_build() via issue_prompt_projection.issue_block_render(),
+    # since self/circle_briefing.md's retirement the same day). Before R132 this
     # called ID.user_name_read(), which is exactly the personalization channel
     # that ruling closes for anything prompt-facing. Old entries already
     # written with a personal name are left as they are — this only changes
@@ -203,7 +203,7 @@ def main() -> int:
     # first run: self/circle_briefing.md projected the LIVE set and every
     # part read it, so a node demoted here went on being presented to the
     # room as a live issue until the next nightly regenerated it. Retired
-    # 2026-08-11 -- circle.py's build_briefing() reads issues/*.toml
+    # 2026-08-11 -- group_attention.py's circle_briefing_build() reads issues/*.toml
     # directly at prompt-assembly time, so a status change is reflected the
     # moment the next circle opens. No projection step, nothing to trigger.
     #

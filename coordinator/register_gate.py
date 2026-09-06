@@ -322,6 +322,27 @@ def _so_order() -> tuple[str, ...]:
         return ("id", "date", "circle", "text", "note")
 
 
+def _cj_cap() -> int:
+    """circle_journal.CAP, imported rather than duplicated — same rule as
+    _ch_cap() above, applied to B94's own register (2026-09-04). Late
+    import for the same circularity reason."""
+    try:
+        import circle_journal_manager as _CJ
+        return _CJ.CAP
+    except Exception:
+        return 4000        # circle_journal_manager.CAP's own reasoned default
+
+
+def _cj_order() -> tuple[str, ...]:
+    """circle_journal.ORDER, imported rather than duplicated — same rule as
+    _so_order() above. Late for the same reason _cj_cap() is late."""
+    try:
+        import circle_journal_manager as _CJ
+        return _CJ.ORDER
+    except Exception:
+        return ("id", "date", "circle", "text", "chain", "provenance")
+
+
 REGISTERS: dict[str, dict] = {
     "parts/*/remember.toml": {
         "table": "remember",
@@ -375,7 +396,7 @@ REGISTERS: dict[str, dict] = {
         # ORDER IS IMPORTED, NOT COPIED — the same rule this dict already
         # wrote down for circle_history's cap, applied to itself
         # (2026-08-16, the phase-2 review's finding #2): a literal here
-        # was a second source of truth for a tuple check_best_practices
+        # was a second source of truth for a tuple practice_manager
         # owns, and the proposals entry below had already shown the
         # correct form.
         "order": PM.ORDER,
@@ -414,6 +435,18 @@ REGISTERS: dict[str, dict] = {
         # contract. See self_observation_manager.py's own note.
         "id_prefix": "SO-", "cap": None, "per_run_max": 1,
         "preamble": True,
+    },
+    "self/circle_journal.toml": {
+        "table": "journal",
+        # ORDER IS IMPORTED, NOT COPIED — the rule this dict already wrote
+        # down for circle_history's cap and best_practices' order.
+        "order": _cj_order(),
+        # CAP IS IMPORTED, NOT COPIED — see _cj_cap(). B94, 2026-09-04:
+        # not circle_history's CAP — CIRCLE_JOURNAL reaches Block 1, paid
+        # on every part's prompt, and should run smaller as a folded
+        # distillate, not merely be capped the same as a raw entry.
+        "id_prefix": "CJ-", "cap": _cj_cap(), "per_run_max": 1,
+        "preamble": True, "chain": True,
     },
     "parts/*/dreams.toml": {
         # READ-ONLY since R178 — nothing writes it. Any paired delta is a

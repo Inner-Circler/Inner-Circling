@@ -153,7 +153,7 @@ reconstruct it from the transcript — the authoritative account of what was sai
 rather than leave the circle reading as no-engagement for that part.
 
 Build the part from the same material `circle.py` uses (`process_core.md`, its
-`long_term.md`, circle_objectives as `build_briefing()`
+`long_term.md`, circle_objectives as `group_attention.circle_briefing_build()`
 constructs it from `issues/issue_model.md` + `issues/*.toml` —
 `self/circle_briefing.md` retired 2026-08-11, `self/issues_narrative.md` at
 B46 2026-08-17)
@@ -275,7 +275,7 @@ precedence over dream-compressed summaries when facts conflict. Then:
    since 2026-08-19; was `self_observation_log.md`)
 3. STEP RETIRED 2026-08-11: used to rewrite `self/circle_briefing.md` with
    resolved questions, which `circle.py` split per part. That file is gone —
-   circle_objectives is now built directly by `build_briefing()` at prompt
+   circle_objectives is now built directly by `group_attention.circle_briefing_build()` at prompt
    time (see `docs/BNF.md` BLOCK 2), and nothing today gives
    "resolved questions" a home; a synthesis redesign that wants to keep
    surfacing them needs a new destination, not this rewrite.

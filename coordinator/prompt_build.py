@@ -1,14 +1,14 @@
 #!/usr/bin/env python3
 """
 prompt_build.py — the prompt's construction: the identity read-layer,
-circle_objectives (build_briefing), the four-block
+circle_objectives (circle_briefing_build), the four-block
 assembly (system_blocks and kin), and the transcript-to-messages view
 (render_messages). Phase 2 stage 2 of the coordinator partitioning
 (2026-08-16); until then all of it lived in circle.py. Verbatim move —
 bodies and comments unchanged.
 
 THE PAYOFF THIS STAGE EXISTS FOR: five live modules (circle_audit.py,
-prompt_show.py, block_overlap_verify.py, midterms_project.py,
+prompt_show.py, block_overlap_verify.py, part_mid_term_project.py,
 part_mid_term_manager.py) imported the whole 4,000-line orchestrator to build or
 inspect prompts; they import this module now. part_mid_term_manager.py and this
 module reference each other the same way mid_term and circle.py always
@@ -38,7 +38,7 @@ import setting_manager as SET             # the length rule's two numbers
 # (30+ for load_shared, 50+ for build_briefing, plus read_ro/strip_settled/
 # strip_to_identity/identity_tail/PART_OBJECTIVES_EMPTY's own callers —
 # grep-confirmed before this move) keeps working via `prompt_build.
-# load_shared`/`prompt_build.circle_briefing_build`/etc. or a
+# group_shared_read`/`prompt_build.circle_briefing_build`/etc. or a
 # `from prompt_build import ...` exactly as before. The real logic now
 # lives exclusively in these four files; nothing here decides what any
 # block contains any more.
@@ -59,7 +59,7 @@ import parts_prompt_projection as _PP
 # issue-graph material, not this assembler's just because it used to read
 # the file directly. Its own alias below resolves the same way.
 # UNLIKE THE OTHER THREE (all in coordinator/), this one crosses into
-# memory/ — group_attention.py's own build_briefing() only ever imported
+# memory/ — group_attention.py's own circle_briefing_build() only ever imported
 # it LAZILY, at call time, never at its own module top, and that was
 # deliberate: memory/ is not guaranteed on sys.path yet at prompt_build.py's
 # import time, only by the time a circle actually opens. quote_verify.py/
@@ -85,7 +85,7 @@ PART_OBJECTIVES_EMPTY = _RA.PART_OBJECTIVES_EMPTY
 # role_context.part_context_block_render()/role_attention.part_attention_finalize() ADDED 2026-09-02: the two
 # remaining real-code call sites that reached an assembler directly instead
 # of through prompt_build.py (circle.py's own Phase 2 for BLOCK 4, via a
-# local `import role_attention as RA`; midterms_project.py's diagnostic
+# local `import role_attention as RA`; part_mid_term_project.py's diagnostic
 # read of a part's BLOCK 3 identity, via `import role_context as RC`) —
 # asked directly to make prompt_build.py the one executor of all four.
 # prompt_part_assemble() below already calls _RC.part_context_block_render/_RA.part_attention_stage internally for
@@ -98,7 +98,7 @@ part_attention_finalize = _RA.part_attention_finalize
 
 # PART_TAGS — no internal use here since the block-3/4 move, 2026-09-02, but
 # real external callers still reach it as `prompt_build.PART_TAGS`
-# (block_overlap_verify.py, part_mid_term_manager.py, midterms_project.py, prompt_show.py,
+# (block_overlap_verify.py, part_mid_term_manager.py, part_mid_term_project.py, prompt_show.py,
 # circle_audit.py, all `import prompt_build as C` then `C.PART_TAGS`).
 PART_TAGS = _P.PART_TAGS
 
@@ -198,7 +198,7 @@ def system_blocks(ident: str, objectives: str, identity: str, tail: str) -> list
         1. circle_identity    rarely; a practice
                               between circles
         2. circle_objectives  between circles
-        3. part_identity      nightly (dreaming)
+        3. part_identity      per synthesis run (dreaming, synchronous at /close)
         (the 4th breakpoint is the rolling one on
          the last message block)
 
@@ -228,10 +228,10 @@ def system_blocks(ident: str, objectives: str, identity: str, tail: str) -> list
 # ------------------------------------------------------------------ briefing
 # `split_briefing()` and `apply_working_set()` REMOVED 2026-08-11: both
 # existed to filter or re-slice a rendered self/circle_briefing.md, and that
-# file is gone. `build_briefing(chosen)` now IS circle_objectives, built
+# file is gone. `circle_briefing_build(chosen)` now IS circle_objectives, built
 # directly from source files at prompt-assembly time — there is nothing
 # left to split, and no rendered text to re-slice by working set (chosen
-# goes straight into build_briefing instead).
+# goes straight into circle_briefing_build instead).
 #
 # BEST PRACTICES REMOVED FROM PROMPT ASSEMBLY 2026-08-11 (R134), separately:
 # the old per-part extraction here used to key on a "best practices" section
@@ -269,7 +269,7 @@ def prompt_part_assemble(part: str, core: str, briefing: str) -> tuple[list[dict
     module. `core` is group_context.group_shared_read()'s text (once per
     circle) — group_context.group_context_block_render() merges it with the practices
     broadcast; this function never touches best_practices.toml itself
-    any more. `briefing` is build_briefing's constructed circle_objectives
+    any more. `briefing` is circle_briefing_build's constructed circle_objectives
     text (once per circle).
 
     PRACTICES DO NOT COME FROM `briefing` (R134) — self/best_practices.toml

@@ -9,20 +9,25 @@ is the verbatim body it had there; only the file moved.
 
     SYNTHESIS_PROMPT_V2   the pass's prompt — versioned code, never a payload
     SYNTH_MAX_TOKENS      its cap (settings-overridable)
-    SYN_HEADERS, _INSIST  what comes back, and the ONE insistent re-ask a HISTORY over
-                          CH.CAP earns (R192)
+    SYN_HEADERS, _INSIST_*  what comes back, and the ONE insistent re-ask a HISTORY over
+                          CH.CAP or a CIRCLE JOURNAL over CJ.CAP earns (R192; extended to
+                          CIRCLE JOURNAL, B94 stage 4, 2026-09-04)
     circle_synthesise            the pass: SECTIONS, writes nothing — the driver stages them
 
 RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the body
 untouched: synthesise -> circle_synthesise. The _private names are unchanged.
 
 Design: docs/INTER_CIRCLE_DESIGN_V2.md (SYNTHESIS); the OBSERVATION follows the dreaming
-grammar (R358); SELF is refused when its heading set moves.
+grammar (R358); SELF is refused when its heading set moves; CIRCLE JOURNAL follows
+docs/MEMORY_DESIGN.md's "Circle-identity coalescing into Block 1" (B94, D90/R454, D92/R455,
+the operator: "add it now" (R456), confirming the /review-item's recommended answer after
+Claude's report of the standalone trial's findings, work/ablations/2026-09-04/).
 """
 
 from __future__ import annotations
 
 import pathlib
+import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
@@ -31,11 +36,20 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 import remember_manager as RM                                          # noqa: E402
 import circle_history_manager as CH                                    # noqa: E402
 import self_observation_manager as SO                              # noqa: E402
+import circle_journal_manager as CJ                                 # noqa: E402
 import roster as R                                             # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import part_dreaming as PD                                     # noqa: E402  _call, _report_chars
 from record_paths import ROOT                                         # noqa: E402
+
+# NOTABLE+ — MEMORY_DESIGN.md's own "MEASURED... directional but thin, n=1 passing-tier row"
+# finding, extended by one more real (still thin) data point in the B94 stage-3 trial: on
+# CIRCLE_JOURNAL specifically, including a passing-tier row did NOT dilute recall (opposite
+# direction from the n=1 finding, at matched token cost) — genuinely unresolved, so this stays
+# a plain constant rather than a settled design, read from remember_manager.SALIENCE_VALUES so
+# a future change (or D91's possible move to two numeric fields) is one edit, not a grep.
+CJ_SALIENCE_TIERS = RM.SALIENCE_VALUES[1:]        # ("notable", "charged", "resolved")
 
 SYNTH_MAX_TOKENS = SET.setting_value_read("synth_max_tokens", 12000)   # was 8000: one
                                 # circle-wide call across five
@@ -51,11 +65,13 @@ You are the circle's synthesis pass for the circle that just closed ({ot}).
 
 Below, in order: the closed circle's full transcript; the most recent dreaming record
 for each part that produced one, written moments ago by that part's own dreaming pass;
-every proposal Self confirmed during this circle; the CURRENT self.md, the standing
-account of Self this circle may or may not have moved; the PREVIOUS circle's HISTORY
-entry, so what you write continues an account rather than restarting one; and — if one
-exists — the most recent observation in your own chain, a note your synthesis pass left
-for Self last time, including how charged it was, if you said so.
+that same material narrowed to only the HIGH-SALIENCE rows (notable and above), for the
+CIRCLE JOURNAL section below; every proposal Self confirmed during this circle; the
+CURRENT self.md, the standing account of Self this circle may or may not have moved; the
+PREVIOUS circle's HISTORY entry, so what you write continues an account rather than
+restarting one; the PREVIOUS circle's own CIRCLE JOURNAL entry, if one exists, for the
+same reason; and — if one exists — the most recent observation in your own chain, a note
+your synthesis pass left for Self last time, including how charged it was, if you said so.
 
 Your job is to find what is TRUE OF THE CIRCLE — not of any one part. A thing only one
 part said, that no other part took up and Self did not confirm, is that part's own
@@ -70,7 +86,7 @@ Emit only what is ACTIONABLE: something that changes what a future circle does, 
 to, or holds as settled. Observation with no consequence is not actionable. Say nothing
 rather than pad.
 
-OUTPUT FORMAT, exactly. Seven section headers, each alone on its own line, at column 0,
+OUTPUT FORMAT, exactly. Nine section headers, each alone on its own line, at column 0,
 spelled exactly as shown, in this order. EVERY header must be printed even when that
 section is empty — print the header and nothing under it.
 
@@ -118,55 +134,116 @@ BLOCK 1 CANDIDATE
     here asserts "this is now identity", and most circles will have none. Each item one
     short paragraph, opening with "- ".
 
+CIRCLE JOURNAL
+    The circle's own evolving identity record — a REPLACEMENT for the prior CIRCLE
+    JOURNAL entry given below, not an addition to it. Fold that predecessor (if one
+    exists) with your own HISTORY above and the high-salience remember material below
+    into ONE continuing account: not a summary of turns, a part's-eye view of what the
+    circle now IS. Merge near-duplicate points made in different words into one
+    statement, said once; keep every genuinely distinct point; never drop a point just
+    because only one source carried it. Where a point already appears in the predecessor
+    unchanged, keep it as is rather than restating it in new words. Do not editorialize
+    or invent connective narrative. Under {cj_target:,} characters — this reaches every
+    part's prompt, every circle, so it must stay compact.
+
+CIRCLE JOURNAL PROVENANCE
+    One line per retained point in CIRCLE JOURNAL, exactly "- <tag>: <short clause
+    naming what it contributed>". <tag> is one of: "history" (your own HISTORY section
+    above), one of {roster_dirs} (a fresh high-salience remember row from that part this
+    circle — copy the part's name exactly as given in the high-salience material's own
+    labels), or "carried:<id>" (the predecessor CIRCLE JOURNAL entry, its id given
+    below) — never invent a different tag.
+
 BLOCK 2 CANDIDATE items reach the next circle's room UNVETTED, as topics for it to
 examine (R184). BLOCK 1 CANDIDATE items reach no part until Self has ratified each one.
 """
 
 
 SYN_HEADERS = ("HISTORY", "OBSERVATION", "SALIENCE", "RESOLUTION", "SELF",
-               "BLOCK 2 CANDIDATE", "BLOCK 1 CANDIDATE")
+               "BLOCK 2 CANDIDATE", "BLOCK 1 CANDIDATE",
+               "CIRCLE JOURNAL", "CIRCLE JOURNAL PROVENANCE")
 
 # Appended to the SYNTHESIS system prompt for the ONE re-ask a cap breach
 # earns (R192). Names the ACTUAL overshoot rather than repeating the original
 # instruction louder: the first ask already said "under {history_cap}", so
 # saying it again unchanged is the same request, and the model has no way to
 # know by how much it missed.
-_INSIST = """
+#
+# GENERALIZED to cover CIRCLE JOURNAL too (B94 stage 4, 2026-09-04) — one
+# re-ask covers BOTH sections if both breached, never two separate loops
+# (R168's own "no automated catch-up" reasoning: a model that overshoots
+# twice on the same section will not comply a third time, and two
+# independent re-asks could in principle both fire, doubling the cost of a
+# single bad reply for no better odds of fixing it).
+_INSIST_HEADER = """
 
 --- THIS IS A SECOND ASK. YOUR PREVIOUS ANSWER WAS REFUSED. ---
+"""
 
-Your HISTORY section was {got:,} characters. The register refuses anything
+_INSIST_SECTION = """
+Your {name} section was {got:,} characters. The register refuses anything
 over {cap:,} and it does not truncate — an over-length answer is DISCARDED
-whole and the previous circle's entry stands instead, so the account of this
-circle is simply lost.
+whole and {loss}.
 
-Write HISTORY again, under {target:,} characters. Every other section stays as
-you judged it. Do not pad the shortfall elsewhere; cut HISTORY itself — decide
-what this circle was ABOUT and say that, rather than covering everything that
-happened in it."""
+Write {name} again, under {target:,} characters."""
+
+_INSIST_FOOTER = """
+
+Every other section stays as you judged it. Do not pad a shortfall elsewhere;
+cut the section itself — decide what matters most and say that, rather than
+covering everything that happened."""
+
+
+def _cj_provenance_tag(item: str, roster_dirs: "tuple[str, ...]") -> "str | None":
+    """The <tag> a CIRCLE JOURNAL PROVENANCE line names, or None if it names none of
+    the three forms the prompt asks for. "carried:CJ-nnnn" is checked FIRST — a plain
+    split on the first ':' would otherwise cut it in half, since the tag itself
+    contains one."""
+    m = re.match(r"^(carried:[\w-]+)\s*:", item)
+    if m:
+        return m.group(1)
+    m = re.match(r"^(history|" + "|".join(re.escape(d) for d in roster_dirs) + r")\s*:",
+                item)
+    return m.group(1) if m else None
 
 
 # --------------------------------------------------------------- synthesis
 def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
                confirmed: list[dict], say=lambda _s: None) -> dict:
     dreams = []
+    high_sal = []          # notable+ only — CIRCLE JOURNAL's own input (B94 stage 4)
     for p in payloads:
         if p.get("memory"):
             dreams.append(f"[{R.TAG_BY_DIR[p['part']]}] {p['memory']}")
+            if p.get("salience") in CJ_SALIENCE_TIERS:
+                # labeled by PART_DIR, not the display tag dreams uses above — this is
+                # the exact string CIRCLE JOURNAL PROVENANCE must echo back as a tag,
+                # and a bare part_dir is what circle_journal_manager's own provenance
+                # grammar reads (no MEM- id: it does not exist until AFTER this call
+                # returns and the coordinator mints it, R170 — see that module's
+                # docstring).
+                high_sal.append(f"[{p['part']}] {p['memory']}")
     conf = [f"- {c['kind']} {c['id']}: {c['line']}" for c in confirmed]
     self_md = (ROOT / "self" / "self.md")
     self_now = self_md.read_text(encoding="utf-8") if self_md.is_file() else ""
     prior = CH.circle_history_latest_read()
     prior_obs = SO.self_observation_latest_read()          # R358: the chain the OBSERVATION
+    prior_cj = CJ.circle_journal_latest_read()
     user = [f"# Transcript of circle {ot}\n{transcript}",
             "# Each part's fresh dreaming record\n"
             + ("\n".join(dreams) if dreams else "(none produced one)"),
+            "# That material narrowed to high-salience rows only (notable+), for "
+            "CIRCLE JOURNAL\n"
+            + ("\n".join(high_sal) if high_sal else "(none this circle)"),
             "# Proposals Self confirmed this circle\n"
             + ("\n".join(conf) if conf else "(none)"),
             f"# The CURRENT self.md\n{self_now or '(absent)'}",
             "# The previous circle's HISTORY entry\n"
             + (f"{prior['id']} ({prior['circle']}): {prior['text']}"
                if prior else "(none — this is the first)"),
+            "# The previous circle's CIRCLE JOURNAL entry\n"
+            + (f"{prior_cj['id']} ({prior_cj['circle']}): {prior_cj['text']}"
+               if prior_cj else "(none — this is the first)"),
             "# The previous observation in your own chain\n"
             + ((f"{prior_obs['id']} ({prior_obs['circle']}"
                 + (f", {prior_obs['salience']}"
@@ -174,13 +251,15 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
                 + f"): {prior_obs['text']}")
                if prior_obs else "(none — this is the first)")]
     # ASK FOR TARGET, REFUSE AT CAP (R192). The prompt names CH.TARGET
-    # (7200); render_new() refuses at CH.CAP (8000). A model asked for
+    # (7200) and CJ.TARGET; render_new() refuses at CH.CAP (8000) and
+    # CJ.circle_journal_new_render() at CJ.CAP. A model asked for
     # exactly its hard limit has no room to run slightly long without being
     # refused — and the whole run, seven DREAMING calls included, is lost to
     # a few dozen characters.
     system = SYNTHESIS_PROMPT_V2.format(
         ot=ot, n=len(R.DIR_NAMES), roster=", ".join(R.TAGS),
-        history_cap=CH.TARGET)
+        roster_dirs=", ".join(R.DIR_NAMES),
+        history_cap=CH.TARGET, cj_target=CJ.TARGET)
     body = "\n\n".join(user)
     # RECORDED WITH NO PART (R412): the synthesis speaks for the circle, and
     # its turn file is named by kind — Per_turn_synthesis_<time>_<seq>.json.
@@ -199,13 +278,27 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
     # Bounded at ONE retry: a model that ignores an explicit character count
     # twice will not comply on a third, and R168's hand-back is the honest
     # outcome there rather than a loop that spends money to reach it slowly.
+    # COVERS HISTORY AND CIRCLE JOURNAL TOGETHER (B94 stage 4) — one re-ask
+    # for whichever breached, never two separate loops.
+    _CAP_SECTIONS = (("HISTORY", CH.CAP, CH.TARGET,
+                     "the previous circle's entry stands instead, so the "
+                     "account of this circle is simply lost"),
+                    ("CIRCLE JOURNAL", CJ.CAP, CJ.TARGET,
+                     "the previous circle's own entry stands instead, so "
+                     "the circle's identity record does not move this time"))
     if sections is not None:
-        n_hist = RD.message_length_norm(sections["HISTORY"])
-        if n_hist > CH.CAP:
-            say(f"  HISTORY {n_hist:,} chars — over the {CH.CAP:,} cap; "
-                f"re-asking once, insisting")
-            insisted_system = system + _INSIST.format(
-                got=n_hist, cap=CH.CAP, target=CH.TARGET)
+        breaches = [(name, RD.message_length_norm(sections[name]), cap, target, loss)
+                   for name, cap, target, loss in _CAP_SECTIONS
+                   if RD.message_length_norm(sections[name]) > cap]
+        if breaches:
+            say("  " + "; ".join(f"{n} {got:,} chars over the {cap:,} cap"
+                                for n, got, cap, _t, _l in breaches)
+               + " — re-asking once, insisting")
+            insisted_system = (system + _INSIST_HEADER
+                              + "".join(_INSIST_SECTION.format(
+                                  name=n, got=got, cap=cap, target=target, loss=loss)
+                                  for n, got, cap, target, loss in breaches)
+                              + _INSIST_FOOTER)
             reply2 = PD._call(insisted_system, body, SYNTH_MAX_TOKENS,
                            kind="synthesis", record=True)
             PD._report_chars(say, "synthesis re-ask",
@@ -217,10 +310,10 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
                 say(f"  the re-ask did not parse ({e2}) — keeping the first "
                     f"answer, which the cap will refuse")
             else:
-                n2 = RD.message_length_norm(s2["HISTORY"])
-                say(f"  re-ask returned {n2:,} chars"
-                    + ("" if n2 <= CH.CAP
-                       else " — still over; truncating at the cap"))
+                for n, _got, cap, _t, _l in breaches:
+                    n2 = RD.message_length_norm(s2[n])
+                    say(f"  re-ask's {n} returned {n2:,} chars"
+                       + ("" if n2 <= cap else " — still over; truncating at the cap"))
                 sections, err, text, stop_reason = (s2, e2, reply2.text,
                                                     reply2.raw_stop)
 
@@ -244,6 +337,18 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
         out["truncated"].append(
             f"HISTORY TRUNCATED at {len(cut):,} chars (was {n_hist:,}; cap "
             f"{CH.CAP:,}) — the insistent re-ask did not bring it under")
+    # SAME RULE, CIRCLE JOURNAL (B94 stage 4): CJ.circle_journal_new_render() also
+    # REFUSES over CJ.CAP rather than truncating, so a still-over-cap reply is cut
+    # here first — the predecessor entry is a worse record to lose than a cut one.
+    n_cj = RD.message_length_norm(sections["CIRCLE JOURNAL"])
+    if n_cj > CJ.CAP:
+        norm = " ".join(sections["CIRCLE JOURNAL"].split())
+        cut = RD.message_truncate(norm, CJ.CAP)
+        sections = dict(sections, **{"CIRCLE JOURNAL": cut})
+        out["sections"] = sections
+        out["truncated"].append(
+            f"CIRCLE JOURNAL TRUNCATED at {len(cut):,} chars (was {n_cj:,}; cap "
+            f"{CJ.CAP:,}) — the insistent re-ask did not bring it under")
     # THE OBSERVATION FOLLOWS THE DREAMING MODEL (R358): CONTINUES chains
     # onto the prior observation, SALIENCE coerces rather than refuses, a
     # RESOLUTION also chains, and a bare CONTINUES lets the prior stand —
@@ -278,4 +383,24 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
                 "section is silent loss; refused, self.md stands")
         else:
             out["self_md"] = self_new
+
+    # CIRCLE JOURNAL (B94 stage 4). Always expected non-empty, same as HISTORY — there
+    # is always at least this circle's own HISTORY to fold from. Provenance items are
+    # supplementary metadata: an item that fails to parse is dropped and flagged
+    # SUSPECT, same as an unparseable SALIENCE above — it never blocks staging the
+    # entry text itself.
+    cj_text = sections["CIRCLE JOURNAL"].strip()
+    if cj_text:
+        out["circle_journal"] = cj_text
+        items = RD.message_items_read(sections["CIRCLE JOURNAL PROVENANCE"])
+        tags = [t for t in (_cj_provenance_tag(i, R.DIR_NAMES) for i in items) if t]
+        if len(tags) != len(items):
+            out["suspect"].append(
+                f"CIRCLE JOURNAL PROVENANCE: {len(items) - len(tags)} of "
+                f"{len(items)} line(s) did not name a recognised tag — dropped, "
+                f"not staged")
+        out["circle_journal_provenance"] = tags
+    else:
+        out["suspect"].append("CIRCLE JOURNAL was empty — nothing staged, the "
+                              "predecessor entry (if any) stands unchanged")
     return out

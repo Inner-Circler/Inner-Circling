@@ -81,7 +81,7 @@ def circle_transcript_append(guard: WriteGuard, path: pathlib.Path, line: str) -
 # of — and keep a history of — the working set selected by me."
 #
 # `apply_working_set()` REMOVED 2026-08-11: it substituted the `## Issues`
-# section into a rendered self/circle_briefing.md. build_briefing(chosen)
+# section into a rendered self/circle_briefing.md. circle_briefing_build(chosen)
 # now takes the working set directly and constructs circle_objectives from
 # it — there is no rendered file to substitute into. prompt_capture still
 # records what was actually sent, so the working set stays recoverable from

@@ -43,6 +43,9 @@ from __future__ import annotations
 import pathlib
 import sys
 
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 import roster as R
 from record_paths import ROOT
 import ifs_model as IFS

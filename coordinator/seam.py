@@ -62,9 +62,9 @@ def read_line(prompt: str = "", channel: str = "command",
     # THE DEFAULT IS "command" BECAUSE IT FAILS SAFE (R221, 2026-08-17).
     # docs/BNF.md line 105 rules RATIFICATION_DIALOG — and COMMAND, and
     # CP_PROTOCOL — never visible to the circle; a call site added later
-    # without thought therefore lands in the private lane rather than
+    # without thought therefore lands in the private channel rather than
     # leaking a Coordinator prompt into the room's pane. Only three sites
-    # in this project are circle lane, and each says so explicitly:
+    # in this project are circle channel, and each says so explicitly:
     # working_set_manager.py's working-set question (circle.py's until
     # 2026-09-03, stage 10) and circle.py's topic and CONSOLE_NAME
     # speaking prompts. test_seam.py and bnf_conformance.py both count.
@@ -80,7 +80,7 @@ def read_line(prompt: str = "", channel: str = "command",
     #
     # A REBOUND read_line's OWN default is what applies to bare calls —
     # extracted modules call `seam.read_line(prompt)` with no channel, so
-    # the adapter's signature, not this one, decides their lane.
+    # the adapter's signature, not this one, decides their channel.
     return _real_input(prompt)
 
 

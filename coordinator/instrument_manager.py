@@ -66,7 +66,7 @@ WHAT `main()` ASSERTS
 That last check is this module's reason to exist. The block is prose a human
 edits; the rows are the record. Nothing else in the project would notice if the
 two drifted, and drift here means a part is told a number about the operator
-that no instrument produced. It is the same shape as `check_best_practices`'s
+that no instrument produced. It is the same shape as `practice_manager`'s
 verbatim arrival check, pointed at the one block whose content is claims about
 a person.
 

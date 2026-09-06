@@ -44,7 +44,7 @@ withdraws its transcript, its working-set entry and its capture.
 All console output goes through `emit(channel, text)` and all input through
 `read_line(prompt, channel, prefill)` — thin wrappers over `seam.emit` / `seam.read_line`, which
 `ui/circling.py` rebinds to run this same `main()` in a thread of its own process. Every emit
-carries a CHANNEL ("command" or "circle") and every read a LANE; the call site is the single
+carries a CHANNEL ("command" or "circle") and every read a CHANNEL; the call site is the single
 source of truth for both (R221).
 
 ## MAIN
@@ -253,13 +253,27 @@ checkout now.
   `work/sandbox/`. Default: off — see the line above.
 - `--parts <dirs>`: comma-separated part directories. Default: every part in `parts/` (the roster).
   A reduced LIVE roster asks for `yes` unless `--yes`.
-- `--group <name>`: open on a NAMED roster from `self/groups.toml` (`coordinator/group_add.py`,
+- `--group <name>`: open on a NAMED roster from `self/groups.toml` (`coordinator/group_manager.py`,
   `/group-add`) instead of `--parts` — a deliberately different roster, not a reduced one, so the
   reduced-live-roster question above does not fire for it. Mutually exclusive with `--parts`.
   Default: unset (the `--parts` roster).
 - `--recall-arm off|delivered|withheld`: tier A recall (`remember_expand.py`, `docs/MEMORY_DESIGN.md`)
   — expand topic-matched seeds into each part's BLOCK 4. Default: `off`. `withheld` computes and
   logs the packs without delivering them, the trial's control arm.
+- `--no-prewarm`: skip `prewarm()`, the sequential zero-output-token calls that write each part's
+  cached prompt prefix before the opening round. Default: off (prewarm runs).
+- `--no-blind`: run the PRIOR protocol, a sequential opening round, instead of the default BLIND
+  round. Default: off.
+- `--seed N`: see the Seed section below. Default: unset (a fresh shuffle every round).
+- `--yes`: skip the reduced-live-roster and new-vs-resume confirmation prompts. Default: off.
+- `--resume OPEN_TIME`: reopen an unclosed circle, e.g. `--resume 2026-08-02_1259`; the transcript
+  must round-trip byte-for-byte or the resume is refused. Default: unset.
+- `--dev[=BOOL]`: open with dev mode on — DEV-table verbs, the help hierarchy, and progress lines
+  all answer at this terminal's `Self>` prompt. Bare `--dev` means `--dev=true`. Default: off.
+- `--list-resumable`: show circles that have a transcript but no close report, then exit.
+  Default: off.
+- `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed
+  (the `ic.py` replacement). Bypasses dev_mode entirely. Default: unset.
 - (`--minimal` retired with the practice mode, R360 2026-08-27.)
 
 Exit codes: 0 a complete record; 1 the circle RAN and its record is incomplete (the failure
@@ -271,7 +285,7 @@ This project: `identity`, `issue_commands`, `roster`, `record_verify`, `record_p
 `setting_manager`, `phase_clock`, `write_guard`, `command_surface`, `llm_client`, `prompt_build`,
 `annotations`, `quote_as_lands`, `propose_lifecycle`, `help_system`, `vetting`, `circle_rounds`,
 `commands`, `transcript_store`, `working_set_manager`, `circle_close`, `token_count` (all
-top-level); `issue_prompt_projection`, `circle_state`, `prompt_capture`, `group_add`,
+top-level); `issue_prompt_projection`, `circle_state`, `prompt_capture`, `group_manager`,
 `short_term_manager`, `initialization`, `recall_index`, `topic_manager` (the open-time topics
 line; `topics` until 2026-09-03), `inter_circle`, `gitrepo` (imported lazily inside `main()`).
 Third party, live runs only: `anthropic`, `python-dotenv` (optional).
@@ -303,15 +317,15 @@ pre-warm, every statement and its retry, every short_term and its retry, the tok
 `token_count.block_tokens`, and phase 2's own calls. None of it under `--dry-run`. Nothing else.
 
 ## HUMAN I/O
-Prompts (lane in brackets): `type 'yes' to proceed:` [command], `type 'yes' to open a NEW
+Prompts (channel in brackets): `type 'yes' to proceed:` [command], `type 'yes' to open a NEW
 circle:` [command], `Do you have specific issues you would like to focus on today ('?' to
 review) ? ` [circle — only when the live graph is non-empty], `CIRCLE topic (blank
 = open):` [circle], `\n<CONSOLE_NAME>> ` [circle — the speaking turn], plus whatever the
-dispatched verbs ask (`type 'yes' to apply:`, `/issue-add`'s two prompts — command lane) and
+dispatched verbs ask (`type 'yes' to apply:`, `/issue-add`'s two prompts — command channel) and
 vetting's `[<id>] a)pprove, d)eny, s)kip ?` [command]. Output: the banner, every notice and
 refusal on the COMMAND channel; the opening focus line, the room's help, the graph-ruling
-summary and "closed." on the CIRCLE channel. Under `ui/circling.py` a command-lane question
-owns the `cmd>` input row and a circle-lane opening question owns the circle pane's row.
+summary and "closed." on the CIRCLE channel. Under `ui/circling.py` a command-channel question
+owns the `cmd>` input row and a circle-channel opening question owns the circle pane's row.
 
 ## OPERATION
 

@@ -175,10 +175,11 @@ Questions alone will not overcome a mechanism that rewards agreement.
    the first speaker sets the frame. A5 works around it. Shuffling already
    varies who goes first.
 
-4. **Record disagreement where it can be found later.** `part_relationships.toml` has a
-   per-part view of every other part and contains no opposition language. If a
-   probe surfaces a polarization, that is where it belongs, and the nightly
-   should be able to see it.
+4. **Record disagreement where it can be found later.** `part_relationships.toml` — the
+   per-part view of every other part this point once named as the destination — was retired
+   2026-08-22 (R309); nothing has taken its place as a per-part opposition-language register.
+   If a probe surfaces a polarization, where it belongs is an open question again, not a
+   solved one (audit-register.md #25).
 
 ---
 

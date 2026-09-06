@@ -171,8 +171,8 @@ def read_line(prompt: str = "", channel: str = "command",
     # `channel` says WHICH pane asks and answers - R221, 2026-08-17. It is
     # meaningless to a standalone terminal run and load-bearing under
     # ui/circling.py, exactly like emit's. The default is "command"
-    # because that lane is private (docs/BNF.md line 105); the three
-    # circle-lane reads in this file each ask for it by name.
+    # because that channel is private (docs/BNF.md line 105); the three
+    # circle-channel reads in this file each ask for it by name.
     #
     # `prefill` (2026-08-20, finding 2) asks the reader to open with that
     # text already typed and the cursor at its end. An AFFORDANCE, not a
@@ -345,7 +345,7 @@ DEFAULT_PARTS = R.DIR_NAMES
 # --------------------------------------------- prompt construction
 # MOVED to prompt_build.py, 2026-08-16 (phase 2 stage 2): the
 # identity read-layer (read_ro/strip_settled/strip_to_identity),
-# circle_objectives construction (build_briefing + ISSUE_MODEL),
+# circle_objectives construction (circle_briefing_build + ISSUE_MODEL),
 # the four-block assembly (ORDER/block_order/system_blocks/
 # load_shared) and the transcript-to-messages view (render_messages)
 # - verbatim, comments included. shared_block()+system_blocks()'s
@@ -547,7 +547,7 @@ def main() -> int:
                          f"A reduced roster is for TESTING — omitted parts are "
                          f"absent from the circle and stay unaware of it.")
     ap.add_argument("--group", default=None,
-                    help="open on a NAMED roster (coordinator/group_add.py, "
+                    help="open on a NAMED roster (coordinator/group_manager.py, "
                          "self/groups.toml) instead of --parts — a "
                          "deliberately different roster, not a reduced one, "
                          "so the REDUCED LIVE ROSTER warning below does not "
@@ -698,11 +698,11 @@ def main() -> int:
                         "both.")
         return 2
     if used_group:
-        import group_add as GA
+        import group_manager as GA
         resolved = GA.group_resolve(args.group)
         if resolved is None:
             emit("command", f"no group named {args.group!r} — "
-                            f"/group-list (or group_add.group_rows_read()) shows what "
+                            f"/group-list (or group_manager.group_rows_read()) shows what "
                             f"exists")
             return 2
         parts = resolved
@@ -1869,7 +1869,7 @@ def main() -> int:
     if staged_propose_ids:
         # COMMAND, not circle: this is Coordinator reporting an operation
         # to Self, which docs/BNF.md line 105 keeps out of the circle
-        # entirely. Corrected with R221 lane work (NEXT.md B51 records
+        # entirely. Corrected with R221 channel work (NEXT.md B51 records
         # that this one fix needed no ruling of its own).
         emit("command", f"\n  {len(staged_propose_ids)} proposal(s) staged: "
               f"{', '.join(staged_propose_ids)}")

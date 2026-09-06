@@ -340,7 +340,7 @@ run; noted for live use.
   the intended async model — parts speak when ready, and every view is derived
   from one canonical transcript, so no part can see something another cannot.
 - **`circle_objectives` is frozen at startup** for the whole run — constructed
-  once by `build_briefing()`. Editing `issues/*.toml` mid-circle does not
+  once by `group_attention.circle_briefing_build()`. Editing `issues/*.toml` mid-circle does not
   propagate. Same as the agent-teams path, where parts read their briefing at
   circle start. All parts in a run share one identical copy.
 - **Long circles lose the message-level cache.** Merged role-blocks alternate
@@ -462,7 +462,7 @@ best practices / better options  self/best_practices.toml, read
                                  projections. R133-137, 2026-08-11; the
                                  register left check_best_practices.py (now
                                  practice_verify.py) 2026-09-03.
-circle_objectives                circle.py's build_briefing() — issue_model.md
+circle_objectives                group_attention.py's circle_briefing_build() — issue_model.md
                                  + the live issues/*.toml graph, constructed
                                  fresh at every circle open.
                                  self/circle_briefing.md retired the same day;
@@ -508,7 +508,7 @@ comment says so directly).
 ## Flags
 
 Regenerated against `coordinator/circle.py`'s own argparse definitions
-(this section previously listed 6 of the real 12, with defaults stated for
+(this section previously listed 6 of the real 13, with defaults stated for
 only one).
 
 ```
@@ -523,6 +523,12 @@ only one).
                     parts/, including the Soul (see "The Soul" below — it
                     IS a participant; process_core.md's own §The Soul
                     disagrees with the record, not this default).
+--group NAME        open on a NAMED roster (coordinator/group_manager.py,
+                    self/groups.toml) instead of --parts — a deliberately
+                    different roster, not a reduced one, so the REDUCED
+                    LIVE ROSTER warning above does not fire for it.
+                    Mutually exclusive with --parts (landed `6fe45f4`,
+                    2026-09-02). Default: unset.
 --recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
                     expand topic-matched seeds into each part's BLOCK 4.
                     ARM is off | delivered | withheld. Default: off.
@@ -601,10 +607,11 @@ it delivered a softening Self had separately asked for. No part declares an
 attendee — it is absent. Trace it through:
 
 - It never appears in the transcript, so it writes no short_term.
-- `coordinator/part_dreaming.py`'s `part_dream()` (inter_circle's until 2026-09-03) reads that with a bare
-  `is_file()`: no short_term file means treated as no engagement for that
-  circle. Absent and present-but-silent are recorded identically.
-- The transcript safety net (`backfill_step()`, run automatically before
+- `coordinator/part_dreaming.py`'s `part_dream()` (inter_circle's until 2026-09-03) reads that via
+  `short_term_manager.short_term_locate()` (B96/R434, 2026-09-04, either `.md` or `.toml` suffix): no
+  short_term file means treated as no engagement for that circle. Absent and present-but-silent are
+  recorded identically.
+- The transcript safety net (`inter_circle.short_term_backfill_step()`, run automatically before
   dreaming at every live close) explicitly **exempts** a part that did not
   speak — absence for a non-speaking part is correct, not a loss — so nothing
   alarms and nothing is backfilled.
@@ -667,7 +674,7 @@ failure available here.
 circle's dream invalidates that part's distillate on its own; an unchanged day
 costs nothing and makes no call.
 
-`midterms_project.py` is the runbook: survey, pack, derive, write, verify. It
+`part_mid_term_project.py` (`midterms_project.py` until 2026-09-04) is the runbook: survey, pack, derive, write, verify. It
 carries Self's prompt verbatim, the operational form actually run, and the
 improvements still proposed. It cannot be imported — the hyphen is deliberate,
 because everything importable belongs in `part_mid_term_manager.py`.

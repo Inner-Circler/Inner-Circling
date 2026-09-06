@@ -346,7 +346,7 @@ def proposal_vet(where: str, live: bool,
     short_terms, close report — never issues/). See _propose_approve().
 
     CHECKPOINT 2 HAS A SECOND EFFECT beyond ruling on a proposal: it
-    runs BEFORE build_briefing() reads issues/ for the new circle's
+    runs BEFORE circle_briefing_build() reads issues/ for the new circle's
     BLOCK 2 (main(), prewarm). Approving an issue-relationship-add propose there is
     the one ruling in this loop that can change what the room is about
     to be told — the new edge lands in that circle's own issue_relationship_brief.

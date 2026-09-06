@@ -44,7 +44,7 @@ system = "list"
 part   = "str"
 
 [shape.processing]
-kinds  = ["dreaming", "synthesis", "mid_term", "coalesce"]
+kinds  = ["dreaming", "synthesis", "mid_term", "coalesce", "capsule"]   # capsule: R451/D86 a, 2026-09-04
 system = "str"
 part   = "str|null"
 messages_exactly = 1

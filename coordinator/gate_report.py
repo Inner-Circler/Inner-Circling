@@ -88,6 +88,8 @@ PLAIN: dict[str, str] = {
         "The safe-to-save check's own rehearsal didn't pass.",
     ".claude/skills/publish-package/test_publish.py":
         "The publisher's own rehearsal didn't pass.",
+    ".claude/skills/run-inner-circling/test_driver.py":
+        "The circle-launcher's own rehearsal of its command-line options didn't pass.",
 }
 FALLBACK = "A check called {name} stopped."
 

@@ -537,7 +537,21 @@ def system_git_attributes_ensure(log) -> None:
 # paths join the cases whose suites already cover them (audit-register #2, #6,
 # #11). No new suite; the durable check (test_hook_template asserting every
 # suite's subject reaches its case) is queued in NEXT.md.
-HOOK_MARK = "# inner-circling pre-commit v138"
+# v139, B104, 2026-09-04: live_probe.py retired — no production caller (the
+# three suites its man page named as callers were retired 2026-08-09..15,
+# quote_verify.py never imported it, work/graph/test_coordinator_draw.py
+# already asserted it offline). Its case dropped along with the module,
+# its man page and its own suite.
+# v140, B103, 2026-09-04: memory/issue_prompt_projection.py joins the
+# practice case's trigger — the one real gap test_hook_template.py's new
+# fifth property (subject-to-trigger) found once built. See that property's
+# own docstring for the mechanism (hook simulation via fnmatch, not a
+# substring guess).
+# v141, B103, audit-register 2026-09-04 #5: a new case for
+# .claude/skills/run-inner-circling/driver.py + its new suite,
+# test_driver.py — the argv-assembly probe the register named as missing,
+# alongside its sibling skills' own cases just above.
+HOOK_MARK = "# inner-circling pre-commit v145"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -949,7 +963,7 @@ PRE_COMMIT = f'''#!/bin/sh
 #
 # v33 ADDS coordinator/prompt_build.py to the block-overlap trigger —
 # phase 2 stage 2 (2026-08-16) moved the prompt's construction (the
-# identity read-layer, minimal case, build_briefing, the four-block
+# identity read-layer, minimal case, circle_briefing_build, the four-block
 # assembly, render_messages) out of circle.py, and prompt blocks'
 # sources are exactly what that case's checker guards. Also joins the
 # practice/annotation trigger: the assembly reads the practice blocks.
@@ -1203,6 +1217,8 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/tests/test_part_dreaming_grounding.py*\
 |*coordinator/self_observation_manager.py*\
 |*coordinator/tests/test_self_observation_manager.py*\
+|*coordinator/circle_journal_manager.py*\
+|*coordinator/tests/test_circle_journal_manager.py*\
 |*coordinator/setting_manager.py*|*coordinator/tests/test_setting_manager.py*\
 |*coordinator/system_setting_verify.py*\
 |*coordinator/process_core.md*\
@@ -1228,13 +1244,19 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/LLM_response_disassembler.py*\
 |*coordinator/tests/test_llm_response_disassembler.py*\
 |*memory/issue_status.py*|*memory/issue_commands.py*|*coordinator/PROPOSE_CLASS.py*\
-|*coordinator/process_core_prompt_projection.py*|*coordinator/quote_verify.py*)
+|*coordinator/process_core_prompt_projection.py*|*coordinator/quote_verify.py*\
+|*memory/issue_prompt_projection.py*)
     # v138, audit-register 2026-09-04 #2/#6/#11: five modules whose SUITES this
     # case already invokes (test_issue_status_cmd, test_issue_commands,
     # test_proposal_manager, test_practice_verify, quote_verify itself) were
     # gated only by the lint sweep because their own paths were not in this
     # pattern — editing the PROPOSE grammar or the one atomic status writer
     # ran no suite. Subject-to-trigger, the missing fifth property.
+    # v140, B103, 2026-09-04: memory/issue_prompt_projection.py was the one
+    # real gap the fifth property (test_hook_template.py) found once built —
+    # it already triggered test_working_set_manager.py (a separate, real
+    # reason) but never its OWN suite, test_issue_prompt_projection.py,
+    # which this case invokes.
     # v107, audit-register.md #40(b): the five suites above (test_backfill,
     # test_convergence_queue, test_issue_prompt_projection, test_spend_report,
     # test_strip_malformed_annotations) were invoked here but not
@@ -1329,6 +1351,13 @@ case "$FILES" in *parts/*|*self/*\
     # because test_register_gate.py runs on bytes it builds itself and so
     # cannot notice that the 30 migrated records are still whole.
     run coordinator/tests/test_self_observation_manager.py
+    # v142, B94, 2026-09-04: the CIRCLE_JOURNAL register. Its own suite, same
+    # reason as self_observation's above — test_register_gate.py alone cannot
+    # exercise render_new()'s provenance/chain discipline or the scaffold
+    # round trip. The suite landed one commit before this case wired it in —
+    # the exact "triggered and uninvoked" defect v45 named, caught this time
+    # before a second commit, not after one.
+    run coordinator/tests/test_circle_journal_manager.py
     run coordinator/tests/test_inter_circle.py
     # v133, 2026-09-04: B91's grounding check on a part's DREAMING memory.
     run coordinator/tests/test_part_dreaming_grounding.py
@@ -1444,16 +1473,16 @@ esac
 # trigger is here rather than a dedicated block like test_issue_gate.py's,
 # because group_context.py/group_attention.py already needed one and a
 # second block for one more roster-shaped file was not a real split.
-case "$FILES" in *coordinator/group_add.py*|*coordinator/group_context.py*\
+case "$FILES" in *coordinator/group_manager.py*|*coordinator/group_context.py*\
 |*coordinator/group_attention.py*|*coordinator/parts_prompt_projection.py*\
 |*coordinator/role_attention.py*|*coordinator/role_context.py*\
 |*coordinator/topic_prompt_projection.py*|*coordinator/prompt_build.py*\
-|*coordinator/tests/test_group_add.py*|*coordinator/tests/test_parts_prompt_projection.py*\
+|*coordinator/tests/test_group_manager.py*|*coordinator/tests/test_parts_prompt_projection.py*\
 |*coordinator/tests/test_prompt_build.py*|*coordinator/tests/test_role_attention.py*\
 |*coordinator/tests/test_role_context.py*|*coordinator/tests/test_topic_prompt_projection.py*)
     NOTE="  pre-commit: the Block 1-4 assembly split (group_context/group_attention/
-  parts_prompt_projection/role_attention/role_context/topic_prompt_projection/group_add) touched"
-    run coordinator/tests/test_group_add.py
+  parts_prompt_projection/role_attention/role_context/topic_prompt_projection/group_manager) touched"
+    run coordinator/tests/test_group_manager.py
     run coordinator/tests/test_parts_prompt_projection.py
     run coordinator/tests/test_prompt_build.py
     run coordinator/tests/test_role_attention.py
@@ -1733,12 +1762,12 @@ esac
 # either (audit-register.md Tier 1 #7, 2026-09-01) -- it fired only
 # system_lint_verify/system_unique_home_verify/sanitize/the staleness advisory, so its two
 # stated invariants (the closed UI-signal-channel set; only circle.py's
-# three named sites open the "circle" read_line lane) were never held by
+# three named sites open the "circle" read_line channel) were never held by
 # anything. Trigger AND invocation land together, v19's rule.
 case "$FILES" in *coordinator/seam.py*|*coordinator/tests/test_seam.py*\
 |*coordinator/circle.py*)
     NOTE="  pre-commit: seam.py's channel contract touched, or a new
-  circle-lane read_line site"
+  circle-channel read_line site"
     run coordinator/tests/test_seam.py
 esac
 
@@ -1857,8 +1886,8 @@ case "$FILES" in *coordinator/working_set_manager.py*|*coordinator/tests/test_wo
     run coordinator/tests/test_working_set_manager.py
 esac
 
-case "$FILES" in *ui/*)
-    NOTE="  pre-commit: ui/ touched — running its self-tests"
+case "$FILES" in *ui/*|*coordinator/seam.py*)
+    NOTE="  pre-commit: ui/ (or its rebinding surface, seam.py) touched — running its self-tests"
     # test_circling_selftest.py (--selftest until 2026-09-03) needs no real import beyond circle.py
     # itself, but test_circle_engine.py runs a REAL dry-run CircleEngine
     # session (it imports circle.py, which imports anthropic) — bare
@@ -1957,6 +1986,22 @@ case "$FILES" in *coordinator/phase_clock.py*|*coordinator/tests/test_phase_cloc
     run coordinator/tests/test_phase_clock.py
 esac
 
+case "$FILES" in *coordinator/circle_delta.py*|*coordinator/circling_verify.py*\
+|*coordinator/instrument_manager.py*|*coordinator/part_mid_term_project.py*\
+|*coordinator/parts_prompt_projection.py*|*coordinator/project_stats.py*\
+|*coordinator/prompt_show.py*|*coordinator/quote_as_lands.py*\
+|*coordinator/remember_expand.py*|*coordinator/remember_prompt_projection.py*\
+|*coordinator/ruling_migrate.py*|*coordinator/token_count.py*\
+|*coordinator/topic_prompt_projection.py*|*memory/issue_index.py*\
+|*coordinator/tests/test_entry_points.py*)
+    # v144, 2026-09-04 (audit-register.md #13). Fourteen shipping __main__ entry points had
+    # no exerciser at all before this suite — several have their own suite, and every one of
+    # those exercises library functions while leaving the __main__ block dark. This trigger
+    # and its invocation land together, same rule v99's own comment states two blocks below.
+    NOTE="  pre-commit: an untested-until-now __main__ entry point touched"
+    run coordinator/tests/test_entry_points.py
+esac
+
 case "$FILES" in *coordinator/circle_delta.py*|*coordinator/tests/test_circle_delta.py*|*coordinator/docs/circle_delta.md*)
     # v99, 2026-08-30. circle_delta landed with a probe and NO trigger, so
     # test_hook_template.py's stray-suite check had been failing on master
@@ -2051,11 +2096,6 @@ case "$FILES" in *coordinator/command_surface.py*|*coordinator/tests/test_dev_mo
     run coordinator/tests/test_dev_mode.py
 esac
 
-case "$FILES" in *coordinator/live_probe.py*|*coordinator/tests/test_live_probe.py*)
-    NOTE=""
-    run coordinator/tests/test_live_probe.py
-esac
-
 case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_capture.py*|*coordinator/turn_contract.toml*|*coordinator/tests/test_turn_contract.py*)
     NOTE=""
     run coordinator/tests/test_prompt_capture.py
@@ -2103,6 +2143,16 @@ case "$FILES" in *.claude/skills/publish-package/publish.py*\
 |*.claude/skills/publish-package/test_publish.py*)
     NOTE="  pre-commit: the publish skill touched"
     run .claude/skills/publish-package/test_publish.py
+esac
+
+# B103, audit-register 2026-09-04 #5: 850 lines that open a real circle,
+# joined the lint scope as an EXTRA_LEG at hook v54 and got nothing else —
+# adjacent to #14 above, which wired the four SIBLING skills' suites; this
+# one had no suite to wire until test_driver.py.
+case "$FILES" in *.claude/skills/run-inner-circling/driver.py*\
+|*.claude/skills/run-inner-circling/test_driver.py*)
+    NOTE="  pre-commit: the run-inner-circling driver touched"
+    run .claude/skills/run-inner-circling/test_driver.py
 esac
 '''
 
@@ -2234,7 +2284,7 @@ POST_COMMIT_MARK = "# inner-circling post-commit v3"
 POST_COMMIT_FAMILY = "# inner-circling post-commit v"
 POST_COMMIT = _backup_push_hook("post-commit", POST_COMMIT_MARK, "commit")
 
-POST_MERGE_MARK = "# inner-circling post-merge v3"
+POST_MERGE_MARK = "# inner-circling post-merge v4"
 POST_MERGE_FAMILY = "# inner-circling post-merge v"
 
 # v2, R-NEW 2026-08-24: THE LOGBOOK FOLD RUNS HERE.
@@ -2266,7 +2316,7 @@ POST_MERGE_FAMILY = "# inner-circling post-merge v"
 # merge has already happened by the time this runs. A failure here is loud
 # and leaves the folded logbooks in the working tree, uncommitted.
 _FOLD_STEP = '''
-# --- the ledger fold, before the backup push (see _backup_push_hook) ---
+# --- the logbook fold, before the backup push (see _backup_push_hook) ---
 if [ -x .venv/Scripts/python.exe ]; then
     if ! .venv/Scripts/python.exe coordinator/assign_ids.py --commit; then
         echo "  post-merge: assign_ids --commit FAILED." >&2

@@ -120,18 +120,20 @@ parts of the system that run.
   every citation, and writes nothing. There is no write path in the module at all.
 - a journalled transaction for atomic multi-file writes, and a local-only git
   history where every circle is a tagged commit
+- the circle's issues briefing built fresh from the live graph at every open,
+  not from a hand-maintained document — the graph reaches the parts this way,
+  directly, every circle
 
 **Designed, not yet built:**
 - dreaming with a write path, gated on a defect being fixed first: the derivation
   never captured a quote for an *edge*, so no edge in the graph currently meets
   the evidentiary bar the schema demands
-- synthesis projecting the briefing *from* the graph. Today the briefing is a
-  hand-maintained document, and the graph is not sent to the parts at all.
 - any mechanism by which a part can pass a commitment to its own future instances
 
 That last one is worth stating plainly. A part's prompt is assembled from its own
-long-term record, its view of the other parts, and a shared briefing. **Its own
-short-term record is written at close and never read back.** So a promise made in
+long-term record, its mid-term distillate, and the circle's own live issues
+briefing. **Its own short-term record is written at close and never read back.**
+So a promise made in
 a circle does not reach the part that made it. Six parts made weekly commitments
 in one circle recently; all six were structurally unkeepable, and none of them
 could have known that.

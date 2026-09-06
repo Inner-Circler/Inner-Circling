@@ -646,7 +646,7 @@ class AppState:
         unreachable from this UI.
 
         FALSE FOR THE SPEAKING TURN, which is the load-bearing carve-out:
-        `Self>` is circle lane AND the steady state of a running circle,
+        `Self>` is circle channel AND the steady state of a running circle,
         so gating on the channel alone would turn every catch-up Enter
         into an empty statement plus a stray "[You]: " echo, killing the
         documented behaviour just below. FALSE with no backend at all —
@@ -662,7 +662,7 @@ class AppState:
 
     def _blank_echo(self) -> str:
         """What "[You]: " shows for a BLANK line that answered a pending
-        circle-lane question (2026-08-21). The question's own legend, if it
+        circle-channel question (2026-08-21). The question's own legend, if it
         has one — "(blank = all, 'none', '?')" -> "(blank = all)"; "(blank =
         open)" -> "(blank = open)" — else the bare fact: "(blank)"."""
         q = getattr(self.backend, "pending_prompt", "") if self.backend else ""
@@ -696,7 +696,7 @@ class AppState:
             return "focus"
         # THE INITIALIZATION HANDOVER — R330, 2026-08-23 (docs/
         # Initialization.md §2.2): the first-run dialogs run on the COMMAND
-        # lane before the working-set question, so the command pane takes
+        # channel before the working-set question, so the command pane takes
         # focus (and with it the 4/5ths split) for their duration, and the
         # circle pane takes it back once "Starting your circle..." has
         # printed. The same shape as "closing" above, in both directions.
@@ -965,16 +965,16 @@ class AppState:
                 self.command.jump_bottom()
                 return "focus" if self.focus == "command" else None
             # THE MIRROR OF submit_command's OPENING GUARD, 2026-08-21. Before
-            # the Self> loop exists, a COMMAND-lane question can be pending —
+            # the Self> loop exists, a COMMAND-channel question can be pending —
             # a vetting a)pprove/d)eny/s)kip at priming, "type 'yes' to open
             # a NEW circle" — and a line typed into the ROOM then would sit
-            # on circle_in until the NEXT circle-lane read, which is the
+            # on circle_in until the NEXT circle-channel read, which is the
             # working-set question: it would become the working set, the
             # same way a cmd> line became one in the other direction. Refused
             # with the question named. MID-CIRCLE speech is untouched:
             # "continue to allow the user to make statements" during
             # (waiting) was ruled 2026-08-20, and once the loop is reached
-            # every circle-lane read is Self's own turn.
+            # every circle-channel read is Self's own turn.
             b = self.backend
             if (b is not None and getattr(b, "waiting_for_input", False)
                     and getattr(b, "waiting_for_channel", "circle") == "command"
@@ -988,7 +988,7 @@ class AppState:
                 self.command.jump_bottom()
                 return "focus" if self.focus == "command" else None
             # THE ECHO IS THE RECORD — 2026-08-21, the lab circle
-            # 2026-08-21_1139. A circle-lane QUESTION is no longer echoed
+            # 2026-08-21_1139. A circle-channel QUESTION is no longer echoed
             # into this pane (CircleEngine._read_line: the row carries it),
             # so the answer must say what it was: a blank answer to a
             # pending question is shown as the legend the question itself
@@ -1207,7 +1207,7 @@ class CircleEngine:
         # `line_taken` below now answers -- see that comment.
         self.waiting_for_input = False
         self.pending_prompt = ""
-        # THE CIRCLE LANE'S CONSUMPTION HANDSHAKE, B57(1), 2026-08-19.
+        # THE CIRCLE CHANNEL'S CONSUMPTION HANDSHAKE, B57(1), 2026-08-19.
         # Until this existed, `submit_circle()` was a bare queue put and
         # NOTHING announced "your line was consumed", so every driver of this
         # engine re-solved the same race privately: `waiting_for_input` can
@@ -1217,9 +1217,9 @@ class CircleEngine:
         # output attributed to the wrong step, silently, with everything
         # still passing.
         #
-        # CLEARED on submit, SET when a CIRCLE-lane read returns. Lane-scoped
+        # CLEARED on submit, SET when a CIRCLE-channel read returns. Channel-scoped
         # deliberately: a circle line can sit queued while this thread
-        # completes a COMMAND-lane read, and an unscoped set in the shared
+        # completes a COMMAND-channel read, and an unscoped set in the shared
         # `finally` would fire there and mean nothing.
         #
         # SET at rest, not cleared, so the readers that drive this engine by
@@ -1240,7 +1240,7 @@ class CircleEngine:
         # its resting value is "circle" rather than None so that the
         # legacy readers which set `waiting_for_input = True` on its own —
         # ui/tests/test_circling_selftest.py, ui/tests/test_circling.py,
-        # ui/tests/test_circle_engine.py — keep describing a circle-lane read,
+        # ui/tests/test_circle_engine.py — keep describing a circle-channel read,
         # which is what they were written against.
         self.waiting_for_channel = "circle"
         # True only for circle.py's OWN speaking prompt, the one turn
@@ -1251,10 +1251,10 @@ class CircleEngine:
         self.speaking_turn = False
         # HAS THE Self> LOOP BEEN REACHED — 2026-08-21, the lab's second day
         # of findings. Set the first time _read_line sees the speaking turn,
-        # never cleared: from then on every circle-lane read this engine
+        # never cleared: from then on every circle-channel read this engine
         # makes IS the Self> prompt (the working-set and topic questions
         # come before it, the close and abort confirmations are command
-        # lane), so a cmd> line forwarded into circle_in lands in the one
+        # channel), so a cmd> line forwarded into circle_in lands in the one
         # reader that DISPATCHES commands. Before it, the same forward
         # landed in working_set_ask()'s read and was consumed as the
         # working set — "not in the graph: /issue-list", re-asked, once per
@@ -1272,7 +1272,7 @@ class CircleEngine:
         # circle-verb refusal there) and by _command_prompt (the row reads
         # a notice while closing). Cleared when main() returns.
         self.close_state = ""
-        # Fed by the COMMAND pane, drained by a command-lane read_line.
+        # Fed by the COMMAND pane, drained by a command-channel read_line.
         # Separate from circle_in because the two panes are disjoint by
         # construction, which is the whole premise this harness tested.
         self.command_in: "queue.Queue[str]" = queue.Queue()
@@ -1338,11 +1338,11 @@ class CircleEngine:
         # (the working-set question, the topic question, a yes/no
         # confirmation) carries real content the user needs to read and
         # is still echoed exactly as before.
-        # `channel` decides the lane, and it comes from circle.py's own
+        # `channel` decides the channel, and it comes from circle.py's own
         # call site — RULED 2026-08-17 (R221), the same single-source-of-
         # truth rule this class already follows for emit(). Nothing here
         # classifies; `speaking_turn` below is a RENDER question ("does
-        # circling draw its own prompt for this read"), not a lane one.
+        # circling draw its own prompt for this read"), not a channel one.
         self.speaking_turn = (channel == "circle"
                               and prompt == f"\n{self._C.CONSOLE_NAME}> ")
         if self.speaking_turn:
@@ -1354,7 +1354,7 @@ class CircleEngine:
         if prefill:
             self.out_queue.put(("prefill", prefill))
         if channel == "circle":
-            # A CIRCLE-LANE QUESTION IS NOT ECHOED INTO SCROLLBACK EITHER —
+            # A CIRCLE-CHANNEL QUESTION IS NOT ECHOED INTO SCROLLBACK EITHER —
             # 2026-08-21, the lab circle 2026-08-21_1139, the operator: *"The output
             # line "CIRCLE issues (blank = all, 'none', '?'):" is redundant
             # to the correctly presented prompt -- keep only the prompt."*
@@ -1370,7 +1370,7 @@ class CircleEngine:
             # seam's own read_line prints the prompt as input() always has.
             q = self.circle_in               # fed by submit_circle()
         else:
-            # A COMMAND-LANE QUESTION IS NOT ECHOED INTO SCROLLBACK —
+            # A COMMAND-CHANNEL QUESTION IS NOT ECHOED INTO SCROLLBACK —
             # 2026-08-21, the lab's finding 1, the operator: *"Overload the prompt
             # INSTEAD ... restore after a valid reply, write diagnostic and
             # repeat upon invalid reply."* Until then "[BP-0039] a)pprove,
@@ -1396,9 +1396,9 @@ class CircleEngine:
         # therefore asked in one place and answered in another, and on
         # 2026-08-20 both of them silently swallowed a /status. Stripped
         # of the spacer newline circle.py bakes in for a plain terminal.
-        # BOTH LANES since 2026-08-21: a command-lane question owns the
+        # BOTH CHANNELS since 2026-08-21: a command-channel question owns the
         # cmd> row the same way (finding 1, above); _circle_prompt and
-        # _command_prompt each read it under their own lane test.
+        # _command_prompt each read it under their own channel test.
         self.pending_prompt = prompt.strip()
         self.waiting_for_input = True
         try:
@@ -1410,13 +1410,13 @@ class CircleEngine:
             self.waiting_for_channel = "circle"
             # AFTER the flag, never before: a waiter released by this event
             # must be guaranteed the stale-True window has already closed,
-            # which is the entire point of the handshake. Circle lane only —
+            # which is the entire point of the handshake. Circle channel only —
             # see `line_taken`'s comment in __init__.
             if channel == "circle":
                 self.line_taken.set()
 
     def submit_circle(self, text: str) -> None:
-        """The ONE way a circle-lane line reaches the engine. Every internal
+        """The ONE way a circle-channel line reaches the engine. Every internal
         forward in `submit_command()` goes through here too, rather than
         putting on `circle_in` directly, so the handshake covers every feed
         site by construction instead of by four people remembering."""
@@ -1425,7 +1425,7 @@ class CircleEngine:
         self.line_taken.clear()
         self.circle_in.put(text)
 
-    # The question a circle-lane read_line is blocked on, "" when none is.
+    # The question a circle-channel read_line is blocked on, "" when none is.
     # Read by _circle_prompt(); see _read_line for why it exists.
     pending_prompt: str = ""
 
@@ -1453,7 +1453,7 @@ class CircleEngine:
         THE DEFECT THIS REPLACES. submit_command() forwarded a command-pane
         verb into circle_in whenever _running() was True. The ONLY reader
         that DISPATCHES commands is circle.py's Self> loop; every other
-        circle-lane read (the working set, the topic) is a QUESTION, and a
+        circle-channel read (the working set, the topic) is a QUESTION, and a
         command is never its answer. So on 2026-08-21 every line the operator
         typed at cmd> during the open — /issue-list, status, dev, /help
         object_classes — was consumed by working_set_ask() as a working
@@ -1461,12 +1461,12 @@ class CircleEngine:
         was re-asked, its prompt re-echoed into the circle pane once per
         command. Fourteen of the day's findings were this one defect.
 
-            answer      a COMMAND-lane read is pending: the line IS its
+            answer      a COMMAND-channel read is pending: the line IS its
                         answer, forwarded verbatim (R221, unchanged)
             loop        the Self> loop has been reached: forward into
                         circle_in — parked at Self> or busy mid-round,
-                        either way the next circle-lane read dispatches
-            opening-q   running, loop NOT reached, parked on a circle-lane
+                        either way the next circle-channel read dispatches
+            opening-q   running, loop NOT reached, parked on a circle-channel
                         NON-speaking read — the working set or the topic:
                         the no-circle verbs may RUN (help, the listings,
                         a property read), anything else is refused and
@@ -1608,7 +1608,7 @@ class CircleEngine:
         with channel "command", same as any real circle.py output, so it
         reaches the pane through the one normal drain path in ui_main_loop().
         """
-        # A COMMAND-LANE read_line IS BLOCKED RIGHT NOW: this line is its
+        # A COMMAND-CHANNEL read_line IS BLOCKED RIGHT NOW: this line is its
         # ANSWER, not a command. Forward it VERBATIM, before any
         # normalization — the slash-strip, head lowercasing and
         # `head + rest_of_line` reconstruction below are correct for a
@@ -1624,7 +1624,7 @@ class CircleEngine:
         phase = self._phase()
         if phase == "answer":
             # FIRST, even while closing: the close's own vetting ("at close"
-            # a)pprove/d)eny/s)kip) is a command-lane read, and a line typed
+            # a)pprove/d)eny/s)kip) is a command-channel read, and a line typed
             # then is its answer — the one thing a closing circle still
             # asks of the operator.
             self.command_in.put(text)
@@ -1680,7 +1680,7 @@ class CircleEngine:
         # with Ctrl-C because nothing on screen said this existed.
         # NO 'abort' BRANCH SINCE 2026-08-31 (R414). It sat
         # here from the day this dispatcher was written — forwarding
-        # "/abort" onto the circle lane, with idle/opening/dead-engine
+        # "/abort" onto the circle channel, with idle/opening/dead-engine
         # guards accreted on 2026-08-20 and 2026-08-21 — and the operator
         # then separated the two lifecycles: quit ends the WINDOW and is
         # this pane's; /abort ends the CIRCLE and is the room's, beside
@@ -1782,7 +1782,7 @@ class CircleEngine:
             # queue; harmless.
             # command_in, NOT circle_in: the read this answers is
             # circle.py:690's "type 'yes' to open a NEW circle", which is
-            # COMMAND lane (it takes read_line's default). On circle_in it
+            # COMMAND channel (it takes read_line's default). On circle_in it
             # would sit unread, the old engine would never finish, and
             # main_loop's 5s finished.wait() would fail every resume.
             self.command_in.put("no")
@@ -2237,7 +2237,7 @@ def _waiting_tag(backend) -> str:
     2026-08-25; the operator, from the install circle: *"Waiting for what
     is unclear; extend a proper 'waiting' prompt to include on what."*
 
-    A pending CIRCLE-lane question never reaches this: the question itself
+    A pending CIRCLE-channel question never reaches this: the question itself
     owns the row (finding 2, 2026-08-20). These are the states that used
     to say a bare "(waiting)" — a question pending in the OTHER pane, the
     round running, or the circle still opening. `loop_reached` (set at the
@@ -2302,7 +2302,7 @@ def _circle_prompt(state: AppState) -> str:
     # woken from circle_in.get() yet when the keystroke's redraw runs — so
     # the row kept saying the console name for a tick after Enter, then flipped.
     # `line_taken` is cleared by submit_circle() on THIS thread, before the
-    # put, and set only when the circle-lane read that consumed the line
+    # put, and set only when the circle-channel read that consumed the line
     # returns (B57(1)); between the two the line is in flight and the row
     # says so. It rests SET, so a backend never submitted through is
     # unaffected, and nothing below changes for it.
@@ -2324,11 +2324,11 @@ def _circle_prompt(state: AppState) -> str:
         return f"{name}{tag}> " if name else f"Self{tag}> "
     # "(wait)" means "a line typed here is not going to be read now".
     # That is true both when no read is pending AND when the pending one
-    # is COMMAND lane (a ratification, a confirmation) — R221. The
+    # is COMMAND channel (a ratification, a confirmation) — R221. The
     # getattr default is "circle" so a backend without the attribute at
     # all (the self-test's _TogglingBackend) behaves exactly as before.
     # A PENDING QUESTION OWNS THE PROMPT ROW — finding 2, 2026-08-20.
-    # circle.py asks the working set and the topic on the CIRCLE lane
+    # circle.py asks the working set and the topic on the CIRCLE channel
     # before the Self> loop exists; both questions used to land in
     # scrollback while the row you type at said only the console name, which is
     # how a /status typed one prompt too early became a working set and
@@ -2347,27 +2347,27 @@ def _circle_prompt(state: AppState) -> str:
 
 
 def _command_prompt(state: AppState) -> str:
-    """The command pane's input-row prompt — "cmd> ", or the COMMAND-lane
+    """The command pane's input-row prompt — "cmd> ", or the COMMAND-channel
     question the engine is blocked on. 2026-08-21, the lab's finding 1,
     the operator: *"Overload the prompt instead in this context, restore after a
     valid reply, write diagnostic and repeat upon invalid reply."*
 
     THE SAME SHAPE AS _circle_prompt's pending-question branch, for the
-    other lane. Until this existed "[BP-0039] a)pprove, d)eny, s)kip ?"
+    other channel. Until this existed "[BP-0039] a)pprove, d)eny, s)kip ?"
     was a scrollback line and the row he typed at said "cmd> " — a
     question asked in one place and answered in another, which is
     finding 2 of the day before, on the other pane. The engine no longer
-    echoes a command-lane prompt into scrollback at all (see
+    echoes a command-channel prompt into scrollback at all (see
     CircleEngine._read_line); the question IS the row while the read is
     pending, and "cmd> " is back the instant it returns — a re-ask after
     an invalid reply is a NEW read, so vetting's own diagnostic lands in
     scrollback and the question returns to the row, which is the
-    "repeat". Every command-lane read gets this, not only vetting: "type
+    "repeat". Every command-channel read gets this, not only vetting: "type
     'yes' to apply:", "type 'yes' to open a NEW circle:", "revision text
     (candidates above)>".
 
     Falls back to `state.command.prompt` with no backend (the demo and
-    self-test path) and whenever no command-lane read is pending."""
+    self-test path) and whenever no command-channel read is pending."""
     backend = state.backend
     pending = getattr(backend, "pending_prompt", "") if backend else ""
     if pending and getattr(backend, "waiting_for_input", False) \
@@ -2375,7 +2375,7 @@ def _command_prompt(state: AppState) -> str:
         return pending + " "
     # THE CLOSE IS PROCEEDING (2026-08-21): the row is a notice, not a
     # prompt — submit_command refuses every line but 'quit' meanwhile. A
-    # command-lane question the close itself asks (vetting at close) still
+    # command-channel question the close itself asks (vetting at close) still
     # wins, above: that is the one moment a closing circle wants a reply.
     if getattr(backend, "close_state", "") == "closing":
         return "closing the circle — collecting memories, please wait (input disabled) "
@@ -2400,7 +2400,7 @@ def ui_pane_body_render(state: AppState, which: str, width: int, write,
     the half of the fix that keeps the BODY TEXT in sync with whatever
     `render_cursor` uses for the SAME redraw. `command_prompt` is the
     same contract for the other pane (2026-08-21) — the pending
-    command-lane question is read from the engine thread's flags too, and
+    command-channel question is read from the engine thread's flags too, and
     a body drawn from one read and a cursor placed from another would
     disagree exactly the way the circle prompt once did."""
     pane = state.circle if which == "circle" else state.command
@@ -3013,7 +3013,12 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
     # AppState.__init__, which the self-test and test_circling.py's stub
     # engine both exercise headless with zero coordinator imports. Only
     # the CIRCLE pane is seeded; state.command's redact_view stays False
-    # for the life of the window.
+    # for the life of the window. COORD_DIR is pushed here (as
+    # _command_surface() and CircleEngine.__init__ each already do
+    # independently) because the bare demo path (`engine is None`) reaches
+    # this line before either of those runs — audit-register.md #5,
+    # broken since 95f8b15 2026-09-03.
+    sys.path.insert(0, str(COORD_DIR))
     import stream_redaction as SR
     state.circle.set_redact(SR.REDACT_VIEW_DEFAULT)
     extra_argv = list(extra_argv or [])
@@ -3203,7 +3208,7 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
                         ui_full_render(state, cols, write)
 
                 # A PROMPT CAN CHANGE WITH NOTHING ARRIVING — 2026-08-21. A
-                # command-lane question takes the cmd> row with NO scrollback
+                # command-channel question takes the cmd> row with NO scrollback
                 # line at all now (CircleEngine._read_line), and the engine
                 # thread sets the flags that decide BOTH prompts after its
                 # last emit, so a drain that lands between the two paints
@@ -3298,9 +3303,9 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
                                 # to answer the "type 'yes' to open a NEW
                                 # circle" read this verb exists for. The
                                 # engine did not finish, so either it was
-                                # parked on a CIRCLE-lane read (the "no"
+                                # parked on a CIRCLE-channel read (the "no"
                                 # sits unconsumed and the NEXT command-
-                                # lane question — a vetting a/d/s, a
+                                # channel question — a vetting a/d/s, a
                                 # "type 'yes' to apply" — would be
                                 # silently answered by it), or it took
                                 # the decline and is finishing slowly

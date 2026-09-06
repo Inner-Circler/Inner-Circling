@@ -118,6 +118,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
 import setting_manager as SET                                         # noqa: E402
+import JOURNAL_CLASS                                               # noqa: E402
 # record_paths.py is "the one home" these constants were re-derived beside
 # (2026-08-19, review tier 5 #41): this module carried its own ROOT and
 # SANDBOX with the R176 comment pasted in — the fossil of the 8-file
@@ -363,6 +364,15 @@ def remember_add(part: str, guard, text: str, cls: str | None = None,
     return rec
 
 
+# The shared LEDGER/JOURNAL core (B105, 2026-09-05 — JOURNAL_CLASS.py). Only
+# remember_dreamt_render() below has this shape — remember_add() (a part's own live
+# [remember: ...]) is id-less, mints no next_id, and is NOT part of it; every path-resolution
+# function above, the salience constants, word-cap truncation, and remember_chain_read()/
+# remember_chain_qualifies() stay this module's own, unchanged. No cap here: RECORD_CAP
+# truncation already happened via remember_truncate() below, before this ever sees the text.
+_JC = JOURNAL_CLASS.JournalClass(table=TABLE, id_prefix="MEM-", cap=None)
+
+
 def remember_dreamt_render(doc: dict, text: str, circle: str,
                   continues: bool, salience: str | None = None) -> tuple[dict, dict]:
     """PURE — the DREAMING tail for the phase-2 driver: mutates a COPY of
@@ -379,7 +389,9 @@ def remember_dreamt_render(doc: dict, text: str, circle: str,
     chain the model had asserted. Id-less records still cannot be chain
     TARGETS, and the gate refuses a chain that names no id in this
     file — chaining past them satisfies it (membership, not adjacency:
-    ifs_model's CHAIN-TARGET check).
+    ifs_model's CHAIN-TARGET check). JOURNAL_CLASS.py's own chain_target()
+    (B105) is this exact rule, generalized — the most recent ID-BEARING row
+    in file order, skipping id-less ones.
 
     `salience` (DESIGN_V2 DREAMING extension, 2026-08-22): the part's own
     SALIENCE answer, ALREADY coerced by the caller (remember_salience_coerce()) —
@@ -387,21 +399,10 @@ def remember_dreamt_render(doc: dict, text: str, circle: str,
     absent entirely, same as every record minted before this build, so a
     caller with nothing to say about salience keeps this function's output
     byte-identical to before this change."""
-    import copy
-    doc = copy.deepcopy(doc)
-    recs = doc.setdefault(TABLE, [])
-    n = doc.get("next_id", 1)
-    rec = {"id": f"MEM-{n:04d}", "date": _now(), "circle": circle,
-           "text": remember_truncate(text)}
-    if continues:
-        prior = next((r for r in reversed(recs) if r.get("id")), None)
-        if prior is not None:
-            rec["chain"] = prior["id"]
+    fields = {"circle": circle, "text": remember_truncate(text)}
     if salience is not None:
-        rec["salience"] = salience
-    recs.append(rec)
-    doc["next_id"] = n + 1
-    return doc, rec
+        fields["salience"] = salience
+    return _JC.new_render(doc, fields, chain=continues)
 
 
 def remember_chain_read(doc: dict, rec_id: str) -> list[dict]:

@@ -33,7 +33,7 @@ WHY THIS IS A GATE AND NOT A REPORT
                                      directory a part (R123). Corrupt it and the
                                      part does not exist for this circle — the
                                      failure is a part silently missing, not an error.
-      issues/issue_model.md          build_briefing()'s ONE hard file dependency.
+      issues/issue_model.md          circle_briefing_build()'s ONE hard file dependency.
       issues/*.toml                  The graph behind it. Both feed BLOCK 2, which is
       self/best_practices.toml       byte-identical for all seven parts and CACHED —
                                      so one corrupt file poisons every prompt at once
@@ -78,7 +78,7 @@ HISTORY
     work/manifests/*.json and circles/*.md — no .toml at all, and nothing under
     issues/. That left the roster, the whole issue graph and every self/ register
     outside the only sweep of its kind, including issues/issue_model.md, the one
-    file build_briefing() cannot proceed without.
+    file circle_briefing_build() cannot proceed without.
 """
 
 from __future__ import annotations

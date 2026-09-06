@@ -25,6 +25,7 @@ from __future__ import annotations
 import pathlib
 import queue
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -152,16 +153,16 @@ def self_test() -> int:
     check("submit_circle CLEARS it — the line is pending, not taken",
           not eng.line_taken.is_set())
     eng.circle_in.get_nowait()
-    # A COMMAND-lane read, completed for real: pre-feed command_in so
+    # A COMMAND-channel read, completed for real: pre-feed command_in so
     # _read_line's `q.get()` returns at once rather than blocking here.
     eng.command_in.put("answered")
     eng._read_line(prompt="", channel="command")
-    check("a COMMAND-lane read does NOT set it — the lane scoping holds, so "
-          "a queued circle line is not reported taken by the other lane",
+    check("a COMMAND-channel read does NOT set it — the channel scoping holds, so "
+          "a queued circle line is not reported taken by the other channel",
           not eng.line_taken.is_set())
     eng.circle_in.put("answered")
     eng._read_line(prompt="", channel="circle")
-    check("a CIRCLE-lane read DOES set it", eng.line_taken.is_set())
+    check("a CIRCLE-channel read DOES set it", eng.line_taken.is_set())
     check("...and waiting_for_input was already False when it did — a waiter "
           "released by the event never sees the stale-True window",
           not eng.waiting_for_input)
@@ -195,7 +196,7 @@ def self_test() -> int:
     # that need no transcript RUN there.
     eng.waiting_for_input, eng.waiting_for_channel = True, "circle"
     eng.pending_prompt = "CIRCLE issues (blank = all, 'none', '?'):"
-    check("parked on a circle-lane question before the loop: 'opening-q'",
+    check("parked on a circle-channel question before the loop: 'opening-q'",
           eng._phase() == "opening-q")
     eng.submit_command("abort")
     check("'abort' parked on the working-set question forwards nothing "
@@ -246,7 +247,7 @@ def self_test() -> int:
           and eng._CS.verb_class("close") is None)
 
     # THE CRASH CASE, 2026-08-20, kept for what it still proves: after the
-    # engine died, cmd> answers rather than queueing onto a lane nothing
+    # engine died, cmd> answers rather than queueing onto a channel nothing
     # drains — the answer is now the same circle-pane refusal, and the verb
     # that DOES end the window is named by the pane's own help.
     eng.finished.set()
@@ -369,7 +370,7 @@ def self_test() -> int:
     result = eng.submit_command("resume 2026-08-10_2112")
     check("'resume <open_time>' declines whatever read_line is pending — on "
           "COMMAND_IN since R221, because the read it answers (circle.py's "
-          "\"type 'yes' to open a NEW circle\") is command lane; on circle_in "
+          "\"type 'yes' to open a NEW circle\") is command channel; on circle_in "
           "it would sit unread and every resume would fail its 5s wait",
           eng.command_in.get_nowait() == "no")
     check("...and nothing was put on circle_in by that decline",
@@ -407,7 +408,7 @@ def self_test() -> int:
         check("bare 'resume' auto-detects the single open sandbox circle",
               result == "resume:2026-08-10_2112")
         check("the auto-detected resume still declines the pending read_line, "
-              "on command_in — same lane as the explicit form above",
+              "on command_in — same channel as the explicit form above",
               eng.command_in.get_nowait() == "no")
         eng.out_queue.get_nowait()   # the acknowledgement, already covered above
 
@@ -668,6 +669,47 @@ def self_test() -> int:
           s_ac._alert_anchor is not None
           and s_ac.on_state("closing") == "focus"
           and s_ac._alert_anchor is None)
+    # THREE DEFENSIVE BRANCHES, never taken by any suite until now
+    # (audit-register 2026-09-04 #15a) — uncovered only because ui_main_loop
+    # itself never runs headless (#13), not because they cannot happen.
+    s_row = C.AppState(6, 3)
+    check("on_alert with no matching row in the pane returns None — the "
+          "line reached on_alert before the pane's own append did",
+          s_row.on_alert(line_al) is None and s_row.focus != "command")
+    s_noop = C.AppState(6, 3)
+    check("apply_alert_anchor with nothing pending is a no-op, not an error",
+          s_noop._alert_anchor is None and s_noop.command.scroll_top is None)
+    s_noop.apply_alert_anchor()
+    check("...and stays that way — every other reason main_loop redraws "
+          "both panes hits this",
+          s_noop._alert_anchor is None and s_noop.command.scroll_top is None)
+    import llm_client as _LC
+    import phase_clock as _PC
+    real_meter = _LC.METER
+    try:
+        class _BrokenMeter:
+            def reset(self):
+                raise RuntimeError("a fake module, or a real one mid-refactor")
+        _LC.METER = _BrokenMeter()
+        reset_calls = []
+        real_phases_reset = _PC.PHASES.reset
+        _PC.PHASES.reset = lambda: (reset_calls.append(1), real_phases_reset())[-1]
+        try:
+            raised = False
+            try:
+                C._reset_process_accumulators()
+            except Exception:                                # noqa: BLE001
+                raised = True
+        finally:
+            _PC.PHASES.reset = real_phases_reset
+        check("a broken accumulator's reset() does not raise past the "
+              "caller — housekeeping must not block a circle opening",
+              not raised)
+        check("...and the OTHER accumulator's reset() still ran — one "
+              "broken module does not stop the loop",
+              reset_calls == [1])
+    finally:
+        _LC.METER = real_meter
     # TWO EMPTY LINES BEFORE SELF'S OWN LINE (2026-08-21), pane only.
     s_sp = C.AppState(6, 6)
     s_sp._submit(s_sp.circle, "first words")
@@ -715,7 +757,7 @@ def self_test() -> int:
     eng_cs.waiting_for_input, eng_cs.waiting_for_channel = True, "command"
     eng_cs.pending_prompt = "[BP-7] a)pprove, d)eny, s)kip ?"
     eng_cs.submit_command("s")
-    check("a command-lane question the CLOSE itself asks (vetting at close) "
+    check("a command-channel question the CLOSE itself asks (vetting at close) "
           "still takes its answer while closing",
           eng_cs.command_in.get_nowait() == "s")
     check("...and owns the cmd> row over the closing notice",
@@ -1293,7 +1335,7 @@ def self_test() -> int:
     check("a line already queued is NOT parked — that line is about to "
           "become work", C._parked_on_read(fe5) and
           (fe5.circle_in.put("hello") or not C._parked_on_read(fe5)))
-    check("a command-lane line queued counts the same",
+    check("a command-channel line queued counts the same",
           fe5.circle_in.get() == "hello" and C._parked_on_read(fe5)
           and (fe5.command_in.put("yes") or not C._parked_on_read(fe5)))
     check("mid-flight (no pending read) is NOT parked — it keeps waiting",
@@ -1329,7 +1371,7 @@ def self_test() -> int:
 
     def _blocked_read(prompt: str, channel: str = "circle") -> None:
         # channel="circle" by default: every prompt this block exercises
-        # (the speaking turn, the topic question) is circle lane under
+        # (the speaking turn, the topic question) is circle channel under
         # R221, and _read_line's own default is "command".
         holder["result"] = eng4._read_line(prompt, channel)
 
@@ -1341,7 +1383,7 @@ def self_test() -> int:
           "pane — circling already shows an equivalent 'Self> ' row",
           eng4.out_queue.empty() and holder["result"] == "a statement")
 
-    # SINCE 2026-08-21 A CIRCLE-LANE QUESTION IS NOT ECHOED EITHER (the operator:
+    # SINCE 2026-08-21 A CIRCLE-CHANNEL QUESTION IS NOT ECHOED EITHER (the operator:
     # the scrollback line was redundant to the prompt row that carries it);
     # what the probe pins now is that the question OWNS THE ROW while the
     # read waits, and that nothing lands in scrollback.
@@ -1360,7 +1402,7 @@ def self_test() -> int:
     seen["row"] = eng4.pending_prompt
     eng4.circle_in.put("")
     t2.join(timeout=2)
-    check("a circle-lane QUESTION (the topic prompt) is NOT echoed into "
+    check("a circle-channel QUESTION (the topic prompt) is NOT echoed into "
           "scrollback — the row carries it (2026-08-21)",
           eng4.out_queue.empty() and holder["result"] == "")
     check("...and the question owned the input row while the read waited",
@@ -1467,7 +1509,7 @@ def self_test() -> int:
           "read — proves body and cursor share ONE read, not two",
           cursor_cols and int(cursor_cols[-1]) == expected_len + 1)
 
-    # --- R221: the LANE split. A command-channel read must ask in the
+    # --- R221: the CHANNEL split. A command-channel read must ask in the
     # COMMAND pane and be answered from it, because docs/BNF.md line 105
     # keeps RATIFICATION_DIALOG (and every other Coordinator->Self
     # exchange) out of the circle entirely. Before this, _read_line put
@@ -1504,7 +1546,7 @@ def self_test() -> int:
     check("...while the circle row shows (waiting) — and NAMES the other "
           "pane as what it waits on (D62 a)",
           "(waiting — a question below in COMMANDS)" in C._circle_prompt(s8))
-    check("...and records which lane it is waiting on",
+    check("...and records which channel it is waiting on",
           eng8.waiting_for_channel == "command")
     check("...and is NOT the speaking turn, so a bare Enter still means "
           "'answer', not 'catch me up'",
@@ -1541,7 +1583,7 @@ def self_test() -> int:
     # skip)" and the working-set/topic prompts are both "blank = ..." —
     # all three were unreachable while handle_key dropped whitespace-only
     # lines before the seam. The carve-out must NOT extend to the speaking
-    # turn, which is circle lane AND the steady state of a running circle.
+    # turn, which is circle channel AND the steady state of a running circle.
     eng9 = C.CircleEngine(queue.Queue())
     s9 = C.AppState(4, 4, backend=eng9)
     s9.focus = "command"
@@ -1558,7 +1600,7 @@ def self_test() -> int:
     eng9.waiting_for_channel, eng9.speaking_turn = "circle", True
     s9.focus = "circle"
     check("_answering is False on Self's speaking turn, even though it IS "
-          "circle lane and pending — a bare Enter there still means "
+          "circle channel and pending — a bare Enter there still means "
           "'catch me up', per the affordance at handle_key",
           s9._answering(s9.circle) is False)
     s9.handle_key("\r")
@@ -1570,8 +1612,8 @@ def self_test() -> int:
           C.AppState(4, 4)._answering(C.AppState(4, 4).circle) is False)
 
     # --- THE MIRROR EDGE, 2026-08-21: a line typed into the ROOM while a
-    # COMMAND-lane question is pending BEFORE the Self> loop exists would
-    # sit on circle_in until the next circle-lane read — the working-set
+    # COMMAND-channel question is pending BEFORE the Self> loop exists would
+    # sit on circle_in until the next circle-channel read — the working-set
     # question — and become the working set, the same way a cmd> line did
     # in the other direction. Refused with the question named; once the
     # loop is reached, speech is queued as it always was. -----------------
@@ -1580,7 +1622,7 @@ def self_test() -> int:
     eng10.waiting_for_input, eng10.waiting_for_channel = True, "command"
     eng10.pending_prompt = "[BP-7] a)pprove, d)eny, s)kip ?"
     s10._submit(s10.circle, "hello room")
-    check("circle-pane speech while a command-lane question is pending "
+    check("circle-pane speech while a command-channel question is pending "
           "BEFORE the loop is refused — nothing reaches circle_in",
           eng10.circle_in.empty())
     check("...the notice lands in the COMMAND pane and names the question",
@@ -1602,12 +1644,12 @@ def self_test() -> int:
     s11 = C.AppState(4, 4, backend=eng11)
     eng11.waiting_for_input, eng11.waiting_for_channel = True, "circle"
     eng11.pending_prompt = "CIRCLE topic (blank = open):"
-    check("_command_prompt: a pending CIRCLE-lane question leaves the cmd> "
+    check("_command_prompt: a pending CIRCLE-channel question leaves the cmd> "
           "row alone — it belongs to the other pane",
           C._command_prompt(s11) == "cmd> ")
     eng11.waiting_for_channel = "command"
     eng11.pending_prompt = "type 'yes' to apply:"
-    check("_command_prompt: a pending COMMAND-lane question IS the row",
+    check("_command_prompt: a pending COMMAND-channel question IS the row",
           C._command_prompt(s11) == "type 'yes' to apply: ")
     eng11.waiting_for_input = False
     check("_command_prompt: 'cmd> ' is back the moment nothing is pending",
@@ -2150,6 +2192,61 @@ def self_test() -> int:
               "on blank rows", C._tint(C.C_CHROME, "") == "")
     finally:
         C.COLOR = False
+
+    # --- backspace at column 0 must be a no-op, never a delete of the LAST
+    # character with the cursor going to -1 — audit-register.md #39:
+    # AppState.handle_key()'s `if pane.input_cursor > 0:` guard is what
+    # this line covers by hitting the mid-line case; only cursor == 0 was
+    # dark. ---------------------------------------------------------------
+    bs_state = C.AppState(circle_height=8, command_height=4)
+    bs_state.handle_key("\t")
+    check("fresh command pane starts with an empty input buffer",
+          bs_state.command.input_buf == "" and bs_state.command.input_cursor == 0)
+    bs_state.handle_key("\x7f")
+    check("backspace (\\x7f) at column 0 on an empty buffer is a no-op",
+          bs_state.command.input_buf == "" and bs_state.command.input_cursor == 0)
+    bs_state.handle_key("\b")
+    check("backspace (\\b) at column 0 on an empty buffer is a no-op",
+          bs_state.command.input_buf == "" and bs_state.command.input_cursor == 0)
+    for ch in "abc":
+        bs_state.handle_key(ch)
+    bs_state.command.input_cursor = 0
+    bs_state.handle_key("\x7f")
+    check("backspace with the cursor moved back to column 0 (non-empty "
+          "buffer) leaves the buffer untouched, not the LAST character "
+          "deleted",
+          bs_state.command.input_buf == "abc" and bs_state.command.input_cursor == 0)
+
+    # --- the bare demo path (`python ui/circling.py`, no args) must not
+    # crash on a coordinator-only import before any engine pushes COORD_DIR
+    # onto sys.path — audit-register.md #5: ui_main_loop's own
+    # `import stream_redaction as SR` raised ModuleNotFoundError for a full
+    # day (95f8b15, 2026-09-03) because every OTHER suite here imports
+    # `circling` only after this file's own sys.path.insert(COORD_DIR)
+    # above, which masks the exact defect a real, freshly-started process
+    # hits. A subprocess is the only way to see what a real invocation
+    # sees. ------------------------------------------------------------
+    try:
+        proc = subprocess.Popen(
+            [sys.executable, str(UI / "circling.py")],
+            stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT, cwd=str(UI.parent))
+        try:
+            out, _ = proc.communicate(timeout=2)
+            ran_until_killed = False
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            out, _ = proc.communicate()
+            ran_until_killed = True
+        text = out.decode("utf-8", "replace")
+        check("bare demo path (no args, no --circle) does not crash on a "
+              "coordinator-only import before any engine pushes COORD_DIR, "
+              "and keeps its curses loop alive until killed",
+              ran_until_killed and "ModuleNotFoundError" not in text
+              and "Traceback" not in text)
+    except OSError as exc:                                     # noqa: BLE001
+        skip("bare demo path subprocess check",
+             f"could not launch a child interpreter ({exc})")
 
     print()
     if failures:

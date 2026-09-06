@@ -236,10 +236,32 @@ SPEC: tuple[Setting, ...] = (
        "How many content words a part's dreamed memory must share with its own lines",
        "NUMERIC_STRING", 50, "dev", "next_circle",
        "coordinator/part_dreaming.py::DREAM_GROUNDING_MIN_OVERLAP", unit="words"),
+    # R451, D86 a, 2026-09-04: the shared room capsule's own cap and ceiling — one
+    # model call per circle, never per part.
+    _s("dream_capsule_cap",
+       "How many characters the shared room capsule may run to",
+       "NUMERIC_STRING", 200000, "dev", "next_circle",
+       "coordinator/part_dreaming.py::CAPSULE_CAP", unit="characters"),
+    _s("dream_capsule_max_tokens",
+       "The ceiling for the one shared room-capsule call per circle",
+       "NUMERIC_STRING", 64000, "dev", "next_circle",
+       "coordinator/part_dreaming.py::CAPSULE_MAX_TOKENS", unit="tokens"),
     _s("synth_max_tokens",
        "The ceiling for the one circle-wide synthesis after a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
        "coordinator/circle_synthesis.py::SYNTH_MAX_TOKENS", unit="tokens"),   # inter_circle's until 2026-09-03
+    # B94, 2026-09-04: CIRCLE_JOURNAL's own sizing, not circle_history's — this register
+    # reaches Block 1, paid on every part's prompt every circle, and a folded distillate
+    # should run smaller than a raw HISTORY entry by construction. Neither number is
+    # measured yet; both move without a code change once stage 3's trial informs them.
+    _s("circle_journal_cap",
+       "How many characters one CIRCLE_JOURNAL entry may run to, refused over",
+       "NUMERIC_STRING", 4000, "dev", "next_circle",
+       "coordinator/circle_journal_manager.py::CAP", unit="characters"),
+    _s("circle_journal_target",
+       "What the fold is asked for, under the cap so an ordinary overshoot survives",
+       "NUMERIC_STRING", 3600, "dev", "next_circle",
+       "coordinator/circle_journal_manager.py::TARGET", unit="characters"),
     _s("derive_max_tokens",
        "The ceiling for distilling one part's identity",
        "NUMERIC_STRING", 64000, "dev", "next_circle",

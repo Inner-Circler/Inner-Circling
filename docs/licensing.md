@@ -1,6 +1,6 @@
 # Licensing
 
-*Proposed and RULED 2026-08-07; entered in the ledger 2026-08-24 as R337,
+*Proposed and RULED 2026-08-07; entered in `rulings/` 2026-08-24 as R337,
 which is why that entry's own date is the later one. The licence is
 **Apache-2.0** and the attribution is **The Inner Circling Project** —
 option (b) below, ruled in the same breath as "name is to be removed from

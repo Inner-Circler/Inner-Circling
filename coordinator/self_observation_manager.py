@@ -56,6 +56,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import REGISTER_CLASS as SS                                       # noqa: E402
+import JOURNAL_CLASS                                               # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -121,20 +122,25 @@ def _rel() -> str:
         return str(PATH)
 
 
+# The shared LEDGER/JOURNAL core (B105, 2026-09-05 — JOURNAL_CLASS.py). LAMBDA, NOT A VALUE:
+# path_fn re-reads PATH from THIS module's own globals on every call, so the probe suites' own
+# rebind of `self_observation_manager.PATH` keeps working exactly as it did before this existed.
+# NO CAP, deliberately — see the module docstring's own note, unchanged by this.
+_JC = JOURNAL_CLASS.JournalClass(
+    table=TABLE, id_prefix="SO-", cap=None,
+    register="self_observation", preamble=_PREAMBLE, path_fn=lambda: PATH)
+
+
 def _doc() -> dict:
-    if PATH.is_file():
-        return SS.register_read(PATH)
-    return {"register": "self_observation", "next_id": 1,
-            "doc": {"preamble": _PREAMBLE}, TABLE: []}
+    return _JC.doc()
 
 
 def self_observation_read() -> list[dict]:
-    return _doc().get(TABLE, [])
+    return _JC.read()
 
 
 def self_observation_latest_read() -> dict | None:
-    es = sorted(self_observation_read(), key=lambda r: r.get("date", ""))
-    return es[-1] if es else None
+    return _JC.latest()
 
 
 def self_observation_new_render(doc: dict, circle: str, text: str,
@@ -150,25 +156,18 @@ def self_observation_new_render(doc: dict, circle: str, text: str,
     `salience` and `continues` are R358's dreaming-model fields:
     `continues` chains the new record to the most recent one already in
     `doc` — every SO record carries an id, so unlike remember_manager.py's chain
-    there is no id-less record to step over."""
-    import copy
+    there is no id-less record to step over. Row construction delegates to
+    JOURNAL_CLASS.py's shared new_render() (B105); this function still owns which
+    optional fields to include and under what condition."""
     text = text.strip()
     if not text:
         raise ValueError("empty OBSERVATION — nothing to record")
-    doc = copy.deepcopy(doc)
-    recs = doc.setdefault(TABLE, [])
-    n = doc.get("next_id", 1)
-    rec = {"id": f"SO-{n:04d}", "date": SS.register_now(), "circle": circle,
-           "text": text, "source": "synthesis"}
+    fields = {"circle": circle, "text": text, "source": "synthesis"}
     if salience:
-        rec["salience"] = salience
-    if continues and recs:
-        rec["chain"] = recs[-1]["id"]
+        fields["salience"] = salience
     if note:
-        rec["note"] = note
-    recs.append(rec)
-    doc["next_id"] = n + 1
-    return doc, rec
+        fields["note"] = note
+    return _JC.new_render(doc, fields, chain=continues)
 
 
 def self_observation_manual_render(doc: dict, text: str,
@@ -177,21 +176,16 @@ def self_observation_manual_render(doc: dict, text: str,
     SYNTHESIS's own write. Same id/date/append discipline as self_observation_new_render(),
     but `circle` is optional (a manual note need not be about one
     particular circle — matches the day-scoped shape the 29 migrated
-    records already carry) and `source` is "self", never "synthesis"."""
-    import copy
+    records already carry) and `source` is "self", never "synthesis". Row construction
+    delegates to JOURNAL_CLASS.py's shared new_render() (B105); never chains — a manual
+    note stands on its own unless /observation-continue names it explicitly."""
     text = text.strip()
     if not text:
         raise ValueError("empty OBSERVATION — nothing to record")
-    doc = copy.deepcopy(doc)
-    recs = doc.setdefault(TABLE, [])
-    n = doc.get("next_id", 1)
-    rec = {"id": f"SO-{n:04d}", "date": SS.register_now(), "text": text,
-           "source": "self"}
+    fields = {"text": text, "source": "self"}
     if circle:
-        rec["circle"] = circle
-    recs.append(rec)
-    doc["next_id"] = n + 1
-    return doc, rec
+        fields["circle"] = circle
+    return _JC.new_render(doc, fields, chain=False)
 
 
 def self_observation_continue_render(doc: dict, target_id: str,
@@ -201,21 +195,17 @@ def self_observation_continue_render(doc: dict, target_id: str,
     Self-authored and naming exactly what it continues rather than
     implicitly meaning "the most recent record." Never mutates
     `target_id`'s own record — that stays exactly as written, which is
-    what keeps this an append, not an edit."""
-    import copy
+    what keeps this an append, not an edit. Row construction delegates to
+    JOURNAL_CLASS.py's shared new_render() (B105); the existence check on
+    `target_id` stays here — new_render() trusts an explicit chain target,
+    never re-validates it."""
     text = text.strip()
     if not text:
         raise ValueError("empty OBSERVATION — nothing to record")
     if not any(r.get("id") == target_id for r in doc.get(TABLE, [])):
         raise ValueError(f"{target_id} not found — nothing to continue")
-    doc = copy.deepcopy(doc)
-    recs = doc.setdefault(TABLE, [])
-    n = doc.get("next_id", 1)
-    rec = {"id": f"SO-{n:04d}", "date": SS.register_now(), "text": text,
-           "source": "self", "chain": target_id}
-    recs.append(rec)
-    doc["next_id"] = n + 1
-    return doc, rec
+    fields = {"text": text, "source": "self"}
+    return _JC.new_render(doc, fields, chain=target_id)
 
 
 def self_observation_retire(doc: dict, target_id: str) -> dict:

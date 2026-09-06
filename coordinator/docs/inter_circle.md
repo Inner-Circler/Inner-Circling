@@ -115,8 +115,11 @@ Per part it reports the character counts of what it was given, what it produced,
 ### short_term_backfill_step(ot, say) (`backfill_step()` before the B99 re-homing, 2026-09-03)
 Step 0 of every live run: any part that spoke but has no well-formed note is rebuilt from the transcript, so it reaches dreaming as a part that participated rather than one that had nothing to say.
 
-### part_dream(part, ot, transcript) — MOVED to part_dreaming.py, 2026-09-03 (stage 11)
-One part's dreaming call. Returns a payload describing at most one memory — with its salience, and whether it continues an earlier one — plus the character counts, anything truncated or suspect, the output token count and the stop reason. It writes nothing.
+### part_dream(part, ot, transcript, capsule="") — MOVED to part_dreaming.py, 2026-09-03 (stage 11)
+One part's dreaming call. Returns a payload describing at most one memory — with its salience, and whether it continues an earlier one — plus the character counts, anything truncated or suspect, the output token count and the stop reason. It writes nothing. Since 2026-09-04 (R451, D86 a) its prompt reads the part's own lines from the transcript, not the whole thing, plus `capsule` — the one shared paragraph `circle_capsule_build()` builds once per circle, below.
+
+### circle_capsule_build(ot, transcript, say) — part_dreaming.py, R451 (D86 a), 2026-09-04
+ONE model call per circle, made before the seven parallel dreaming calls: a short shared paragraph covering what happened in the room, the same text every part reads alongside its own lines. Best-effort — a failed or unparseable call degrades to an empty capsule and a diagnostic line, never a refusal to the run.
 
 ### circle_synthesise(ot, transcript, payloads, ...) — MOVED to circle_synthesis.py, 2026-09-03 (stage 11)
 The one circle-wide call, over the five inputs named above. Returns the material for the circle-level registers; like dreaming, it writes nothing.
@@ -129,6 +132,7 @@ The one circle-wide call, over the five inputs named above. Returns the material
         say so and return 1.
     }
     if (live) then { run the backfill step; if it fails, stop here. }
+    Build the shared room capsule, once (R451, D86 a, 2026-09-04).
     Dream every part in parallel, collecting payloads and reporting each as it
         lands.
     Synthesise over the transcript and those payloads.

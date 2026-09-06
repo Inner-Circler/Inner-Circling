@@ -582,7 +582,7 @@ def prompt_capture_discard(d: "pathlib.Path | None") -> int:
 # -------------------------------------------------------------- item stats
 # Per-item character counts WITHIN a block — ruled 2026-08-16: "per single
 # item add (topics, part-relationships, issues, etc.)". PARSES THE EMITTED
-# TEXT, never a generator (build_briefing, topic_manager.block(), etc.) — the same
+# TEXT, never a generator (circle_briefing_build, topic_manager.block(), etc.) — the same
 # rule this whole module exists to enforce (see the docstring above, E09/
 # E12): stats threaded out of a generator would describe its INTENT; stats
 # parsed from the captured block describe what was actually sent, and drift
@@ -761,7 +761,7 @@ def _leak_check(fname: str, text: str) -> list[str]:
     that a per-part FILTER had removed the other six parts' entries from a
     34,000-character briefing. There is no filter now — practices route by
     self/best_practices.toml's own `addressee` field (R134), and
-    circle_objectives is built directly by prompt_build's `build_briefing()`
+    circle_objectives is built directly by group_attention's `circle_briefing_build()`
     (2026-08-11, self/circle_briefing.md retired) — so the shared blocks
     should contain no addressed entry at all, not this part's either.
 

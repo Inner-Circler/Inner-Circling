@@ -17,6 +17,10 @@ topics.toml              synthesis's unvetted BLOCK 2
                          topics
 remember.toml            Self's own reflexive record
 circle_history.toml      one durable entry per circle
+circle_journal.toml      the circle's own evolving
+                         identity, folded into Block 1
+                         every close (added 2026-09-04,
+                         B94)
 proposals.toml           the PROPOSE-class register --
                          what parts proposed and Self
                          ruled on (added 2026-08-23,
@@ -36,11 +40,18 @@ redaction.toml           your curated redaction targets for
 groups.toml              your named rosters of parts, so
                          `--group <name>` can invoke a whole
                          circle by name (added 2026-09-03)
+settings.toml            what you change when the code would
+                         otherwise decide -- a cap, a budget,
+                         a mode. Not shipped: it appears the
+                         first time you change one
+                         (/settings-update); absent means
+                         every setting is at its default
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,
-`circle_history_manager.py`, `remember_manager.py`, `self_observation_manager.py`, `proposal_group_manager.py`,
-`redaction_manager.py` and `group_add.py` each construct their own empty shape — `next_id = 1` (or,
+`circle_history_manager.py`, `circle_journal_manager.py`, `remember_manager.py`,
+`self_observation_manager.py`, `proposal_group_manager.py`,
+`redaction_manager.py` and `group_manager.py` each construct their own empty shape — `next_id = 1` (or,
 for `redaction_manager.py`, four separate `next_*` counters) plus an empty table —
 when their file is absent, and these delegates are byte-equivalent to that.
 So a fresh install reads the same document whether it received the delegate or no
@@ -63,7 +74,7 @@ you rule things into them.
 ---
 
 **There is no `circle_briefing.md` delegate, and there should not be one.**
-`self/circle_briefing.md` was retired 2026-08-11: `build_briefing()` now reads
+`self/circle_briefing.md` was retired 2026-08-11: `group_attention.circle_briefing_build()` now reads
 `issues/issue_model.md`, the live graph and `self/best_practices.toml` directly
 at every circle open, and the `split_briefing()` that routed the old document by
 heading is gone from the code entirely. A delegate lingered here until

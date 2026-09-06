@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
 group_attention.py — the SOLE assembler of prompt Block 2 (circle_objectives):
-build_briefing(chosen), constructed fresh at every circle open, live or
+circle_briefing_build(chosen), constructed fresh at every circle open, live or
 sandbox alike. The operator, 2026-09-02: "a group_attention.py ... responsible for
 every prompt element written to Block 2 ... none aware of any of the
 others, all of the code responsible for those fragment assemblies exists
 exclusively in the corresponding single file." docs/CIRCLE_TYPES_DESIGN.md
-has the assessment this build follows; docs/BNF.md's build_briefing(chosen)
+has the assessment this build follows; docs/BNF.md's circle_briefing_build(chosen)
 production (BLOCK 2) is the grammar this implements.
 
 MOVED VERBATIM from prompt_build.py's circle_briefing_build(), 2026-09-02 — same

@@ -109,7 +109,9 @@ Two more things worth knowing:
 SHIPS
   - coordinator/                  the running system
   - memory/                       the issue graph's code
-  - ui/                           the two-pane interface
+  - ui/                           the two-pane interface (the windowed
+                                  Ticker flavor, ui/ticker/, is NOT in
+                                  this bundle)
   - docs/                         how it works
   - coordinator/process_core.md   the rulebook every part reads
   - parts/soul/, parts/child/     two seed parts

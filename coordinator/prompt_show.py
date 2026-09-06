@@ -172,7 +172,7 @@ def _notes(name: str, note: str, part: str) -> list[str]:
             This block IS the working-set issue
             projection and the relations brief, built
             from the nodes chosen at circle open —
-            build_briefing(), the same construction for
+            circle_briefing_build(), the same construction for
             every circle."""))
     elif name == "part_identity":
         out.append(_box("TO BE SUPPLIED", "dream entries", """

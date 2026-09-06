@@ -65,7 +65,7 @@ asserts it. A shuffled enumeration would rewrite those bytes every run.
 
 `ALPHA_DIR_NAMES` is kept as an ALIAS of `DIR_NAMES`, not deleted — the two
 are now the same list, and keeping the name means `ifs_model` and
-`check_best_practices` do not move for a rename that changes nothing.
+`practice_manager` do not move for a rename that changes nothing.
 
 `part_verify()` IS THE CHECK, AND IT IS CALLED. It used to compare a list against
 the tree; the list is now the tree, so that comparison can never fail and

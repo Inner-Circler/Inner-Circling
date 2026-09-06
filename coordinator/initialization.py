@@ -11,7 +11,7 @@ grammar, docs/Initialization.md the design; the rulings are R323-R332
                                   skips itself (--live, interactive, not
                                   --resume, not --yes).
     PART_CONTEXT_DIALOG(part)     ask a part's declared [context] questions
-                                  on the COMMAND lane, validate each answer
+                                  on the COMMAND channel, validate each answer
                                   per its data_type/data_max, record the
                                   answers through roster.part_context_write().
     ISSUE_ADD_DIALOG              the first issue, composed into one
@@ -258,7 +258,7 @@ def part_context_dialog(part: str, *, prefill: bool = False,
     (every surface); an empty line keeps it, `-` clears it. Without
     prefill — the first-run form — an empty line skips the question.
 
-    Every read is one seam.read_line() on the COMMAND lane, the prompt
+    Every read is one seam.read_line() on the COMMAND channel, the prompt
     being the numbered question, so in the dual pane it rides the cmd>
     input row and in a terminal input() prints it. An INVALID line is
     answered with one line saying why and the SAME question, until valid
@@ -350,7 +350,7 @@ def issue_dialog_due() -> bool:
 def _ask(qs: list[dict], *, seeds: "dict[str, str] | None" = None,
          part: str = "") -> "dict[str, str] | None":
     """The one asking loop every dialog shares: the numbered question on the
-    COMMAND lane, validated per its own row, described-and-re-asked on
+    COMMAND channel, validated per its own row, described-and-re-asked on
     invalid, until valid or empty. `seeds` are prefilled values (R323 — a
     bracket's strings arrive on the line): Enter keeps a seed, `-` clears
     it; with no seed, Enter skips. None = cancelled (Ctrl-C/EOF), said."""
@@ -578,7 +578,7 @@ def initialization_pending_dialogs_read(base: pathlib.Path | None = None) -> lis
 
 def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:
     """The INITIALIZATION step of a circle open — R330: between CHECKPOINT 2
-    and the working-set question, COMMAND lane, focus handed to the command
+    and the working-set question, COMMAND channel, focus handed to the command
     pane for its duration and back after "Starting your circle...". Returns
     the paths it wrote (for the caller's record); [] when nothing fired.
 

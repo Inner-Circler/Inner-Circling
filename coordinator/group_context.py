@@ -54,7 +54,7 @@ def group_shared_read() -> str:
     wants directly, as any other statement.
 
     Briefing: self/circle_briefing.md is GONE (2026-08-11) — circle_objectives
-    is built directly by build_briefing(chosen), not read from a file here.
+    is built directly by circle_briefing_build(chosen), not read from a file here.
 
     NOT A GENERATED FILE, and the distinction matters because this project
     retired one. self/circle_briefing.md was written to disk by one process
@@ -72,18 +72,36 @@ def group_shared_read() -> str:
 
 
 def group_context_block_render(core: str) -> tuple[str, int]:
-    """The full BLOCK 1 text: `core` (group_shared_read()'s own text) plus the
-    circle-wide best-practices broadcast, merged. `core` is a parameter
-    rather than a fresh group_shared_read() call so the caller's one-read-per-
+    """The full BLOCK 1 text: `core` (group_shared_read()'s own text), the
+    circle-wide best-practices broadcast, and CIRCLE_JOURNAL's newest entry
+    (B94 stage 5, 2026-09-04), all merged. `core` is a parameter rather than
+    a fresh group_shared_read() call so the caller's one-read-per-
     circle timing (all seven parts share the same bytes) is preserved
     exactly as it was when this concatenation lived in prompt_build.py's
     assemble_part() — this function only moved WHERE the decision is made,
     not WHEN group_shared_read() runs.
 
+    CIRCLE_JOURNAL: the NEWEST entry only, never "the last few" — its own
+    fold is already incremental revision (docs/MEMORY_DESIGN.md), so the
+    newest entry already carries forward what matters from every prior one;
+    reading more would repeat that same material, already folded, a second
+    time. ε when the register is empty (a fresh install, or before this
+    tree's first circle has closed) — same optional-source shape best
+    practices already has, just below.
+
     Returns (the merged text, the practices text's own length in chars) —
     the count is a diagnostic for prompt_capture's manifest, mirroring
-    role_context.part_context_block_render()'s own narrowcast_chars."""
+    role_context.part_context_block_render()'s own narrowcast_chars. Not
+    also returning CIRCLE_JOURNAL's own length: nothing downstream reads a
+    second count yet, and one would be added the day something does,
+    exactly as this docstring itself says of any other change here."""
     import process_core_prompt_projection as PCP
+    import circle_journal_manager as CJ
     prac = PCP.group_best_practices()
-    text = core + ("\n\n" + prac.rstrip("\n") if prac.strip() else "")
-    return text, len(prac)
+    journal = CJ.circle_journal_latest_read()
+    parts = [core]
+    if prac.strip():
+        parts.append(prac.rstrip("\n"))
+    if journal:
+        parts.append("## Circle identity\n\n" + journal["text"])
+    return "\n\n".join(parts), len(prac)

@@ -32,6 +32,8 @@ The two headers deliberately share no literal text, so the two blocks can never 
 
 **This projection is load-bearing.** The distillation stage drops a fresh single-source record by instruction, and that is harmless only because this projection carries every fresh record verbatim into the part's prompt until reinforcement consolidates it. The prompt capture asserts that invariant at every live circle.
 
+**A part's own live `[remember: ...]` is not the only writer.** DREAMING mints its own coordinator-authored record — id-bearing (`MEM-nnnn`), chained to the part's own prior dreamt memory when it continues one, salience-tagged — via `remember_dreamt_render()`. Row construction there now delegates to `JOURNAL_CLASS.py`'s shared core (B105, 2026-09-05): the same "mint an id, stamp a date, optionally chain, optionally refuse oversize" shape `circle_history_manager.py`, `self_observation_manager.py` and `circle_journal_manager.py` also use. `remember_add()` above is untouched by this — it is id-less and mints no `next_id`, a genuinely different write than the one this shares.
+
 ### The fields
 
     date      when it was written, UTC.
@@ -78,7 +80,7 @@ shown.)
 
 ## DEPENDENCIES
 
-`REGISTER_CLASS` for load, save and timestamps; `setting_manager` for the caps; `record_paths` (`ROOT`, `SANDBOX`); the write guard arrives as the `guard` argument. The refresh cutoff that splits settled from tail is `part_mid_term_manager`'s (`mid_term` until 2026-09-03), read by `remember_prompt_projection`, not here. `pathlib`, `re`, `sys`.
+`REGISTER_CLASS` for load, save and timestamps; `JOURNAL_CLASS` for the shared row-construction core `remember_dreamt_render()` delegates to (B105); `setting_manager` for the caps; `record_paths` (`ROOT`, `SANDBOX`); the write guard arrives as the `guard` argument. The refresh cutoff that splits settled from tail is `part_mid_term_manager`'s (`mid_term` until 2026-09-03), read by `remember_prompt_projection`, not here. `pathlib`, `re`, `sys`.
 
 ## EXTERNAL FILES
 
@@ -108,6 +110,24 @@ Whether this part has already used its one remember in the current circle, read 
 
 ### remember_add(part, guard, text, cls=None, word_cap=None)
 Appends one record. **It never checks the allowance itself** — the caller decides whether this is the part's one use; this only writes. Passing a word cap selects the authored ceiling, which is what makes a record the part's own words rather than a coordinator-minted summary of them.
+
+### remember_dreamt_render(doc, text, circle, continues, salience=None)
+    Truncate the text to the coordinator's own record cap (never refused —
+        the writer decided to keep going, not to stop).
+    Hand the register and a {circle, text[, salience]} dict to
+        JOURNAL_CLASS's shared new_render(), asking it to chain when
+        `continues` is true.
+        new_render, in turn, mints "MEM-" plus next_id, stamps the UTC time,
+        and — if chaining was asked for — sets chain to the most recent
+        ID-BEARING row scanning backwards from the end of the file (skips a
+        live, id-less [remember: ...] written since the last dreaming pass;
+        that row can never be a chain target either).
+    Return (the new register, the new record).
+
+Pure, like every render function this shares its shape with: the phase-2 driver stages the result and the register gate verifies it before anything is saved.
+
+### remember_chain_read(doc, rec_id) / remember_chain_qualifies(doc, rec) / remember_newest_dreamt_read(part)
+Chain-walking and the LONG_TERM_CANDIDATE trigger — real per-part complexity B105 deliberately left untouched. `remember_newest_dreamt_read()` is the id-bearing analogue of `_JC.latest(require_id=True)` in `JOURNAL_CLASS.py`, kept here as its own function because this register's `_doc()`/path resolution never went through that class at all.
 
 The four below MOVED to `remember_prompt_projection.py` 2026-09-03 (B99 stage 17b) — kept here as they
 were, because the design reasoning is theirs; the names are that module's.

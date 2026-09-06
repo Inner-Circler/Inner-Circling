@@ -70,7 +70,7 @@ def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
 
     `read_line` IS A PARAMETER (2026-09-03, stage 10): circle.py passes its own
     read_line_no_annotation, which refuses an annotation at this prompt (R225)
-    and reads on the CIRCLE lane. Required, not defaulted — a default of
+    and reads on the CIRCLE channel. Required, not defaulted — a default of
     seam.read_line would silently drop that refusal.
 
         (blank)   NO issues at all — the prologue and nothing else

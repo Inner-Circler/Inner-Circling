@@ -571,7 +571,7 @@ def _group_add_args(rest: str) -> tuple[str, list[str]]:
 
 
 def command_group_add(text: str, record=None) -> tuple[bool, str]:
-    import group_add as GA
+    import group_manager as GA
     name, members = _group_add_args(text)
     if not name:
         msg = f"usage: {GROUP_ADD_USAGE}"
@@ -585,12 +585,12 @@ def command_group_add(text: str, record=None) -> tuple[bool, str]:
 
 
 def command_group_list() -> None:
-    import group_add as GA
+    import group_manager as GA
     seam.emit("command", GA.group_list())
 
 
 def command_group_view(n_text: str) -> None:
-    import group_add as GA
+    import group_manager as GA
     ok, text = GA.group_view(n_text)
     seam.emit("command", text if ok else f"  {text}")
 
@@ -601,7 +601,7 @@ def command_group_delete(n_text: str, interactive: bool = True) -> None:
     deletion would silently invalidate a real `circle.py --group <name>`
     invocation someone may already depend on, even though a group carries
     no file-removal risk of its own."""
-    import group_add as GA
+    import group_manager as GA
     hit = GA.group_delete(n_text)
     if hit is None:
         seam.emit("command", f"  no group #{n_text.strip() or '?'} — "
@@ -1302,7 +1302,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         command_issue_add(rest_text, guard=guard, interactive=interactive)
     elif head == "/part-context-update":
         # PART_CONTEXT_DIALOG, prefilled — docs/Initialization.md §6,
-        # 2026-08-23. Asks on the COMMAND lane, so it needs a surface that
+        # 2026-08-23. Asks on the COMMAND channel, so it needs a surface that
         # can answer: `interactive` False (the dual pane's no-circle door)
         # is refused with where it works. A circle open (`guard`) means its
         # BLOCK 3 was built before this write — said, effective next circle.
@@ -1496,7 +1496,7 @@ def command_issue_add(rest: str, guard=None, *, interactive: bool = True,
     Self-opened issue is.
 
     `interactive` — at cmd> a missing string is PROMPTED for on the command
-    lane (an empty answer leaves it missing); at PROPOSAL APPROVAL nothing
+    channel (an empty answer leaves it missing); at PROPOSAL APPROVAL nothing
     is asked — a `[proposed: /issue-add …]` is staged at one circle and ruled
     at another, so what the bracket did not carry stays missing and the row
     opens a lead. vetting passes interactive=False.

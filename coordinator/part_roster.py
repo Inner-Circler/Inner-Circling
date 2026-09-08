@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-roster.py — ONE roster, READ FROM `parts/`. B29 2026-08-07, R123 2026-08-08.
+part_roster.py — ONE roster, READ FROM `parts/`. B29 2026-08-07, R123 2026-08-08.
 
 WHAT THIS REPLACES. A14 counted thirteen hardcoded copies of the part list
 across eight files; coordinator/circle_close_verify.py makes it nine files, ten copies.
@@ -64,7 +64,7 @@ prefix 42,464 characters rather than 6,976, and `prompt_capture --verify`
 asserts it. A shuffled enumeration would rewrite those bytes every run.
 
 `ALPHA_DIR_NAMES` is kept as an ALIAS of `DIR_NAMES`, not deleted — the two
-are now the same list, and keeping the name means `ifs_model` and
+are now the same list, and keeping the name means `record_model` and
 `practice_manager` do not move for a rename that changes nothing.
 
 `part_verify()` IS THE CHECK, AND IT IS CALLED. It used to compare a list against
@@ -86,7 +86,10 @@ except ModuleNotFoundError:                                  # 3.10 and older
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
-PARTS_DIR = ROOT / "parts"
+import sys                                                   # noqa: E402
+sys.path.insert(0, str(HERE))
+import record_paths as _RP                                   # noqa: E402
+PARTS_DIR = _RP.PARTS_DIR       # the default group's parts/ — record_paths.group_tree (B117)
 
 # The marker. A directory under parts/ that has one IS a part; a directory
 # that has none is reported, never silently skipped.
@@ -341,7 +344,7 @@ def _gate_faults(where: str, k: str, q: dict) -> list:
 # say which unique space its answer must not collide with; the validator in
 # initialization.py checks it. The Soul's preferred_name declares "part_tags":
 # it becomes the console's reserved name (identity.user_name_read()), which
-# roster.verify() refuses any part to wear.
+# part_roster.part_verify() refuses any part to wear.
 UNIQUE_SPACES = ("part_tags", "issue_ids", "issue_labels")
 
 
@@ -611,6 +614,27 @@ DIR_BY_TAG: dict[str, str] = {t: d for d, t in ROSTER}       # Tag -> dir, curre
 DIR_BY_TAG_ALL: dict[str, str] = {**DIR_BY_TAG, **ALT_TAGS}  # + historical
 
 
+@_RP.group_follow
+def part_roster_rebind() -> None:
+    """Re-scan the CURRENT group's parts/ into the tables above, IN PLACE — B117 stage 3
+    (2026-09-07). Every reader holds these same list and dict objects (`R.DIR_NAMES`,
+    `from record_paths import PART_TAGS`), so mutating them is what makes a process opened on
+    another group see that group's roster without re-importing anything. Runs after every
+    record_paths.group_set()."""
+    global PARTS_DIR
+    PARTS_DIR = _RP.PARTS_DIR
+    roster, alt, tails, probs = part_scan(PARTS_DIR)
+    ROSTER[:] = roster
+    ALT_TAGS.clear(); ALT_TAGS.update(alt)
+    IDENTITY_TAILS.clear(); IDENTITY_TAILS.update(tails)
+    PROBLEMS[:] = probs
+    DIR_NAMES[:] = [d for d, _t in roster]
+    TAGS[:] = [t for _d, t in roster]
+    TAG_BY_DIR.clear(); TAG_BY_DIR.update(dict(roster))
+    DIR_BY_TAG.clear(); DIR_BY_TAG.update({t: d for d, t in roster})
+    DIR_BY_TAG_ALL.clear(); DIR_BY_TAG_ALL.update({**DIR_BY_TAG, **alt})
+
+
 def statement_re(tags):
     """THE transcript statement-line grammar, compiled for a tag set —
     exactly what the writer produces (transcript_store.statement_line):
@@ -654,7 +678,7 @@ def statement_re(tags):
 # here put 1,518 identical bytes into BLOCK 3, the one block that exists to
 # differ per part. What a part CHOOSES to remember is still per-part and
 # still reaches block 3, under `## What you have chosen to remember`.
-# roster.py now owns only per-part facts, which is what this comment always
+# part_roster.py now owns only per-part facts, which is what this comment always
 # said the test was.
 
 

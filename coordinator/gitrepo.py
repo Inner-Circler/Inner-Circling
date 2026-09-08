@@ -415,7 +415,7 @@ def system_git_attributes_ensure(log) -> None:
 # v64: A MERGE RECONCILIATION, AND A COLLISION WORTH THE ENTRY. Two
 # branches each bumped HOOK_MARK to "v63" for DIFFERENT bodies —
 # master's annotation surface (R254/R255) and worktree-b14-obslog-toml's
-# self_observation register (R256). git merged the constant clean,
+# circle_observation register (R256). git merged the constant clean,
 # because both sides made the IDENTICAL edit; that is the silent half of
 # the same defect R238/R239 rule for ids, arriving here in the one
 # constant whose whole job is to say "the installed hook is out of
@@ -551,7 +551,48 @@ def system_git_attributes_ensure(log) -> None:
 # .claude/skills/run-inner-circling/driver.py + its new suite,
 # test_driver.py — the argv-assembly probe the register named as missing,
 # alongside its sibling skills' own cases just above.
-HOOK_MARK = "# inner-circling pre-commit v147"
+# v152, B117 stage 6 (2026-09-07): the groups/ case (every group's tree checked), the band's
+# engine probe beside the lookup's own, groups/groups.toml as a delegate trigger.
+# v153, B120 stage 1 (R468, 2026-09-07): groups/groups.toml retired for groups/<name>/group.toml —
+# the delegate trigger names the descriptor, live and shipped.
+# v154 (2026-09-07): work/tools/test_htmlify_spy.js joins the htmlify trigger. It is the fake layout
+# the contents spy is RUN against, so editing it alone must run the suite it belongs to — a fixture
+# outside its own trigger is the "triggered but uninvoked" defect from the other side.
+# v156, D101 (2026-09-07): docs/BNF.md is GENERATED. The grammar's sources — docs/PRODUCT_BNF.md and
+# every groups/<name>/GROUP_BNF.md — and its composition share one trigger, and the guard runs ahead
+# of the conformance harness: a verdict on a docs/BNF.md that is not its sources' composition is a
+# verdict on a file nobody wrote.
+# v158, 2026-09-07. Three arms, one cause: a path or a file moved and whatever matched the old one
+# went quiet rather than loud. (1) work/tools/test_storage_audit.py shipped with its tool and was
+# wired to nothing, failing the stray-suite check on master and blocking the one file able to fix it
+# — the fourth recurrence of that shape. (2) A *test_*.py* arm now runs the stray-suite detector, so
+# the commit that ADDS a suite is the commit that catches it stranded. (3) The packaging arm gains
+# scan.py and the three never-ship LISTS: packaging/ignore.txt fired no check at all, which is how
+# its record patterns stayed root-anchored through B117 while every delegate-less record path
+# resolved `root` — copy the live bytes into the bundle — instead of `blocked`.
+# v159, 2026-09-07 (audit #17). Body change is a COMMENT only — the v138 case's stated ground for
+# riding atomic_write.py on this trigger ("test_TRANSACTION_CLASS exercises it, crash states
+# included") was false from v138 until now. The suite gained the case that makes it true; the mark
+# moves because the rendered body did, and an unbumped mark leaves the installed hook stale in a
+# way only HOOK_MARK's own difference would have caught.
+# v161, 2026-09-07 (R485): coordinator/ifs_model.py -> coordinator/record_model.py. The
+# name is the only thing that was IFS about it; the RECORD it models is every group's. TWO arms
+# carry the literal path — the register-gate case and the SHORT_TERM case — so renaming one and
+# not the other would leave a case matching nothing, silently, which is this changelog's most
+# frequent entry.
+#
+# v162, 2026-09-07 (R486): coordinator/vetting.py ->
+# coordinator/proposal_vetting.py and coordinator/roster.py -> coordinator/part_roster.py, under
+# R435. FIVE arms carry a literal path between them — the annotation-surface case, the
+# practice/annotation case, the roster case, the record-paths case, and two `run` lines — and the
+# same trap as v161 above applies to every one of them.
+#
+# v163, 2026-09-08 (E36): a case for packaging/conform_packaging.py and its new
+# suite. The script had NO trigger at all, which is how a default action that
+# spends money and overwrites the publish gate's record kept an unimplemented
+# --help — nothing ran a probe over its arguments because there was no probe
+# and nothing would have invoked one.
+HOOK_MARK = "# inner-circling pre-commit v164"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -614,11 +655,11 @@ PRE_COMMIT = f'''#!/bin/sh
 # case block below fired only on *parts/*, *self/*, or
 # *coordinator/best_practices.toml* — the DATA. A commit that edited
 # v63, 2026-08-19 (R256): self/self_observation_log.md became
-# self/self_observation_log.toml, a real register with its own module and
+# circles/circle_observation_log.toml, a real register with its own module and
 # its own suite. BOTH ends added, because v45 is the standing lesson here —
 # a new module inside a trigger whose case never INVOKES its probe reports
 # nothing and looks green. The *self/* glob already caught the data file;
-# it never caught coordinator/self_observation_manager.py.
+# it never caught coordinator/circle_observation_manager.py.
 #
 # v63 AND NOT v62, deliberately. .git/hooks is shared with every worktree,
 # and the installed hook already read v62 while master's template read v61
@@ -824,7 +865,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # PASSENGER — when some other path in that long case matched. A commit
 # touching remember_manager.py alone fired system_lint_verify.py and nothing else. That was
 # masked on 2026-08-17's D23 commit because circle.py, vetting.py,
-# ifs_model.py, parts/ and self/ all match the same case. Masking is not
+# record_model.py, parts/ and self/ all match the same case. Masking is not
 # coverage, and a part's own private memory register is a poor place to
 # learn the difference.
 #
@@ -1008,7 +1049,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # coordinator/inter_circle.py (the INTER_CIRCLE_PROCESSOR — dreaming/
 # synthesis at /close, R167/R168), circle_history_manager.py (the CH- register),
 # relationships.py (present since R185 but never a trigger — the v22 gap
-# shape, caught here), ifs_model.py (now carries the register gate,
+# shape, caught here), record_model.py (now carries the register gate,
 # R188), and their suites test_inter_circle.py + test_register_gate.py.
 # Both suites are network-free: canned model outputs, staging-only, live
 # registers byte-verified untouched.
@@ -1189,6 +1230,23 @@ advise() {{
 # nothing normalises it away. Three files were converted wholesale on
 # 2026-08-07 and every other check passed.
 run coordinator/file_line_endings_verify.py --staged
+# v152, B117 stage 6 (R467, 2026-09-07): A RECORD IS A GROUP'S TREE, and there is more than one.
+# The corruption sweep walks every groups/<name>/ itself; the self-check and the issue gate
+# are per group, so each group present beside the default gets its own run — a damaged file in
+# groups/band/ refuses a commit exactly as one in groups/ifs/ does. The default group's own
+# runs are the two cases below (unchanged); this loop covers the others.
+case "$FILES" in *groups/*)
+    NOTE="  pre-commit: a group's record touched — every group's tree is checked"
+    run coordinator/record_verify.py
+    for gdir in groups/*/; do
+        gname="${{gdir#groups/}}"; gname="${{gname%/}}"
+        [ "$gname" = "ifs" ] && continue
+        [ -d "$gdir/parts" ] || continue
+        run coordinator/circle_audit.py --selfcheck --group "$gname"
+        [ -d "$gdir/issues" ] && run memory/issue_gate.py "$gdir/issues"
+    done
+esac
+
 case "$FILES" in *issues/*|*coordinator/tests/test_issue_gate.py*\
 |*memory/issue_gate.py*|*memory/issue_schema.py*)
     # v138, audit-register 2026-09-04 #2: the gate and THE ONE READER/WRITER
@@ -1199,7 +1257,7 @@ case "$FILES" in *issues/*|*coordinator/tests/test_issue_gate.py*\
     run coordinator/tests/test_issue_gate.py
 esac
 
-case "$FILES" in *parts/*|*self/*\
+case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
 |*coordinator/practice_manager.py*|*coordinator/practice_verify.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
 |*coordinator/prompt_build.py*|*coordinator/annotations.py*|*coordinator/propose_lifecycle.py*\
@@ -1207,19 +1265,20 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/recall_index.py*|*coordinator/tests/test_recall_index.py*\
 |*coordinator/embed_store.py*|*coordinator/process_core.md*\
 |*coordinator/help_system.py*|*coordinator/commands.py*\
-|*coordinator/vetting.py*|*coordinator/circle_rounds.py*\
+|*coordinator/proposal_vetting.py*|*coordinator/circle_rounds.py*\
 |*coordinator/REGISTER_CLASS.py*|*coordinator/tests/test_practice_verify.py*\
 |*coordinator/tests/test_practice_annotations.py*|*coordinator/proposal_manager.py*\
 |*coordinator/tests/test_proposal_manager.py*|*coordinator/topic_manager.py*\
 |*coordinator/tests/test_topic_manager.py*|*coordinator/inter_circle.py*\
 |*coordinator/part_dreaming.py*|*coordinator/circle_synthesis.py*\
 |*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history_manager.py*\
-|*packaging/scaffold/self/*|*coordinator/tests/test_scaffold_delegates.py*\
+|*packaging/scaffold/groups/ifs/self/*|*coordinator/tests/test_scaffold_delegates.py*\
+|*groups/*/group.toml*|*packaging/scaffold/groups/*/group.toml*\
 |*coordinator/JOURNAL_CLASS.py*|*coordinator/tests/test_journal_class.py*\
 |*coordinator/tests/test_circle_history_manager.py*\
 |*coordinator/tests/test_part_dreaming_grounding.py*\
-|*coordinator/self_observation_manager.py*\
-|*coordinator/tests/test_self_observation_manager.py*\
+|*coordinator/circle_observation_manager.py*\
+|*coordinator/tests/test_circle_observation_manager.py*\
 |*coordinator/circle_journal_manager.py*\
 |*coordinator/tests/test_circle_journal_manager.py*\
 |*coordinator/setting_manager.py*|*coordinator/tests/test_setting_manager.py*\
@@ -1227,15 +1286,15 @@ case "$FILES" in *parts/*|*self/*\
 |*coordinator/process_core.md*\
 |*coordinator/providers.py*|*coordinator/tests/test_providers.py*\
 |*coordinator/backfill.py*|*coordinator/tests/test_register_gate.py*\
-|*coordinator/ifs_model.py*|*coordinator/register_gate.py*|*coordinator/tests/test_annotations.py*\
+|*coordinator/record_model.py*|*coordinator/register_gate.py*|*coordinator/tests/test_annotations.py*\
 |*coordinator/remember_manager.py*|*coordinator/tests/test_remember_manager.py*\
 |*coordinator/remember_prompt_projection.py*|*coordinator/remember_list_projection.py*\
 |*coordinator/quote_as_lands.py*|*coordinator/tests/test_quote_as_lands.py*\
-|*coordinator/process_core.md*|*coordinator/roster.py*\
+|*coordinator/process_core.md*|*coordinator/part_roster.py*\
 |*coordinator/tests/test_annotation_exemplars.py*\
 |*coordinator/transcript_store.py*|*coordinator/tests/test_transcript_store.py*\
 |*coordinator/part_mid_term_manager.py*|*coordinator/tests/test_part_mid_term_manager.py*\
-|*coordinator/tests/test_vetting.py*|*coordinator/tests/test_issue_commands.py*\
+|*coordinator/tests/test_proposal_vetting.py*|*coordinator/tests/test_issue_commands.py*\
 |*coordinator/tests/test_circle_rounds_display.py*|*coordinator/llm_client.py*\
 |*coordinator/token_count.py*|*coordinator/tests/test_token_count.py*\
 |*coordinator/tests/test_llm_client.py*\
@@ -1300,7 +1359,7 @@ case "$FILES" in *parts/*|*self/*\
     # v129, 2026-09-03: redaction.py -> redaction_manager.py + stream_redaction.py (the pipeline,
     # the Ticker's session redaction folded in) — stage 18d; test_redaction.py covers both.
     # v128, 2026-09-03: the nine registers' modules are <CLASS>_manager.py (stage 18c) —
-    # proposal, proposal_group, topic, remember, circle_history, self_observation,
+    # proposal, proposal_group, topic, remember, circle_history, circle_observation,
     # instrument, part_mid_term, dream_history; suites and man pages with them.
     # v132, 2026-09-04 (B100, R445): ledger_ruling_verify.py -> logbook_ruling_verify.py and
     # ledger_next_verify.py -> logbook_next_verify.py, their suites with them — LOGBOOK is the
@@ -1330,7 +1389,7 @@ case "$FILES" in *parts/*|*self/*\
     # (cohesion re-homing stage 12a, R435); the bare name is the close step's now.
     # v118, 2026-09-03: part_dreaming.py and circle_synthesis.py join inter_circle's
     # trigger — DREAMING and SYNTHESIS moved out of the driver (stage 11, B99).
-    # v115, 2026-09-03: register_gate.py joins the trigger — ifs_model.py's gate half
+    # v115, 2026-09-03: register_gate.py joins the trigger — record_model.py's gate half
     # (record_tree_compare, REGISTERS, the register checks) moved there (stage 9, B99).
     # v114, 2026-09-03: propose_lifecycle.py joins the trigger — annotations.py's
     # PROPOSE staging half moved there (cohesion re-homing stage 8, B99); its
@@ -1350,12 +1409,12 @@ case "$FILES" in *parts/*|*self/*\
     # target (v27) — successor probes arrive with the register gate.
     run coordinator/tests/test_topic_manager.py
     run coordinator/tests/test_register_gate.py
-    # v62: the SELF_OBSERVATION register (R256). Its own suite,
+    # v62: the CIRCLE_OBSERVATION register (R256). Its own suite,
     # because test_register_gate.py runs on bytes it builds itself and so
     # cannot notice that the 30 migrated records are still whole.
-    run coordinator/tests/test_self_observation_manager.py
+    run coordinator/tests/test_circle_observation_manager.py
     # v142, B94, 2026-09-04: the CIRCLE_JOURNAL register. Its own suite, same
-    # reason as self_observation's above — test_register_gate.py alone cannot
+    # reason as circle_observation's above — test_register_gate.py alone cannot
     # exercise render_new()'s provenance/chain discipline or the scaffold
     # round trip. The suite landed one commit before this case wired it in —
     # the exact "triggered and uninvoked" defect v45 named, caught this time
@@ -1404,10 +1463,10 @@ case "$FILES" in *parts/*|*self/*\
     # invocation here fails loudly rather than silently.
     run coordinator/tests/test_quote_as_lands.py
     # v63: the ANNOTATION SURFACE (R254/R255). process_core.md and
-    # roster.py join THIS case because they are what the parts are
+    # part_roster.py join THIS case because they are what the parts are
     # actually taught. Both were already triggered elsewhere — v45's
     # block-overlap case and the owner-name sweep for process_core.md, the
-    # roster case for roster.py — but by nothing that reads the GRAMMAR,
+    # roster case for part_roster.py — but by nothing that reads the GRAMMAR,
     # so a change rewriting every part's annotation instructions ran no
     # probe that could tell whether the forms still parsed. The suite
     # parses process_core.md's OWN exemplars through the real grammar, so
@@ -1463,7 +1522,7 @@ case "$FILES" in *parts/*|*self/*\
     # v36's comment always claimed here.
     run coordinator/tests/test_transcript_store.py
     run coordinator/tests/test_part_mid_term_manager.py
-    run coordinator/tests/test_vetting.py
+    run coordinator/tests/test_proposal_vetting.py
     run coordinator/tests/test_issue_commands.py
     run coordinator/tests/test_issue_status_cmd.py
     # v51 closes v49's recorded debt: test_help_system was claimed by
@@ -1591,6 +1650,17 @@ case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_b
     run coordinator/tests/test_block_overlap_verify.py
 esac
 
+case "$FILES" in *docs/BNF.md*|*docs/PRODUCT_BNF.md*|*GROUP_BNF.md*|*work/tools/bnf_compose.py*|*work/tools/test_bnf_compose.py*)
+    NOTE="  pre-commit: the grammar's SOURCES or its composition touched"
+    # THE GUARD RUNS BEFORE THE CONFORMANCE HARNESS BELOW, and the order is the
+    # point: docs/BNF.md is GENERATED (D101), so a conformance verdict on a
+    # docs/BNF.md that is not its sources' composition is a verdict on a file
+    # nobody wrote. Its own probe runs first, for the same reason the harness's
+    # does — a guard that cannot fail is not evidence either.
+    run work/tools/test_bnf_compose.py
+    run work/tools/bnf_compose.py --check
+esac
+
 case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_known_gaps.toml*|*work/tools/test_bnf_conformance.py*|*work/graph/prompt_grammar_draw.py*)
     NOTE="  pre-commit: docs/BNF.md or its conformance harness touched"
     # The harness's own probe runs FIRST (v47): a broken harness's verdict
@@ -1626,7 +1696,16 @@ case "$FILES" in *coordinator/proposal_group_manager.py*|*coordinator/tests/test
     # lives at circle.py's checkpoints rather than in the loop these
     # suites drive.
     run coordinator/tests/test_proposal_group_manager.py
-    run coordinator/tests/test_vetting.py
+    run coordinator/tests/test_proposal_vetting.py
+esac
+
+case "$FILES" in *work/tools/htmlify.py*|*work/tools/test_htmlify.py*|*work/tools/test_htmlify_spy.js*)
+    NOTE="  pre-commit: htmlify (the JOURNAL of rendered LEDGERs, B113) touched"
+    # v148, B113 (R461, R462): the probe holds the palette rule (no hex literal in the
+    # tool; every colour a var(--ROLE) palette.py defines), opens-from-disk (no URL, no
+    # CR), and the journal's rules (a ledger is never edited in place; --remove; the
+    # index's previous/next). The lint runs through system_lint_verify's leg above.
+    run work/tools/test_htmlify.py
 esac
 
 case "$FILES" in *work/tools/memory_probe.py*|*work/tools/test_memory_probe.py*)
@@ -1635,6 +1714,18 @@ case "$FILES" in *work/tools/memory_probe.py*|*work/tools/test_memory_probe.py*)
     # lab branch); a probe tool whose guard quietly stopped guarding could
     # seed a record or open a live circle in the main tree. R351/R354.
     run work/tools/test_memory_probe.py
+esac
+
+case "$FILES" in *work/tools/storage_audit.py*|*work/tools/test_storage_audit.py*)
+    NOTE="  pre-commit: the storage audit touched"
+    # v158. The suite shipped with the tool (744cfa6, 2026-09-07) and was wired
+    # to nothing, so test_hook_template.py's stray-suite check failed on master
+    # from that commit onward — blocking the next commit to gitrepo.py, which is
+    # the one file able to fix it. Fourth recurrence of that shape: v99
+    # (circle_delta), v100 (phase_clock), v103 (redaction_manager). The
+    # *test_*.py* arm below is the structural half, so a NEW suite now runs the
+    # detector that would have caught it.
+    run work/tools/test_storage_audit.py
 esac
 
 case "$FILES" in *.gitignore*)
@@ -1653,8 +1744,13 @@ case "$FILES" in *prompts/*)
     run coordinator/prompt_capture.py --verify
 esac
 
-case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*)
+case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*)
     NOTE="  pre-commit: code touched — compiling and linting every module"
+    # v148, B113: work/tools/ joins the TRIGGER because a LEG joined system_lint_verify's
+    # SCOPE — ("work/tools", "*htmlify.py"), the tool and its probe and nothing else in
+    # that directory (memory_probe.py carries an unused import today, and a whole-directory
+    # leg would have refused every commit until someone cleaned a file this change never
+    # touched). test_system_lint_verify holds this pattern to CODE_DIRS + the legs.
     # v54, B57(3): .claude/skills/ joins the TRIGGER because it joined
     # system_lint_verify's SCOPE — the run skill's driver.py is 850 lines that open
     # a real circle and was linted only by a human remembering to. It is a
@@ -1669,7 +1765,7 @@ case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*
     # test_system_lint_verify asserts this pattern and CODE_DIRS stay one thing.
     run coordinator/system_lint_verify.py
     # v95: ONE FACT, ONE HOME. The same value declared in two modules is the
-    # defect this project records more often than any other — ifs_model's
+    # defect this project records more often than any other — record_model's
     # REGISTERS says so twice in its own comments, and every instance so far
     # was found by a person reading code. Rides system_lint_verify's trigger because
     # its subject is the same: every module in the tree. Trigger and
@@ -1755,8 +1851,8 @@ esac
 # reader/writer. Its suite runs whenever the manager, the suite, or any of the
 # three modules that write or read a record through it move — the close step,
 # the safety net, dreaming — and whenever the legacy-.md contract could shift
-# (ifs_model owns the four headings and R248's mark).
-case "$FILES" in *coordinator/short_term_manager.py*|*coordinator/tests/test_short_term_manager.py*|*coordinator/circle_close.py*|*coordinator/backfill.py*|*coordinator/part_dreaming.py*|*coordinator/ifs_model.py*)
+# (record_model owns the four headings and R248's mark).
+case "$FILES" in *coordinator/short_term_manager.py*|*coordinator/tests/test_short_term_manager.py*|*coordinator/circle_close.py*|*coordinator/backfill.py*|*coordinator/part_dreaming.py*|*coordinator/record_model.py*)
     NOTE="  pre-commit: the SHORT_TERM record's reader/writer, or a module that writes through it, touched"
     run coordinator/tests/test_short_term_manager.py
 esac
@@ -1835,9 +1931,40 @@ case "$FILES" in *coordinator/*|*memory/*|*packaging/*|*process_core.md*)
     quiet packaging/sanitize.py --dry-run
 esac
 
-case "$FILES" in *packaging/package.py*|*packaging/test_package.py*|*packaging/sanitize.py*)
-    NOTE="  pre-commit: the build's owner-name refusal touched — asserting it still refuses"
+case "$FILES" in *packaging/package.py*|*packaging/test_package.py*|*packaging/sanitize.py*|*packaging/scan.py*|*packaging/ignore.txt*|*packaging/exceptions.toml*|*packaging/runtime_only.txt*)
+    NOTE="  pre-commit: the build's refusals touched — asserting they still refuse"
+    # v158 widened this from package/test_package/sanitize to the three LISTS and
+    # the resolver that reads them. ignore.txt fired NO packaging check at all,
+    # which is how its four record patterns stayed root-anchored through B117:
+    # they matched nothing, every delegate-less record path resolved `root`
+    # (copy the live bytes into the bundle) instead of `blocked`, and no gate
+    # looked. runtime_only.txt was repathed in the same move and ignore.txt was
+    # not. test_package.py now asserts both halves of resolve()'s branch order.
     run packaging/test_package.py
+esac
+
+case "$FILES" in *packaging/conform_packaging.py*|*packaging/test_conform_packaging.py*)
+    NOTE="  pre-commit: the argument gate over a script that SPENDS and RECORDS"
+    # v163, E36. conform_packaging.py had no trigger of its own and no suite:
+    # its DEFAULT action makes up to 2 paid model calls and then writes
+    # scaffold_check_state.toml, the record the publish gate reads. `--help`
+    # was unimplemented and an unknown argument was simply not
+    # --assemble-only, so `--help` ran the whole thing. parse_args is pure, so
+    # this suite costs nothing and can never reach the model — which is what
+    # makes it a probe that will still be run in a year.
+    run packaging/test_conform_packaging.py
+esac
+
+case "$FILES" in *packaging/scaffold_staleness.py*|*packaging/test_scaffold_staleness.py*)
+    NOTE="  pre-commit: the staleness hash touched — asserting it answers the same in every tree"
+    # v164, B124. The sensor below is ADVISORY on purpose, so nothing refused
+    # when its answer depended on which directory asked: a gitignored live
+    # counterpart put its bytes in the hash in the main checkout and an absence
+    # marker in every fresh worktree, and a record made in one read STALE in the
+    # other over byte-identical committed content. The hash is the thing to
+    # gate, not its reading — this suite holds the tree-independence, and no
+    # case triggered on this module at all until it existed.
+    run packaging/test_scaffold_staleness.py
 esac
 
 # v104, 2026-09-01. ADVISORY: packaging/scaffold/ went stale silently for
@@ -1858,8 +1985,12 @@ case "$FILES" in *coordinator/TRANSACTION_CLASS.py*|*coordinator/circle_audit.py
 |*coordinator/tests/test_TRANSACTION_CLASS.py*|*coordinator/tests/test_circle_audit_lock.py*\
 |*coordinator/atomic_write.py*)
     # v138, audit-register 2026-09-04 #2: atomic_write.py is THE UNIVERSAL WRITE
-    # PATH (twenty modules) and had no trigger; test_TRANSACTION_CLASS exercises
-    # it, crash states included, so it rides this case.
+    # PATH (38 call sites) and had no trigger, so it rides this case.
+    # v158: the ground given at v138 — "test_TRANSACTION_CLASS exercises it, crash
+    # states included" — WAS FALSE FOR THREE DAYS. No suite called record_atomic_write
+    # at all; the only mention was a comment. The trigger fired, the suite ran, and the
+    # subject was untouched. test_atomic_write_unlinks_its_temp_when_the_swap_fails()
+    # now makes the claim true, walking the except-arm the happy path never reaches.
     NOTE="  pre-commit: the audit's transaction/lock machinery, or atomic_write, touched"
     # v48. Both probes build their own temp trees (transaction's crash
     # states via a scripted os.replace failure, the lock cases against a
@@ -1921,6 +2052,10 @@ case "$FILES" in *ui/*|*coordinator/seam.py*)
     # failure.
     run ui/tests/test_circling_selftest.py
     run ui/tests/test_circle_engine.py
+    # v152, B117 stage 6: the same engine on the second GROUP — opened and closed in dry-run,
+    # groups/ifs/ proved byte-identical after. Its subject is circling.py, so it rides here;
+    # a groups/ change runs it too (the record-safety case).
+    run ui/tests/test_circle_engine_band.py
     run ui/tests/test_circling.py --fast
     # v96, 2026-08-29: the Ticker flavor's adaptor probe — bridge.py
     # over real stdio, a full dry-run session, the lens RPCs, the
@@ -1942,7 +2077,7 @@ case "$FILES" in *ui/*|*coordinator/seam.py*)
     run ui/tests/test_palette.py
 esac
 
-case "$FILES" in *parts/*|*coordinator/roster.py*|*coordinator/tests/test_roster.py*)
+case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_part_roster.py*)
     NOTE="  pre-commit: the roster is read from the tree, so the tree can lie"
     # v61. The lament that stood here since v11 — "UNCOVERED again until this
     # gets a replacement" — is answered. The replacement shipped 2026-08-17 as
@@ -1953,8 +2088,8 @@ case "$FILES" in *parts/*|*coordinator/roster.py*|*coordinator/tests/test_roster
     #
     # circle_audit.py --selfcheck rides the parts/ case above and LOOKS like
     # this gate. It is register_gate.record_tree_verify: register schemas, line
-    # endings, long_term.md dream entries. It never calls roster.part_verify().
-    run coordinator/tests/test_roster.py
+    # endings, long_term.md dream entries. It never calls part_roster.part_verify().
+    run coordinator/tests/test_part_roster.py
 esac
 
 case "$FILES" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*parts/*)
@@ -2039,6 +2174,27 @@ case "$FILES" in *coordinator/redaction_manager.py*|*coordinator/stream_redactio
     run coordinator/tests/test_redaction.py
 esac
 
+case "$FILES" in *test_*.py*)
+    # v158, THE STRUCTURAL HALF. A commit that ADDS a suite is the one commit
+    # that can strand it, and until now it fired nothing: the stray-suite
+    # detector lives in the arm below, whose trigger is gitrepo.py and its own
+    # four suites, so a new suite elsewhere went unnoticed until the NEXT
+    # gitrepo.py commit — which the failure then blocked. That has now happened
+    # four times (v99 circle_delta, v100 phase_clock, v103 redaction_manager,
+    # v158 storage_audit), each time costing the same diagnosis.
+    #
+    # ONLY test_hook_template.py runs here, deliberately. It is the detector;
+    # the three heavier suites in the arm below stay keyed to the hook module
+    # itself, so touching an ordinary suite does not drag in the whole set.
+    # A commit touching BOTH gitrepo.py and a suite runs this one twice — the
+    # arm below names it too. That is accepted rather than factored out: the
+    # suite is read-only and quick, and collapsing the two triggers into one
+    # would re-couple the detector to the hook module, which is the coupling
+    # that stranded four suites in the first place.
+    NOTE="  pre-commit: a suite touched — the stray-suite detector"
+    run coordinator/tests/test_hook_template.py
+esac
+
 case "$FILES" in *coordinator/gitrepo.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*|*coordinator/tests/test_hook_gate.py*)
     NOTE="  pre-commit: the hook's own module touched"
     # v61. Until now editing PRE_COMMIT ran no shell check at commit time:
@@ -2081,10 +2237,19 @@ case "$FILES" in *coordinator/circling_verify.py*|*coordinator/circling_contract
 esac
 
 case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
-|*coordinator/record_paths.py*)
+|*coordinator/record_paths.py*|*coordinator/tests/test_record_paths.py*|*coordinator/part_roster.py*\
+|*ui/tests/test_circle_engine_band.py*|*groups/*)
     # v138, audit-register 2026-09-04 #2: record_paths.py DECIDES WHERE EVERY
     # WRITE LANDS and had no trigger; test_write_guard reads it, so it rides here.
+    # v150, B117 stage 1 (R466/R467, 2026-09-07): record_paths.group_tree() is the one lookup
+    # every record path asks; its own probe rides here, and part_roster.py (which reads PARTS_DIR
+    # from it) triggers it too.
+    # v152, B117 stage 6: a group's record (groups/<name>/) triggers this case too, and the
+    # band's engine probe — a real dry-run circle on the second group, opened and closed, with
+    # every file under groups/ifs/ proved byte-identical after — rides beside the lookup's own.
     NOTE="  pre-commit: a record-safety module touched"
+    run coordinator/tests/test_record_paths.py
+    run ui/tests/test_circle_engine_band.py
     # v61. Three modules that decide whether the record survives, none of
     # which had a suite before 2026-08-19: the write guard (nothing imported
     # it at all), the open-circle guard (E12's subject), and the close
@@ -2108,6 +2273,21 @@ esac
 case "$FILES" in *coordinator/command_surface.py*|*coordinator/tests/test_dev_mode.py*)
     NOTE=""
     run coordinator/tests/test_dev_mode.py
+esac
+
+# v160, R483 (2026-09-07): what a part may put in a
+# [proposed: ...] bracket lives on FIVE surfaces now, and this is the one that
+# holds them together. The trigger is deliberately wide — every input the suite
+# reads — because the drift it catches is between files that no single edit
+# touches together. A group's layer is hand-written markdown, so the code and
+# the rulebook agreed by memory alone until audit-register.md #12 measured them
+# three verbs apart with nothing failing.
+case "$FILES" in *coordinator/command_surface.py*|*coordinator/annotations.py*\
+|*coordinator/process_ifs.md*|*coordinator/process_band.md*|*coordinator/process_core.md*\
+|*groups/*/group.toml*|*packaging/scaffold/coordinator/process_ifs.md*\
+|*coordinator/tests/test_proposable_surfaces.py*)
+    NOTE=""
+    run coordinator/tests/test_proposable_surfaces.py
 esac
 
 case "$FILES" in *coordinator/prompt_capture.py*|*coordinator/tests/test_prompt_capture.py*|*coordinator/turn_contract.toml*|*coordinator/tests/test_turn_contract.py*)
@@ -2166,6 +2346,17 @@ case "$FILES" in *.claude/skills/scaffold-check/scaffold_check.py*\
 |*.claude/skills/scaffold-check/test_scaffold_check.py*)
     NOTE="  pre-commit: the scaffold-check skill touched"
     run .claude/skills/scaffold-check/test_scaffold_check.py
+esac
+
+# v149, B115 (R464, 2026-09-07): BLOCK 1 is two layers — the universal rulebook and the group's
+# own layer file, composed by process_core_prompt_projection. The probe holds the universal layer
+# to assuming no group and holds the IFS layer over it to the pre-split rulebook's own sha256.
+case "$FILES" in *coordinator/process_core.md*|*coordinator/process_ifs.md*\
+|*coordinator/process_band.md*\
+|*coordinator/process_core_prompt_projection.py*\
+|*coordinator/tests/test_process_core_layers.py*)
+    NOTE="  pre-commit: BLOCK 1's layers touched — the byte-identity probe runs"
+    run coordinator/tests/test_process_core_layers.py
 esac
 
 # B103, audit-register 2026-09-04 #5: 850 lines that open a real circle,

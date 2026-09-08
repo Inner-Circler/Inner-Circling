@@ -49,7 +49,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import practice_manager as PM                                   # noqa: E402  the register
-import roster as R                                              # noqa: E402
+import part_roster as R                                              # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")

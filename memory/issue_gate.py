@@ -44,8 +44,12 @@ which no format can verify for you:
     CLOSURE       an edge is legal only when both ends are live.
     ATTESTATION   an attested edge carries a real quote from a real circle; a
                   proposed one names who is being asked.
-    DIRECTION     a `consequence-of` whose Basis makes the TARGET the derived
-                  thing is pointing the wrong way.
+    DIRECTION     a `leads-to` or `narrower-than` whose Basis makes the TARGET
+                  the derived thing is pointing the wrong way — the two types
+                  the check actually scopes to. `consequence-of`, named at
+                  the check itself and in docs/ISSUE_MODEL.md, is the RETIRED
+                  spelling: 8df75e8 replaced it with `leads-to` and reversed
+                  its sense, and EDGE_TYPES has not carried it since.
     EVIDENCE      a live node cites something. Ruled 2026-07-29: "I prefer not
                   to record possible issues."
     AGREEMENT     `held_by` and the evidence sections name the same parts.
@@ -62,7 +66,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # atomic_write/identity et al.
 import identity as ID                                          # noqa: E402
 import issue_schema as S                                       # noqa: E402
-import roster as R                                              # noqa: E402
+import part_roster as R                                              # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -72,7 +76,6 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 
-from record_paths import ROOT                                  # noqa: E402  (stage 14: was S.ROOT)
 ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
 # One copy, in the schema (2026-08-19, review tier 5 #44) — these were
 # the first of three lockstep clones the R176 sweep had to edit together.
@@ -86,7 +89,7 @@ ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
 # the only one that exists). self/sessions/ retired 2026-08-13 — it held
 # exactly that one file and its own directory added a special-cased path
 # for a single record; a session ref now resolves straight under self/.
-SELF_DIR = ROOT / "self"
+from record_paths import SELF_DIR                              # noqa: E402
 
 MIN_QUOTE = 2   # ruled 2026-08-01, deliberately near zero: "Yeah, ouch."
 
@@ -109,7 +112,7 @@ SPEAKER_RE = re.compile(r"^(?:\[To:[^\]]*\]\s*)?"
                                    in sorted(ID.self_tags()))
                         + r")\b)"
                         r"(?:\s*\[To:[^\]]*\])?(?:\s*\*\([^)]*\)\*)?\s*:", re.M)
-# B29: derived from roster.py — free-text normalisation, so every dir name
+# B29: derived from part_roster.py — free-text normalisation, so every dir name
 # and every current-or-historical Tag (lowercased) resolves to its dir.
 SPEAKERS = {d: d for d in R.DIR_NAMES}
 SPEAKERS.update({tag.lower(): d for tag, d in R.DIR_BY_TAG_ALL.items()})

@@ -1,7 +1,7 @@
 # part.toml — the presence of THIS FILE is what makes a directory a part.
 #
-# `roster.py` scans `parts/` and reads only this. A directory WITHOUT one is
-# not a part, and is reported by `roster.part_verify()` rather than silently
+# `part_roster.py` scans `parts/` and reads only this. A directory WITHOUT one is
+# not a part, and is reported by `part_roster.part_verify()` rather than silently
 # skipped — a part that vanishes from the roster is a part that is absent
 # from the circle, writes no short_term, and reads as no engagement.
 #
@@ -17,7 +17,7 @@ tag = "Soul"
 # Historical spellings of this part's Tag, for reading CLOSED transcripts
 # written before a rename. Empty is the normal case and the expected one.
 #
-# This is where `roster.ALT_TAGS` went, ruled 2026-08-08: a historical
+# This is where `part_roster.ALT_TAGS` went, ruled 2026-08-08: a historical
 # spelling is one installation's history, not mechanism, so it belongs in
 # the part's own file rather than in shipped code.
 alt_tags = []
@@ -147,12 +147,12 @@ ask       = "What do you prefer to be called"
 data_type = "STRING"
 data_max  = 40
 # THE ONE CONTEXT ANSWER THE MECHANISM READS — identity.user_name_read() takes it
-# for the console prompt, and roster.part_verify() treats it as Self's reserved
+# for the console prompt, and part_roster.part_verify() treats it as Self's reserved
 # name. So it declares HOW it is kept valid, which every mechanism-facing
 # field must (2026-08-28). Every other question here reaches a model or
 # reaches nothing, and neither needs one.
 gate      = "UNIQUE_IN"
-unique_in = "part_tags"        # a part's Tag would collide (roster.part_verify)
+unique_in = "part_tags"        # a part's Tag would collide (part_roster.part_verify)
 
 # >>> context.answers
 [context.answers]

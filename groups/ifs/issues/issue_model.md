@@ -26,7 +26,7 @@ felt charge and no instance is a *category*, not an issue.
 Actions taken toward an issue are properties of that issue, not issues
 themselves. Projects, rhythms and rules are not issues. Part-to-part relations
 are not recorded anywhere; they show in the circle itself. Honesty is an
-expectation held in process_core.md, not an issue for resolution.
+expectation held in the rulebook, not an issue for resolution.
 
 A **best practice** is the inverse: a behaviour to encourage. It is never
 resolved and never settles.

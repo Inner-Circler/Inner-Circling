@@ -32,7 +32,7 @@ import issue_commands as IC        # /issue-add's body and _run_captured (2026-0
 import seam
 import transcript_store as TS      # withheld(): recorded, never in the room
 import initialization as INIT   # the dialogs the /part-* verbs open (imports roster, seam)
-import roster as R
+import part_roster as R
 from command_surface import ISSUE_NODE_RE
 from help_system import command_help, HELP_WIDTH
 
@@ -258,8 +258,8 @@ def command_remember(text: str, guard=None) -> None:
                          + ")")
 
 
-# ---------------------------------------------------- SELF_OBSERVATION CRUD
-# self/self_observation_log.toml — SYNTHESIS's own note to Self about the
+# ---------------------------------------------------- CIRCLE_OBSERVATION CRUD
+# circles/circle_observation_log.toml — SYNTHESIS's own note to Self about the
 # CIRCLE as a working body, explicitly private (never projected into any
 # part's prompt) and explicitly allowed to hold personal material. These
 # five verbs were built 2026-09-01 on the operator's ask ("first class object with
@@ -269,12 +269,12 @@ def command_remember(text: str, guard=None) -> None:
 
 def command_observation_add(text: str) -> None:
     """/observation-add <text> — Self's own manual entry, `source="self"`."""
-    import self_observation_manager as SO
+    import circle_observation_manager as CO
     body = " ".join(text.split())
     if not body:
         seam.emit("command", "  usage: /observation-add <text>")
         return
-    rec = SO.self_observation_manual_add(body)
+    rec = CO.circle_observation_manual_add(body)
     seam.emit("command", f"  added {rec['id']} — {rec['text'][:56]}"
                          f"{'…' if len(rec['text']) > 56 else ''}")
 
@@ -282,30 +282,30 @@ def command_observation_add(text: str) -> None:
 def command_observation_list(rest: str) -> None:
     """/observation-list [<n>] — bare lists (retired hidden unless --all);
     `<n>` shows one whole record. `--all` may appear with or without `<n>`."""
-    import self_observation_manager as SO
+    import circle_observation_manager as CO
     a = rest.split()
     include_all = "--all" in a
     a = [x for x in a if x != "--all"]
     if not a:
-        seam.emit("command", SO.self_observation_list(include_retired=include_all))
+        seam.emit("command", CO.circle_observation_list(include_retired=include_all))
         return
     if len(a) != 1 or not a[0].isdigit():
         seam.emit("command", "  usage: /observation-list [<n>] [--all]")
         return
-    seam.emit("command", SO.self_observation_show(int(a[0]), include_retired=include_all))
+    seam.emit("command", CO.circle_observation_show(int(a[0]), include_retired=include_all))
 
 
 def command_observation_continue(rest: str) -> None:
     """/observation-continue <id> <text> — a NEW record chained onto <id>;
     <id>'s own record is never touched."""
-    import self_observation_manager as SO
+    import circle_observation_manager as CO
     parts_ = rest.split(None, 1)
     if len(parts_) != 2 or not parts_[1].strip():
         seam.emit("command", "  usage: /observation-continue <id> <text>")
         return
     target, body = parts_[0], " ".join(parts_[1].split())
     try:
-        rec = SO.self_observation_continue_add(target, body)
+        rec = CO.circle_observation_continue_add(target, body)
     except ValueError as e:
         seam.emit("command", f"  {e}")
         return
@@ -315,13 +315,13 @@ def command_observation_continue(rest: str) -> None:
 def command_observation_retire(rest: str) -> None:
     """/observation-retire <id> — soft delete: hides from the default
     listing, stays in the file and in git history."""
-    import self_observation_manager as SO
+    import circle_observation_manager as CO
     target = rest.strip()
     if not target:
         seam.emit("command", "  usage: /observation-retire <id>")
         return
     try:
-        SO.self_observation_retire_now(target)
+        CO.circle_observation_retire_now(target)
     except ValueError as e:
         seam.emit("command", f"  {e}")
         return
@@ -335,14 +335,14 @@ def command_observation_purge(rest: str) -> None:
     be typed twice, matching, as the one deliberate confirmation step —
     irreversible in the live file, recoverable only from git history at
     the commit before the purge, same as any other mistaken edit here."""
-    import self_observation_manager as SO
+    import circle_observation_manager as CO
     a = rest.split()
     if len(a) != 2 or a[0] != a[1]:
         seam.emit("command", "  usage: /observation-purge <id> <id>  "
                              "— type the SAME id twice, to confirm")
         return
     try:
-        SO.self_observation_purge_now(a[0])
+        CO.circle_observation_purge_now(a[0])
     except ValueError as e:
         seam.emit("command", f"  {e}")
         return
@@ -476,6 +476,43 @@ def command_propose_list() -> None:
             seam.emit("command", row(r, f"({r.get('state', '?')})"))
 
 
+PRACTICE_UPDATE_USAGE = "/practice-update <n> <text>  — the number /practice-list showed"
+TOPIC_UPDATE_USAGE = "/topic-update TP-nnnn <text>"
+
+
+def command_practice_update(text: str, record=None) -> tuple[bool, str]:
+    """/practice-update <n> <text> — replace the title of the practice at /practice-list's
+    number <n>, in place; id and origin stay, `amended` takes today's date (R465, B116,
+    2026-09-07). Written immediately, like /practice-add."""
+    import practice_manager as PM
+    parts = text.split(None, 1)
+    if len(parts) < 2 or not parts[0].strip().isdigit():
+        msg = f"usage: {PRACTICE_UPDATE_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    ok, msg = PM.practice_update(int(parts[0]), parts[1])
+    seam.emit("command", f"  {msg}")
+    if ok and record is not None:
+        record()
+    return ok, msg
+
+
+def command_topic_update(text: str) -> tuple[bool, str]:
+    """/topic-update TP-nnnn <text> — replace one open topic's text in place; id, circle
+    and date stay, `amended` takes today's date (R465, B116, 2026-09-07). IMMEDIATE, the
+    contract /topic-close keeps: written the moment it is typed, /abort does not undo it,
+    and a sandbox circle's /topic-update still writes the LIVE register."""
+    import topic_manager as TOP
+    parts = text.split(None, 1)
+    if len(parts) < 2 or not parts[0].strip().upper().startswith("TP-"):
+        msg = f"usage: {TOPIC_UPDATE_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    ok, msg = TOP.topic_update(parts[0].strip().upper(), parts[1])
+    seam.emit("command", f"  {msg}")
+    return ok, msg
+
+
 def command_practice_delete(arg: str, record=None) -> None:
     import practice_manager as PM
     a = arg.strip()
@@ -510,7 +547,7 @@ def _add_practice_row(text: str, addressee: str, usage: str,
     RETURNS (ok, msg), B62 2026-08-23 — until then this returned nothing
     and a caller could only ever know the head was recognised, never
     whether the write actually happened. `_propose_approve()`'s dev_cmd
-    branch is the one that needed it: see vetting.py."""
+    branch is the one that needed it: see proposal_vetting.py."""
     import practice_manager as PM
     if not " ".join(text.split()).strip():
         msg = f"usage: {usage}"
@@ -548,36 +585,46 @@ def command_practice_add(text: str, record=None) -> tuple[bool, str]:
 
 
 # --------------------------------------------------------------- /group-*
-GROUP_ADD_USAGE = '/group-add "<name>" <member1>,<member2>,...'
+GROUP_ADD_USAGE = '/group-add "<name>" <member1>,<member2>,... [layer=<path>]'
 
 
-def _group_add_args(rest: str) -> tuple[str, list[str]]:
-    """`"<name>" <m1>,<m2>,...` -> (name, members). The name must be
+def _group_layer_split(members_text: str) -> tuple[str, "str | None"]:
+    """`<m1>,<m2>,... [layer=<path>]` -> (the member text, the layer path or None). The
+    trailing token is the only place a layer is given (B115, R464): a path relative to the
+    tree naming the group's BLOCK 1 layer file."""
+    toks = members_text.split()
+    if toks and toks[-1].startswith("layer="):
+        return " ".join(toks[:-1]), toks[-1][len("layer="):].strip() or None
+    return members_text, None
+
+
+def _group_add_args(rest: str) -> tuple[str, list[str], "str | None"]:
+    """`"<name>" <m1>,<m2>,... [layer=<path>]` -> (name, members, layer). The name must be
     quoted (straight or curly, matching every other quoted-arg parser in
     this file) so a multi-word name stays one token; members follow as a
     bare comma-separated list, matching how --parts already reads its
     own list on the command line."""
     s = " ".join(rest.split()).strip()
     if not s or s[0] not in ('"', "“"):
-        return "", []
+        return "", [], None
     m = _ISSUE_ADD_ARG_RE.match(s)
     if not m:
-        return "", []
+        return "", [], None
     name = (m.group(1) if m.group(1) is not None
             else m.group(2) or "").replace('\\"', '"').strip()
-    members_text = s[m.end():].strip()
+    members_text, layer = _group_layer_split(s[m.end():].strip())
     members = [p.strip() for p in members_text.split(",") if p.strip()]
-    return name, members
+    return name, members, layer
 
 
 def command_group_add(text: str, record=None) -> tuple[bool, str]:
     import group_manager as GA
-    name, members = _group_add_args(text)
+    name, members, layer = _group_add_args(text)
     if not name:
         msg = f"usage: {GROUP_ADD_USAGE}"
         seam.emit("command", f"  {msg}")
         return False, msg
-    ok, msg = GA.group_add(name, members)
+    ok, msg = GA.group_add(name, members, layer)
     seam.emit("command", f"  {msg}")
     if ok and record is not None:
         record()
@@ -593,6 +640,30 @@ def command_group_view(n_text: str) -> None:
     import group_manager as GA
     ok, text = GA.group_view(n_text)
     seam.emit("command", text if ok else f"  {text}")
+
+
+GROUP_UPDATE_USAGE = "/group-update <n> <member1>,<member2>,... [layer=<path>]"
+
+
+def command_group_update(text: str, record=None) -> tuple[bool, str]:
+    """/group-update <n> <m1>,<m2>,... [layer=<path>] — replace the members of the group at
+    /group-list's number <n>, in place; the name stays (B112, 2026-09-06).
+    Members are the same bare comma-separated list /group-add takes; layer= given replaces
+    the group's BLOCK 1 layer file, omitted keeps it (B115)."""
+    import group_manager as GA
+    parts = text.split(None, 1)
+    if len(parts) < 2 or not parts[0].strip().isdigit():
+        msg = f"usage: {GROUP_UPDATE_USAGE}"
+        seam.emit("command", f"  {msg}")
+        return False, msg
+    n_text = parts[0].strip()
+    members_text, layer = _group_layer_split(parts[1])
+    members = [p.strip() for p in members_text.split(",") if p.strip()]
+    ok, msg = GA.group_update(n_text, members, layer)
+    seam.emit("command", f"  {msg}")
+    if ok and record is not None:
+        record()
+    return ok, msg
 
 
 def command_group_delete(n_text: str, interactive: bool = True) -> None:
@@ -1047,8 +1118,8 @@ def command_part_context_update(rest: str, *, guard=None, interactive: bool = Tr
     """`/part-context-update <part>` — PART_CONTEXT_DIALOG(part) with the
     recorded answers prefilled; the edit path for what the first-run
     dialog recorded (docs/Initialization.md §6). USER table: the data is
-    the person's own. `<part>` is a directory name (`soul`) or a Tag
-    (`Soul`), case-insensitive.
+    the person's own. `<part>` is a directory name or a Tag,
+    case-insensitive.
 
     `interactive` is False where no one can answer a question — the
     dual pane's no-circle dispatch hands every read an immediate "" — and
@@ -1149,9 +1220,10 @@ def command_part_context_clear(rest: str, *, interactive: bool = True) -> None:
 
 
 def command_part_add(rest: str, *, guard=None, interactive: bool = True) -> None:
-    """`/part-add ["<describe>" "<Tag>"]` — PART_ADD_DIALOG, the strings (the
-    same two the taught bracket carries, in the same order) prefilled when
-    given. The typed twin of approval's path (R323/R326's shape)."""
+    """`/part-add ["<describe>" "<Tag>"]` — PART_ADD_DIALOG, the two strings
+    (describe, then Tag) prefilled when given. This is the ONLY way in since
+    R483: the verb left PROPOSE_SUBSET_COMMANDS, so approval's path (R323/R326's
+    shape) can no longer be reached — the bracket it approved cannot be staged."""
     if not interactive:
         seam.emit("command", "  /part-add asks questions and needs a command "
                              "pane that can answer them: open a circle first, "
@@ -1265,6 +1337,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         command_practice_list()
     elif head == "/practice-delete":
         command_practice_delete(rest_text, record=record)
+    elif head == "/practice-update":
+        command_practice_update(rest_text, record=record)
     elif head == "/better-option-add":
         command_better_option_add(rest_text, record=record)
     elif head == "/remember-list":
@@ -1332,6 +1406,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         command_group_list()
     elif head == "/group-view":
         command_group_view(rest_text)
+    elif head == "/group-update":
+        command_group_update(rest_text, record=record)
     elif head == "/group-delete":
         command_group_delete(rest_text, interactive=interactive)
     elif head == "/topic-list":
@@ -1340,6 +1416,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # IMMEDIATE, same contract as /practice-add — the docstring on
         # command_topic_close() carries the sandbox note.
         command_topic_close(rest_text)
+    elif head == "/topic-update":
+        command_topic_update(rest_text)
     elif head == "/prompt-show":
         who = rest_text.split()[0] if rest_text.split() else "circle"
         command_prompt_show(who)

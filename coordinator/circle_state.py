@@ -52,7 +52,16 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import setting_manager as SET                                        # noqa: E402
-LIVE = ROOT / "circles"
+import record_paths as _RP                                         # noqa: E402
+LIVE = _RP.CIRCLES_DIR
+
+
+@_RP.group_follow
+def _live_rebind() -> None:
+    """The CURRENT group's transcript series — B117 stage 4 (2026-09-07); circles are per
+    group (R467), so "is a circle open?" is asked of the group's own series."""
+    global LIVE
+    LIVE = _RP.CIRCLES_DIR
 SANDBOX = ROOT / "work" / "sandbox" / "circles"  # moved, R176, 2026-08-15
 LOGS = ROOT / "work" / "logs"
 

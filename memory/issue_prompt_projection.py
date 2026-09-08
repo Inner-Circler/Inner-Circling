@@ -78,6 +78,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # identity/paths et al.
 import identity as ID                                          # noqa: E402
 import issue_schema as S                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -88,8 +89,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-ISSUES = ROOT / "issues"
-CIRCLES = ROOT / "circles"
+ISSUES = _RP.ISSUES_DIR
+CIRCLES = _RP.CIRCLES_DIR
 
 # MOVED HERE FROM group_attention.py, 2026-09-02 -- on direct instruction,
 # the same move already made for topics.toml (topic_prompt_projection.py) and
@@ -102,11 +103,24 @@ CIRCLES = ROOT / "circles"
 ISSUE_MODEL = ISSUES / "issue_model.md"
 
 
+@_RP.group_follow
+def _issue_dirs_rebind() -> None:
+    """BLOCK 2 is built from the CURRENT group's issue graph and prologue — B117 stage 4
+    (2026-09-07): record_paths.group_set() runs this after rebinding, so a band circle's
+    circle_objectives carry the band's issue_model.md and none of the IFS group's nodes."""
+    global ISSUES, CIRCLES, ISSUE_MODEL
+    ISSUES = _RP.ISSUES_DIR
+    CIRCLES = _RP.CIRCLES_DIR
+    ISSUE_MODEL = ISSUES / "issue_model.md"
+
+
 def record_ro_read(p: pathlib.Path) -> str:
     """Read-only by construction. Fails loudly rather than silently
-    degrading. Duplicate of group_attention.read_ro()/parts_prompt_projection.
-    record_ro_read() -- small enough that importing across files to share it
-    would carry more risk (a circular import) than the duplication does."""
+    degrading. Duplicate of parts_prompt_projection.record_ro_read() and
+    process_core_prompt_projection.record_ro_read() -- small enough that importing
+    across files to share it would carry more risk (a circular import) than the
+    duplication does. (read_ro() was this function's name in prompt_build.py
+    before B99; nothing defines it now, so do not go looking.)"""
     return p.read_text(encoding="utf-8")
 
 

@@ -1,0 +1,36 @@
+# group.toml — the presence of THIS FILE is what makes this folder a GROUP (R468,
+# 2026-09-07; R123's part.toml rule one level up). coordinator/group_manager.py writes
+# it; record_paths.py reads it. It carries what shipped code must not hardcode about
+# ONE group: its roles, the roles /part-delete refuses, which roles' first-run dialogs
+# come first, which role's answer names the console, its BLOCK 1 layer, the commands its
+# parts may propose. The folder's name is the group's name.
+
+name = "ifs"
+display = "IFS Circle"
+default = true
+roles = [
+    "child",
+    "soul",
+]
+reserved = [
+    "soul",
+    "child",
+]
+initialization = [
+    "soul",
+    "child",
+]
+layer = "coordinator/process_ifs.md"
+member = "part"
+members = "parts"
+proposed_commands = [
+    "issue-relationship-add",
+    "issue-label-update",
+    "issue-add",
+    "practice-add",
+    "better-option-add",
+]
+
+[identity]
+role = "soul"
+key = "preferred_name"

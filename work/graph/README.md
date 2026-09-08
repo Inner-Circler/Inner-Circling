@@ -23,10 +23,14 @@ changed nothing redraws nothing.
 
 To draw it yourself at any time:
 
-    python ui/issue_draw.py issues/
+    .venv/Scripts/python ui/issue_draw.py groups/ifs/issues/
+
+(`.venv/Scripts/python` on Windows, `.venv/bin/python` elsewhere — plain
+`python` is a different interpreter and will not find what this needs, the
+same reason every command in the top-level README begins that way.)
 
 **Nothing reads these files back.** They are yours to look at. Deleting
-them costs one redraw; the graph itself lives in `issues/`, which is the
-thing to keep.
+them costs one redraw; the graph itself lives in `groups/ifs/issues/`,
+which is the thing to keep.
 
 `ui/docs/issue_draw.md` is the full manual.

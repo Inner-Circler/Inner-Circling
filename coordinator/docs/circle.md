@@ -58,7 +58,7 @@ if (no verb) then { emit the usage line; return 2 }
 if (command_dev_dispatch(head, rest) is False) then { emit "<head> needs a live circle ..."; return 2 }
     return 0
 }
-    problems = roster.part_verify()
+    problems = part_roster.part_verify()
 if (problems) then { emit "THE ROSTER DOES NOT VERIFY — no circle opened" + each problem; return 2 }
 if (neither --live nor --dry-run) then { emit "Choose a mode..." pointing at the lab; return 2 }   // R360
     parts = --parts split; refuse (return 2) any name not in PART_TAGS or without a directory
@@ -253,10 +253,15 @@ checkout now.
   `work/sandbox/`. Default: off — see the line above.
 - `--parts <dirs>`: comma-separated part directories. Default: every part in `parts/` (the roster).
   A reduced LIVE roster asks for `yes` unless `--yes`.
-- `--group <name>`: open on a NAMED roster from `self/groups.toml` (`coordinator/group_manager.py`,
-  `/group-add`) instead of `--parts` — a deliberately different roster, not a reduced one, so the
+- `--group <name>`: open on a NAMED group — its own `groups/<name>/group.toml` (R468, B120;
+  `coordinator/group_manager.py`, `/group-add`; `/group-update <n>` replaces its roles in place,
+  B112) instead of `--parts` — a
+  deliberately different roster, not a reduced one, so the
   reduced-live-roster question above does not fire for it. Mutually exclusive with `--parts`.
-  Default: unset (the `--parts` roster).
+  Default: unset — the DEFAULT GROUP's roster, which is a rule, not a name (R468, B120 stage 4):
+  the one group installed, or the one whose `group.toml` says `default = true`; when neither
+  holds (none installed, several unmarked, more than one marked) a bare open prints one sentence
+  saying so and asks for `--group`.
 - `--recall-arm off|delivered|withheld`: tier A recall (`remember_expand.py`, `docs/MEMORY_DESIGN.md`)
   — expand topic-matched seeds into each part's BLOCK 4. Default: `off`. `withheld` computes and
   logs the packs without delivering them, the trial's control arm.
@@ -298,7 +303,7 @@ Read: `parts/*/part.toml` (the roster), `process_core.md`, `self/best_practices.
 2026-09-04, R434; the resume and interrupted-close checks); `self/proposals.toml`,
 `self/best_practices.toml` (vetting);
 `self/topics.toml` (the open-time topics line, dev on).
-Written (LIVE): `circles/circle_<OT>.md` (statement by statement), `self/working_sets.toml`,
+Written (LIVE): `circles/circle_<OT>.md` (statement by statement), `circles/working_sets.toml`,
 `work/prompts/<OT>/` (the Block files, `manifest.json`, one `Per_turn_*.json` per request),
 `parts/<p>/short_term_<OT>.toml` (`.md` before 2026-09-04, R434), `circles/commands_<OT>.toml`
 when rulings were made,

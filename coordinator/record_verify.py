@@ -12,8 +12,10 @@ WHAT THIS IS
         invalid JSON     a manifest that no longer parses
         invalid TOML     a register, a part.toml or an issue node that no longer parses
 
-    plus a truncation guard on the two rulebooks: each must still carry its own
-    section anchors, because a rulebook cut short still looks like a rulebook.
+    plus a truncation guard on the rulebooks — the operations rulebook, the universal
+    layer, and EVERY GROUP'S OWN LAYER, discovered from the group descriptors rather
+    than named here: each must still carry its own section anchors, because a rulebook
+    cut short still looks like a rulebook.
 
 WHY THIS IS A GATE AND NOT A REPORT
     NUL-byte damage is what once silenced a part. The file still had a name, a
@@ -99,6 +101,7 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
+import record_paths as _RP                                         # noqa: E402
 # PROCESS/PROCESS_CORE module constants DELETED 2026-09-01 --
 # audit-register.md #30 found them zero-reference: the actual guard
 # (below, record_process_verify()) rebuilds both paths inline against a
@@ -117,8 +120,49 @@ ROOT = Path(__file__).resolve().parent.parent
 # the section does not silently break this guard.
 PROCESS_ANCHORS = ["## Orchestration", "## Coordinator constraints",
                    "## Close", "## Nightly"]
-CORE_ANCHORS = ["## What is with you", "## Speaking rules", "## After each circle",
-                "## The Soul"]
+CORE_ANCHORS = ["## What is with you", "## Speaking rules", "## After each circle"]
+# The IFS layer (R464, B115, 2026-09-07): process_core.md is the universal layer since then, and
+# "## The Soul" lives in coordinator/process_ifs.md — the same truncation guard, on that file.
+IFS_LAYER_ANCHORS = ["## What you are", "## The Soul", "## Goals"]
+
+# EVERY GROUP'S LAYER, NOT A HARDCODED LIST. The pairs below named process.md, process_core.md and
+# process_ifs.md by hand, so coordinator/process_band.md — the band's BLOCK 1 layer since B115
+# stage 4 — was guarded by nothing: it is in neither the pairs nor STATE_GLOBS, and truncating it
+# passed. A hardcoded tuple would have repeated that for the next group, so the layer set is read
+# from each groups/<name>/group.toml's own `layer` field instead.
+#
+# LAYER_ANCHORS are the sections every layer carries whatever its craft — a cut-short layer loses
+# Goals and the honesty mandate first, because they sit at the end. LAYER_ANCHORS_EXTRA adds what
+# one layer alone must keep.
+LAYER_ANCHORS = ["## What you are", "## Goals", "## The honesty mandate"]
+LAYER_ANCHORS_EXTRA = {"coordinator/process_ifs.md": ["## The Soul"]}
+
+
+def record_group_layers_read(root: Path = ROOT) -> list[tuple[Path, list[str]]]:
+    """(layer file, anchors) for every group that declares one. A group whose descriptor is
+    unreadable is skipped here rather than reported: _check_one() already judges every
+    group.toml as an operational state file, and one defect should be said once."""
+    out: list[tuple[Path, list[str]]] = []
+    groups = root / "groups"
+    if not groups.is_dir():
+        return out
+    for desc in sorted(groups.glob("*/group.toml")):
+        try:
+            layer = tomllib.loads(desc.read_text(encoding="utf-8")).get("layer")
+        except (OSError, ValueError):
+            continue
+        if not isinstance(layer, str) or not layer:
+            continue
+        out.append((root / layer, LAYER_ANCHORS + LAYER_ANCHORS_EXTRA.get(layer, [])))
+    # A FLOOR, not a default. A flat tree (a snapshot, a probe's temp tree) has no groups/,
+    # and discovering nothing would silently drop the layer check that was unconditional
+    # before. Checking the IFS layer when it exists and no descriptor named one keeps the
+    # coverage this function replaced.
+    if not out:
+        ifs = root / "coordinator" / "process_ifs.md"
+        if ifs.is_file():
+            out.append((ifs, IFS_LAYER_ANCHORS))
+    return out
 
 # Every operational state file, by (subdirectory, glob). A directory that is absent
 # is skipped rather than reported, so this still runs against a partial or archived
@@ -133,6 +177,12 @@ STATE_GLOBS = [
     ("issues", "*.toml"),
     ("work/manifests", "*.json"),
     ("circles", "*.md"),
+    # circles/ HOLDS THE CIRCLE'S OWN METADATA TOO — R-NEW (2026-09-07): the four registers whose
+    # rows are one-per-circle and frozen once written live beside the transcripts they are about.
+    # This glob is taught BEFORE any of them moves: a .toml arriving in a directory swept only for
+    # *.md leaves the corruption gate silently not reading it, which is the failure this gate exists
+    # to make loud.
+    ("circles", "*.toml"),
 ]
 
 
@@ -190,10 +240,13 @@ def _check_one(p: Path, root: Path) -> Finding | None:
 
 
 def record_process_verify(root: Path = ROOT) -> list[Finding]:
-    """The two rulebooks: readable, clean, and not cut short."""
+    """The rulebooks — the operations rulebook, the universal layer, and EVERY GROUP'S OWN
+    LAYER: readable, clean, and not cut short. The layers are discovered from the group
+    descriptors, so a new group is guarded the day it declares one."""
     out: list[Finding] = []
-    pairs = ((root / "coordinator" / "process.md", PROCESS_ANCHORS),
-             (root / "coordinator" / "process_core.md", CORE_ANCHORS))
+    pairs = [(root / "coordinator" / "process.md", PROCESS_ANCHORS),
+             (root / "coordinator" / "process_core.md", CORE_ANCHORS)]
+    pairs += record_group_layers_read(root)
     for path, anchors in pairs:
         rel = path.relative_to(root).as_posix()
         if not path.exists():
@@ -280,17 +333,42 @@ def record_sweep(root: Path = ROOT) -> tuple[list[Finding], int]:
     """Returns (findings, files scanned). Empty findings means the tree is clean."""
     out: list[Finding] = []
     seen = 0
-    for subdir, pattern in STATE_GLOBS:
-        base = root / subdir
-        if not base.is_dir():
-            continue
-        for p in sorted(base.glob(pattern)):
-            if not p.is_file():
-                continue
+    # A GROUP DESCRIBES ITSELF — R468, B120 (2026-09-07): under the real ROOT, every
+    # groups/<name>/group.toml is swept like any register (a parse failure refuses), and a folder
+    # under groups/ holding a record but no descriptor is REPORTED — never silently a group.
+    if Path(root).resolve() == _RP._REAL_ROOT:
+        for g in _RP.group_present_read():
             seen += 1
-            f = _check_one(p, root)
+            f = _check_one(_RP.group_descriptor_locate(g), ROOT)
             if f is not None:
                 out.append(f)
+        for stray in _RP.group_stray_read():
+            out.append(Finding(
+                f"groups/{stray}",
+                "holds a record but no group.toml — a folder is a group only when its "
+                "descriptor is present (R468)",
+                "write one (/group-add) or move the folder out of groups/"))
+    for subdir, pattern in STATE_GLOBS:
+        # a record kind resolves through the group's tree under the real ROOT (B117), flat
+        # elsewhere. Under the real ROOT EVERY group's tree is swept (stage 6): a damaged file in
+        # groups/band/ is as much a refusal as one in groups/ifs/.
+        if subdir in _RP.RECORD_KINDS:
+            if Path(root).resolve() == _RP._REAL_ROOT:
+                bases = [_RP.group_tree(g) / subdir for g in _RP.group_present_read()]
+            else:
+                bases = [_RP.record_dir(root, subdir)]
+        else:
+            bases = [root / subdir]
+        for base in bases:
+            if not base.is_dir():
+                continue
+            for p in sorted(base.glob(pattern)):
+                if not p.is_file():
+                    continue
+                seen += 1
+                f = _check_one(p, root)
+                if f is not None:
+                    out.append(f)
     out += record_process_verify(root)
     out += record_lab_merge_verify(root)
     return out, seen
@@ -308,7 +386,8 @@ def record_report_lines_render(findings: list[Finding]) -> list[str]:
 
 def main() -> int:
     findings, seen = record_sweep()
-    print(f"Integrity: {seen} operational state file(s) + the two rulebooks")
+    rulebooks = 2 + len(record_group_layers_read(ROOT))
+    print(f"Integrity: {seen} operational state file(s) + {rulebooks} rulebook(s)")
     if findings:
         print()
         for f in findings:

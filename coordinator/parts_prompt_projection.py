@@ -4,8 +4,8 @@ parts_prompt_projection.py — every parts/<p>/* read Block 3's assembler needs,
 (parts_projection.py until 2026-09-03 — F5 under R435: a PROMPT projection says so in its name)
 pulled out of role_context.py, 2026-09-02, on direct instruction: the same
 move group_context.py/group_attention.py/topic_prompt_projection.py already made
-for their own registers, extended here with roster.py folded in too — a
-part's own directory (long_term.md, part.toml) and roster.py's own
+for their own registers, extended here with part_roster.py folded in too — a
+part's own directory (long_term.md, part.toml) and part_roster.py's own
 import-time reading of that same directory (TAG_BY_DIR, IDENTITY_TAILS)
 are one subject, not two, once nothing outside this file needs to touch
 either directly.
@@ -29,10 +29,10 @@ segments themselves are this module's.
 
 <header> WAS PROVENANCE-ONLY, AND NOW IS A REAL CALL — the one exception
 found 2026-09-02 when a direct question asked whether every edge into a
-block was a verified, real, per-request call. roster.py:scan() runs once,
-at roster.py's own import; nothing called it at prompt-assembly time, so
+block was a verified, real, per-request call. part_roster.py:scan() runs once,
+at part_roster.py's own import; nothing called it at prompt-assembly time, so
 the graph drew it dashed. part_header_render(), below, DOES run at request time — it
-still reads roster.TAG_BY_DIR, itself built by that same import-time
+still reads part_roster.TAG_BY_DIR, itself built by that same import-time
 scan(), but the function credited with the text a part actually receives
 is now one this module calls for real, not one whose only connection is
 where the underlying data first came from.
@@ -46,9 +46,9 @@ import sys
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
-import roster as R
-from record_paths import ROOT
-import ifs_model as IFS
+import part_roster as R
+from record_paths import ROOT, record_dir
+import record_model as M
 
 
 def record_ro_read(p: pathlib.Path) -> str:
@@ -72,14 +72,14 @@ def part_settled_strip(text: str) -> str:
 
 
 def part_identity_strip(text: str) -> str:
-    """Drop everything from `ifs_model.IDENTITY_END` onward in a long_term.md.
+    """Drop everything from `record_model.IDENTITY_END` onward in a long_term.md.
 
     THE DELIMITER IS NOT `## Dream entries` ANY MORE — Self, 2026-08-22:
     *"do not restore the obsolete ## Dream entries heading as a delimiter; add a
     valid delim like '## required end' and change to code accordingly."* The
     dream corpus moved to `parts/<p>/dreams.toml` on 2026-08-12, so that heading
     had been standing over a one-line tombstone with zero entries under it in all
-    seven files. IMPORTED, not re-typed: `ifs_model` owns the boundary because it
+    seven files. IMPORTED, not re-typed: `record_model` owns the boundary because it
     is the module that verifies what sits either side of it, and two spellings of
     one delimiter is how the two sides stop agreeing.
 
@@ -87,14 +87,14 @@ def part_identity_strip(text: str) -> str:
     process authored. These sections are NOT equal (1,186 chars for the
     Soul against 4,158 for another part), so differences observed between parts in
     a circle may be differences in specification rather than in part."""
-    i = text.find("\n" + IFS.IDENTITY_END)
+    i = text.find("\n" + M.IDENTITY_END)
     return text if i < 0 else text[:i].rstrip() + "\n"
 
 
 def part_header_render(part: str) -> str:
     """<header> — '# You are the "<Tag>" part (<dir>).\\n\\n'. MOVED from
     role_context.py's own block(), 2026-09-02, where it built this line
-    inline. The Tag comes from roster.TAG_BY_DIR (record_paths.PART_TAGS is the
+    inline. The Tag comes from part_roster.TAG_BY_DIR (record_paths.PART_TAGS is the
     same dict, aliased); reading it through roster directly here, now that
     roster is imported in this file rather than role_context.py, removes
     one hop of indirection."""
@@ -105,7 +105,7 @@ def part_ident_core_render(part: str) -> str:
     """<ident_core> — parts/<p>/long_term.md, read and stripped to just the
     part's foundational identity. MOVED verbatim from role_context.py's
     own block(), 2026-09-02 — same read, same two strips, same order."""
-    base = ROOT / "parts" / part
+    base = record_dir(ROOT, "parts") / part
     return part_identity_strip(part_settled_strip(record_ro_read(base / "long_term.md")))
 
 

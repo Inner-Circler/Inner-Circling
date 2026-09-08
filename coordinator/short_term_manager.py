@@ -22,8 +22,8 @@ directory and an open time asks `short_term_locate()` and never spells a suffix.
 THE FORMAT. Four named keys, one per section of the /close reply (SHORT_TERM_PROMPT in
 circle_close.py), each the lowercase snake_case of its heading:
 
-    part = "child"                    the parts/ directory
-    tag = "Child"                     the display tag (roster)
+    part = "<dir>"                    the parts/ directory
+    tag = "<Tag>"                     the display tag (roster)
     circle = "2026-09-04_1200"        the OT
     reconstructed = false             R248's mark, as a value rather than a header sentence
     what_i_said = \"\"\"...\"\"\"
@@ -64,7 +64,7 @@ BOTH FORMATS, ONE DICT:
      "reconstructed": bool, "sections": {heading: body}, "other": str,
      "dreamt": [{"date": str, "text": str}, ...]}
 
-`sections` is keyed by the HEADING (`## What I said`), the one spelling ifs_model owns, so a
+`sections` is keyed by the HEADING (`## What I said`), the one spelling record_model owns, so a
 caller that already holds SHORT_TERM_SECTIONS indexes it directly.
 """
 from __future__ import annotations
@@ -77,7 +77,7 @@ try:
 except ModuleNotFoundError:                                  # pragma: no cover
     import tomli as tomllib                                  # type: ignore
 
-import ifs_model as M
+import record_model as M
 import REGISTER_CLASS as SS
 from atomic_write import record_atomic_write
 
@@ -105,7 +105,7 @@ HEADING_OF = dict(zip(KEYS, SECTIONS))
 # THE RECORD'S KEYS, in file order — docs/BNF.md's <short_term> production, which
 # work/tools/bnf_conformance.py reads off this literal. Spelled out rather than
 # built from KEYS so the tool can read it; the assertion below is what keeps
-# the spelling and ifs_model's headings from drifting apart.
+# the spelling and record_model's headings from drifting apart.
 ORDER = ("part", "tag", "circle", "reconstructed",
          "what_i_said", "what_i_observed_in_others", "shifts_toward_other_parts",
          "current_emotional_state", "other")
@@ -402,7 +402,7 @@ def short_term_dreamt_append(path: pathlib.Path, text: str, date: str = "") -> N
 
 
 # ------------------------------------------------------------------ verify
-# MOVED FROM backfill.py, 2026-09-04 (B96) — and from ifs_model.py before that
+# MOVED FROM backfill.py, 2026-09-04 (B96) — and from record_model.py before that
 # (2026-09-03, cohesion re-homing stage 4). The rule is unchanged: readable, four
 # sections in order, each with something under it, headed for the right part and
 # circle. What is new is the .toml branch, which reads the same line through the

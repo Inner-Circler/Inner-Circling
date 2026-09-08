@@ -39,7 +39,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import remember_manager as RM                                          # noqa: E402
 import part_mid_term_manager as MT                                          # noqa: E402
-import roster as R                                             # noqa: E402
+import part_roster as R                                             # noqa: E402
 import short_term_manager as STM                               # noqa: E402  the record's one reader (B96)
 import command_surface as CS                                   # noqa: E402  dev_mode,
                                                                # attribute access only
@@ -49,7 +49,7 @@ import LLM_response_disassembler as RD                         # noqa: E402  eve
 import setting_manager as SET                                         # noqa: E402
 import transcript_store as TS                                  # noqa: E402  the one parser
                                                                # (B91, 2026-09-04)
-from record_paths import ROOT                                         # noqa: E402
+from record_paths import ROOT, record_dir                             # noqa: E402
 
 # RAISED 2026-08-21 (the operator: "raise the caps as you suggest"), after the
 # lab circle 2026-08-21_1139: child and mourner stopped at max_tokens=4,000 with
@@ -71,7 +71,7 @@ DREAM_MAX_TOKENS = SET.setting_value_read("dream_max_tokens", 8000)    # was 400
 DREAM_GROUNDING_MIN_OVERLAP = SET.setting_value_read("dream_grounding_min_overlap", 3)
 
 # ---------------------------------------------------------------- prompts
-# VERSIONED CODE CONSTANTS (docs/INTER_CIRCLE_DESIGN.md) — the chain and
+# VERSIONED CODE CONSTANTS (docs/INTER_CIRCLE_DESIGN_V2.md) — the chain and
 # format mechanics live here, never in a payload. One conformance against
 # the ICD's committed text, flagged to its owner rather than silent: the
 # "emit no other text at column 0" line is DROPPED — a self.md replacement
@@ -428,7 +428,7 @@ def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
     empty capsule renders as an empty section, never a refusal."""
     tag = R.TAG_BY_DIR[part]
     distillate, _why = MT.part_mid_term_block_render(part)
-    st_path = STM.short_term_locate(ROOT / "parts" / part, ot)
+    st_path = STM.short_term_locate(record_dir(ROOT, "parts") / part, ot)
     prior = RM.remember_newest_dreamt_read(part)
     own = _own_lines(part, transcript, with_context=True)
     user = [f"# Your identity distillate\n{distillate or '(none on file)'}",

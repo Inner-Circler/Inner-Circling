@@ -11,7 +11,7 @@ part's own long_term.md (read + stripped), its speaking-rules tail and
 rendered [context] answers, and its header line moved to
 parts_prompt_projection.py, 2026-09-02, on direct instruction -- the same move
 group_context.py/group_attention.py/topic_prompt_projection.py already made
-for their own registers, with roster.py folded into the new module too
+for their own registers, with part_roster.py folded into the new module too
 rather than imported here. What remains here is orchestration: call
 parts_prompt_projection.py, instrument_manager.py, part_mid_term_manager.py and remember_manager.py,
 concatenate what each returns.

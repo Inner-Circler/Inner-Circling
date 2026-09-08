@@ -1,0 +1,7 @@
+register = "circle_observation"
+next_id = 1
+observation = []
+
+[doc]
+preamble = """
+CIRCLE_OBSERVATION -- what SYNTHESIS noticed about the CIRCLE as a working body: its pace, what it avoided, where it went easily. Addressed to Self, about the room, never about Self. One record per processed circle; accumulate, never prune. No cap: nothing upstream bounds an OBSERVATION, so this register does not refuse one either."""

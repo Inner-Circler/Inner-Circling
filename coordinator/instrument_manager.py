@@ -83,6 +83,7 @@ import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes this project
 # prints. Degrade instead of crashing: a probe that dies formatting its own
@@ -91,7 +92,15 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-REGISTER = ROOT / "self" / "instruments.toml"
+REGISTER = _RP.SELF_DIR / "instruments.toml"
+
+
+@_RP.group_follow
+def _register_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07). The band's self/ has none
+    (the operator's own scores never cross into another group), so its block is empty."""
+    global REGISTER
+    REGISTER = _RP.SELF_DIR / "instruments.toml"
 
 # The response scale's own numbers, and nothing else. Dates are stripped
 # before this applies — see `_prose_numbers`.

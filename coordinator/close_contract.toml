@@ -116,7 +116,7 @@ sandbox_report_marker = "mode"
 #
 # So a row naming a directory that is not in today's roster is PAIRED with an
 # unmatched speaker in the same transcript when their statement counts agree,
-# and the pair is noted rather than failed. Derived from roster.DIR_NAMES and
+# and the pair is noted rather than failed. Derived from part_roster.DIR_NAMES and
 # from the counts themselves — no hand-kept date and no hardcoded old name, so
 # the next rename is absorbed the same way without an edit here.
 #

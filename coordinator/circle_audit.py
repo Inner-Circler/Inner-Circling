@@ -10,14 +10,14 @@ WHAT EXISTS TODAY
     1  survey      circles inter_circle.py has not processed (no dream/<OT> tag)
     2  reconcile   circle_close_verify.py --reconcile per circle + transcript safety net
     3  backfill    reconstruct a lost short_term from the transcript
-    6  validate    ifs_model invariants: self-check, baseline, or staged candidate
+    6  validate    record_model invariants: self-check, baseline, or staged candidate
     7  commit      write-ahead os.replace sweep (TRANSACTION_CLASS.py)
     8  verify      re-read every committed file, compare sha256
     9  record      git commit of this run's own paths, committed.json, log line
 
     Phases 4 (dream) and 5 (synthesise) are deliberately NOT here: they are
     coordinator/inter_circle.py, run synchronously at /close (R163's
-    "between, not cross" — docs/INTER_CIRCLE_DESIGN.md). This module is the
+    "between, not cross" — rulings/R163.toml). This module is the
     independent check on that engine's records, and stays independent of it:
     an engine asserting it acted is exactly the assurance this file was
     built to replace.
@@ -67,15 +67,16 @@ LOCK_STALE_SEC = 6 * 3600
 sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
-import ifs_model as M                                       # noqa: E402
+import record_model as M                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import register_gate as RG              # noqa: E402  the gate (stage 9, 2026-09-03)
 import backfill as BF                                       # noqa: E402  (B54)
 import short_term_manager as STM                            # noqa: E402  (B96)
 import gitrepo as G                                         # noqa: E402
 import TRANSACTION_CLASS as T                                     # noqa: E402
-import roster as R                                          # noqa: E402
+import part_roster as R                                          # noqa: E402
 import REGISTER_CLASS as SS                                    # noqa: E402
-import self_observation_manager as SO                           # noqa: E402
+import circle_observation_manager as CO                           # noqa: E402
                                    # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
@@ -87,15 +88,23 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 CIRCLE_RE = re.compile(r"^circle_(\d{4}-\d{2}-\d{2}_\d{4})\.md$")
-# B29: derived from roster.py. Deliberately roster.TAGS (current
+# B29: derived from part_roster.py. Deliberately part_roster.TAGS (current
 # spellings only), NOT the _ALL set — this reader only ever sees circles
 # this audit is processing, which postdate the 2026-08-07 Soul tag
 # rename, unlike circle_close_verify.py which also walks historical transcripts.
-# The GRAMMAR is roster.statement_re, the one builder (2026-08-19, review
+# The GRAMMAR is part_roster.statement_re, the one builder (2026-08-19, review
 # tier 3 #35 — this file's own copy accepted arbitrary spacing and had
 # drifted from circle_close_verify's; only the tag set differs now, and that
 # difference is the documented intent above).
 STATEMENT_RE = R.statement_re(R.TAGS)
+
+
+@_RP.group_follow
+def _grammar_rebind() -> None:
+    """The CURRENT group's Tags — B117 stage 5 (2026-09-07); `--group` below calls group_set()."""
+    global STATEMENT_RE
+    STATEMENT_RE = R.statement_re(R.TAGS)
+
 
 # Exactly what an audit run is allowed to have left uncommitted. Anything
 # dirty outside this set was not this tool. Rewritten at the 2026-08-19
@@ -104,9 +113,22 @@ STATEMENT_RE = R.statement_re(R.TAGS)
 # writes only short_terms (--backfill) and one synthetic observation-log
 # append (--stage-synthetic); inter_circle.py git-commits its own writes
 # inside /close, so its output never sits uncommitted between runs.
+#
+# THE PATHS ARE REPO-RELATIVE, AND THE RECORD MOVED TWICE. `git status --porcelain` prints
+# groups/<name>/parts/... since B117, and the observation log went self/ -> circles/ with
+# SELF_OBSERVATION -> CIRCLE_OBSERVATION (b857f7c, cd2c4d7 / R481). Anchored at ^parts/ and
+# ^self/ this matched NOTHING, so `expected` was always empty, the `expected and not other`
+# branch was unreachable, and phase 0 reported the audit's own --backfill output as
+# unexplained dirt — the conflation the branch exists to prevent.
+#
+# The group segment is optional so a flat tree (a sandbox, a snapshot) still matches, and
+# the old flat forms stay accepted for the same reason: this reads a working tree, and a
+# working tree can predate a move.
 AUDIT_OUTPUT_RE = re.compile(
-    r"^(parts/[a-z_]+/short_term_[\d_-]+\.(?:md|toml)"
-    r"|self/self_observation_log\.toml)$")
+    r"^(?:groups/[a-z][a-z0-9_-]*/)?"
+    r"(parts/[a-z_]+/short_term_[\d_-]+\.(?:md|toml)"
+    r"|circles/circle_observation_log\.toml"
+    r"|self/circle_observation_log\.toml)$")
 
 
 def circle_audit_hr_render(title: str) -> None:
@@ -439,7 +461,7 @@ def circle_audit_phase1_run(run: Run) -> list[str]:
                  f"processed, and guessing would report every circle "
                  f"unprocessed")
         return []
-    circles = sorted(m.group(1) for p in (ROOT / "circles").glob("circle_*.md")
+    circles = sorted(m.group(1) for p in _RP.record_dir(ROOT, "circles").glob("circle_*.md")
                      if (m := CIRCLE_RE.match(p.name)))
     if not tags:
         run.warn(f"no dream/<OT> tags exist — inter_circle.py has processed "
@@ -495,7 +517,7 @@ def circle_audit_phase2_run(run: Run, unprocessed: list[str]) -> None:
             run.fail(f"circle_{ot}: RECONCILE-DRIFT — short_terms recorded at close "
                      f"are absent or changed on disk; phase 3 must backfill them")
 
-        counts = BF.part_spoke_read(ROOT / "circles" / f"circle_{ot}.md")
+        counts = BF.part_spoke_read(_RP.record_dir(ROOT, "circles") / f"circle_{ot}.md")
         if not counts:
             run.fail(f"circle_{ot}: transcript has no parseable statements")
             continue
@@ -532,8 +554,8 @@ def circle_audit_snapshot(dest: pathlib.Path) -> pathlib.Path:
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(p, out)
         n += 1
-    for p in (ROOT / "self").glob("narrative_*.md"):
-        out = dest / "self" / p.name
+    for p in _RP.record_dir(ROOT, "self").glob("narrative_*.md"):
+        out = dest / _RP.record_rel("self") / p.name
         out.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy2(p, out)
         n += 1
@@ -550,7 +572,7 @@ def circle_audit_snapshot(dest: pathlib.Path) -> pathlib.Path:
         "latest_dream_tag": (tags[-1] if tags else None) if not err else None,
         "dream_tag_error": err,
         "circle_in_progress": CS.circle_is_in_progress(),
-        "circles_on_disk": len(list((ROOT / "circles").glob("circle_*.md"))),
+        "circles_on_disk": len(list(_RP.record_dir(ROOT, "circles").glob("circle_*.md"))),
         "sha256": {p.relative_to(dest).as_posix(): M.record_sha(p.read_bytes())
                    for p in sorted(dest.rglob("*.md"))},
     }, indent=2) + "\n", encoding="utf-8", newline="")
@@ -732,13 +754,13 @@ def circle_audit_synthetic_stage(tx: T.Transaction, run: Run) -> None:
     # rehearsal itself rather than on what it is rehearsing. CONSEQUENCE,
     # stated because it is real: a synthetic run that reaches phases 7-9
     # CONSUMES an SO- id. The text says so, so the record self-identifies.
-    doc, _rec = SO.self_observation_new_render(
-        SO._doc(), f"synthetic-{today}",
+    doc, _rec = CO.circle_observation_new_render(
+        CO._doc(), f"synthetic-{today}",
         f"Synthetic transaction test: {today}. Not an observation — "
         f"circle_audit.py --stage-synthetic wrote this to rehearse phases "
         f"6-9 against the real tree and the real gate.")
-    tx.stage("self/self_observation_log.toml",
-             SS.register_dumps(doc, SO.TABLE, SO.ORDER).encode("utf-8"))
+    tx.stage(_RP.record_rel("circles/circle_observation_log.toml"),
+             SS.register_dumps(doc, CO.TABLE, CO.ORDER).encode("utf-8"))
     run.ok(f"staged {len(tx.staged())} synthetic file(s) "
            f"(stand-in for phases 3-5)")
 
@@ -843,7 +865,7 @@ def circle_audit_run_log(mode: str, result: str, detail: str) -> None:
 # uninstall_tasks()) REMOVED WHOLESALE 2026-08-15 — see rulings/ and
 # docs/NIGHTLY_DESIGN.md's own §7 retirement note. It existed to snapshot/validate
 # around the separate, since-retired ifs-nightly Cowork task; nothing schedules
-# dreaming/synthesis any more (docs/INTER_CIRCLE_DESIGN.md's Placement ruling —
+# dreaming/synthesis any more (docs/INTER_CIRCLE_DESIGN_V2.md's Placement ruling —
 # synchronous at /close).
 
 
@@ -852,6 +874,9 @@ def main() -> int:
     ap = argparse.ArgumentParser(
         description="circle-record audit — phases 0-2 and 6 by default (no "
                     "writes to the live tree, no model calls)")
+    ap.add_argument("--group", default=None,
+                    help="audit this GROUP's record (groups/<name>/) instead of the default "
+                         "group's — B117 stage 5. Default: the ifs group.")
     ap.add_argument("--snapshot", nargs="?", const="auto", metavar="DIR",
                     help="copy the current parts/ + self/ memory files to DIR "
                          "(default work/circle_audit/baseline_<timestamp>) and exit")
@@ -917,6 +942,8 @@ def main() -> int:
                     help="mirror all output to "
                          "work/logs/circle_audit_<timestamp>.log")
     args = ap.parse_args()
+    if args.group:
+        _RP.group_set(args.group)           # B117 stage 5: this group's record, before any read
 
     run = Run()
     started = datetime.datetime.now()
@@ -998,7 +1025,7 @@ def main() -> int:
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")
             scope = unprocessed
             if args.all_circles:
-                scope = sorted(m.group(1) for f in (ROOT / "circles").glob("circle_*.md")
+                scope = sorted(m.group(1) for f in _RP.record_dir(ROOT, "circles").glob("circle_*.md")
                                if (m := CIRCLE_RE.match(f.name)))
                 run.warn(f"--all-circles: scanning all {len(scope)} circles. A "
                          f"backfill for an ALREADY-PROCESSED circle repairs the "

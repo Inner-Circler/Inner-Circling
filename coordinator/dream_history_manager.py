@@ -50,6 +50,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import LLM_response_disassembler as RD                         # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 
 TABLE = "dreams"
 ORDER = ("id", "date", "title", "section", "sources", "content")
@@ -75,12 +76,23 @@ def _now_date() -> str:
 
 
 def dream_history_locate() -> pathlib.Path:
-    return ROOT / "self" / "dreams.toml"
+    return _RP.record_dir(ROOT, "self") / "dreams.toml"
+
+
+def _doc() -> dict:
+    """The document a tree with no self/dreams.toml reads — an empty corpus,
+    ids from SD-0001. The register name is the live file's own. B111
+    (2026-09-06): the file never ships (one person's dreams), so a recipient's
+    first run met a file-not-found where every other manager builds its empty
+    shape. Nothing writes this back on a read; --bootstrap on it reports an
+    empty corpus and exits 1, as before."""
+    return {"register": "self_dreams", "next_id": 1, TABLE: []}
 
 
 def _load() -> dict:
     import REGISTER_CLASS as SS
-    return SS.register_read(dream_history_locate())
+    p = dream_history_locate()
+    return SS.register_read(p) if p.is_file() else _doc()
 
 
 def _save(doc: dict) -> None:

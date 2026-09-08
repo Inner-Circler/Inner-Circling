@@ -1168,7 +1168,8 @@ def self_test() -> int:
         vars(C)["ui_main_loop"] = real_main_loop
 
     # --- _open_sandbox_circles(): scoped to the engine's OWN root -------
-    fake_live_entry = {"path": pathlib.Path("circles") / "circle_2026-08-13_0900.md"}
+    import record_paths as _rp                       # the live root is a group's (B117)
+    fake_live_entry = {"path": pathlib.Path(_rp.record_rel("circles")) / "circle_2026-08-13_0900.md"}
     fake_sandbox_entry = {"path": pathlib.Path("work") / "sandbox"
                            / "circles" / "circle_2026-08-13_0901.md"}
     eng9d = C.CircleEngine(queue.Queue())
@@ -1579,7 +1580,7 @@ def self_test() -> int:
           "returns — 'restore after a valid reply'",
           C._command_prompt(s8) == "cmd> ")
 
-    # PROBE 3: the empty-Enter carve-out. vetting.py offers "(or Enter to
+    # PROBE 3: the empty-Enter carve-out. proposal_vetting.py offers "(or Enter to
     # skip)" and the working-set/topic prompts are both "blank = ..." —
     # all three were unreachable while handle_key dropped whitespace-only
     # lines before the seam. The carve-out must NOT extend to the speaking
@@ -1928,6 +1929,83 @@ def self_test() -> int:
     check("a control key mid-burst ends the current batch and is its own "
           "unit, in order, without losing what came after it",
           units4 == [("text", "ab"), ("key", "\t"), ("text", "c")])
+
+    # --- THE TWO PLATFORM ARMS, COMPARED WITHOUT RUNNING EITHER (audit #16). ------
+    # ui/circling.py's `if IS_WINDOWS:` split means ~90 lines of the POSIX arm are dark
+    # by construction on this host: its raw_mode uses termios, and _read_escape reads real
+    # stdin through select, which on Windows works only on sockets. It SHIPS — the export
+    # bundle goes to Inner-Circler/Inner-Circling and circling.py is a packaging entry
+    # point since R314 — so a recipient on Linux or macOS runs code nothing here executes.
+    #
+    # What IS checkable anywhere is the CONTRACT BETWEEN THE ARMS, read off the AST: a
+    # name added to one arm and forgotten in the other, and a key one platform can emit
+    # that the other cannot handle. That is the realistic regression; executing termios
+    # is not.
+    import ast as _ast
+    _src = pathlib.Path(C.__file__).read_text(encoding="utf-8")
+    _split = [n for n in _ast.parse(_src).body
+              if isinstance(n, _ast.If) and isinstance(n.test, _ast.Name)
+              and n.test.id == "IS_WINDOWS"]
+    check("ui/circling.py still has exactly one module-level `if IS_WINDOWS:` split",
+          len(_split) == 1)
+    if _split:
+        def _defined(body):
+            out = set()
+            for n in body:
+                if isinstance(n, (_ast.FunctionDef, _ast.ClassDef)):
+                    out.add(n.name)
+                elif isinstance(n, _ast.Assign):
+                    out.update(t.id for t in n.targets if isinstance(t, _ast.Name))
+            return out
+
+        def _key_vocab(body):
+            out = set()
+            for n in body:
+                if isinstance(n, _ast.Assign) and isinstance(n.value, _ast.Dict):
+                    out.update(v.value for v in n.value.values
+                               if isinstance(v, _ast.Constant))
+            return out
+
+        _win, _posix = _defined(_split[0].body), _defined(_split[0].orelse)
+        _pub = lambda s: {n for n in s if not n.startswith("_")}   # noqa: E731
+        check("both platform arms define the SAME public surface — a backend added to one "
+              "and forgotten in the other is what this catches",
+              _pub(_win) == _pub(_posix) == {"enable_vt_mode", "poll_key", "raw_mode"})
+
+        _wv, _pv = _key_vocab(_split[0].body), _key_vocab(_split[0].orelse)
+        check("no key the POSIX arm emits is unknown to the win32 arm", not (_pv - _wv))
+        # THE ONE ASYMMETRY IS DELIBERATE, so it is pinned rather than merely allowed:
+        # ui/circling.py:500-509 says the dedicated cursor cluster is emitted "only where
+        # the two key clusters can be told apart, which today is Windows alone (\xe0 vs
+        # \x00); no POSIX terminal distinguishes the numpad". If that set ever changes,
+        # this fails and the comment has to change with it.
+        check("...and the only keys win32 can emit that POSIX cannot are exactly the "
+              "documented cursor cluster",
+              (_wv - _pv) == set(C.CURSOR_ROW_KEYS) | set(C.CURSOR_ENDS))
+
+    # --- ui_main_loop's RESUME SWAP, read rather than run (audit #9). ------------
+    # ui_main_loop is ~409 lines and the product path since R314, and the only suite
+    # that reaches C.main() REPLACES it (vars(C)["ui_main_loop"] = lambda: 0), so every
+    # `if engine is not None` branch is dark. It has already cost a day once: an import
+    # inside it raised ModuleNotFoundError for a full day (95f8b15).
+    #
+    # Driving the whole loop headless is a bigger build than this file should carry, but
+    # its WORST case is specific and stated in its own comment: losing `live` across the
+    # engine swap sends `--resume <OT>` WITHOUT `--live`, "which looks for the transcript
+    # under sandbox/circles/ instead of circles/ — wrong file, not just wrong mode". That
+    # is a source-shape claim, and this asserts it: the replacement engine's live= comes
+    # from the OLD engine, not from a literal and not from the ambient mode.
+    _swap = _src.split("was_live = engine.live", 1)
+    check("ui_main_loop's resume swap still captures the old engine's live flag",
+          len(_swap) == 2)
+    if len(_swap) == 2:
+        _after = _swap[1].split("ui_full_render", 1)[0]
+        check("...and hands that captured flag to the replacement engine's start(), so a "
+              "resumed live circle does not go looking under work/sandbox/",
+              "engine.start(" in _after and "live=was_live" in _after)
+        check("...and the resume argv is rebuilt through _strip_resume rather than appended "
+              "blindly, so a second resume cannot stack two --resume pairs",
+              "_strip_resume(extra_argv)" in _after)
 
     # --- Astral characters (tier 4 #39): Windows getwch() delivers an
     # emoji as two UTF-16 surrogates, each of which fails the

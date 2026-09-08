@@ -35,5 +35,3 @@ sit with what I hold rather than managing it from a distance. I yearn
 for Self, the full real human in the world, in the now. 
 
 ## required end
-
-*(The historic dream corpus moved to `dreams.toml`, 2026-08-12.)*

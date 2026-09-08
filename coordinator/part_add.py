@@ -7,12 +7,12 @@ part_add.py — the part-lifecycle register: create, list, view, delete a
 is never asked for a directory name).
 
 WHAT A PART IS, MECHANICALLY: a directory under `parts/` whose `part.toml`
-names its Tag (roster.py — the marker's presence IS membership) and whose
+names its Tag (part_roster.py — the marker's presence IS membership) and whose
 `long_term.md` is its identity. `prompt_build.record_ro_read()` reads long_term.md
 with a bare read_text() and fails loudly, so an empty identity is the one
 thing that crashes prompt assembly — `part_add()` refuses it, and writes
 long_term.md FIRST, part.toml LAST: a crash between the two leaves a
-non-part directory `roster.part_verify()` reports, never a part with no identity
+non-part directory `part_roster.part_verify()` reports, never a part with no identity
 that takes a circle down.
 
 THE SEED IS THE PERSON'S OWN WORDS, VERBATIM, under a heading that says so —
@@ -26,8 +26,9 @@ created mid-process is invisible to this process — safe, and said.
 DELETE IS GIT-RECOVERABLE, NEVER ARCHIVED (the 2026-08-19 ruling that
 removed the archiving mechanism): the directory is removed and the deletion
 committed; `git log --all -- parts/<name>/` finds the record and
-`git checkout <rev> -- parts/<name>/` restores it whole. Soul and Child are
-RESERVED (docs/BNF.md) and refused before any dialog; a delete while a
+`git checkout <rev> -- parts/<name>/` restores it whole. The group's RESERVED
+roles (its group.toml, R468 — Soul and Child for the IFS group, docs/BNF.md) are
+refused before any dialog; a delete while a
 circle may be open is refused outright (circle_state fails closed) — the
 next round's read of a vanished long_term.md would take the circle down.
 
@@ -40,7 +41,7 @@ from __future__ import annotations
 
 import re
 
-import roster as R
+import part_roster as R
 import seam
 from circle_close_verify import MAX_MEMBERS
 
@@ -122,7 +123,7 @@ def part_add(name: str, tag: str, identity: str) -> tuple[bool, str]:
     record_atomic_write(d / R.MARKER,
                  "# part.toml — the presence of THIS FILE is what makes this "
                  "directory a part.\n# Created by /part-add (docs/"
-                 "Initialization.md). roster.py reads it; the Tag is the\n"
+                 "Initialization.md). part_roster.py reads it; the Tag is the\n"
                  "# display name the directory name cannot give.\n\n"
                  f'tag = "{tag.strip()}"\n\nalt_tags = []\n')
     _r, _a, _t, probs = R.part_scan()
@@ -169,14 +170,19 @@ def part_view(n_text: str) -> tuple[bool, str]:
     return True, f"\n  {t} — parts/{d}/long_term.md\n\n" + p.read_text(encoding="utf-8")
 
 
-RESERVED_DIRS = ("soul", "child")
+def part_reserved_read() -> tuple[str, ...]:
+    """The roles /part-delete refuses — the bound group's group.toml `reserved` list (R468,
+    B120; RESERVED_DIRS = ("soul", "child") was the literal until then, and is the IFS group's
+    own value of it)."""
+    import record_paths as _RP
+    return tuple(str(d) for d in _RP.group_descriptor_read(_RP.group_read()).get("reserved", []))
 
 
 def part_delete(n_text: str) -> None:
     """/part-delete <n> — confirmation is TYPING THE DIRECTORY NAME (a
     destructive act gets a harder yes than 'yes'), then the directory is
     removed and the deletion COMMITTED — git is the record. Refused for the
-    two RESERVED parts, and while a circle may be open (circle_state fails
+    group's RESERVED roles, and while a circle may be open (circle_state fails
     closed; a live round reading a vanished long_term.md is a crash, not an
     absence)."""
     import shutil
@@ -186,9 +192,10 @@ def part_delete(n_text: str) -> None:
                              f"/part-list shows them")
         return
     d, t = hit
-    if d in RESERVED_DIRS:
-        seam.emit("command", f"  {t} is a RESERVED part (docs/BNF.md) — "
-                             f"never deleted")
+    if d in part_reserved_read():
+        import record_paths as _RP
+        seam.emit("command", f"  {t} is a RESERVED role of this group "
+                             f"(groups/{_RP.group_read()}/group.toml) — never deleted")
         return
     try:
         import circle_state

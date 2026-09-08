@@ -639,7 +639,7 @@ class AppState:
         line AND an empty line is a legal answer to it — which is what
         lets a bare Enter reach the seam at all.
 
-        Three reads need it. `vetting.py` offers "(or Enter to skip)",
+        Three reads need it. `proposal_vetting.py` offers "(or Enter to skip)",
         and the working-set and topic prompts are both documented
         "blank = ...". Before R221 the `text.strip()` guard above dropped
         every one of them before the seam, so all three affordances were
@@ -3449,7 +3449,7 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                statement, and every write lands under
                work/sandbox/ only. Everything AFTER --circle is
                forwarded to circle.py itself, e.g.:
-                   --circle --parts child,idealist --seed 1
+                   --circle --parts <dir>,<dir> --seed 1
                --live must appear in THIS argv, not only in ARGS —
                see CircleEngine.start()'s own docstring for why.
 

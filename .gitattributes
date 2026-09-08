@@ -15,7 +15,7 @@
 #     RECONCILE-DRIFT on files nobody had touched -- and the documented response to
 #     DRIFT is to backfill from the transcript, i.e. to overwrite a good record.
 #
-#   * coordinator/ifs_model.py  enforces that dream-entry bodies, the identity
+#   * coordinator/record_model.py  enforces that dream-entry bodies, the identity
 #     preamble, and unchanged sections are byte-identical. Line-ending conversion
 #     would fail every one of those checks at once.
 #

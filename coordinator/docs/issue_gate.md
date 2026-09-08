@@ -198,7 +198,7 @@ Stdout only, no stdin. Prints a node/live-count summary, verification counts, ad
         unparsed leading region beyond that point is left unattributed
         rather than guessed at). For each marker, resolve its speaker
         name to a canonical part directory (or "self") via the SPEAKERS
-        table built from roster.py and identity.py; unresolvable markers
+        table built from part_roster.py and identity.py; unresolvable markers
         are silently dropped from the span list rather than raising.
     }
 

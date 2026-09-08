@@ -3,7 +3,7 @@
 working_set_manager.py — the WORKING SET: which issues a circle is shown.
 
     the question at open      WORKING_SET_PROMPT, working_set_ask()   (was circle.py's)
-    the register              self/working_sets.toml — WORKING_SETS, working_set_record(),
+    the register              circles/working_sets.toml — WORKING_SETS, working_set_record(),
                               _withdraw_working_set()               (was transcript_store.py's)
     the id parsers            issue_id_normalise(), working_set_argv_parse() (argv), working_set_parse()
                               (a typed line)                         (three copies, now one)
@@ -41,7 +41,7 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import seam                                                    # noqa: E402
 import REGISTER_CLASS as SS                                       # noqa: E402
-from record_paths import SELF_DIR                                     # noqa: E402
+from record_paths import CIRCLES_DIR                                     # noqa: E402
 
 
 # ------------------------------------------------------------------ the question
@@ -221,7 +221,18 @@ def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
 
 
 # ------------------------------------------------------------------ the register
-WORKING_SETS = SELF_DIR / "working_sets.toml"
+WORKING_SETS = CIRCLES_DIR / "working_sets.toml"
+
+
+def _working_sets_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07)."""
+    global WORKING_SETS
+    import record_paths as _RP
+    WORKING_SETS = _RP.CIRCLES_DIR / "working_sets.toml"
+
+
+import record_paths as _RPf                                            # noqa: E402
+_RPf.group_follow(_working_sets_rebind)
 
 # NEXT.md B14, R210 (2026-08-17): working_sets.md -> .toml, the same
 # REGISTER_CLASS.py registers under self/ already use. No id, no next_id —
@@ -259,7 +270,7 @@ def _working_sets_doc() -> dict:
 
 def working_set_record(ot: str, chosen: "list[str] | None", topic: str,
                        live: bool) -> None:
-    """Append to self/working_sets.toml. A history, so a later reading of a
+    """Append to circles/working_sets.toml. A history, so a later reading of a
     transcript can ask what the room was shown, not only what it said.
 
     `chosen` carries the working set's three states (working_set_ask):

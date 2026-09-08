@@ -28,8 +28,12 @@ import re
 import issue_commands as IC        # issue-relationship-add's one grammar (R202)
 import seam
 import command_surface as CS
+# PROPOSABLE_COMMANDS is no longer from-imported here (B122): what this module
+# admits is the CURRENT GROUP's narrowing of it, read at call time through
+# CS.command_proposable_read(). A from-import would be the constant, frozen at
+# module load — the exact shape of the defect, one level down.
 from command_surface import (PROPOSE_SUBSET_COMMANDS,
-                             DEFERRED_PROPOSE_COMMANDS, PROPOSABLE_COMMANDS)
+                             DEFERRED_PROPOSE_COMMANDS)
 
 
 # a part's remember is a private note to its own future self and must
@@ -169,9 +173,17 @@ def _proposable_list() -> str:
     A REFUSAL THAT DOES NOT SAY WHAT IS ALLOWED sends the writer looking for
     a typo in their argument — R231's lesson, and the reason
     annotation_malformed_strip() already named the valid spellings when there
-    were six of them. Read from command_surface.PROPOSABLE_COMMANDS rather
-    than restated — the same set /help counts."""
-    return "valid: " + ", ".join(sorted(PROPOSABLE_COMMANDS))
+    were six of them. Read from command_surface.command_proposable_read() rather
+    than restated — the same set /help counts, and THIS GROUP'S (B122).
+
+    A GROUP MAY PROPOSE NOTHING, and "valid: " with nothing after it is not a
+    refusal a reader can act on. R466 ruled the band's list empty, so this is a
+    real reading, not a defensive one: it gets a sentence instead of an empty
+    list."""
+    proposable = CS.command_proposable_read()
+    if not proposable:
+        return "no command may be proposed in this group"
+    return "valid: " + ", ".join(sorted(proposable))
 
 
 def _propose_command_shape(text: str) -> dict | None:
@@ -218,7 +230,7 @@ def _propose_command_shape(text: str) -> dict | None:
         shape does; nothing about that branch is edge-specific.
       dev_cmd
         /practice-add, /better-option-add, /issue-add — each run through
-        its own cmd_* directly at approval (vetting.py), not through
+        its own cmd_* directly at approval (proposal_vetting.py), not through
         dispatch_dev_cmd(), so a register refusal reports its own reason
         rather than "command dispatch refused". B62, 2026-08-23.
 
@@ -264,6 +276,16 @@ def _propose_command_shape(text: str) -> dict | None:
                 "why": ("issue-evidence-add resolves its quote against the "
                         "live transcript, which a checkpoint has not got — "
                         "rule it at cmd> instead")}
+    # THE GROUP NARROWS, B122 (2026-09-07). The two checks above are about the
+    # VERB — what the code can execute at all, and the one verb ruled in and not
+    # yet buildable — and they are group-independent facts, so they come first:
+    # a deferred verb must keep its own reason in every group rather than being
+    # reported as "not on the list". This one is about the GROUP, and it takes
+    # the ordinary MALFORMED path (None) precisely because that path names what
+    # IS valid here — which is what a band member's rulebook already tells them
+    # to expect, and what nothing enforced until now.
+    if head not in CS.command_proposable_read():
+        return None
     if head in IC.HEADS:
         parsed, why = IC.issue_command_parse(head + " " + rest.strip(), "")
         shape = ("issue-relationship-add" if head == "/issue-relationship-add"

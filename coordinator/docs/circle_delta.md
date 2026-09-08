@@ -66,8 +66,10 @@ Three doctrines it inherits rather than invents: the close report is the read ga
             that commit's parent blob and its own blob } else { the live file's size, marked
             unchanged }
     }
-    count the rows each self/ register gained for this circle (circle_history,
-        self_observation_log, topics with its LONG_TERM CANDIDATE prefix, best_practices),
+    count the rows each register gained for this circle — circles/circle_history.toml and
+        circles/circle_observation_log.toml, self/topics.toml (with its LONG_TERM CANDIDATE
+        prefix) and self/best_practices.toml — noting `missing` for any the reporter cannot
+        find, because absence and a quiet circle both otherwise read as 0/0;
         and whether the dream commit touched self/self.md;
     classify each machine commit's paths against its writer's declared set;
     if (a tagged commit is a merge) then { report that instead of classifying — a machine
@@ -83,7 +85,7 @@ NETWORK: none. No model calls, ever.
 
 ## DEPENDENCIES
 
-settings (the `circle_stats` read), roster, identity, transcript_store (whose annotations import needs `memory/` on sys.path — this module adds it, the same hop circle.py makes), remember, proposals, annotations, recall_index, gitrepo (tag_name only), atomic_write. Every project import is function-local and guarded; tomllib (tomli on 3.10) reads the registers raw.
+settings (the `circle_stats` read), part_roster, identity, transcript_store (whose annotations import needs `memory/` on sys.path — this module adds it, the same hop circle.py makes), remember, proposals, annotations, recall_index, gitrepo (tag_name only), atomic_write. Every project import is function-local and guarded; tomllib (tomli on 3.10) reads the registers raw.
 
 ## HUMAN I/O
 

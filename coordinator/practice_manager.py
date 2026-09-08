@@ -96,7 +96,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
-import roster as R                                              # noqa: E402
+import part_roster as R                                              # noqa: E402
 import PROPOSE_CLASS                                            # noqa: E402
 from record_paths import BEST_PRACTICES                                # noqa: E402
 
@@ -109,8 +109,20 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 # monkeypatch keeps working.
 BP = BEST_PRACTICES
 
+
+def _bp_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07): BLOCK 1's practices are the
+    group's own. A probe's PM.BP swap holds until something calls group_set()."""
+    global BP
+    import record_paths as _RP
+    BP = _RP.BEST_PRACTICES
+
+
+import record_paths as _RPf                                            # noqa: E402
+_RPf.group_follow(_bp_rebind)
+
 # "All parts" and "Self" BROADCAST (-> BLOCK 1); a PartTag NARROWCASTS
-# (-> BLOCK 3, that part alone). B29: PartTag list derived from roster.py,
+# (-> BLOCK 3, that part alone). B29: PartTag list derived from part_roster.py,
 # alphabetical-by-dir-name order.
 BROADCAST_ADDRESSEES = ("All parts", "Self")
 PART_ADDRESSEES = tuple(R.TAG_BY_DIR[d] for d in R.ALPHA_DIR_NAMES)
@@ -225,7 +237,10 @@ def practice_add(text: str, addressee: str = PRACTICE_ADDRESSEE) -> tuple[bool, 
     return True, f"{doc['practice'][-1]['id']} added — {body[:44]}..."
 
 
-ORDER = ("id", "addressee", "title", "origin", "in_room", "kind", "record",
+# `amended` — the date of the last in-place update (practice_update(); R465, B116,
+# 2026-09-07). Absent until one; replaced each time; no prior wording, no reason —
+# git is the journal.
+ORDER = ("id", "addressee", "title", "origin", "in_room", "kind", "record", "amended",
          "state", "op", "target_id", "sources", "circle", "proposed_at")
 
 STAGING_ONLY = ("op", "target_id", "sources", "circle", "proposed_at")
@@ -427,3 +442,32 @@ def practice_delete(n: int) -> tuple[bool, str]:
     _PC.save(doc)
     one = " ".join(gone["title"].split())
     return True, f"removed {n}. [{gone['id']}] {one[:48]}..."
+
+
+def practice_update(n: int, text: str) -> tuple[bool, str]:
+    """Replace the n-th listed practice's title in place — same id, same origin, same
+    position AS /practice-list NUMBERS THEM — and stamp `amended` with today's date
+    (R465, B116, 2026-09-07). The prior wording is not kept on the row: git is the journal.
+    Rides REGISTER_CLASS.register_row_update(); the text takes practice_add()'s own
+    normalisation and its empty-body refusal. A row still awaiting Self's ruling
+    (state "proposed") is refused — rule on it first; a change to a proposal's text is a
+    change to what was proposed."""
+    body = " ".join(text.split("\n")).strip()
+    doc = _doc()
+    ps = doc.get("practice", [])
+    shown = [p for p in ps if p.get("addressee") != BETTER_OPTION_ADDRESSEE]
+
+    def _precheck(fields: dict, row: dict) -> str:
+        if not fields["title"]:
+            return "nothing to update"
+        if row.get("state") == "proposed":
+            return f"[{row['id']}] is still proposed — rule on it before changing its text"
+        return ""
+
+    ok, msg, row = SS.register_row_update(
+        doc, "practice", locate=n, listed=shown, precheck=_precheck,
+        fields={"title": body, "amended": SS.register_now()[:10]})
+    if not ok:
+        return False, msg + (" — /practice-list" if "1.." in msg else "")
+    _PC.save(doc)
+    return True, f"updated {n}. [{row['id']}] {body[:48]}..."

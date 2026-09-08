@@ -10,7 +10,7 @@ topic_manager.py — the TOPIC register: unvetted synthesis material carried int
     python coordinator/topic_manager.py --init     write the empty register file
     python coordinator/topic_prompt_projection.py   the BLOCK 2 projection, exactly as sent
 
-(As a library: `topic_read()`, `topic_open_read()`, `topic_new_render(doc, circle, text)` from the phase-2 driver, `topic_close(id)` from Self's `/topic-close`, and `topic_prompt_projection.topic_block_render()` from `group_attention.circle_briefing_build()`.)
+(As a library: `topic_read()`, `topic_open_read()`, `topic_new_render(doc, circle, text)` from the phase-2 driver, `topic_close(id)` from Self's `/topic-close`, `topic_update(id, text)` from `/topic-update` (R465, B116), and `topic_prompt_projection.topic_block_render()` from `group_attention.circle_briefing_build()`.)
 
 ## DESCRIPTION
 
@@ -101,6 +101,16 @@ Render one open topic and write the register. The coordinator calls this once pe
     if (the row is not open) then { return (false, naming its actual state). }
     Set state to "closed by Self <utc timestamp>", save, and return
         (true, "<id> closed — kept as a tombstone").
+
+### topic_update(tid, text)
+    Replace one OPEN topic's text in place (R465, B116, 2026-09-07): same id, circle
+        and date; `amended` set to today's date; the text CAP-truncated at a word
+        boundary as topic_new_render() does; no prior wording kept — git is the journal.
+    if (there is no such row) then { return (false, "<id> not found"). }
+    if (the text is empty) then { return (false, "nothing to update"). }
+    if (the row is not open) then { return (false, naming its state — a tombstone). }
+    Otherwise change the row through REGISTER_CLASS.register_row_update() (id
+        immutable), save, and return (true, "<id> updated — <text>...").
 
 ### topic_prompt_projection.topic_block_render() (`block()` here before it moved, 2026-09-03)
     if (no topic is open) then { return "" — the objectives block is unchanged. }

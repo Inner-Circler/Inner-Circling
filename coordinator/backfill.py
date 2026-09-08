@@ -42,13 +42,24 @@ from __future__ import annotations
 
 import pathlib
 
-import ifs_model as M
-import roster as R
+import record_model as M
+import part_roster as R
 import short_term_manager as STM
+import record_paths as _RP                                         # noqa: E402
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 STATEMENT_RE = R.statement_re(R.TAGS)
+
+
+@_RP.group_follow
+def _grammar_rebind() -> None:
+    """The CURRENT group's Tags — B117 stage 5 (2026-09-07): compiled once at import for the
+    default group, recompiled after record_paths.group_set() so a band close backfills its own
+    roster's statements."""
+    global STATEMENT_RE
+    STATEMENT_RE = R.statement_re(R.TAGS)
+
 
 # The reply is four prose sections for a whole circle. 16,000 was set in
 # circle_audit and is kept rather than re-guessed — see the stop_reason check
@@ -88,7 +99,7 @@ def part_spoke_read(transcript: pathlib.Path) -> dict[str, int]:
 # MOVED AGAIN, 2026-09-04 (B96, R434): to short_term_manager.py, the record's one
 # reader/writer, so the .toml branch and the legacy .md branch draw the same
 # well-formed line through the same parser the close writes with. It came here
-# from ifs_model.py on 2026-09-03 (cohesion re-homing, stage 4). The name stays
+# from record_model.py on 2026-09-03 (cohesion re-homing, stage 4). The name stays
 # reachable as BF.short_term_verify — both callers here and the suite use it.
 short_term_verify = STM.short_term_verify
 
@@ -99,7 +110,7 @@ def short_term_backfill_path(part: str, ot: str) -> pathlib.Path:
     else the format the circle's OTHER parts are in, else the live format —
     .toml since R434. One rule for the text and the path, so the two callers
     (inter_circle's step 0, circle_audit's phase 3) cannot disagree."""
-    return STM.short_term_path_new(ROOT / "parts", part, ot)
+    return STM.short_term_path_new(_RP.record_dir(ROOT, "parts"), part, ot)
 
 
 def short_term_needs_backfill(ot: str) -> list[tuple[str, int, str]]:
@@ -115,7 +126,7 @@ def short_term_needs_backfill(ot: str) -> list[tuple[str, int, str]]:
     section is exactly the shape that passes a naive "are the headings there"
     test while telling a reader nothing."""
     out: list[tuple[str, int, str]] = []
-    transcript = ROOT / "circles" / f"circle_{ot}.md"
+    transcript = _RP.record_dir(ROOT, "circles") / f"circle_{ot}.md"
     for part, n in sorted(part_spoke_read(transcript).items()):
         f = short_term_backfill_path(part, ot)
         bad = [x for x in short_term_verify(f.as_posix(), M.record_bytes_read(f),
@@ -128,7 +139,7 @@ def short_term_needs_backfill(ot: str) -> list[tuple[str, int, str]]:
 def short_term_header_render(part: str, ot: str, tag: str) -> str:
     """The reconstruction's own header, carrying the R248 mark.
 
-    THE MARK IS THE POINT, not the sentence around it. `ifs_model` owns the
+    THE MARK IS THE POINT, not the sentence around it. `record_model` owns the
     literal and the reader (`is_reconstructed`), so the thing that writes it
     and the things that act on it cannot drift apart — which is what the old
     prose-only note allowed, since nothing parsed it. The sentence itself is
@@ -152,7 +163,7 @@ def short_term_backfill(part: str, ot: str, tag: str, system: str,
     ceiling returning zero characters for a ~2,500-token answer). A
     reconstruction that is not checked is the loss it was meant to repair,
     with a file in front of it."""
-    transcript_path = ROOT / "circles" / f"circle_{ot}.md"
+    transcript_path = _RP.record_dir(ROOT, "circles") / f"circle_{ot}.md"
     try:
         transcript = transcript_path.read_text(encoding="utf-8")
     except OSError as e:

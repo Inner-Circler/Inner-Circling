@@ -26,6 +26,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # atomic_write/identity et al.
 import issue_schema as S  # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import working_set_manager as WS  # noqa: E402  the parsers and the pull (stage 10)
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
@@ -37,7 +38,16 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-ISSUES = ROOT / "issues"
+ISSUES = _RP.ISSUES_DIR
+
+
+@_RP.group_follow
+def _issues_rebind() -> None:
+    """The index is the CURRENT group's — B117 stage 4 (2026-09-07)."""
+    global ISSUES
+    ISSUES = _RP.ISSUES_DIR
+
+
 CLOSED = ("settled", "declined", "retired")
 # A ROOT IS A LIVE NODE (R429, 2026-09-01), not a
 # separate bucket beside live/leads/closed. It carries `root = true` in its

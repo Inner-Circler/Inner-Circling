@@ -21,7 +21,7 @@ by anything but the coordinator process itself.
 Over time the record accumulates: transcripts, a per-part distillate that
 feeds the next circle's prompts, and a graph of **issues** where every
 piece of evidence is a verbatim quote checked against the transcript it
-came from. `docs/what-this-is.md` is the long account.
+came from. `docs/overview.md` is the long account.
 
 ## What this is not
 
@@ -45,10 +45,20 @@ Free of charge, offered as-is, by one person who is not a clinician.
 
 ## Safety
 
-**This install contains no crisis resources and no safety net.** The
-registers under `self/` arrive empty by design, so nothing here will
-notice distress, escalate, or put a phone number in front of you. Earlier
-versions of this file implied otherwise; they were wrong.
+**Nothing here is a safety net.** No part of this system notices distress,
+escalates, or reaches a human being on your behalf. The registers under
+`groups/ifs/self/` arrive empty by design, and nothing is watched or
+monitored. Earlier versions of this file implied otherwise; they were
+wrong.
+
+**The parts do carry crisis lines, and one may offer you them.** The
+rulebook every part reads — `coordinator/process_core.md` — names **988**,
+texting **HOME** to **741741**, and **findahelpline.com**, and tells each
+part that safety content is real and additive, never a substitute for what
+the circle is doing. The first two are United States services. If you are
+elsewhere, the directory is the one that will reach you, and you may want
+to replace those lines with your own country's: that file ships as yours
+to edit.
 
 If you are in crisis, or approaching one, stop and use a human service:
 your local emergency number, or a directory such as `findahelpline.com`.
@@ -59,7 +69,7 @@ Some further judgement, offered rather than enforced:
 - Treat your parts gently. Parts speak about hope and trauma because that 
   is what they mirror. A circle can reach things that deserve care.
 - Do not run a circle to settle a decision. The room converges. That 
-  tendency is measured in docs/what-this-is.md and is a known risk.
+  tendency is a known risk, and it is why this is not a decision procedure.
 - Take what surfaces a trusted and capable person, ideally.
 
 ## Privacy — what stays, and what leaves
@@ -72,7 +82,8 @@ pane has a redacted view: names, places and organisations you list are
 shown as stable opaque ids while the transcript on disk, and what the
 model receives, stay exactly as written. `/redact-alias-add`,
 `/redact-alias-update`, `/redact-alias-delete` and `/redact-alias-list`
-keep the list, in `self/redaction.toml`; part names are never eligible.
+keep the list, in `groups/ifs/self/redaction.toml`; part names are never
+eligible.
 It is presentation only — a screen someone else might see — not privacy
 from the model, which is the paragraph below.
 
@@ -121,16 +132,45 @@ SHIPS
   - ui/                           the two-pane interface (the windowed
                                   Ticker flavor, ui/ticker/, is NOT in
                                   this bundle)
-  - docs/                         how it works
-  - coordinator/process_core.md   the rulebook every part reads
-  - parts/soul/, parts/child/     two seed parts
+  - docs/overview.md              how it works — the long account
+  - docs/what-this-is.md          a description written for readers outside
+                                  the project, with what is BUILT and what is
+                                  DESIGNED marked separately
+  - docs/licensing.md             the licence (Apache-2.0) and the attribution
+                                  it asks for
+  - docs/circling_probes.md       draft questions Self may ask at a circle's
+                                  open. Wired into nothing — reading them
+                                  changes no file and no rule
+                                  These four are the whole of docs/ that a
+                                  bundle carries; the rest of the live
+                                  tree's docs/ never ships
+  - coordinator/process_core.md   the rulebook every part reads (the universal layer;
+                                  coordinator/process_ifs.md is the IFS group's own)
+  - groups/ifs/parts/soul/, groups/ifs/parts/child/     two seed parts
+  - groups/ifs/group.toml         the group's own descriptor — its presence makes the folder a
+                                  group (R468): roles, reserved roles, the first-run order, the
+                                  role whose answer names the console, its rulebook layer
 
-ARRIVES EMPTY, WITH A README
-  - circles/                      transcripts land here
-  - issues/                       the issue graph
-  - self/                         Self's registers
+ARRIVES EMPTY, WITH A README — under groups/ifs/, the IFS group's own folder; a second
+group gets a folder of the same shape beside it (groups/<name>/). Which groups a bundle
+carries is a list (packaging/groups.toml on the publishing side) — this one carries IFS;
+a bundle may carry any one or more, and the program resolves whatever it finds
+  - groups/ifs/circles/           transcripts land here, and the four
+                                  one-per-circle registers sit beside them
+  - groups/ifs/issues/            the issue graph
+  - groups/ifs/self/              Self's registers
   - work/prompts/                 captured prompts
   - work/logs/                    close reports
+  - work/graph/                   the issue graph's PICTURE, redrawn at every
+                                  close whose graph moved; the command pane
+                                  prints the path
+  - work/manifests/               stays empty here: nothing in this bundle
+                                  writes it, as its own README says
+  - work/circle_audit/            the record audit's own lock and snapshots
+  - work/nightly/                 the staging root a write passes through
+                                  before it lands. Nothing is scheduled — the
+                                  name is historical and its own README says
+                                  so
 
 NEVER SHIPS
   - any transcript, any part, any issue, any remember, any proposal 
@@ -204,8 +244,8 @@ files in one folder, which is what makes that enough.
 
 **There is no package to install, and that is deliberate.** This is not a
 library you import — it is a working directory that becomes your own
-record. The code reads and writes `parts/`, `self/`, `issues/`,
-`circles/` and `work/` *beside itself*: every path is derived from where
+record. The code reads and writes `groups/<name>/{parts,self,issues,circles}/`
+— `groups/ifs/` for the group you receive — and `work/` *beside itself*: every path is derived from where
 the modules sit on disk. Installed into a Python packages directory, your
 transcripts and your parts' identities would be written there too, among
 the libraries, where nothing expects to find them and an upgrade would
@@ -342,9 +382,14 @@ you pass on.
 is missing, turn on file extensions in Explorer and check the file is
 `.env` and not `.env.txt`.*
 
-A shell variable of the same name **wins over the file** — `.env` is not
-read for a value the environment already has. That is worth knowing if
-you ever rotate a key and nothing seems to change.
+**The two lines above behave differently, deliberately.** For
+`ANTHROPIC_API_KEY`, a shell variable of the same name **wins over the
+file** — `.env` is not read for a value the environment already has. That
+is worth knowing if you ever rotate a key and nothing seems to change.
+`IFS_USER_NAME` is the opposite: it is read from `.env` **only**, never
+from the environment, so editing the file always takes effect on the next
+run with nothing else to clear. The key taught that lesson; the name was
+built not to repeat it.
 
 `IFS_USER_NAME` sets the name the console greets you by. **It does not
 change the record** — the transcript writes `[Self]:` for everything you
@@ -544,9 +589,9 @@ at the cmd> prompt.
 
 **About proposals**
 
-When circling reveals something important - like another issue
-or even a new part, this is how you register such things for
-dedicated attention:
+When circling reveals something important — like another issue, a
+practice worth keeping, or a better option for you — this is how a
+part registers it for dedicated attention:
 
 ```
 [proposed: <command>]
@@ -556,18 +601,23 @@ The command is any of those you can see by typing "help propose"
 in the command pane - the same command works there or here in
 the circle pane when written in this way.  Proposals are "staged";
 at the end of the circle you are asked if you approve of any
-proposals. You can approve (the proposal affects the system, 
-adding a part or an issue, etc.), deny (the proposal is forgotten), 
-or skip (you'll be asked again at the next circle close). 
+proposals. You can approve (the proposal affects the system,
+opening an issue or adding a practice, etc.), deny (the proposal
+is forgotten), or skip (you'll be asked again at the next circle
+close).
 
-Parts are told about any new parts or issues, and they will
-begin to accumulate related memories.
+A part cannot propose a new PART. Adding one is yours alone,
+with `/part-add` at the command pane — but parts are told about
+any new part or issue, and they will begin to accumulate related
+memories.
 
 As with remember, the syntax is strict.
 
 **Closing the circle**
  
-`/close` ends it properly, `/abort` ends it without a record.
+`/close` ends it properly. `/abort` stops without closing: the transcript
+is kept and its path is printed, but no part writes a closing reflection
+and none of the after-close processing runs.
 
 When you close a circle, the system looks at records and learns
 more about you. It may take some time to finish... just let it run.
@@ -576,7 +626,10 @@ See `coordinator/README.md` for more information.
 
 ## What a circle costs
 
-Parts run on Claude Sonnet. The coordinator prints a token and 
+Parts run on Claude Sonnet unless you change the `model` setting
+(`/settings-list` shows it and its current value; `/settings-update model
+<name>` changes it, and it takes effect at the next circle). The
+coordinator prints a token and 
 cost meter at the end of every circle, computed from the rates in
 `coordinator/llm_client.py` — **read that file rather than trusting a
 number written here**, since published rates change and this line 
@@ -603,6 +656,8 @@ circle would have cost without it.
 1  each part is asked for its summary of the circle, and those are written
 2  the close report is verified, and the whole circle is committed to git
 3  THEN dreaming runs for every part, and one circle-wide synthesis after it
+4  and if the issue graph moved, its picture is redrawn — the command pane
+   prints the path, under work/graph/
 ```
 
 Step 3 makes model calls of its own **after** the transcript is already
@@ -616,7 +671,8 @@ wrote nothing and the re-run is clean.
 
 ## Parts ... and the ones you will add
 
-**A circle starts at two.** `parts/soul/` and `parts/child/` arrive with
+**A circle starts at two.** `groups/ifs/parts/soul/` and
+`groups/ifs/parts/child/` arrive with
 an identity and no history — the substrate and the root of wonder,
 structural in the IFS model rather than particular to any one person.
 
@@ -637,14 +693,16 @@ one closes, in plainer terms than this file.
 ## Where to read next
 
 ```
-docs/what-this-is.md          written for outside readers, including
-                              what can go wrong
 docs/overview.md              the parts, and what each is for
 coordinator/README.md         how to run a circle, step by step
-coordinator/process_core.md   the rulebook every part is given
+coordinator/process_core.md   the rulebook every part is given — the
+                              UNIVERSAL half, shared by every group
+coordinator/process_ifs.md    the IFS group's own half, composed into
+                              the above at every circle open
 coordinator/process.md        the operations rulebook — closing,
                               auditing, recovery
-issues/issue_model.md         what an issue is, and what is not one
+groups/ifs/issues/issue_model.md
+                              what an issue is, and what is not one
 ```
 
 ## Status, support, and contributing
@@ -713,23 +771,35 @@ YOURS — the system expects you to update this; the API key is required.
   .env                          your key and your name
 
 YOURS — the system is pretty tolerant if you update these
-  self/self.md                  more about you
-  self/best_practices.toml      how the circle behaves, and how you move
-  parts/<name>/long_term.md     a part's identity
-  parts/<name>/part.toml        a part's tag and speaking rules
-  coordinator/process_core.md   the rulebook
+  groups/ifs/self/self.md       more about you
+  groups/ifs/self/best_practices.toml
+                                how the circle behaves, and how you move
+  groups/ifs/parts/<name>/long_term.md
+                                a part's identity
+  groups/ifs/parts/<name>/part.toml
+                                a part's tag and speaking rules
+  coordinator/process_core.md   the rulebook every part reads — the
+                                universal layer
+  coordinator/process_ifs.md    the IFS group's own layer, composed onto
+                                it: the Soul, the goals, the honesty
+                                mandate, mutual knowing
 
 WITH CARE — machine-written, but hand-editable
-  issues/issue_model.md         what an issue is
-  issues/*.toml                 the issue graph
-  self/*.toml                   the registers
+  groups/ifs/issues/issue_model.md
+                                what an issue is
+  groups/ifs/issues/*.toml      the issue graph
+  groups/ifs/self/*.toml        the registers
+  groups/ifs/circles/*.toml     the four one-per-circle registers, which sit
+                                beside the transcripts rather than under self/
     Each has one owning module that reads and writes it. Keep the shape,
     edit between circles, and run the gate named below afterwards.
 
 NEVER — the historical record, and what is derived from it
-  circles/*.md                  transcripts
-  parts/*/short_term_<OT>.toml  each part's record of a circle (.md before 2026-09-04)
-  parts/*/mid_term.md           the distillate
+  groups/ifs/circles/*.md       transcripts
+  groups/ifs/parts/*/short_term_<OT>.toml
+                                each part's record of a circle (.md before 2026-09-04)
+  groups/ifs/parts/*/mid_term.md
+                                the distillate
   work/logs/*.json              close reports
   work/prompts/**               captured prompts
 ```
@@ -786,17 +856,17 @@ anything at all
       a failure prints INTEGRITY FAIL and, per file, the defect and the
       remedy, then exits non-zero. There is no --force.
 
-parts/ or self/
+groups/ifs/parts/, groups/ifs/self/ or groups/ifs/circles/*.toml
   .venv\Scripts\python coordinator\circle_audit.py --selfcheck
       watch for   0 FAIL · 0 WARN · N OK
       a WARN is not a pass. Read it.
 
-issues/
+groups/ifs/issues/
   .venv\Scripts\python memory\issue_gate.py
       watch for   GATE PASS — every invariant satisfied
       and the "quote(s) verified verbatim" count. It should not fall.
 
-self/best_practices.toml
+groups/ifs/self/best_practices.toml
   .venv\Scripts\python coordinator\practice_verify.py
       watch for   PASS — tally, ids, addressees and routing all hold
 

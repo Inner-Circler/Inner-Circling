@@ -4,7 +4,7 @@ when a circle moves the account of Self, and whatever it writes here stands
 
 <!--
 Hand-genericized delegate, shipped in place of the operator's own file — see
-README.md beside this one. The live self/self.md is written in and about
+README.md beside this one. The live groups/ifs/self/self.md is written in and about
 the operator's own voice: who Self is for this installation, and the
 psychological context the parts are speaking into. None of that ships. What
 ships is the SHAPE — the two sections synthesis expects to find and rewrite,

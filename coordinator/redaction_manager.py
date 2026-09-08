@@ -55,7 +55,7 @@ the original design's own literal examples verbatim.
 
 THE HARD EXEMPTION — the operator's own words, unconditional, in both
 circles and consults: *"part names are never redacted."* Every current
-part tag, every historical alt-spelling (`roster.ALT_TAGS`), and every
+part tag, every historical alt-spelling (`part_roster.ALT_TAGS`), and every
 name Self has ever gone by (`identity.self_tags()`) is refused at
 `alias_add()`/`alias_update()` time AND filtered out of the compiled
 registry pattern every time it is built — the second check is defense in
@@ -82,7 +82,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 
 import REGISTER_CLASS as SS                                       # noqa: E402
-import roster as R                                               # noqa: E402
+import part_roster as R                                               # noqa: E402
 import identity as ID                                            # noqa: E402
 import record_paths as P                                                 # noqa: E402
 
@@ -109,6 +109,14 @@ _ALIAS_PREAMBLE = (
 
 # ---------------------------------------------------------- the reverse map
 MAP_PATH = P.REDACTION_MAP
+
+
+@P.group_follow
+def _paths_rebind() -> None:
+    """The CURRENT group's registers — B117 stage 4 (2026-09-07)."""
+    global ALIAS_PATH, MAP_PATH
+    ALIAS_PATH = P.REDACTION
+    MAP_PATH = P.REDACTION_MAP
 MAP_TABLE = "token"
 MAP_ORDER = ("id", "kind", "literal", "created")
 STRUCTURED_KINDS = ("email", "url", "phone", "handle")
@@ -156,7 +164,7 @@ def alias_protected_read() -> frozenset[str]:
     """Every word that may NEVER be redacted, casefolded: the seven live
     part tags, every historical alt-spelling, and every name Self has
     ever gone by. The operator's own words: "part names are never
-    redacted in consults or circles." Rebuilt on every call — roster.py
+    redacted in consults or circles." Rebuilt on every call — part_roster.py
     and identity.py cache their own reads, so this costs nothing worth
     caching a second time over."""
     return frozenset(t.casefold() for t in
@@ -218,24 +226,28 @@ def alias_update(n: int, canonical: str,
     delete-and-recreate wearing a different name. Delete and re-add if
     the kind itself was wrong; the original design this replicates had no
     update verb at all for the same reason — add/list/delete only."""
-    rows = alias_read()
-    if not 1 <= n <= len(rows):
-        return False, f"{n} is not in 1..{len(rows)} — /redact-alias-list"
+    # Rides REGISTER_CLASS.register_row_update() since stage 2 of B116 (R465, 2026-09-07):
+    # locate by the listing's number, id and kind immutable, the part-name precheck first,
+    # only canonical/forms touched. The save stays here.
     canonical = canonical.strip()
     if not canonical:
         return False, "a canonical name is required"
     forms = [f.strip() for f in (forms or []) if f.strip()]
-    for candidate in [canonical] + forms:
-        hit = _protected_hit(candidate)
-        if hit is not None:
-            return False, (f"{candidate!r} is a part/Self name ({hit!r}) — "
-                           f"part names are never redacted, in circles or "
-                           f"consults")
+
+    def _precheck(fields: dict, _row: dict) -> str:
+        for candidate in fields["forms"]:
+            hit = _protected_hit(candidate)
+            if hit is not None:
+                return (f"{candidate!r} is a part/Self name ({hit!r}) — part names are "
+                        f"never redacted, in circles or consults")
+        return ""
+
     doc = _alias_doc()
-    live = doc.get(ALIAS_TABLE, [])
-    row = live[n - 1]
-    row["canonical"] = canonical
-    row["forms"] = [canonical] + forms
+    ok, msg, row = SS.register_row_update(
+        doc, ALIAS_TABLE, locate=n, immutable=("id", "kind"), precheck=_precheck,
+        fields={"canonical": canonical, "forms": [canonical] + forms})
+    if not ok:
+        return False, msg + (" — /redact-alias-list" if "1.." in msg else "")
     _alias_save(doc)
     return True, f"updated [{row['id']}] {row['kind']} {canonical!r}"
 

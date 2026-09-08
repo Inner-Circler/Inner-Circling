@@ -71,7 +71,7 @@ ACCUMULATE, NEVER PRUNE. One record per processed circle at most; the register g
 (docs/REGISTER_GATE_DESIGN.md) enforces exactly that in paired mode. WRITER: the phase-2
 driver (circle_synthesis.py's SYNTHESIS pass, staged by inter_circle.py, B94 stage 4) — this
 module's own render function stays PURE, matching circle_history_manager.py and
-self_observation_manager.py's shape, so a caller can
+circle_observation_manager.py's shape, so a caller can
 stage a candidate without writing (Transaction's own contract).
 """
 
@@ -84,6 +84,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import setting_manager as SET                                     # noqa: E402
 import JOURNAL_CLASS                                               # noqa: E402
 
@@ -91,7 +92,14 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # Rebindable for probes — test suites never write the live register.
-PATH = ROOT / "self" / "circle_journal.toml"
+PATH = _RP.CIRCLES_DIR / "circle_journal.toml"
+
+
+@_RP.group_follow
+def _path_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07)."""
+    global PATH
+    PATH = _RP.CIRCLES_DIR / "circle_journal.toml"
 
 TABLE = "journal"
 ORDER = ("id", "date", "circle", "text", "chain", "provenance")
@@ -115,8 +123,8 @@ def _rel() -> str:
     """PATH for printing. `PATH.relative_to(ROOT)` raises when PATH has been
     rebound to a temp file, which is exactly what the probe suite does to the
     constant above — so a module whose PATH is documented as rebindable must
-    not assume PATH is still under ROOT (self_observation_manager.py's own
-    fix; circle_history_manager.py predates it and still assumes)."""
+    not assume PATH is still under ROOT. All three journal managers carry this
+    fix now; circle_history_manager.py was the last, at B105."""
     try:
         return PATH.relative_to(ROOT).as_posix()
     except ValueError:

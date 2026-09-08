@@ -2,8 +2,8 @@
 """
 register_gate.py — the REGISTER gate: the one gate every write to the record passes.
 
-MOVED OUT OF ifs_model.py, 2026-09-03 (cohesion re-homing stage 9, B99; the name is
-docs/REGISTER_GATE_DESIGN.md's own). ifs_model.py keeps the structural MODEL of the memory
+MOVED OUT OF record_model.py, 2026-09-03 (cohesion re-homing stage 9, B99; the name is
+docs/REGISTER_GATE_DESIGN.md's own). record_model.py keeps the structural MODEL of the memory
 files — Finding, the primitives, entries, the long_term/headed/append-only comparisons — and
 this module reads it as M. Every function below is the verbatim body it had there; only the
 file moved. What lives here:
@@ -40,7 +40,8 @@ import re
 import sys
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import ifs_model as M                                          # noqa: E402  the file model
+import record_model as M                                          # noqa: E402  the file model
+import record_paths as _RP                                         # noqa: E402
 import proposal_manager as PR                                         # noqa: E402  REGISTERS reads ORDER
 import practice_manager as PM                                  # noqa: E402  REGISTERS reads ORDER
 
@@ -53,8 +54,8 @@ def _tree_files(root: pathlib.Path) -> list[pathlib.Path]:
     # The gate does not cover the TOML successor — that is B37's already
     # open "no gate exists for any TOML register today", now one file
     # wider, not a new gap invented here.
-    out = [root / "parts" / p / "long_term.md" for p in M.PARTS]
-    out += [root / "self" / f for f in M.SELF_FILES]
+    out = [_RP.record_dir(root, "parts") / p / "long_term.md" for p in M.PARTS]
+    out += [_RP.record_dir(root, "self") / f for f in M.SELF_FILES]
     return out
 
 
@@ -159,7 +160,11 @@ def record_tree_compare(baseline: pathlib.Path, candidate: pathlib.Path,
     # narrative is unaffected by one already being there, and flagging it turns a
     # second look at an already-dreamed day into a phantom failure.
     nd = f"narrative_{today}.md"
-    bn, cn = baseline / "self" / nd, candidate / "self" / nd
+    # a snapshot mirrors its tree's own shape: the group's under the real ROOT, flat in a probe
+    self_rel = next((r for r in (_RP.record_rel("self"), "self")
+                     if (baseline / r).is_dir() or (candidate / r).is_dir()),
+                    _RP.record_rel("self"))
+    bn, cn = baseline / self_rel / nd, candidate / self_rel / nd
     bdata, cdata = M.record_bytes_read(bn), M.record_bytes_read(cn)
     if cdata is None:
         pass                                   # this run writes no narrative
@@ -291,6 +296,13 @@ def _tp_cap() -> int:
     return _TP.CAP
 
 
+def _tp_order() -> tuple[str, ...]:
+    """topic_manager.ORDER, imported rather than duplicated — the same rule as _tp_cap()
+    above, applied when B116 (R465) added `amended` to the row. Late for the same reason."""
+    import topic_manager as _TP
+    return _TP.ORDER
+
+
 def _mem_cap() -> int:
     """remember.GATE_CHAR_CEILING, imported rather than duplicated — the rule
     _ch_cap() below already writes down, applied to the register that needed
@@ -312,12 +324,12 @@ def _mem_cap() -> int:
 
 
 def _so_order() -> tuple[str, ...]:
-    """self_observation_log.ORDER, imported rather than duplicated. Late for
+    """circle_observation_log.ORDER, imported rather than duplicated. Late for
     the same reason _ch_cap() is late — that module imports REGISTER_CLASS,
     which this module's own dependency chain already pulls in."""
     try:
-        import self_observation_manager as _SO
-        return _SO.ORDER
+        import circle_observation_manager as _CO
+        return _CO.ORDER
     except Exception:
         return ("id", "date", "circle", "text", "note")
 
@@ -366,7 +378,10 @@ REGISTERS: dict[str, dict] = {
     # for any future register to opt into, even with no current user.
     "self/topics.toml": {
         "table": "topic",
-        "order": ("id", "circle", "date", "text", "state"),
+        # ORDER IS IMPORTED, NOT COPIED (the rule the best_practices row below writes down),
+        # since B116 added `amended` (R465, 2026-09-07). /topic-update is a hand edit between
+        # circles — out of this gate's scope by design; it never widens the gate.
+        "order": _tp_order(),
         "id_prefix": "TP-", "cap": _tp_cap(), "per_run_max": None,
         "preamble": True,
         "state_values": ("open",), "state_prefixes": ("closed by Self ",),
@@ -405,6 +420,8 @@ REGISTERS: dict[str, dict] = {
         # is Self's or a part's own words, ruled unlimited (R023).
         "id_prefix": "BP-", "cap": None, "per_run_max": None,
         "preamble": True, "new_state": "proposed",
+        # /practice-update (B116, R465) is a hand edit between circles — out of this gate's
+        # scope by design ("the gate does not police humans"); it never widens the gate.
         # _sync_tally keeps an "**Entries: N**" count inside this file's
         # own preamble — the one register whose [doc] legitimately moves
         # when a row lands. Everything else about it stays immutable;
@@ -413,7 +430,7 @@ REGISTERS: dict[str, dict] = {
         # single-tree state sanity intentionally omitted: accepted/denied
         # states carry free-form timestamps and R-prose; parse + ids only.
     },
-    "self/circle_history.toml": {
+    "circles/circle_history.toml": {
         "table": "history",
         "order": ("id", "date", "circle", "text", "chain"),
         # CAP IS IMPORTED, NOT COPIED. This row said 600 until 2026-08-15 and
@@ -425,18 +442,23 @@ REGISTERS: dict[str, dict] = {
         "id_prefix": "CH-", "cap": _ch_cap(), "per_run_max": 1,
         "preamble": True, "chain": True,
     },
-    "self/self_observation_log.toml": {
+    "circles/circle_observation_log.toml": {
         "table": "observation",
         # ORDER IS IMPORTED, NOT COPIED — the rule this dict already wrote
         # down for circle_history's cap and best_practices' order.
         "order": _so_order(),
         # NO CAP: nothing upstream bounds an OBSERVATION section, so a cap
         # here would fail on legitimate output rather than enforce a
-        # contract. See self_observation_manager.py's own note.
-        "id_prefix": "SO-", "cap": None, "per_run_max": 1,
+        # contract. See circle_observation_manager.py's own note.
+        # TWO PREFIXES, AND ONLY HERE — R-NEW (2026-09-07): CIRCLE_OBSERVATION became
+        # CIRCLE_OBSERVATION and the id change is FORWARD-ONLY, so SO-0001..SO-0031 stay
+        # as written and CO- is minted from the next close. The FIRST entry is what the
+        # manager mints; the rest are accepted spellings. A single string still works
+        # everywhere else and is the shape every other register uses.
+        "id_prefix": ("CO-", "SO-"), "cap": None, "per_run_max": 1,
         "preamble": True,
     },
-    "self/circle_journal.toml": {
+    "circles/circle_journal.toml": {
         "table": "journal",
         # ORDER IS IMPORTED, NOT COPIED — the rule this dict already wrote
         # down for circle_history's cap and best_practices' order.
@@ -464,7 +486,8 @@ def _register_paths(root: pathlib.Path) -> list[tuple[pathlib.Path, dict]]:
     first run) is simply not iterated."""
     out = []
     for pat, spec in REGISTERS.items():
-        for p in sorted(root.glob(pat)):
+        top, _sep, rest = pat.partition("/")
+        for p in sorted(_RP.record_dir(root, top).glob(rest)):
             if p.is_file():
                 out.append((p, spec))
     return out
@@ -494,10 +517,25 @@ def _fixed_point(data: bytes, spec: dict) -> bool:
         return False
 
 
-def _idnum(rec: dict, prefix: str) -> int | None:
+def _prefixes(prefix) -> tuple:
+    """A spec's id_prefix as a tuple. A single string is the shape every register but
+    CIRCLE_OBSERVATION uses; the FIRST entry is what the manager mints (R-NEW, 2026-09-07)."""
+    return (prefix,) if isinstance(prefix, str) else tuple(prefix)
+
+
+def _idnum(rec: dict, prefix) -> int | None:
+    """The numeric part of a record's id under any accepted prefix, else None.
+
+    NOT `v.startswith(prefix)` with a raw tuple: str.startswith ACCEPTS a tuple and would
+    pass, and then `v[len(prefix):]` slices by the tuple's LENGTH (2) rather than the
+    matched prefix's — returning None for every id and reading as ID-SEQUENCE on every
+    staged record. Found by test_inter_circle, not by inspection."""
     v = rec.get("id", "")
-    if isinstance(v, str) and v.startswith(prefix) and v[len(prefix):].isdigit():
-        return int(v[len(prefix):])
+    if not isinstance(v, str):
+        return None
+    for p in _prefixes(prefix):
+        if v.startswith(p) and v[len(p):].isdigit():
+            return int(v[len(p):])
     return None
 
 
@@ -538,11 +576,16 @@ def register_verify(rel: str, data: bytes | None,
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             out.append(M._f("FAIL", "DUPLICATE-ID", rel, f"reused: {dupes}"))
-        bad = [i for i in ids if not (isinstance(i, str) and i.startswith(pre)
-                                      and i[len(pre):].isdigit())]
+        # A SPEC MAY NAME SEVERAL ACCEPTED PREFIXES — R-NEW (2026-09-07), for
+        # CIRCLE_OBSERVATION's forward-only SO- -> CO- change. Every prefix is
+        # accepted on a row that already exists; the manager mints the first.
+        pres = _prefixes(pre)
+        bad = [i for i in ids
+               if not (isinstance(i, str)
+                       and any(i.startswith(p) and i[len(p):].isdigit() for p in pres))]
         if bad:
             out.append(M._f("FAIL", "BAD-ID", rel,
-                          f"not {pre}NNNN-shaped: {bad[:4]}"))
+                          f"not {'/'.join(pres)}NNNN-shaped: {bad[:4]}"))
         if "next_id" in doc and not isinstance(doc["next_id"], int):
             out.append(M._f("FAIL", "BAD-NEXT-ID", rel,
                           f"next_id is {type(doc['next_id']).__name__} "
@@ -670,7 +713,7 @@ def register_compare(rel: str, base: bytes | None, cand: bytes | None,
             if _idnum(r, pre) != base_n + i:
                 out.append(M._f("FAIL", "ID-SEQUENCE", rel,
                               f"new record {i} has id {r.get('id')!r}; "
-                              f"expected {pre}{base_n + i:04d}"))
+                              f"expected {_prefixes(pre)[0]}{base_n + i:04d}"))
     cap = spec.get("cap")
     newest_base = max((r.get("date", "") for r in brecs), default="")
     base_ids = {r.get("id") for r in brecs if "id" in r}

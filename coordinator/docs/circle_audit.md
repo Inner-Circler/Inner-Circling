@@ -202,7 +202,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
 
 Python standard library: `argparse`, `atexit`, `datetime`, `json`, `os`, `pathlib`, `re`, `shutil`, `subprocess`, `sys`, plus `from __future__ import annotations`.
 
-Local/sibling modules: `ifs_model` (as `M`) — the file model: `record_file_verify`, `record_sha`, `record_bytes_read`, `SHORT_TERM_SECTIONS`, `PARTS`, and the `Finding` result type (`level`/`code`/`path`/`message`); `register_gate` (as `RG`, since 2026-09-03) — the gate: `_tree_files`, `record_tree_compare`, `record_tree_verify`, `register_summarise`; `gitrepo` (as `G`) — all git-repository bootstrap and safety operations (`system_git_is_available`, `system_git_run`, `system_git_repo_ensure`, `system_git_remote_refuse`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_is_dirty`, `system_git_paths_commit`, `system_git_identity_resolve`, `ENV_GIT_NAME`, `ENV_GIT_EMAIL`); `TRANSACTION_CLASS` (as `T`) — the staged-write/transaction file/commit machinery: the `Transaction` class (`stage`, `staged`, `changed`, `validate`, `commit`, `verify`, `record_committed`, `run_id`, `staging`) and the module-level `transaction_read`, `transaction_report`, `transaction_finish`, `transaction_rollback`; `roster` (as `R`) — `TAGS` and `DIR_BY_TAG` (current-spelling part tag/directory mappings, deliberately not `DIR_BY_TAG_ALL`, since this reader only ever sees circles the audit itself processes, all postdating a 2026-08-07 tag rename); `circle_state` (as `CS`, imported locally inside circle_audit_open_verify() and circle_audit_snapshot()) — `circle_is_in_progress()`, the fails-closed open-circle probe.
+Local/sibling modules: `record_model` (as `M`) — the file model: `record_file_verify`, `record_sha`, `record_bytes_read`, `SHORT_TERM_SECTIONS`, `PARTS`, and the `Finding` result type (`level`/`code`/`path`/`message`); `register_gate` (as `RG`, since 2026-09-03) — the gate: `_tree_files`, `record_tree_compare`, `record_tree_verify`, `register_summarise`; `gitrepo` (as `G`) — all git-repository bootstrap and safety operations (`system_git_is_available`, `system_git_run`, `system_git_repo_ensure`, `system_git_remote_refuse`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_is_dirty`, `system_git_paths_commit`, `system_git_identity_resolve`, `ENV_GIT_NAME`, `ENV_GIT_EMAIL`); `TRANSACTION_CLASS` (as `T`) — the staged-write/transaction file/commit machinery: the `Transaction` class (`stage`, `staged`, `changed`, `validate`, `commit`, `verify`, `record_committed`, `run_id`, `staging`) and the module-level `transaction_read`, `transaction_report`, `transaction_finish`, `transaction_rollback`; `roster` (as `R`) — `TAGS` and `DIR_BY_TAG` (current-spelling part tag/directory mappings, deliberately not `DIR_BY_TAG_ALL`, since this reader only ever sees circles the audit itself processes, all postdating a 2026-08-07 tag rename); `circle_state` (as `CS`, imported locally inside circle_audit_open_verify() and circle_audit_snapshot()) — `circle_is_in_progress()`, the fails-closed open-circle probe.
 
 Inside `circle_audit_phase3_run()` only, two further dependencies are imported locally rather than at module load: `prompt_build` (as `C`, for the same identity/prompt assembly a live circle uses — `group_shared_read`, `circle_briefing_build`, `prompt_part_assemble`, `PART_TAGS`; it was `circle` until phase 2 stage 2, and `load_shared`/`shared_block`/`system_blocks` retired into `prompt_part_assemble` 2026-09-02) and `llm_client` (as `LC`, for `stream_client_build` and `stream_call_once` — the transport, which owns the `anthropic` client and the `.env` key resolution since 2026-08-28; this file built its own `Anthropic()` client until then).
 
@@ -228,7 +228,7 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
         circle, in phase 2 and phase 3.
         `parts/<part>/long_term.md` (`part_relationships.toml` too, until
         that register retired 2026-08-22) and the fixed set of `self/*.md`
-        files (per ifs_model.SELF_FILES)
+        files (per record_model.SELF_FILES)
         -- read wholesale during a snapshot (circle_audit_snapshot()) and during
         invariant checking (record_tree_compare()/record_tree_verify(), called from
         phase 6).
@@ -375,7 +375,9 @@ Verifies git preconditions, but only enforces them as hard failures when the run
     status column, correct for every status-column shape git produces).
     Split paths into `expected` (matching AUDIT_OUTPUT_RE -- exactly
     what an audit run is allowed to have left uncommitted: short_terms
-    and the synthetic observation-log append) and `other`.
+    and the synthetic observation-log append, under groups/<name>/ or
+    flat, and at either of the observation log's two historic paths,
+    because a working tree can predate a move) and `other`.
     if (there are expected paths and no other paths) then {
         log OK: the tree is dirty only in the audit's own output -- the
         expected state after an uncommitted backfill.
@@ -539,7 +541,7 @@ Unprocessed = in scope and carrying no dream/<OT> tag. The scope epoch is the ol
     { Read the given transcript file as text (returning an empty dict on
       any OSError). For each line matching STATEMENT_RE (a bracketed
       part-tag, optionally followed by a "[To: ...]" addressee, then a
-      colon), map the tag to its directory name via roster.DIR_BY_TAG and
+      colon), map the tag to its directory name via part_roster.DIR_BY_TAG and
       increment that part's count. Return the per-part statement-count
       dict. }
 
@@ -567,7 +569,7 @@ Reconciles each unprocessed circle against `circle_close_verify.py`, then applie
         }
         for each part that spoke, sorted:
             Check its short_term_<ot>.toml (.md before 2026-09-04, R434) via
-            ifs_model.record_file_verify().
+            record_model.record_file_verify().
             if (the file could not be read at all) then {
                 record it as needing backfill, with the first finding's
                 message (or "missing") as the reason.
@@ -811,7 +813,7 @@ Phases 7 (commit), 8 (verify), 9 (record) — the docstring notes explicitly tha
 2026-08-15, code included. They registered/removed the two Windows Task Scheduler jobs that
 snapshotted before and validated after the separate, since-retired `ifs-nightly` Cowork task.
 See `rulings/` and `docs/NIGHTLY_DESIGN.md`'s own §7 retirement note: nothing schedules
-dreaming/synthesis any more (`docs/INTER_CIRCLE_DESIGN.md`'s Placement ruling — synchronous
+dreaming/synthesis any more (`docs/INTER_CIRCLE_DESIGN_V2.md`'s Placement ruling — synchronous
 at `/close`).
 
 ## BUGS

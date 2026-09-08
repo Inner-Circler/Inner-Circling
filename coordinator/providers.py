@@ -94,7 +94,7 @@ class Knob:
         # word and its own inline check, which made it the FOURTH validation
         # vocabulary in the tree a week after the third. It now declares what
         # every other gated field declares and is checked by the same
-        # function, roster.part_context_value_verify().
+        # function, part_roster.part_context_value_verify().
         self.values = values
         self.default = default
         self.applies = applies
@@ -102,7 +102,7 @@ class Knob:
         self.data_type = data_type
 
     def as_question(self) -> dict:
-        """The declaration in the shape roster.part_context_value_verify() reads, so a
+        """The declaration in the shape part_roster.part_context_value_verify() reads, so a
         provider's knob and a part's context question are held to one rule."""
         return {"key": self.key, "ask": self.ask, "data_type": self.data_type,
                 "gate": self.gate, "values": list(self.values)}

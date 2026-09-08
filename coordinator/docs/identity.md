@@ -12,7 +12,7 @@ identity.py — resolves who "Self" is for this installation: the fixed internal
 This module resolves ruling 2026-08-07: "during circles, the role of the user 'Self' should be personalized, that is, code should accept and generate 'Self' unless a 'UserName' is present." It exists to prevent conflating two distinct names that a single earlier hardcoded value used to be:
 
 - `SELF_ID` ("self") — the canonical internal id, never displayed or written to a transcript, used for every `speaker ==` comparison in the codebase.
-- `user_name_read()` — the CONSOLE-ONLY name: the Soul's recorded preferred_name, else $IFS_USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
+- `user_name_read()` — the CONSOLE-ONLY name: the home role's recorded preferred_name (the role the group's own group.toml names, R468 — the Soul for the IFS group), else $IFS_USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
 
 The docstring documents, in some detail, a Windows-specific trap: `os.environ` is case-insensitive on Windows and Windows always sets `USERNAME` for every process, so a naive `os.environ.get("UserName")` silently returns the OS login name (lower-cased) rather than an unset default, and `.env` cannot override it because `load_dotenv()` never overwrites a variable the OS already set. The module works around this by checking a project-specific variable, `IFS_USER_NAME`, first — it is the only variable `.env` can actually control on this platform — and the ruled `UserName` variable second, as the fallback that in practice is rarely reached once `IFS_USER_NAME` is set (which it now is, per the docstring, as of 2026-08-07).
 
@@ -56,13 +56,20 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
         Attempt to import python-dotenv and load ROOT/.env; if the package is absent, do nothing. A missing .env file is likewise tolerated (load_dotenv handles that itself).
     }
 
-### `soul_preferred_name()`
+### `_home_rebind()` — at import, and after every record_paths.group_set()
     {
-        read parts/soul/part.toml directly with tomllib (dependency-light, the way self_installed_tags_read()
-        reads self/identity.toml); return [context].answers.preferred_name stripped, or "" when the
-        file, the table or the key is absent, empty, or unreadable — never raises. Re-read on every
-        call. (R325, 2026-08-23; the Soul is a RESERVED part, which is why a shipped
-        module may name its directory.)
+        read the bound group's group.toml [identity]: HOME_DIR = its `role` ("" when the group
+        names none), HOME_KEY = its `key` (preferred_name when absent). R468, B120 — the home role is
+        the group's own; SOUL_DIR = "soul" was the literal until then, and is the IFS group's value.
+    }
+
+### `self_home_name_read()`   (soul_preferred_name() until R468)
+    {
+        if HOME_DIR is "" then { return "" — a group with no home role has no recorded name }
+        read parts/<HOME_DIR>/part.toml directly with tomllib (dependency-light, the way
+        self_installed_tags_read() reads self/identity.toml); return [context].answers.<HOME_KEY>
+        stripped, or "" when the file, the table or the key is absent, empty, or unreadable —
+        never raises. Re-read on every call. (R325, 2026-08-23.)
     }
 
 ### `user_name_read(explicit=None)`
@@ -74,8 +81,8 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
 
 ### `user_name_source()`
     {
-        (value, source-label), most explicit first: soul_preferred_name() if non-blank
-        ("parts/soul/part.toml preferred_name"); else IFS_USER_NAME from the .env FILE
+        (value, source-label), most explicit first: self_home_name_read() if non-blank
+        ("parts/<HOME_DIR>/part.toml <HOME_KEY>"); else IFS_USER_NAME from the .env FILE
         ("$IFS_USER_NAME"); else the literal "Self" ("default"). Never the OS login (R132). The
         console-only name — DISPLAY and SELF_ID do not move (R329).
     }

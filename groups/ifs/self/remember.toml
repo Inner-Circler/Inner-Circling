@@ -2,7 +2,7 @@ register = "self_remember"
 next_id = 1
 
 # Empty delegate, shipped in place of the operator's own register -- see
-# README.md beside this file. The live self/remember.toml is Self's OWN
+# README.md beside this file. The live groups/ifs/self/remember.toml is Self's OWN
 # reflexive record -- private, unvetted, and personal to the operator. This
 # delegate ships the register and none of it.
 #
@@ -11,11 +11,13 @@ next_id = 1
 # a label for people: no code reads the key. coordinator/remember_manager.py
 # serves both files and tells them apart by path, never by this name.
 #
-# Must stay valid, loadable TOML: remember_manager.py mints ids from doc["next_id"],
-# defaulting to 1 when absent, so an empty register at next_id = 1 is what a
-# fresh install would build for itself anyway.
+# Must stay valid, loadable TOML. `next_id` below is TOLERATED, NOT REQUIRED:
+# remember_manager._load() builds only {remember: []} for an absent file, and
+# remember_add() — the path your own [remember: ...] takes — is id-less and mints
+# no next_id at all. The counter belongs to the coordinator's dreamt records
+# (remember_dreamt_render(), "MEM-"-prefixed, per part), which never write here.
 remember = []
 
 [doc]
 preamble = """
-SELF's own reflexive record (docs/BNF.md, SELF). Private, unvetted, accumulate-never-prune."""
+SELF's own reflexive record. Private, unvetted, accumulate-never-prune."""

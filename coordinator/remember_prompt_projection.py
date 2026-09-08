@@ -100,7 +100,7 @@ def remember_project(part: str) -> tuple[str, dict]:
 
 
 # ------------------------------------------------------- cutoff-aware split
-# B44, RULED 2026-08-15 (docs/INTER_CIRCLE_DESIGN.md, "Projection"; R170's
+# B44, RULED 2026-08-15 (the "Projection" ruling, R170's
 # "mechanical selection... no LLM call, no new artifact"). Until this, the
 # WHOLE register rode in BLOCK 4 (block(), retired 2026-09-03, D81) — uncached, resent every
 # circle regardless of how old a memory was. This splits it at `cutoff`

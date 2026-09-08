@@ -92,6 +92,17 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 PROPOSALS = SS.PROPOSALS
+
+
+def _proposals_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07). Registered below, after
+    REGISTER_CLASS's own follower, so SS.PROPOSALS has already moved when this reads it."""
+    global PROPOSALS
+    PROPOSALS = SS.PROPOSALS
+
+
+import record_paths as _RPf                                                # noqa: E402
+_RPf.group_follow(_proposals_rebind)
 ORDER = ("id", "kind", "text", "state", "author", "sources", "circle",
          "proposed_at")
 STAGING_ONLY = ("sources", "circle", "proposed_at")

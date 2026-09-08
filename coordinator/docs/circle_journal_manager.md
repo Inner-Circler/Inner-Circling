@@ -14,9 +14,9 @@ circle_journal_manager.py — the CIRCLE_JOURNAL register: the circle's own evol
 
 ## DESCRIPTION
 
-`self/circle_history.toml` already writes one durable entry per circle, and each part's own `remember.toml` already collects fresh, salience-tagged material every close — but until B94 (2026-09-04) neither reached a prompt block, and nothing joined them. This register is that join: SYNTHESIS folds the prior CIRCLE_JOURNAL entry (if one exists) with this circle's own fresh HISTORY text and the high-salience remember rows parts surfaced, into one continuing account of what the circle now *is* — not a summary of turns, a part's-eye view of the whole. The same incremental-revision shape `part_mid_term_manager.py` already uses one level down, at the part rather than the circle: fold in what changed, keep what still holds, never replay every past entry from scratch.
+`circles/circle_history.toml` already writes one durable entry per circle, and each part's own `remember.toml` already collects fresh, salience-tagged material every close — but until B94 (2026-09-04) neither reached a prompt block, and nothing joined them. This register is that join: SYNTHESIS folds the prior CIRCLE_JOURNAL entry (if one exists) with this circle's own fresh HISTORY text and the high-salience remember rows parts surfaced, into one continuing account of what the circle now *is* — not a summary of turns, a part's-eye view of the whole. The same incremental-revision shape `part_mid_term_manager.py` already uses one level down, at the part rather than the circle: fold in what changed, keep what still holds, never replay every past entry from scratch.
 
-Named CIRCLE_JOURNAL by the operator's own ruling (D90/R454, 2026-09-04) — reusing docs/BNF.md's own JOURNAL shape word rather than colliding with `<circle_identity>`, which already names Block 1 as a whole. The operator also ruled the build order (D92/R455): this register shipped bespoke first, ahead of the shared LEDGER/JOURNAL core (`PROMPT_LEDGER`/`PROMPT_JOURNAL`). **B105 (2026-09-05) then built that core and folded this register into it** — `circle_journal_new_render()` now delegates row construction to a module-level `JournalClass` instance (`JOURNAL_CLASS.py`), sharing it with `circle_history_manager.py`, `self_observation_manager.py` and (for one function) `remember_manager.py`. This module keeps only what makes CIRCLE_JOURNAL its own — CAP/TARGET, text normalization, and whether `provenance` is included.
+Named CIRCLE_JOURNAL by the operator's own ruling (D90/R454, 2026-09-04) — reusing docs/BNF.md's own JOURNAL shape word rather than colliding with `<circle_identity>`, which already names Block 1 as a whole. The operator also ruled the build order (D92/R455): this register shipped bespoke first, ahead of the shared LEDGER/JOURNAL core (`PROMPT_LEDGER`/`PROMPT_JOURNAL`). **B105 (2026-09-05) then built that core and folded this register into it** — `circle_journal_new_render()` now delegates row construction to a module-level `JournalClass` instance (`JOURNAL_CLASS.py`), sharing it with `circle_history_manager.py`, `circle_observation_manager.py` and (for one function) `remember_manager.py`. This module keeps only what makes CIRCLE_JOURNAL its own — CAP/TARGET, text normalization, and whether `provenance` is included.
 
 **Two size numbers, doing different jobs — this register's OWN, not `circle_history_manager.py`'s imported.** `TARGET` and `CAP` follow the same asked-for-vs-refused-at pattern as `circle_history_manager.py`'s pair, but sized differently: this register reaches Block 1, paid on every part's prompt every circle, while `circle_history.toml` reaches no prompt block at all — and a folded, deduplicated distillate should run smaller than a raw HISTORY entry by construction, not merely be capped the same. Both defaults (4,000 / 3,600 characters) are setting-overridable and were chosen before more than two circles existed to measure against; the standalone trial that informed them is `work/ablations/2026-09-04/`.
 
@@ -26,13 +26,13 @@ Named CIRCLE_JOURNAL by the operator's own ruling (D90/R454, 2026-09-04) — reu
 
 **Accumulate, never prune.** At most one record per processed circle, and nothing here ever deletes one. The register gate enforces exactly that, the same as every other journal-shaped register.
 
-**The writer is the phase-2 driver.** `circle_synthesis.py`'s SYNTHESIS pass mints the entry (B94 stage 4); `inter_circle.py` stages it into `self/circle_journal.toml` right beside `circle_history.toml`'s own staging (B94 stage 4); `group_context.py` — Block 1's sole assembler — reads the newest entry into every part's prompt under a `## Circle identity` heading (B94 stage 5). The newest entry only, never "the last few": its own fold is already incremental revision, so reading more would repeat material the newest entry already carries forward.
+**The writer is the phase-2 driver.** `circle_synthesis.py`'s SYNTHESIS pass mints the entry (B94 stage 4); `inter_circle.py` stages it into `circles/circle_journal.toml` right beside `circle_history.toml`'s own staging (B94 stage 4); `group_context.py` — Block 1's sole assembler — reads the newest entry into every part's prompt under a `## Circle identity` heading (B94 stage 5). The newest entry only, never "the last few": its own fold is already incremental revision, so reading more would repeat material the newest entry already carries forward.
 
 ## MAIN
 
     Read the command-line arguments.
     if ("--init" appears) then {
-        if (self/circle_journal.toml already exists) then {
+        if (circles/circle_journal.toml already exists) then {
             print that it exists and was left untouched.
             return 0.
         } else {
@@ -59,7 +59,7 @@ Named CIRCLE_JOURNAL by the operator's own ruling (D90/R454, 2026-09-04) — reu
 ## COMMAND-LINE ARGUMENTS
 
     (none)      list every entry: id, the circle it is about, and its chain link.
-    --init      create self/circle_journal.toml as an empty register. Refuses
+    --init      create circles/circle_journal.toml as an empty register. Refuses
                 to overwrite an existing one — it prints and exits 0.
     --show      print the newest entry in full, text and provenance included.
 
@@ -71,7 +71,7 @@ Arguments are matched by presence, not position. Anything unrecognised falls thr
 
 ## EXTERNAL FILES
 
-    self/circle_journal.toml    READ by every verb; WRITTEN only by --init here.
+    circles/circle_journal.toml    READ by every verb; WRITTEN only by --init here.
                                 The real per-circle writes come from the phase-2
                                 driver calling circle_journal_new_render() and saving the result.
 

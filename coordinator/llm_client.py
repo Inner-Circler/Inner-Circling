@@ -13,7 +13,7 @@ rounds, stage 7) — it is round-logic wearing an API call, and the
 phase-2 review's correction of the original plan's "llm_client is
 self-contained" claim was exactly this line. What it needs of the
 coordinator is small and named: record_paths.PART_TAGS, seam, settings, providers
-(the vendor seam, R382), and ifs_model for the four short_term headings it
+(the vendor seam, R382), and record_model for the four short_term headings it
 must not keep a second copy of.
 
 METER is a module singleton MUTATED IN PLACE (add()) and never
@@ -149,9 +149,9 @@ def stream_ceiling_read(base: int, dry: bool = False) -> int:
 # them as its canned short_term, and circle_close.py's short_term_collect() checks
 # a real response carries all four.
 #
-# IMPORTED, NOT COPIED (2026-08-28). This module and ifs_model each wrote the
+# IMPORTED, NOT COPIED (2026-08-28). This module and record_model each wrote the
 # same four strings out, and the two were read by different consumers —
-# circle.py took this copy, circle_close_verify.py took that one. ifs_model owns a
+# circle.py took this copy, circle_close_verify.py took that one. record_model owns a
 # short_term's SHAPE (its own comment beside RECONSTRUCTED_MARK says so, in
 # the words "the literal lives here, in the module that owns a short_term's
 # shape, so the writer and the reader cannot drift apart"), so it owns these.
@@ -159,7 +159,7 @@ def stream_ceiling_read(base: int, dry: bool = False) -> int:
 # THE SELF-CONTAINMENT LINE IN THIS MODULE'S HEADER IS NOW WRONG, and is
 # corrected there: this file needs one more thing of the coordinator than it
 # used to. That is the price of one home, and it is the right way round.
-from ifs_model import SHORT_TERM_SECTIONS                     # noqa: E402,F401
+from record_model import SHORT_TERM_SECTIONS                     # noqa: E402,F401
 
 
 # ------------------------------------------------------------------ usage meter

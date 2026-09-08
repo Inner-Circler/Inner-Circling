@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 """
-ifs_model.py — structural model of the IFS memory files (the invariant gate that
+record_model.py — structural model of the RECORD's memory files (the invariant gate that
 judges with it is register_gate.py's, since 2026-09-03).
+
+EVERY GROUP'S, NOT THE IFS GROUP'S. Nothing here is IFS: the shapes it parses —
+long_term.md's `## required end` boundary, the four short_term sections, the dream
+entries, self.md — are all <record> productions in docs/PRODUCT_BNF.md, "everything
+true of ANY group", and groups/band/ already carries every one of them. `PARTS` is
+roster's own list object, which roster.part_roster_rebind() mutates IN PLACE after every
+record_paths.group_set(), so a process opened on another group models THAT group without
+re-importing anything.
 
 WHAT THIS IS
     Phase 6 of NIGHTLY_DESIGN.md, built first and on purpose. It parses
@@ -28,7 +36,7 @@ WHY THIS FIRST
     against what is actually there is both stricter and more honest.
 
 USE
-    import ifs_model as M
+    import record_model as M
     text, findings = M.check_file(rel, data)
 
 THE GATE MOVED OUT, 2026-09-03 (cohesion re-homing stage 9): record_tree_compare,
@@ -46,7 +54,7 @@ import sys
 import unicodedata
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import roster as R                                            # noqa: E402
+import part_roster as R                                            # noqa: E402
 
 PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 
@@ -62,18 +70,18 @@ PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 # section existed) went with it.
 # "self_observation_log.md": "append_only" REMOVED 2026-08-19
 # (R256, B14's DESIGNED half): the file is
-# self/self_observation_log.toml now and is judged by the REGISTERS arm
+# circles/circle_observation_log.toml now and is judged by the REGISTERS arm
 # below, not by the byte-prefix rule. self.md stays here — SYNTHESIS reads
 # it back and replaces it whole, which is what "structured" is for.
 #
 # "narrative_arc.md": "append_only" REMOVED 2026-08-24. A PHANTOM
 # DEPENDENCY, and it had been one for nine days: R165 (2026-08-15) moved
 # its one job — the cross-circle phase bullet — into
-# self/circle_history.toml, and R256 (2026-08-19) recorded the
+# circles/circle_history.toml, and R256 (2026-08-19) recorded the
 # consequence outright, *"no writer since R165 ... absent from both
 # packaging/scaffold/ and additions.toml — it does not ship at all"*.
 # Nothing writes it, nothing reads it, and it reaches no prompt block
-# (docs/INTER_CIRCLE_DESIGN.md §1202 says so; prompt_build.py never opens
+# (R165's move said so; prompt_build.py never opens
 # it). This entry was the only thing left asserting it must exist — so
 # record_tree_verify() FAILED "MISSING" on every fresh install, for a file
 # the project had already ruled it does not ship. A gate outliving its

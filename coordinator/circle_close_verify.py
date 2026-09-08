@@ -77,8 +77,8 @@ Checks (evaluated against the state that REMAINS after any --prune):
                            lead-writes-short_terms close contract the LEAD authors each
                            file from the part's reply (the lead's own writes persist
                            where teammate writes did not); a reply that drops (#43706)
-                           is retried, then transcript-backfilled. Silent parts (e.g.
-                           the Soul, uncalled) are exempt. Needs --open-time (or
+                           is retried, then transcript-backfilled. Silent parts
+                           (uncalled) are exempt. Needs --open-time (or
                            a single today's transcript). Prints a parseable
                            "MISSING-SHORT-TERM: <part>,..." line for the /circle_close
                            retry loop. Fails CLOSED if the transcript can't be resolved
@@ -139,7 +139,8 @@ if hasattr(sys.stdout, "reconfigure"):
 
 ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT / "coordinator"))
-import roster as R                                             # noqa: E402
+import part_roster as R                                             # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 
 # 8 named parts + the lead. Raised from 8 on 2026-08-07 with the ruling
 # that a circle STARTS AT TWO and grows through part-initialisation as
@@ -162,7 +163,7 @@ MAX_MEMBERS = 9
 # display name is configurable (identity.py) and has been written three ways
 # across the corpus; none of them appears in this map, so none of them can
 # affect which parts are found to have spoken.
-# B29: derived from roster.py. BOTH SPELLINGS (DIR_BY_TAG_ALL, not
+# B29: derived from part_roster.py. BOTH SPELLINGS (DIR_BY_TAG_ALL, not
 # DIR_BY_TAG) — the tag was renamed 2026-08-07 and 56 lines across the
 # corpus carry the earlier one and are the record, so this reader (which
 # walks historical transcripts, unlike circle_audit.py's STATEMENT_RE) still
@@ -170,18 +171,25 @@ MAX_MEMBERS = 9
 # TAG_TO_DIR alias went 2026-09-03.
 
 # The four canonical short_term sections (process_core.md) — IMPORTED from
-# ifs_model, the copy the register gate and the audit already share, so a
+# record_model, the copy the register gate and the audit already share, so a
 # schema edit lands once (2026-08-19, review tier 3 #35: this was the third
 # hand copy; llm_client.py keeps its own by its transport-only charter, and
 # test_register_gate asserts the two spellings agree). A dropped/truncated
 # write is caught by a missing section, not only by an absent file.
-from ifs_model import SHORT_TERM_SECTIONS  # noqa: E402
+from record_model import SHORT_TERM_SECTIONS  # noqa: E402
 
 # A real statement line: "[Part]:" or "[Part] [To: X]:" at line start —
-# roster.statement_re, the one grammar (see its docstring; this file's own
+# part_roster.statement_re, the one grammar (see its docstring; this file's own
 # copy accepted ANY second bracket and had drifted from nightly's). Coordinator
 # annotations like "[Child has now spoken twice ...]" still do not match.
 _STATEMENT_RE = R.statement_re(R.DIR_BY_TAG_ALL)
+
+
+@_RP.group_follow
+def _grammar_rebind() -> None:
+    """The CURRENT group's Tags, historical spellings included — B117 stage 5 (2026-09-07)."""
+    global _STATEMENT_RE
+    _STATEMENT_RE = R.statement_re(R.DIR_BY_TAG_ALL)
 
 
 def circle_close_team_dir_read() -> str | None:
@@ -333,7 +341,13 @@ _PC_TYPES = {"int": int, "str": str, "bool": bool, "list": list, "dict": dict}
 
 def circle_close_contract_read() -> dict:
     """close_contract.toml, or {} when absent. A MISSING CONTRACT IS SAID OUT
-    LOUD by the caller, never passed over — R368."""
+    LOUD by the caller, never passed over — R368.
+
+    ONE OF THREE IDENTICAL BODIES, deliberately: circling_verify.circling_contract_read()
+    and prompt_capture.prompt_capture_contract_read() are the others. Each verifier owns
+    its own CONTRACT constant and sits at a different layer, so a shared helper would need
+    a home none of the three has and would buy one import edge per module for ten lines of
+    tomllib boilerplate. Same trade record_ro_read() states, and the same answer."""
     try:
         import tomllib as _toml
     except ModuleNotFoundError:                              # pragma: no cover
@@ -545,7 +559,7 @@ def circle_close_postcondition_sweep(root: Path, open_time: "str | None" = None)
     if stamps and open_time is None:
         oldest = stamps[0]
         seen = set(stamps)
-        circles = root / "circles"
+        circles = _RP.record_dir(root, "circles")
         for t in sorted(circles.glob("circle_*.md")):
             ot = t.name[len("circle_"):-len(".md")]
             if ot < oldest:
@@ -587,6 +601,9 @@ def main() -> int:
                          "/circle_close retry loop, before hard shutdown, while "
                          "agents are still reachable; skips teardown checks, prune, "
                          "and statement_temp deletion")
+    ap.add_argument("--group", default=None,
+                    help="verify this GROUP's record (groups/<name>/) — B117 stage 5. "
+                         "Default: the ifs group.")
     ap.add_argument("--max-members", type=int, default=MAX_MEMBERS)
     ap.add_argument("--open-time", default=None,
                     help="circle open time YYYY-MM-DD_HHMM; if given, check for "
@@ -611,6 +628,8 @@ def main() -> int:
                          "from the transcript instead of read as no-engagement. "
                          "Requires --open-time.")
     args = ap.parse_args()
+    if args.group:
+        _RP.group_set(args.group)           # B117 stage 5: this group's record, before any read
 
     claude_home = Path(args.claude_home)
     root = Path(args.root)
@@ -665,7 +684,7 @@ def main() -> int:
             # THE FILE THE CLOSE HASHED, by its recorded name (B96, R434): a report
             # from before 2026-09-04 carries no `file` key and hashed the .md.
             name = entry.get("file") or f"short_term_{ot}.md"
-            nbytes, nsha = record_file_digest(root / "parts" / part / name)
+            nbytes, nsha = record_file_digest(_RP.record_dir(root, "parts") / part / name)
             if nsha is None:
                 drift.append(part)
                 print(f"  MISSING  {part}: close recorded it present "
@@ -691,7 +710,7 @@ def main() -> int:
     # statement_temp deletion (parts may not have fully stood down yet). With
     # --write-report it also emits the close report reconcile reads.
     if args.short_term_only:
-        circles = root / "circles"
+        circles = _RP.record_dir(root, "circles")
         transcript, ot, st_warn = circle_transcript_resolve(circles, args.open_time)
         print("Circle-close short_term check")
         if st_warn:
@@ -707,7 +726,7 @@ def main() -> int:
         missing: list[str] = []
         import short_term_manager as STM
         for part, n in sorted(parts_that_spoke(transcript).items()):
-            path = STM.short_term_locate(root / "parts" / part, ot)
+            path = STM.short_term_locate(_RP.record_dir(root, "parts") / part, ot)
             ok, why = short_term_status(path)
             nbytes, nsha = record_file_digest(path) if path else (None, None)
             # `file` — THE REAL NAME HASHED, extension included (B96): what
@@ -738,7 +757,7 @@ def main() -> int:
     # Delete all statement_temp.md files — unconditional, every run (see
     # module docstring). Not part of --prune: this is routine close hygiene,
     # not rare-orphan cleanup.
-    parts_root = root / "parts"
+    parts_root = _RP.record_dir(root, "parts")
     if parts_root.is_dir():
         for tmp in sorted(parts_root.glob("*/statement_temp.md")):
             tmp.unlink()
@@ -813,7 +832,7 @@ def main() -> int:
     # false WARN when a circle opens before midnight and closes after it,
     # since the transcript filename is stamped with OPEN time, not close
     # time); falls back to a same-calendar-day guess otherwise.
-    circles = root / "circles"
+    circles = _RP.record_dir(root, "circles")
     if args.open_time:
         expected = circles / f"circle_{args.open_time}.md"
         if not expected.is_file():
@@ -847,7 +866,7 @@ def main() -> int:
     if transcript is not None and ot:
         import short_term_manager as STM
         for part, n in sorted(parts_that_spoke(transcript).items()):
-            path = STM.short_term_locate(root / "parts" / part, ot)
+            path = STM.short_term_locate(_RP.record_dir(root, "parts") / part, ot)
             ok, why = short_term_status(path)
             if not ok:
                 missing_short_terms.append(part)

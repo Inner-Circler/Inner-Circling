@@ -73,6 +73,7 @@ ID_PREFIX = "CG-"
 # diagnostic call, which held the same literal; llm_client owns it. A local
 # MAX_TOKENS alias stood here until 2026-09-03.
 import LLM_response_disassembler as RD                         # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 
 SYSTEM = """\
 You are grouping a vetting queue for an IFS-circle coordinator. Below are
@@ -103,7 +104,7 @@ def _now() -> str:
 
 
 def proposal_group_locate() -> pathlib.Path:
-    return ROOT / "self" / "coalesce.toml"
+    return _RP.record_dir(ROOT, "self") / "coalesce.toml"
 
 
 # --------------------------------------------------------------- pending set
@@ -284,7 +285,7 @@ def main() -> int:
                     help="parse/validate/hash checks, no API. Default: off.")
     ap.add_argument("--init", action="store_true",
                     help="write the empty register if absent "
-                         "(self_observation_log's own pattern). Default: off.")
+                         "(circle_observation_log's own pattern). Default: off.")
     a = ap.parse_args()
     if a.selftest:
         return selftest()

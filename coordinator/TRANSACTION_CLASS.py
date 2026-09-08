@@ -45,8 +45,9 @@ import os
 import pathlib
 import shutil
 
-import ifs_model as M
+import record_model as M
 import register_gate as RG              # noqa: E402  the gate (stage 9, 2026-09-03)
+import record_paths as _RP                                         # noqa: E402
 from atomic_write import record_atomic_write
 
 # THE WRITE-AHEAD FILE'S NAME — TRANSACTION, the class's own word, since B100
@@ -160,8 +161,9 @@ class Transaction:
                 q = self.candidate / p.relative_to(self.root)
                 q.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(p, q)
-        for p in (self.root / "self").glob("narrative_*.md"):
-            q = self.candidate / "self" / p.name
+        src = _RP.record_dir(self.root, "self")
+        for p in src.glob("narrative_*.md"):
+            q = self.candidate / src.relative_to(self.root) / p.name
             q.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(p, q)
         # TOML registers (docs/REGISTER_GATE_DESIGN.md, R188): copied so the

@@ -66,6 +66,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))  # atomic_write/identity et al.
 from atomic_write import record_atomic_write
+import record_paths as _RP                                         # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -76,7 +77,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-ISSUES = ROOT / "issues"
+ISSUES = _RP.ISSUES_DIR
 
 # The circle-transcript roots and the ref -> path mapping, ONE copy
 # (2026-08-19, review tier 5 #44). These lived as three lockstep
@@ -88,8 +89,19 @@ ISSUES = ROOT / "issues"
 # under self/) stays ITS OWN: only the gate admits session refs, so this
 # shared helper answers circle_/sandbox_ prefixes alone and returns None
 # for anything else.
-CIRCLES = ROOT / "circles"
+CIRCLES = _RP.CIRCLES_DIR
 SANDBOX_CIRCLES = ROOT / "work" / "sandbox" / "circles"  # moved, R176, 2026-08-15
+
+
+@_RP.group_follow
+def _issue_dirs_rebind() -> None:
+    """The graph and the transcripts are the CURRENT group's — B117 stage 4 (2026-09-07):
+    record_paths.group_set() runs this after rebinding, so a circle opened on another group
+    reads and writes that group's issues/. A probe that re-points ISSUES to a temp copy is
+    untouched until something calls group_set()."""
+    global ISSUES, CIRCLES
+    ISSUES = _RP.ISSUES_DIR
+    CIRCLES = _RP.CIRCLES_DIR
 
 
 def circle_transcript(ref: str) -> "pathlib.Path | None":

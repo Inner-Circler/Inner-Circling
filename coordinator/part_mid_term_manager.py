@@ -146,12 +146,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 # own lazy-import convention (2026-08-28, R379). MODEL and the RATE_* pair
 # (read as LC.MODEL / LC.RATE_IN / LC.RATE_OUT at the use; local aliases
 # until 2026-09-03) were LITERAL COPIES of llm_client's, and a price or a model
-# id written twice is one edit away from two answers — the defect ifs_model's
+# id written twice is one edit away from two answers — the defect record_model's
 # REGISTERS dict already records for circle_history's cap. llm_client is light at
 # import (os, threading, time, seam, paths; `anthropic` is lazy inside its own
 # functions), so this costs no import-time weight and closes no cycle:
 # prompt_build already imports it at module level.
 import llm_client as LC                                        # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 
@@ -322,7 +323,7 @@ judgment of what is actionable."""
 
 
 def part_mid_term_locate(part: str) -> pathlib.Path:
-    return ROOT / "parts" / part / "mid_term.md"
+    return _RP.record_dir(ROOT, "parts") / part / "mid_term.md"
 
 
 def part_mid_term_dreamt_read(part: str) -> list[tuple[str, str]]:
@@ -343,7 +344,7 @@ def part_mid_term_dreamt_read(part: str) -> list[tuple[str, str]]:
     # files on 2026-09-04 before the move.
     import short_term_manager as STM
     out = []
-    for f in reversed(STM.short_term_paths_read(ROOT / "parts" / part)):
+    for f in reversed(STM.short_term_paths_read(_RP.record_dir(ROOT, "parts") / part)):
         ot = f.stem.replace("short_term_", "")
         out += [(ot, d["text"]) for d in STM.short_term_read(f, part)["dreamt"]]
     return out
@@ -361,7 +362,7 @@ def part_mid_term_dreams_locate(part: str) -> list[tuple[str, str, str]]:
     corpus's replacement source; `part_mid_term_dreamt_read()` below still covers the newer,
     not-yet-condensed material sitting in short_term's `## Dreamt`."""
     import REGISTER_CLASS as SS
-    p = ROOT / "parts" / part / "dreams.toml"
+    p = _RP.record_dir(ROOT, "parts") / part / "dreams.toml"
     if not p.is_file():
         return []
     doc = SS.register_read(p)
@@ -376,7 +377,7 @@ def part_mid_term_sources_read(part: str) -> dict:
     a hash over one view and a call over another is how a cache silently
     serves the wrong thing."""
     import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
-    base = ROOT / "parts" / part
+    base = _RP.record_dir(ROOT, "parts") / part
     lt = C.part_settled_strip(C.record_ro_read(base / "long_term.md"))
     dt = part_mid_term_dreams_locate(part)
     dr = part_mid_term_dreamt_read(part)
@@ -498,7 +499,8 @@ def part_mid_term_block_render(part: str) -> tuple[str, str]:
 
 def part_mid_term_write(part: str, body: str, locked_by_self: bool = False,
           src: "dict | None" = None) -> None:
-    when = __import__("REGISTER_CLASS").now()[:19]
+    when = __import__("REGISTER_CLASS").register_now()[:19]     # E35: `now` was renamed 2026-09-03
+
     # `src` must be the assembly the DERIVATION read (refresh threads it
     # through) so the stamped hash describes what the body was actually
     # made from — a fresh read here could hash sources that moved
@@ -615,9 +617,9 @@ def part_mid_term_suspect_read(reply) -> list[str]:
     if len(body) < BUDGET // 2:
         bad.append(f"{len(body):,} chars, under half the {BUDGET:,} "
                    f"budget — check for dropped content")
-    import ifs_model as IFS          # IDENTITY_END — the long_term.md boundary
-    if IFS.IDENTITY_END in body:
-        bad.append(f"'{IFS.IDENTITY_END}' leaked into the body — the "
+    import record_model as M          # IDENTITY_END — the long_term.md boundary
+    if M.IDENTITY_END in body:
+        bad.append(f"'{M.IDENTITY_END}' leaked into the body — the "
                    f"derivation reached past the identity boundary")
     return bad
 

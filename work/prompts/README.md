@@ -37,4 +37,4 @@ turn file's block references resolve.
 **These files inherit the privacy of what they capture.** A prompt
 embeds the part's own identity file verbatim, and a turn file carries the
 part's reply plus, since R386 (2026-08-29), a summary of what the model
-reasoned. Treat this directory exactly as you treat `parts/`.
+reasoned. Treat this directory exactly as you treat `groups/ifs/parts/`.

@@ -681,11 +681,17 @@ def _class_tree_text(cls: str) -> str:
         # PROPOSABLE_COMMANDS, not the raw subset — the deferred verb is
         # refused at classification, and listing it as proposable would
         # repeat the 6-vs-5 defect this page's pointer replaced.
+        # THROUGH command_proposable_read() SINCE B122 (2026-09-07): the current
+        # group's descriptor narrows what the classifier admits, and a page that
+        # counted the constant would advertise verbs this group's own refusal
+        # rejects — the same disagreement one group over.
+        proposable = sorted(CS.command_proposable_read())
         blocks.append(("text",
                        ["", "    a /propose-add — or a part's "
                             "[proposed: ...] — may name:"]
-                       + [f"      {specs[h][0] if h in specs else h}"
-                          for h in sorted(CS.PROPOSABLE_COMMANDS)]))
+                       + ([f"      {specs[h][0] if h in specs else h}"
+                           for h in proposable] or
+                          ["      nothing — this group proposes no command"])))
     for child in _children_of(cls, classes):
         kids = [h for h in specs
                 if _class_of_head(h, classes) in _subtree(child, classes)

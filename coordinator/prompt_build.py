@@ -63,7 +63,7 @@ import parts_prompt_projection as _PP
 # it LAZILY, at call time, never at its own module top, and that was
 # deliberate: memory/ is not guaranteed on sys.path yet at prompt_build.py's
 # import time, only by the time a circle actually opens. quote_verify.py/
-# circle.py/vetting.py resolve the same need the same way — inserting
+# circle.py/proposal_vetting.py resolve the same need the same way — inserting
 # memory/ themselves rather than assuming an earlier import already did.
 import sys as _sys
 _sys.path.insert(0, str(_P.ROOT / "memory"))
@@ -241,7 +241,7 @@ def system_blocks(ident: str, objectives: str, identity: str, tail: str) -> list
 # block() (BLOCK 1), parts_prompt_projection.part_practices_render() inside
 # role_context.part_context_block_render() (BLOCK 3) -- moved out of check_best_practices.py,
 # 2026-09-02, to sit with their own consumers rather than staying paired
-# with each other. See ifs_model.py for the matching cleanup.
+# with each other. See record_model.py for the matching cleanup.
 
 # `strip_resolved()` REMOVED 2026-08-05. It dropped a `## Resolved` heading
 # from open_concerns.md before the file reached a part. Both halves of its

@@ -73,7 +73,7 @@ The guard is careful in one specific direction: it must never answer "not proces
 
 ## DEPENDENCIES
 
-Every register module it writes through — `remember_manager`, `topic_manager`, `circle_history_manager`, `self_observation_manager`, `practice_manager` — plus `part_mid_term_manager` for the re-derivation, `TRANSACTION_CLASS` for staging, `backfill` for step 0, `part_dreaming` and `circle_synthesis` for the two model passes, `llm_client` and `LLM_response_disassembler`, `setting_manager`, `phase_clock`, `prompt_capture`, `roster`, `REGISTER_CLASS`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
+Every register module it writes through — `remember_manager`, `topic_manager`, `circle_history_manager`, `circle_observation_manager`, `practice_manager` — plus `part_mid_term_manager` for the re-derivation, `TRANSACTION_CLASS` for staging, `backfill` for step 0, `part_dreaming` and `circle_synthesis` for the two model passes, `llm_client` and `LLM_response_disassembler`, `setting_manager`, `phase_clock`, `prompt_capture`, `roster`, `REGISTER_CLASS`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
 
 ## EXTERNAL FILES
 
@@ -83,8 +83,8 @@ Every register module it writes through — `remember_manager`, `topic_manager`,
     parts/<name>/remember.toml           WRITTEN — one memory per part, at most
     parts/<name>/mid_term.md             RE-DERIVED for the parts whose sources moved
     self/topics.toml                     WRITTEN — synthesis's candidates
-    self/circle_history.toml             WRITTEN — one entry for this circle
-    self/self_observation_log.toml       WRITTEN — one observation
+    circles/circle_history.toml             WRITTEN — one entry for this circle
+    circles/circle_observation_log.toml       WRITTEN — one observation
     self/best_practices.toml             WRITTEN — confirmed practices
     work/logs/dream_<OT>.json            WRITTEN last by a successful run: the marker
     work/logs/dream_error_<OT>.json      WRITTEN on failure, with the diagnosis

@@ -117,6 +117,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import JOURNAL_CLASS                                               # noqa: E402
 # record_paths.py is "the one home" these constants were re-derived beside
@@ -134,7 +135,7 @@ if hasattr(sys.stdout, "reconfigure"):
 
 TABLE = "remember"
 # id/chain ADDED 2026-08-15 with the DREAMING build (docs/
-# INTER_CIRCLE_DESIGN.md <memory_reflexive>): a DREAMING-authored record
+# INTER_CIRCLE_DESIGN_V2.md, DREAMING): a DREAMING-authored record
 # carries "MEM-"-prefixed id (per-part high-water next_id, minted by the
 # COORDINATOR — R170) and, when it continues the prior dreamt memory, a
 # chain naming that record's id. LIVE [remember: ...] records stay id-less
@@ -285,7 +286,7 @@ SELF = "self"
 def _root_for(part: str, base: pathlib.Path) -> pathlib.Path:
     """`base` is the live or sandbox tree root. Self's register lives at
     <base>/self/remember.toml; a part's at <base>/parts/<part>/."""
-    return base / "self" if part == SELF else base / "parts" / part
+    return _RP.record_dir(base, "self") if part == SELF else _RP.record_dir(base, "parts") / part
 
 
 def remember_locate(part: str, guard) -> pathlib.Path:
@@ -389,7 +390,7 @@ def remember_dreamt_render(doc: dict, text: str, circle: str,
     chain the model had asserted. Id-less records still cannot be chain
     TARGETS, and the gate refuses a chain that names no id in this
     file — chaining past them satisfies it (membership, not adjacency:
-    ifs_model's CHAIN-TARGET check). JOURNAL_CLASS.py's own chain_target()
+    record_model's CHAIN-TARGET check). JOURNAL_CLASS.py's own chain_target()
     (B105) is this exact rule, generalized — the most recent ID-BEARING row
     in file order, skipping id-less ones.
 

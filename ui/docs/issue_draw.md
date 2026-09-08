@@ -4,10 +4,16 @@
 issue_draw.py — render the issue graph (issues/*.toml, or a sandbox graph.json snapshot) as a force-directed SVG plus a self-contained interactive HTML page.
 
 ## SYNOPSIS
-    python ui/issue_draw.py issues/
-    python ui/issue_draw.py issues/ --working-set nNNNN,nNNNN,...
-    python ui/issue_draw.py issues/ --if-stale
+    python ui/issue_draw.py groups/ifs/issues/
+    python ui/issue_draw.py groups/ifs/issues/ --working-set nNNNN,nNNNN,...
+    python ui/issue_draw.py groups/ifs/issues/ --if-stale
     python ui/issue_draw.py work/issue_derive/<RUN>/graph.json
+
+The first argument is A GROUP'S issue directory — `groups/<name>/issues/`, the IFS
+circle's above. A root `issues/` has not existed since B117, and passing one does
+not fail cleanly: `arg.is_dir()` is False for a directory that is not there, so
+control falls through to the snapshot branch and raises FileNotFoundError trying to
+read it as a graph.json.
 
 `--live` retired 2026-08-13: a default run (no `--working-set`) already
 builds the live-only view and embeds it in `issue_graph.html` as a toggle —
@@ -321,7 +327,8 @@ Passing `--live` today is accepted, does nothing to the output, and prints a
 note pointing at the toggle.
 
 **Run at a close, 2026-08-27 (R365).** `coordinator/circle.py::issue_graph_redraw()`
-shells out to `python ui/issue_draw.py issues/ --if-stale` at every LIVE
+shells out to `python ui/issue_draw.py <record_rel("issues")>/ --if-stale` — the
+CURRENT group's issue directory, `groups/ifs/issues/` by default — at every LIVE
 `/close`, positioned immediately after `vetting.proposal_vet()` and
 immediately before `circle_close_mark()`. That position is the whole
 design: both routes by which a circle moves the graph are complete by then

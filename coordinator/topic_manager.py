@@ -77,6 +77,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import remember_manager as RM                                          # noqa: E402
 
@@ -87,10 +88,20 @@ if hasattr(sys.stdout, "reconfigure"):
 # no probe ever writes a TP- row into the live register (a tombstone
 # register makes a probe's leftovers permanent; see test_system_lint_verify.py's
 # same outside-the-tree pattern).
-PATH = ROOT / "self" / "topics.toml"
+PATH = _RP.SELF_DIR / "topics.toml"
+
+
+@_RP.group_follow
+def _path_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07); a probe's PATH rebind holds
+    until something calls record_paths.group_set()."""
+    global PATH
+    PATH = _RP.SELF_DIR / "topics.toml"
 
 TABLE = "topic"
-ORDER = ("id", "circle", "date", "text", "state")
+# `amended` — the date of the last in-place update (topic_update(); R465, B116, 2026-09-07).
+# Absent until one; replaced each time; no prior wording, no reason — git is the journal.
+ORDER = ("id", "circle", "date", "text", "state", "amended")
 
 CAP = 800       # chars per topic — one short paragraph
 BUDGET = SET.setting_value_read("topics_budget", 2400)   # chars projected into BLOCK 2,
@@ -159,6 +170,32 @@ def topic_close(tid: str) -> tuple[bool, str]:
     row["state"] = f"closed by Self {SS.register_now()}"
     _save(doc)
     return True, f"{tid} closed — kept as a tombstone"
+
+
+def topic_update(tid: str, text: str) -> tuple[bool, str]:
+    """Replace one OPEN topic's text in place — same id, same circle, same date — and
+    stamp `amended` with today's date (R465, B116, 2026-09-07). Located by id, the way
+    every topic verb addresses a row (/topic-list prints ids, not numbers). The text
+    takes topic_new_render()'s own rule: CAP-truncated at a word boundary, never refused
+    for length; an empty text is refused. A tombstone is not updated — closed rows are
+    history. Rides REGISTER_CLASS.register_row_update(); the save is this module's."""
+    body = " ".join(text.split())
+
+    def _precheck(fields: dict, row: dict) -> str:
+        if not fields["text"]:
+            return "nothing to update"
+        if row.get("state") != "open":
+            return f"{row.get('id')} is not open (state={row.get('state')!r}) — a tombstone"
+        return ""
+
+    doc = _doc()
+    ok, msg, row = SS.register_row_update(
+        doc, TABLE, locate=tid, precheck=_precheck,
+        fields={"text": RM.remember_truncate(body, CAP), "amended": SS.register_now()[:10]})
+    if not ok:
+        return False, msg
+    _save(doc)
+    return True, f"{tid} updated — {row['text'][:48]}..."
 
 
 def topic_wrap(s: str, n: int) -> list[str]:

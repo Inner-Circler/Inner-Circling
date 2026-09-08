@@ -35,13 +35,13 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import remember_manager as RM                                          # noqa: E402
 import circle_history_manager as CH                                    # noqa: E402
-import self_observation_manager as SO                              # noqa: E402
+import circle_observation_manager as CO                              # noqa: E402
 import circle_journal_manager as CJ                                 # noqa: E402
-import roster as R                                             # noqa: E402
+import part_roster as R                                             # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import part_dreaming as PD                                     # noqa: E402  _call, _report_chars
-from record_paths import ROOT                                         # noqa: E402
+from record_paths import ROOT, record_dir                             # noqa: E402
 
 # NOTABLE+ — MEMORY_DESIGN.md's own "MEASURED... directional but thin, n=1 passing-tier row"
 # finding, extended by one more real (still thin) data point in the B94 stage-3 trial: on
@@ -69,8 +69,9 @@ that same material narrowed to only the HIGH-SALIENCE rows (notable and above), 
 CIRCLE JOURNAL section below; every proposal Self confirmed during this circle; the
 CURRENT self.md, the standing account of Self this circle may or may not have moved; the
 PREVIOUS circle's HISTORY entry, so what you write continues an account rather than
-restarting one; the PREVIOUS circle's own CIRCLE JOURNAL entry, if one exists, for the
-same reason; and — if one exists — the most recent observation in your own chain, a note
+restarting one; the PREVIOUS circle's own CIRCLE JOURNAL entry, if one exists — not for
+that reason but as the entry your CIRCLE JOURNAL section REVISES, the base your fold
+replaces; and — if one exists — the most recent observation in your own chain, a note
 your synthesis pass left for Self last time, including how charged it was, if you said so.
 
 Your job is to find what is TRUE OF THE CIRCLE — not of any one part. A thing only one
@@ -224,10 +225,10 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
                 # docstring).
                 high_sal.append(f"[{p['part']}] {p['memory']}")
     conf = [f"- {c['kind']} {c['id']}: {c['line']}" for c in confirmed]
-    self_md = (ROOT / "self" / "self.md")
+    self_md = (record_dir(ROOT, "self") / "self.md")
     self_now = self_md.read_text(encoding="utf-8") if self_md.is_file() else ""
     prior = CH.circle_history_latest_read()
-    prior_obs = SO.self_observation_latest_read()          # R358: the chain the OBSERVATION
+    prior_obs = CO.circle_observation_latest_read()          # R358: the chain the OBSERVATION
     prior_cj = CJ.circle_journal_latest_read()
     user = [f"# Transcript of circle {ot}\n{transcript}",
             "# Each part's fresh dreaming record\n"

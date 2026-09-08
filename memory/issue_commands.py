@@ -632,7 +632,8 @@ def issue_add(label: str, desc: str, absence: str, *, guard=None,
     # ONLY against the real issues/: issue_index.py reads the schema's own
     # ISSUES, not an argument, so with S.ISSUES re-pointed (a probe on a
     # temp copy) it would rebuild the real index over a copy's write.
-    if S.ISSUES.resolve() != (ROOT / "issues").resolve():
+    import record_paths as _RPm          # the CURRENT group's issues/ (B117 stage 4), not the
+    if S.ISSUES.resolve() != _RPm.ISSUES_DIR.resolve():   # default's bound at import
         return True
     out2, rc2 = _run_captured(["memory/issue_index.py"])
     tail = out2.strip().splitlines()[-1:] if out2.strip() else []

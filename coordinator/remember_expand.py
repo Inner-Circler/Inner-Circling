@@ -32,7 +32,7 @@ it does not own. R387 never ruled the MECHANISM, only the PLACEMENT (this
 content belongs in BLOCK 4, not BLOCK 2 or BLOCK 3); the direct-write shape
 was an implementation choice made alongside that ruling, not required by
 it. Every other memory-read path (part_mid_term_manager.py, remember_manager.py,
-practice_manager.py, instrument_manager.py, issue_prompt_projection.py, roster.py)
+practice_manager.py, instrument_manager.py, issue_prompt_projection.py, part_roster.py)
 already returns text and lets its own block's assembler place it — this
 was the one file with write access to a structure it did not own, which
 is worse than the direct-mutation shape's own advantage (a single, cheaply
@@ -52,9 +52,9 @@ import time
 
 import seam
 import remember_manager as RM
-import roster as R
+import part_roster as R
 import transcript_store as TS
-from record_paths import ROOT
+from record_paths import ROOT, record_dir
 
 # The part-facing heading (the operator's default, accepted 2026-08-29 with
 # the module name). Part-facing prose: theirs to reword.
@@ -214,7 +214,7 @@ def remember_dereference(ot: str, seed_text: str, part_tag: str, char_cap: int) 
     try:
         if not _closed(ot):
             return ""
-        p = ROOT / "circles" / f"circle_{ot}.md"
+        p = record_dir(ROOT, "circles") / f"circle_{ot}.md"
         if not p.is_file():
             return ""
         _, _, entries = TS.circle_transcript_parse(p.read_text(encoding="utf-8"))

@@ -67,9 +67,9 @@ data_type = "STRING"
 data_max  = 200
 
 # ---------------------------------------------------------------- the part dialog
-# PART_ADD_DIALOG — R324 (NEVER at a circle start: it fires on approval of a
-# part's `[proposed: /part-add ...]`, or from /part-add typed at cmd>), R323
-# (the bracket's strings arrive prefilled), R332 (the validator; the name is
+# PART_ADD_DIALOG — R324 (NEVER at a circle start: it fires from /part-add typed
+# at cmd>, its only trigger since R483 shut the approval door), R323
+# (the bracket's strings arrive prefilled, for the shut door), R332 (the validator; the name is
 # checked against roster rules in part_add.part_precheck as well). The directory
 # name derives from the part's name; the dialog only asks for one when the
 # derivation collides or empties.

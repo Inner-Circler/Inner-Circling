@@ -80,7 +80,7 @@ classes, and silent about the registers that never reach it. These are written
 during a live circle WITHOUT passing through the guard at all, each live-gated
 in its own writer instead: `self/best_practices.toml` (`/practice-add`,
 `/practice-delete`), `self/topics.toml` (`/topic-close`),
-`self/proposals.toml`, and `self/working_sets.toml`.
+`self/proposals.toml`, and `circles/working_sets.toml`.
 
 `long_term.md` is genuinely unwritable in-circle. `part_relationships.toml`
 used to be unwritable *by the guard* but staged by `inter_circle.py` at
@@ -183,7 +183,7 @@ citing the 2026-08-07 incident that taught it. Update both together.
 
 RETIRED — R228 removed the batch shape, and the scheduled tasks are gone from
 the scheduler. Dreaming and synthesis now run synchronously, as `/close`'s
-phase 2: `coordinator/inter_circle.py` (design: `docs/INTER_CIRCLE_DESIGN.md`).
+phase 2: `coordinator/inter_circle.py` (design: `docs/INTER_CIRCLE_DESIGN_V2.md`).
 The old prompts are in git at their own paths,
 `scripts/ifs-nightly-dreaming-SKILL.md` and
 `scripts/ifs-nightly-synthesis-SKILL.md`.
@@ -206,7 +206,7 @@ short_terms and nothing else. Design history: `docs/NIGHTLY_DESIGN.md`.
    that spoke (`[Part]:` or `[Part] [To: …]:` lines) with no well-formed
    short_term is backfilled first. A genuinely silent part is exempt — absence
    for a non-speaking part is correct, not a loss.
-3. **Invariant gate** (`coordinator/ifs_model.py`). Structural checks over the
+3. **Invariant gate** (`coordinator/record_model.py`). Structural checks over the
    memory files: identity sections cannot vanish, content above `## Dream
    entries` is frozen, dream history is append-only, existing entry bodies are
    immutable, historic weights are frozen, the observation log and narrative arc
@@ -271,8 +271,9 @@ precedence over dream-compressed summaries when facts conflict. Then:
 
 1. Rewrites `self/self.md` (system state, parts table, dated dream-synthesis
    bullets)
-2. Appends one `SO-` record to `self/self_observation_log.toml` (TOML
-   since 2026-08-19; was `self_observation_log.md`)
+2. Appends one `CO-` record to `circles/circle_observation_log.toml` (TOML
+   since 2026-08-19; was `self_observation_log.md`. `CO-` since R481,
+   2026-09-07 — `SO-` ids written before it keep their prefix, forward-only)
 3. STEP RETIRED 2026-08-11: used to rewrite `self/circle_briefing.md` with
    resolved questions, which `circle.py` split per part. That file is gone —
    circle_objectives is now built directly by `group_attention.circle_briefing_build()` at prompt
@@ -283,8 +284,8 @@ precedence over dream-compressed summaries when facts conflict. Then:
    write the narrative layer, a phase bullet appended to `self/narrative_arc.md`
    only on a genuine phase transition, plus a fresh `self/narrative_YYYY-MM-DD.md`.
    R165 (2026-08-15) moved the one job this did — the cross-circle phase
-   bullet — into `self/circle_history.toml`; R256 (2026-08-19) confirmed
-   "no writer since R165" for the arc file. `ifs_model.py` calls the
+   bullet — into `circles/circle_history.toml`; R256 (2026-08-19) confirmed
+   "no writer since R165" for the arc file. `record_model.py` calls the
    dependency "A PHANTOM": nothing writes either file today, and the operator's
    own `self/narrative_arc.md` is untouched, frozen history since 2026-07-27.
 

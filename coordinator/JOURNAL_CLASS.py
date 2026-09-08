@@ -5,7 +5,7 @@ JOURNAL_CLASS.py — the shared LEDGER/JOURNAL register base (docs/MEMORY_DESIGN
 JOURNAL productions; B105, 2026-09-05).
 
 Checked directly against the code before this was built: `circle_history_manager.py`,
-`self_observation_manager.py` and `circle_journal_manager.py` each carried an IDENTICAL private
+`circle_observation_manager.py` and `circle_journal_manager.py` each carried an IDENTICAL private
 `_doc()` (differing only in register name and preamble) and the same three-function shape — read
 the rows, read the most recent, render a new one — genuinely duplicated rather than shared.
 `remember_manager.py`'s own `remember_dreamt_render()` carries the same render shape for its one
@@ -23,9 +23,9 @@ for the phase-2 driver to stage; this stays that way.
 
 WHAT IT DOES NOT: text preparation (`" ".join(text.split())` vs `.strip()` vs
 `remember_truncate()` — genuinely different per register), empty-text refusal (only
-self_observation_manager.py does this), which optional fields a caller includes and under what
-condition (`if salience:` truthiness in self_observation vs `if salience is not None:` in
-remember, `if note:`, `if provenance:`), self_observation's own retire/purge (an in-place mutation
+circle_observation_manager.py does this), which optional fields a caller includes and under what
+condition (`if salience:` truthiness in circle_observation vs `if salience is not None:` in
+remember, `if note:`, `if provenance:`), circle_observation's own retire/purge (an in-place mutation
 of an EXISTING row — a different shape from "append new", and the only register with a use for
 it today), and remember's per-part/live-sandbox path resolution, salience constants, word-cap
 truncation and chain-walking (`remember_chain_read`/`remember_chain_qualifies`) — real production
@@ -37,12 +37,12 @@ has to `PROPOSE_CLASS.py`.
 
 CHAIN TARGET IS FILE ORDER, NEVER DATE ORDER. Every existing chain rule this base replaces scans
 file order — `circle_history_new_render()`/`circle_journal_new_render()` used `recs[-1]`,
-`self_observation_new_render()` used `recs[-1]`, `remember_dreamt_render()` used
+`circle_observation_new_render()` used `recs[-1]`, `remember_dreamt_render()` used
 `next(r for r in reversed(recs) if r.get("id"))`. None of the four ever sorted by date. `latest()`
 below IS date-sorted (what a `*_latest_read()` wrapper answers "what is the newest entry" with),
 so `new_render(..., chain=True)` calls `chain_target()`, never `latest()` — the two diverge
 whenever a register's file order is not the same as its date order, which the register gate only
-WARNs on single-tree (DATE-ORDER) and which self_observation's day-scoped migrated rows plausibly
+WARNs on single-tree (DATE-ORDER) and which circle_observation's day-scoped migrated rows plausibly
 exhibit.
 
 EVERY CONFIGURABLE IS A FUNCTION, NOT A VALUE, matching PROPOSE_CLASS.py's own discipline:
@@ -56,6 +56,11 @@ instance (`circle_history_manager.py`'s own `_JC`, one per register, exactly lik
 no `{"register":..., "next_id":..., "doc":{...}}` envelope shape at all (its own `_load()` returns
 `{TABLE: []}` when the file is absent) — it keeps its own loader entirely and uses only
 `new_render()`, which needs none of the three.
+
+NO UPDATE, BY DESIGN (R444, R457, R465 — B116, 2026-09-07). A journal-shaped register is
+accumulate-never-prune and each record is chained to its predecessor, so a record's text is never
+rewritten in place; this base exposes no update and `REGISTER_CLASS.register_row_update()` is not
+for its rows. circle_observation's retire/purge are the sanctioned edits, and they keep the row.
 """
 
 from __future__ import annotations
@@ -133,7 +138,7 @@ class JournalClass:
         `chain=True` auto-chains to `chain_target()`'s own answer (silently omits the field when
         there is no id-bearing predecessor yet — same as every register this replaces).
         `chain="SOME-ID"` chains to exactly that id — the caller has already validated it exists
-        (self_observation_continue_render()'s own rule); this never re-validates a named target.
+        (circle_observation_continue_render()'s own rule); this never re-validates a named target.
         `chain=False` (default) never sets the field at all.
 
         Refuses (ValueError), never truncates, when `self.cap` is set and the named `cap_field`

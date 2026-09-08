@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import pathlib
 
-from record_paths import ROOT, SANDBOX, PART_TAGS
+from record_paths import ROOT, SANDBOX, PART_TAGS, record_dir
 
 
 class WriteGuard:
@@ -34,9 +34,9 @@ class WriteGuard:
             raise RuntimeError(
                 f"REFUSING write outside work/sandbox (sandbox mode): {rp}"
             )
-        if rp == (ROOT / "circles" / f"circle_{self.ot}.md").resolve():
+        if rp == (record_dir(ROOT, "circles") / f"circle_{self.ot}.md").resolve():
             return rp
-        parts_dir = (ROOT / "parts").resolve()
+        parts_dir = record_dir(ROOT, "parts").resolve()
         if (
             _within(rp, parts_dir)
             and rp.parent.parent == parts_dir
@@ -63,7 +63,7 @@ class WriteGuard:
         # accumulates across circles, filename fixed, not stamped with
         # self.ot. Scoped to this one file, not the whole self/ directory
         # — matching the precision every other rule here already uses.
-        if rp == (ROOT / "self" / "remember.toml").resolve():
+        if rp == (record_dir(ROOT, "self") / "remember.toml").resolve():
             return rp
         # work/prompts/<OT>/ — the emitted system prompts, this circle's
         # only. Moved up from ROOT/prompts/ 2026-08-08 (a packaging root, not

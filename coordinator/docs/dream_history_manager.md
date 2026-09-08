@@ -72,7 +72,12 @@ The bare invocation writes nothing and makes no model call.
 ## EXTERNAL FILES
 
     self/dreams.toml    READ by every verb. WRITTEN by --bootstrap and --fold, and
-                        only ever by appending section="history" rows.
+                        only ever by appending section="history" rows. ABSENT is
+                        read as an empty corpus (`register = "self_dreams"`,
+                        `next_id = 1`, no rows) since B111, 2026-09-06 — the file
+                        never ships, and a fresh install's first run used to die on
+                        file-not-found; a read never creates it, and --bootstrap on
+                        an empty corpus reports so and exits 1.
     .env                READ only when ANTHROPIC_API_KEY is absent from the
                         environment, and only on a verb that calls the model.
 

@@ -89,6 +89,7 @@ sys.path.insert(0, str(HERE))
 # memory/ too — annotations.py (reached through transcript_store's own
 # _split_remember) imports issue_commands from there, same hop circle.py makes.
 sys.path.insert(0, str(ROOT / "memory"))
+import record_paths as _RP                                         # noqa: E402
 
 LOGS = ROOT / "work" / "logs"
 
@@ -191,9 +192,19 @@ def _cites(row: dict, ot: str) -> bool:
 # ---------------------------------------------------------- pure classifiers
 # The dream commit's own writers: the staged registers (inter_circle) plus
 # the mid_term refresh. parts/<p>/ entries are matched by basename.
-DREAM_SELF_FILES = ("self/circle_history.toml", "self/self_observation_log.toml",
-                    "self/topics.toml", "self/best_practices.toml", "self/self.md")
+DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in (
+    "circles/circle_history.toml", "circles/circle_observation_log.toml",
+    "self/topics.toml", "self/best_practices.toml", "self/self.md"))
 DREAM_PART_FILES = ("remember.toml", "mid_term.md")
+
+
+@_RP.group_follow
+def _dream_files_rebind() -> None:
+    """The CURRENT group's self/ — B117 stage 5 (2026-09-07); `--group` below calls group_set()."""
+    global DREAM_SELF_FILES
+    DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in (
+        "circles/circle_history.toml", "circles/circle_observation_log.toml",
+        "self/topics.toml", "self/best_practices.toml", "self/self.md"))
 
 
 def circle_delta_is_silent(statements: int, present: bool, status: str) -> bool:
@@ -208,13 +219,13 @@ def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
     out = []
     for p in paths:
         p = p.replace("\\", "/")
-        ok = (p == f"circles/circle_{ot}.md"
-              or p == f"circles/commands_{ot}.toml"
+        ok = (p == _RP.record_rel(f"circles/circle_{ot}.md")
+              or p == _RP.record_rel(f"circles/commands_{ot}.toml")
               or p == f"work/logs/close_{ot}.json"
               or p.startswith(f"work/prompts/{ot}")
-              or (p.startswith("parts/")
+              or (p.startswith(_RP.record_rel("parts") + "/")
                   and p.endswith((f"/short_term_{ot}.toml", f"/short_term_{ot}.md")))
-              or p in ("self/working_sets.toml", "self/proposals.toml"))
+              or p in (_RP.record_rel("circles/working_sets.toml"), _RP.record_rel("self/proposals.toml")))
         if not ok:
             out.append(p)
     return out
@@ -234,7 +245,7 @@ def circle_delta_dream_paths_classify(paths: list[str], ot: str) -> list[str]:
     out = []
     for p in paths:
         p = p.replace("\\", "/")
-        parts_hit = (p.startswith("parts/")
+        parts_hit = (p.startswith(_RP.record_rel("parts") + "/")
                      and p.split("/")[-1] in DREAM_PART_FILES)
         if not (parts_hit or p in DREAM_SELF_FILES
                 or p.startswith(f"work/prompts/{ot}")):
@@ -259,7 +270,7 @@ def _statement_counts(ot: str) -> tuple[str, int, dict, str]:
     the close report still carries per-part counts."""
     try:
         import transcript_store as TS
-        raw = (ROOT / "circles" / f"circle_{ot}.md").read_text(encoding="utf-8")
+        raw = (_RP.record_dir(ROOT, "circles") / f"circle_{ot}.md").read_text(encoding="utf-8")
         _ot, topic, transcript = TS.circle_transcript_parse(raw)
     except Exception:                                          # noqa: BLE001
         return "", 0, {}, ""
@@ -290,7 +301,7 @@ def _annotations(raw: str) -> dict:
 
 
 def _issue_commands(ot: str) -> list[dict]:
-    rows = _rows(ROOT / "circles" / f"commands_{ot}.toml", "command")
+    rows = _rows(_RP.record_dir(ROOT, "circles") / f"commands_{ot}.toml", "command")
     return [{"verb": r.get("verb", "?"), "node": r.get("node", "")}
             for r in rows]
 
@@ -321,7 +332,7 @@ def _spend(ot: str) -> dict | None:
 
 def _part_rows(ot: str, close: dict, dream_sha: str | None,
                dream_files: list[str]) -> list[dict]:
-    import roster as R
+    import part_roster as R
     import remember_manager as RM
     by_part = {p.get("part"): p for p in close.get("parts", [])}
     out = []
@@ -349,7 +360,7 @@ def _part_rows(ot: str, close: dict, dream_sha: str | None,
                 row["chain_len"] = len(RM.remember_chain_read({RM.TABLE: recs}, dre["id"]))
             except Exception:                                  # noqa: BLE001
                 row["chain_len"] = 1
-        rel = f"parts/{d}/mid_term.md"
+        rel = _RP.record_rel(f"parts/{d}/mid_term.md")
         live = ROOT / rel
         after = live.stat().st_size if live.is_file() else 0
         before = after
@@ -367,24 +378,38 @@ def _part_rows(ot: str, close: dict, dream_sha: str | None,
 def _processing(ot: str, dream_sha: str | None,
                 dream_files: list[str]) -> dict:
     out: dict = {}
+    # circle_history and circle_observation_log live under circles/, not self/ — b857f7c
+    # (R-NEW, 2026-09-07) moved the four one-per-circle registers. DREAM_SELF_FILES above
+    # was updated with them and this tuple was not, so both reported total:0 against 7 and
+    # 31 real rows: _rows() reads an absent file as [], which is indistinguishable from a
+    # register that did not move. topics and best_practices are still self/.
     for name, path, table in (
-            ("circle_history", ROOT / "self" / "circle_history.toml", "history"),
-            ("self_observation", ROOT / "self" / "self_observation_log.toml",
+            ("circle_history", _RP.record_dir(ROOT, "circles") / "circle_history.toml", "history"),
+            ("circle_observation", _RP.record_dir(ROOT, "circles") / "circle_observation_log.toml",
              "observation"),
-            ("topics", ROOT / "self" / "topics.toml", "topic"),
-            ("best_practices", ROOT / "self" / "best_practices.toml",
+            ("topics", _RP.record_dir(ROOT, "self") / "topics.toml", "topic"),
+            ("best_practices", _RP.record_dir(ROOT, "self") / "best_practices.toml",
              "practice")):
         rows = _rows(path, table)
         mine = [r for r in rows if _cites(r, ot)]
         entry: dict = {"added": len(mine), "total": len(rows)}
-        if name == "self_observation" and mine:
+        # ABSENT IS NOT THE SAME AS EMPTY, AND 0/0 IS THE REASSURING ANSWER. The stale
+        # self/ paths above reported 0 added / 0 total for two registers that held 7 and
+        # 31 rows, and nothing in the report could distinguish that from a quiet circle.
+        # A reporter may not refuse, but it can say which file it could not find.
+        if not path.is_file():
+            try:
+                entry["missing"] = path.relative_to(ROOT).as_posix()
+            except ValueError:                                 # a snapshot or temp base
+                entry["missing"] = str(path)
+        if name == "circle_observation" and mine:
             entry["salience"] = mine[-1].get("salience")
         if name == "topics":
             entry["long_term_candidates"] = sum(
                 1 for r in mine
                 if str(r.get("text", "")).startswith("LONG_TERM CANDIDATE"))
         out[name] = entry
-    out["self_md_changed"] = (("self/self.md" in dream_files)
+    out["self_md_changed"] = ((_RP.record_rel("self/self.md") in dream_files)
                               if dream_sha else None)
     return out
 
@@ -400,7 +425,7 @@ def circle_delta_collect(ot: str) -> dict:
         # R130's signature: a close whose commit silently failed. The commit
         # that ADDED the transcript is the honest fallback anchor.
         circle_sha = _git(["log", "--diff-filter=A", "--format=%H", "-n", "1",
-                           "--", f"circles/circle_{ot}.md"])
+                           "--", _RP.record_rel(f"circles/circle_{ot}.md")])
     dream_tag, dream_sha = _find_tag("dream", ot)
     marker = (LOGS / f"dream_{ot}.json").is_file()
     processed = ("tag" if dream_sha else ("marker" if marker
@@ -499,13 +524,13 @@ def circle_delta_render(delta: dict) -> list[str]:
                    "processed; absence means only that")
         out.append("  (check the registers before re-running anything)")
     else:
-        so = pr.get("self_observation", {})
+        so = pr.get("circle_observation", {})
         so_s = (f" (salience {so['salience']})"
                 if so.get("salience") else "")
         tp = pr.get("topics", {})
         lt = tp.get("long_term_candidates", 0)
         out.append(f"  circle_history +{pr.get('circle_history', {}).get('added', 0)}"
-                   f" · self_observation +{so.get('added', 0)}{so_s}"
+                   f" · circle_observation +{so.get('added', 0)}{so_s}"
                    f" · topics +{tp.get('added', 0)}"
                    + (f" (long_term candidates {lt})" if lt else ""))
         smd = pr.get("self_md_changed")
@@ -636,11 +661,16 @@ def main(argv: list[str]) -> int:
                                              "across the registers")
     ap.add_argument("--ot", help="the circle's open time "
                                  "(default: the newest close report)")
+    ap.add_argument("--group", default=None,
+                    help="report a circle of this GROUP's record (groups/<name>/) — B117 stage 5. "
+                         "Default: the ifs group.")
     ap.add_argument("--series", action="store_true",
                     help="part memory over every closed circle")
     ap.add_argument("--json", action="store_true",
                     help="print the payload as JSON instead of the report")
     args = ap.parse_args(argv)
+    if args.group:
+        _RP.group_set(args.group)           # B117 stage 5: this group's record, before any read
 
     if args.series:
         deltas = circle_delta_series_read()

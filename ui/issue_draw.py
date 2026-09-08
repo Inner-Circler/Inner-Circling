@@ -27,7 +27,7 @@ final for that circle. Both routes a circle can move the graph are behind
 that point: a ruling typed at cmd> (or into the transcript as an
 annotation), applied by issue_commands.issue_command_apply(); and a [proposed: ...] row
 accepted at the checkpoint, applied by the same function through
-vetting.py. WHAT IT ACTUALLY TESTS IS STALENESS, not either route —
+proposal_vetting.py. WHAT IT ACTUALLY TESTS IS STALENESS, not either route —
 issue_draw_is_stale() below compares issues/*.toml against the picture's own mtime, so
 a hand edit, an aborted circle whose cmd> rulings already landed, and a
 brand-new install with no picture at all are all caught by the same test,
@@ -94,7 +94,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "coordinator"))   # working_set_manager (stage 10)
 import palette as P                                            # noqa: E402
 import working_set_manager as WS                               # noqa: E402
-ISSUES_DIR = ROOT / "issues"
+import record_paths as _RP                                         # noqa: E402
+ISSUES_DIR = _RP.ISSUES_DIR
 
 # THE OUTPUT DIRECTORY IS NAMED, not derived from __file__. It was
 # `__file__.parent` while this script lived in work/graph/, which is exactly

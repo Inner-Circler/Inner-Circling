@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-vetting.py — Self's ruling loop over every pending propose-class
+proposal_vetting.py — Self's ruling loop over every pending propose-class
 proposal, and the approve/deny executors it dispatches to. Phase 2
 stage 4 of the coordinator partitioning (2026-08-16; built sixth —
 _propose_approve executes commands through dispatch_dev_cmd and
@@ -21,7 +21,7 @@ issue_graph_now_read() moves WITH the vetting loop — Self's explicit ruling on
 the phase-2 plan's open decision — because _propose_approve is its one
 consumer: a command-shaped proposal is re-classified and re-parsed
 fresh at approval time against the live graph, never trusted from a
-staging-time snapshot. test_proposal_manager patches vetting.graph_now (and
+staging-time snapshot. test_proposal_manager patches proposal_vetting.graph_now (and
 IC.issue_precheck/IC.issue_command_apply on their own module) to isolate this loop from
 the real tree — module-attribute patching against the OWNER, the same
 late-binding contract seam.py documents.
@@ -184,6 +184,15 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
             PR.proposal_approve(row["id"])
             return True, "/issue-add executed"
         if shape["head"] == "/part-add":
+            # UNREACHABLE SINCE R483, 2026-09-07, AND
+            # KEPT. /part-add left PROPOSE_SUBSET_COMMANDS on the operator's
+            # word (*"part-add should also not be told to or available to
+            # parts"*), so annotations._propose_command_shape() returns None
+            # for the verb and no row of this shape can ever be staged again.
+            # The ruling shut the door; it did not retire R323's dialog, and
+            # deleting the branch would decide a question nobody asked. If the
+            # door is ever reopened this is what is behind it — unchanged.
+            #
             # THE SAME RULING'S OTHER HALF — a part proposing a part is the
             # room noticing someone not yet at the table; the bracket's two
             # strings ([proposed: /part-add "<describe>" "<Tag>"]) arrive
@@ -359,7 +368,7 @@ def proposal_vet(where: str, live: bool,
     # (R183): approve() drops the `circle` staging field on acceptance, so
     # in-process capture at the checkpoint is the ONLY clean record of
     # what was confirmed this run. Checkpoint-2 approvals (next priming)
-    # reach no synthesis — recorded in docs/INTER_CIRCLE_DESIGN.md.
+    # reach no synthesis — recorded in docs/INTER_CIRCLE_DESIGN_V2.md.
     import practice_manager as PM
     import proposal_manager as PR
     import proposal_group_manager as CG

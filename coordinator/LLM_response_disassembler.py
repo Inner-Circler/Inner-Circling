@@ -43,7 +43,7 @@ WHAT STAYS WHERE IT WAS, and why each is not a "reply read":
 LEAF MODULE. rounds, circle, llm_client, inter_circle, mid_term, backfill,
 coalesce and dream_history all take this; it takes none of them. What it
 takes at import is providers and the two constants it must not copy
-(ifs_model.SHORT_TERM_SECTIONS, record_paths.PART_TAGS). annotations — the
+(record_model.SHORT_TERM_SECTIONS, record_paths.PART_TAGS). annotations — the
 grammar above — is reached inside message_close_split() alone, at call time:
 annotations pulls in memory/issue_commands, and llm_client (which every
 suite and every tool loads) must stay importable with only coordinator/ on
@@ -54,7 +54,7 @@ from __future__ import annotations
 import re
 
 import providers as _providers
-from ifs_model import SHORT_TERM_SECTIONS
+from record_model import SHORT_TERM_SECTIONS
 from record_paths import PART_TAGS
 
 

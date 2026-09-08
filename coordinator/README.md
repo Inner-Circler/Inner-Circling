@@ -389,7 +389,7 @@ own `max_retries` is set to 0 for these calls so the ladder is the only
 retry behaviour there is.
 
 **An unspoken circle leaves no trace.** If the run dies between step 6 and
-step 8, the transcript and its `self/working_sets.toml` entry are removed. The
+step 8, the transcript and its `circles/working_sets.toml` entry are removed. The
 test is the bytes: if a single statement landed, the file differs from what
 `open_transcript` wrote and nothing is touched — a partial transcript is a
 real record and is resumable.
@@ -523,8 +523,8 @@ only one).
                     parts/, including the Soul (see "The Soul" below — it
                     IS a participant; process_core.md's own §The Soul
                     disagrees with the record, not this default).
---group NAME        open on a NAMED roster (coordinator/group_manager.py,
-                    self/groups.toml) instead of --parts — a deliberately
+--group NAME        open on a NAMED group (coordinator/group_manager.py,
+                    groups/<name>/group.toml — R468) instead of --parts — a deliberately
                     different roster, not a reduced one, so the REDUCED
                     LIVE ROSTER warning above does not fire for it.
                     Mutually exclusive with --parts (landed `6fe45f4`,

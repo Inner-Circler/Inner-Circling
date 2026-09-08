@@ -72,6 +72,42 @@ work/logs/closing_*.json
 work/logs/dream_[0-9]*.json
 work/logs/delta_[0-9]*.json
 
+# EVERYTHING ELSE A RUN DROPS HERE IS A MEMO — the default is now ignore, and
+# the record is re-included by name below. spend_<OT>.json (R380) was the file
+# that made the default worth changing: nothing commits it, so every live close
+# left one dirty forever, which is the shape that deadlocked a lab `pull-main`.
+#
+# `work/logs/*` and NOT `work/logs/`, deliberately, exactly as `work/sandbox/*`
+# above: git cannot re-include anything beneath an EXCLUDED DIRECTORY, so the
+# directory form would silently defeat all four negations.
+#
+# THE NEGATIONS ARE LOAD-BEARING IN BOTH DIRECTIONS, and this is the one place
+# in the file where that is true of a machine path rather than a human one:
+#   close_*.json   transcript_store.circle_commit_paths() puts it in EVERY
+#                  circle's own commit, live and sandbox. It is new and
+#                  untracked at each close, and `git add --` REFUSES the whole
+#                  path list when one member is ignored — so ignoring it would
+#                  raise GitError out of circle_commit() into /close, which
+#                  catches only ImportError. It is also the record
+#                  circle_state.py, circle_delta.py and
+#                  circle_close_verify.py --reconcile all read.
+#   */ .md .txt    the hand-written build logs, the lab testing transcripts and
+#                  the bnf_conformance baseline — 28 tracked files that
+#                  gitrepo.system_git_ignored_untrack() would `git rm --cached`
+#                  at the next --git-setup. ALL FILES ARE TRACKED IN THE LOCAL
+#                  (ruled 2026-08-07).
+# `git ls-files --cached --ignored --exclude-standard -- work/logs` is the
+# check: it must stay EMPTY, because that set is exactly what --git-setup drops.
+#
+# work/logs/circle_audit*.log stays spelled out above and below: REQUIRED_IGNORES
+# in gitrepo.py matches by exact string, so the blanket does not satisfy it and
+# --git-setup would re-append the line on every run.
+work/logs/*
+!work/logs/close_*.json
+!work/logs/*/
+!work/logs/*.md
+!work/logs/*.txt
+
 # THE DIAGNOSTIC NOTES a refused check writes — work/diagnostics/gate_<time>.md,
 # 2026-08-26. Each is written FOR its reader, who may hand-edit it before
 # sending it anywhere; a copy in the history would be a second version they did

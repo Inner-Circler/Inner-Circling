@@ -74,7 +74,7 @@ THE LAYOUT — R277, 2026-08-21. One directory per circle, and inside it:
 THE PER-TURN RECORD is the Messages-API request body as sent, plus the reply:
 
     {
-      "seq": 12, "part": "child", "kind": "statement",
+      "seq": 12, "part": "<dir>", "kind": "statement",
       "time": "2026-08-21_143022", "dry_run": false,
       "request": {
         "model": ..., "max_tokens": ...,
@@ -167,7 +167,7 @@ import threading
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
-import roster as R                                            # noqa: E402
+import part_roster as R                                            # noqa: E402
 # One home for the roots (2026-08-19, review tier 5 #41) — see
 # remember_manager.py's note beside its own import: this was the third private
 # ROOT/SANDBOX derivation, each a place the next relocation could miss.
@@ -221,12 +221,22 @@ IDENTITY_BLOCKS = ("part_identity", "part_objectives")   # the per-part pair
 MANIFEST = "manifest.json"
 PROJECTION_PREFIX = 96      # chars of the newest record recorded as the probe
 
-# B29: derived from roster.py — was a hand-typed copy.
+# B29: derived from part_roster.py — was a hand-typed copy.
 PART_TAGS = tuple(R.TAGS)
+
+
+def _tags_rebind() -> None:
+    """The CURRENT group's Tags — B117 stage 5 (2026-09-07)."""
+    global PART_TAGS
+    PART_TAGS = tuple(R.TAGS)
+
+
+import record_paths as _RPf                                            # noqa: E402
+_RPf.group_follow(_tags_rebind)
 # PART_TAGS_BY_DIR (= R.TAG_BY_DIR) DELETED 2026-09-01 -- audit-register.md
 # #30 found it a zero-reference symbol; two docs cited it as this module's
 # own surface, but nothing anywhere imports or reads it. Use
-# roster.TAG_BY_DIR directly.
+# part_roster.TAG_BY_DIR directly.
 
 
 def _sha(b: bytes) -> str:
@@ -809,7 +819,10 @@ def prompt_capture_contract_read() -> dict:
     """turn_contract.toml, or {} when it is absent or unreadable. A MISSING
     CONTRACT IS A NOTE, NOT A PASS — _verify_dir says so out loud, because a
     check that quietly stops checking is the defect this whole file exists
-    to catch."""
+    to catch.
+
+    One of three identical bodies, deliberately — see
+    circle_close_verify.circle_close_contract_read() for the reasoning."""
     try:
         import tomllib as _toml
     except ModuleNotFoundError:                              # pragma: no cover

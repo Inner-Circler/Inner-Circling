@@ -21,11 +21,15 @@ X_nNNNN.toml  retired
 
 Renaming the file changes the status. The `n####` inside never changes.
 
-**This directory is empty on purpose, and your ids will be your own.**
+**No nodes ship, on purpose, and your ids will be your own.**
 Node ids are allocated in your graph, counting up from the first. They
 do not
 correspond to anyone else's — an id in someone else's notes means
 nothing here.
+
+`issue_model.md` beside this file is not a node and does not go: it is the
+prologue every circle's briefing is built on, and a circle refuses to open
+without it.
 
 Prose lives in `"""` blocks, hard-wrapped; a single newline is soft.
 Run `memory/issue_gate.py` after any hand edit.

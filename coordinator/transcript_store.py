@@ -33,10 +33,10 @@ import sys
 
 import command_surface as CS
 import identity as ID              # SELF_ID + the display name
-import roster as R
+import part_roster as R
 import seam
 import working_set_manager as WS   # the working_sets register (stage 10; REGISTER_CLASS went with it)
-from record_paths import ROOT, SANDBOX
+from record_paths import ROOT, SANDBOX, SANDBOX_CIRCLES, record_dir
 from write_guard import WriteGuard
 
 # THIS IS A DISPLAY NAME ONLY (R132/R144 — see circle.py's config
@@ -52,7 +52,7 @@ CONSOLE_NAME = ID.user_name_read()
 # Windows translates every "\n" to "\r\n" -- so this script silently wrote CRLF
 # while every file reaching the tree through any other route was LF. That is not a
 # cosmetic split: circle_close_verify.py records each short_term's sha256 at close and
-# re-verifies it at reconcile, ifs_model.py enforces byte-identical
+# re-verifies it at reconcile, record_model.py enforces byte-identical
 # dream bodies, and git is the rollback target. All three need bytes to be stable
 # and to mean one thing. (Fixed 2026-07-26; the eight CRLF files from
 # circle_2026-07-26_1910 are left as-is -- their hashes are already in
@@ -154,12 +154,12 @@ _HEAD_RE = re.compile(r"# Circle — (.*) — (\d{4}-\d{2}-\d{2}_\d{4})")
 # broke reading 56 lines carrying the earlier spelling — `unknown speaker
 # tag`, raised on a transcript this project wrote itself. The record is
 # never rewritten, so the reader has to carry the history. Same shape as
-# identity.HISTORICAL_NAMES for Self, and roster.DIR_BY_TAG_ALL for the
+# identity.HISTORICAL_NAMES for Self, and part_roster.DIR_BY_TAG_ALL for the
 # close verifier.
 #
 # WHERE THAT HISTORY LIVES IS NOW A PART'S OWN FILE (R123). It was a dict
 # typed here, holding one installation's rename in a module that SHIPS; it
-# is `alt_tags` in parts/<dir>/part.toml, and roster.DIR_BY_TAG_ALL is the
+# is `alt_tags` in parts/<dir>/part.toml, and part_roster.DIR_BY_TAG_ALL is the
 # read direction assembled from it. Empty in this tree, deliberately —
 # ruled 2026-08-08 that the one retired tag is not to be recognised — so
 # this changes nothing today and means the next rename needs no code.
@@ -572,7 +572,7 @@ def circle_sandbox_commit(ot: str) -> None:
     # direction. A record of the close is cheap; inferring one is not.
     logs = ROOT / "work" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
-    tpath = SANDBOX / "circles" / f"circle_{ot}.md"
+    tpath = SANDBOX_CIRCLES / f"circle_{ot}.md"
     try:
         import hashlib as _h
         raw = tpath.read_bytes() if tpath.is_file() else b""
@@ -586,12 +586,12 @@ def circle_sandbox_commit(ot: str) -> None:
     except Exception as e:                                   # noqa: BLE001
         seam.emit("command", f"  close report not written — {e}")
 
-    paths = [SANDBOX / "circles" / f"circle_{ot}.md",
+    paths = [SANDBOX_CIRCLES / f"circle_{ot}.md",
              logs / f"close_{ot}.json"]
     for pdir in sorted((SANDBOX / "prompts").glob(f"{ot}*")):
         if pdir.is_dir():
             paths += sorted(pdir.glob("*"))
-    paths += sorted((SANDBOX / "circles").glob(f"commands_{ot}.toml"))
+    paths += sorted(SANDBOX_CIRCLES.glob(f"commands_{ot}.toml"))
     paths = [p for p in paths if p.is_file()]
     if not paths:
         return
@@ -609,7 +609,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
 
     THE TWO REGISTERS JOINED 2026-08-26, on the operator's word, after a
     real circle's leftovers deadlocked a `pull-main`: the lab's tree was
-    dirty with `self/working_sets.toml` and `self/proposals.toml`, and the
+    dirty with `circles/working_sets.toml` and `self/proposals.toml`, and the
     merge refuses a dirty tree — correctly. Both are this circle's own
     output and neither was staged by anything:
 
@@ -632,7 +632,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     DELETED. A close report supersedes it") and the `dream/<OT>` tag is the
     authority for the second. `.gitignore` carries both, with that reason
     written beside them."""
-    paths = [ROOT / "circles" / f"circle_{ot}.md",
+    paths = [record_dir(ROOT, "circles") / f"circle_{ot}.md",
              ROOT / "work" / "logs" / f"close_{ot}.json"]
     # work/prompts/<OT>/ and every work/prompts/<OT>_resume_<k>/
     # a resumed sitting wrote. The resume captures were missed on the first
@@ -643,16 +643,17 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     # THE REAL FILE, by suffix — .toml since R434 (B96, 2026-09-04), .md for a
     # resumed pre-B96 close; the one locator decides, never a spelled suffix.
     import short_term_manager as STM
-    paths += [STM.short_term_locate(ROOT / "parts" / p, ot)
-              or ROOT / "parts" / p / STM.short_term_name(ot) for p in written]
+    parts_dir = record_dir(ROOT, "parts")
+    paths += [STM.short_term_locate(parts_dir / p, ot)
+              or parts_dir / p / STM.short_term_name(ot) for p in written]
     # The graph-rulings record, when this circle wrote one. commit_sandbox
     # always staged its sandbox twin; the live path omitted it (2026-08-18
     # review, tier 2 #18), so the one file the gate's provenance greps
     # rely on sat untracked forever — "never add -A" means nothing else
     # ever swept it in.
-    paths += sorted((ROOT / "circles").glob(f"commands_{ot}.toml"))
-    paths += [p for p in (ROOT / "self" / "working_sets.toml",
-                          ROOT / "self" / "proposals.toml") if p.is_file()]
+    paths += sorted(record_dir(ROOT, "circles").glob(f"commands_{ot}.toml"))
+    paths += [p for p in (record_dir(ROOT, "circles") / "working_sets.toml",
+                          record_dir(ROOT, "self") / "proposals.toml") if p.is_file()]
     return paths
 
 
@@ -698,6 +699,12 @@ def circle_close_verifier_run(ot: str) -> int:
     records a missing short_term — the caller must NOT report a clean close."""
     cmd = [sys.executable, str(ROOT / "coordinator" / "circle_close_verify.py"),
            "--short-term-only", "--open-time", ot, "--write-report"]
+    # THE GROUP RIDES ALONG (E33, 2026-09-07): the verifier is a fresh process and resolves
+    # the record through its own --group; without it the band's first live close looked for
+    # its transcript in the default group's circles/ and wrote no close report.
+    import record_paths as _RP
+    if _RP.group_read() != _RP.DEFAULT_GROUP:
+        cmd += ["--group", _RP.group_read()]
     # CAPTURED, never inherited (the operator's lab close, 2026-08-30): a child
     # writing to the real stdout lands inside the Ticker bridge's NDJSON
     # protocol stream, and every report line arrives as a loud

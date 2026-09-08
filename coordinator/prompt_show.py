@@ -34,9 +34,9 @@ the two every part shares; a part name shows the two that are its own:
     3 part_identity      PER PART, cached
     4 part_objectives    PER PART, uncached
 
-Every block prints its real position from `circle.py:block_order()`, so a
+Every block prints its real position from `prompt_build.block_order()`, so a
 reorder cannot mislabel this any more than it can mislabel a capture, and the
-render is SLICED FROM `system_blocks()` rather than reassembled — a second
+render is SLICED FROM `prompt_build.system_blocks()` rather than reassembled — a second
 implementation of the thing this file exists to inspect would be worse than
 no inspection at all.
 

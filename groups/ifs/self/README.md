@@ -4,9 +4,10 @@
 
 **Everything here is a DELEGATE — the live shape, none of the content.** Ruled
 2026-08-18: every `self/` register the code depends on ships as an empty
-template, never seeded. `packaging/sanitize.py`'s 2026-08-09 run found heavy
-owner-name and part-name content throughout the live `self/`, and nothing there
-is generic enough to ship. What is worth shipping is the shape.
+template, never seeded. The project's own packaging tools — which are not in
+this bundle — found heavy owner-name and part-name content throughout the
+author's live `self/` in 2026-08-09, and nothing there is generic enough to
+ship. What is worth shipping is the shape.
 
 ```
 best_practices.toml      how the CIRCLE behaves, and
@@ -16,20 +17,10 @@ self.md                  who Self is for this
 topics.toml              synthesis's unvetted BLOCK 2
                          topics
 remember.toml            Self's own reflexive record
-circle_history.toml      one durable entry per circle
-circle_journal.toml      the circle's own evolving
-                         identity, folded into Block 1
-                         every close (added 2026-09-04,
-                         B94)
 proposals.toml           the PROPOSE-class register --
                          what parts proposed and Self
                          ruled on (added 2026-08-23,
                          R315)
-working_sets.toml        which issue nodes each circle
-                         was shown
-self_observation_log.toml  what synthesis
-                         noticed about the room, one
-                         record per circle
 coalesce.toml            the proposal coalesce register --
                          groups of pending proposals that
                          are one ask in different words
@@ -37,9 +28,25 @@ coalesce.toml            the proposal coalesce register --
 redaction.toml           your curated redaction targets for
                          the CIRCLE pane's redacted view
                          (added 2026-08-31)
-groups.toml              your named rosters of parts, so
-                         `--group <name>` can invoke a whole
-                         circle by name (added 2026-09-03)
+(FOUR REGISTERS ARE NOT HERE, and were until
+ 2026-09-07: circle_history.toml,
+ circle_journal.toml, circle_observation_log.toml
+ and working_sets.toml moved to `../circles/`,
+ beside the transcripts. Each holds one row per
+ CIRCLE rather than one about Self, which is what
+ the move sorted on; `../circles/README.md`
+ describes all four. They ship empty there.)
+
+(groups.toml is NOT here, and no longer exists
+ anywhere: it left every group's self/ on
+ 2026-09-07 (R467) and was RETIRED the same day
+ (R468, B120). A group now describes itself —
+ `../group.toml`, beside this self/ folder, and
+ its presence is what makes the folder a group.
+ That is where a group's roles, its reserved
+ roles and its rulebook layer live. Which groups
+ a bundle carries is packaging/groups.toml, on
+ the publishing side.)
 settings.toml            what you change when the code would
                          otherwise decide -- a cap, a budget,
                          a mode. Not shipped: it appears the
@@ -59,17 +66,16 @@ dreams.toml              Self's own dream corpus and the
                          (dream_history_manager.py, run by
                          hand: --bootstrap, --fold). Never
                          shipped -- one person's dreams --
-                         and nothing at /close reads it. The
-                         tool itself assumes the file is
-                         there: run without one, it stops
-                         with a file-not-found
+                         and nothing at /close reads it. Absent
+                         reads as an empty corpus; the file
+                         appears when a derivation first
+                         writes it
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,
-`circle_history_manager.py`, `circle_journal_manager.py`, `self_observation_manager.py`,
-`proposal_manager.py`, `redaction_manager.py` and `group_manager.py` each construct their own
+`proposal_manager.py` and `redaction_manager.py` each construct their own
 empty shape when their file is absent — a `next_id = 1` counter (four `next_*` counters for
-`redaction_manager.py`; none at all for `group_manager.py`) plus an empty table — and each
+`redaction_manager.py`) plus an empty table — and each
 delegate here loads to that same document, allowing only a longer `[doc]` preamble ("SHIPPED
 EMPTY ..." prose appended to the builder's own text). Three exceptions, named so nobody "fixes"
 them: `remember_manager.py` builds only `remember = []` when the file is absent — no register
@@ -81,6 +87,11 @@ tree a probe holds every delegate to exactly this rule at every commit
 this copy re-checks it. The delegates are not byte-for-byte what the code would write — some carry a header
 comment — they are equivalent in what a fresh install *reads*. The delegate exists so the file
 is *there*, valid and loadable, rather than conjured on first write.
+
+The same rule and the same probe cover the four delegates in `../circles/`
+(`circle_history_manager.py`, `circle_journal_manager.py`,
+`circle_observation_manager.py`, `working_set_manager.py`) — they are not listed
+above only because their registers are not Self's.
 
 `self.md` is the one exception: it is prose, so it ships hand-genericized rather
 than empty — the two sections synthesis expects, with a note in each saying what
@@ -99,7 +110,8 @@ you rule things into them.
 
 **There is no `circle_briefing.md` delegate, and there should not be one.**
 `self/circle_briefing.md` was retired 2026-08-11: `group_attention.circle_briefing_build()` now reads
-`issues/issue_model.md`, the live graph and `self/best_practices.toml` directly
+`groups/ifs/issues/issue_model.md`, the live graph and
+`groups/ifs/self/best_practices.toml` directly
 at every circle open, and the `split_briefing()` that routed the old document by
 heading is gone from the code entirely. A delegate lingered here until
 2026-08-18, correctly labelled vestigial, standing in for a file the live tree no
@@ -108,10 +120,11 @@ to ship.
 
 ---
 
-**`self_observation_log` is `.toml` since 2026-08-19** (R256). It
+**`circle_observation_log` is `.toml` since 2026-08-19** (R256). It
 was the last `.md`-as-datastore on a live write path in the shipped product:
-`inter_circle.py` appends to it at every `/close`, so it moved to the register
-shape the rest of this directory already uses. `self.md` deliberately did not —
+`inter_circle.py` appends to it at every `/close`, so it took the register
+shape this directory uses. It has since moved out to `../circles/`, with the
+other three one-per-circle registers. `self.md` deliberately did not —
 synthesis reads it back as prompt input and replaces it whole, which is a
 document, not a register.
 
@@ -126,11 +139,11 @@ the file into BLOCK 2 at each circle open. It had not since B46. Worse, that
 sentence was *written into it* on 2026-08-18, a day after the code went: the
 edit corrected an older stale reference and replaced it with a fresher one.
 
-Nothing in `packaging/` ever named this file. `scan.py::resolve()` could not
-reach it either — resolution is driven by the paths live code depends on, and
-no live code depended on it — so it shipped purely as a passenger of
-`_clone_scaffold()`'s wholesale copy, unexamined by the register that is
-supposed to justify every shipped path.
+The packaging tools that decide what ships — not part of this bundle — never
+named this file, and could not reach it by following what live code depends
+on, because no live code depended on it. It shipped purely as a passenger of
+the wholesale scaffold copy, unexamined by the register that is supposed to
+justify every shipped path.
 
 **There is no `leads.md` delegate any more.** Dropped 2026-08-19
 (R257), for the same reason `circle_briefing.md`'s went:

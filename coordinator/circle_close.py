@@ -44,7 +44,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import seam                                                    # noqa: E402
-import roster as R                                             # noqa: E402
+import part_roster as R                                             # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import annotations as MK                                       # noqa: E402  the remember split
 import LLM_response_disassembler as RD                         # noqa: E402  every read of a reply
@@ -52,7 +52,7 @@ import llm_client as LC                                        # noqa: E402  cal
 import prompt_build as PB                                      # noqa: E402  render_messages
 import transcript_store as TS                                  # noqa: E402  write_lf, parse, resume
 import short_term_manager as STM                               # noqa: E402  THE record's one reader/writer (B96)
-from record_paths import ROOT, SANDBOX, PART_TAGS                     # noqa: E402
+from record_paths import ROOT, SANDBOX, PART_TAGS, record_dir        # noqa: E402
 
 
 # THE CLOSE ASKS FOR TWO THINGS NOW, ruled 2026-08-19 (R255): the four
@@ -242,7 +242,7 @@ def _interrupted_closes(base: pathlib.Path) -> list[tuple[str, list[str]]]:
         if not spoke:
             continue
         missing = sorted(p for p in spoke
-                         if STM.short_term_locate(ROOT / "parts" / p, ot_i) is None)
+                         if STM.short_term_locate(record_dir(ROOT, "parts") / p, ot_i) is None)
         # ALL of them missing usually means an OPEN circle or an /abort, not
         # an interrupted close — nobody has started closing yet, so nothing
         # has been written. circle_state's own warning above is what speaks
@@ -272,7 +272,7 @@ def _dest_for(part: str, ot: str, guard) -> pathlib.Path:
     already wrote, whatever its suffix, else `short_term_<OT>.toml` — R434
     (2026-09-02, B96): a NEW circle writes TOML, live and dry-run alike."""
     base = SANDBOX if not guard.live else ROOT
-    return STM.short_term_path_new(base / "parts", part, ot)
+    return STM.short_term_path_new(record_dir(base, "parts"), part, ot)
 
 
 def _short_term_call(part: str, sysblocks, transcript, dry: bool):
@@ -463,11 +463,11 @@ def circle_resumable_list() -> int:
     A circle whose every speaking part has its short_term is a finished
     close from before close reports existed, and stays hidden. Read-only."""
     rows = []
-    for f in sorted((ROOT / "circles").glob("circle_*.md")):
+    for f in sorted(record_dir(ROOT, "circles").glob("circle_*.md")):
         ot = f.stem[len("circle_"):]
         if (ROOT / "work" / "logs" / f"close_{ot}.json").is_file():
             continue
-        done = {p.parent.name for p in STM.short_term_glob(ROOT / "parts", ot)}
+        done = {p.parent.name for p in STM.short_term_glob(record_dir(ROOT, "parts"), ot)}
         try:
             topic, tr, _, _ = TS.circle_transcript_resume_read(f, ot, R.DIR_NAMES)
             spoke = {e["speaker"] for e in tr if e["speaker"] in PART_TAGS}

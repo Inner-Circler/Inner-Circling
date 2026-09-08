@@ -47,13 +47,21 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import JOURNAL_CLASS                                               # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # Rebindable for probes — test suites never write the live register.
-PATH = ROOT / "self" / "circle_history.toml"
+PATH = _RP.CIRCLES_DIR / "circle_history.toml"
+
+
+@_RP.group_follow
+def _path_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07)."""
+    global PATH
+    PATH = _RP.CIRCLES_DIR / "circle_history.toml"
 
 TABLE = "history"
 ORDER = ("id", "date", "circle", "text", "chain")
@@ -116,7 +124,7 @@ def _rel() -> str:
     """PATH for printing. `PATH.relative_to(ROOT)` raises when PATH has been rebound to a
     temp file, which is exactly what a probe suite does to the constant above — so a module
     whose PATH is documented as rebindable must not assume PATH is still under ROOT.
-    self_observation_manager.py and circle_journal_manager.py both already carry this fix
+    circle_observation_manager.py and circle_journal_manager.py both already carry this fix
     (their own docstrings named this module as the one that "predates it and still assumes" —
     found true, and fixed here, when B105's own new direct test rebound PATH the same way)."""
     try:
@@ -132,7 +140,7 @@ def circle_history_new_render(doc: dict, circle: str, text: str) -> tuple[dict, 
     construction (id mint, date stamp, chain, cap refusal) delegates to
     JOURNAL_CLASS.py's shared new_render() (B105); this module still owns its
     own text normalization — whitespace-collapsed to one paragraph, unlike
-    self_observation_manager.py's verbatim multi-line OBSERVATION text."""
+    circle_observation_manager.py's verbatim multi-line OBSERVATION text."""
     text = " ".join(text.split())
     return _JC.new_render(doc, {"circle": circle, "text": text}, chain=True)
 

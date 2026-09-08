@@ -24,15 +24,15 @@ The register began as a single append-only bullet in `self/narrative_arc.md` and
 
 **Accumulate, never prune.** At most one record per processed circle, and nothing here ever deletes one. The register gate enforces exactly that.
 
-**The writer is the phase-2 driver only.** Nothing else in the system writes this file. Raising the cap was safe for the same reason: no prompt block projects this register, and its one consumer reads the single most recent entry, so the cost of a bigger cap is bounded at one record per run.
+**The writer is the phase-2 driver only.** Nothing else in the system writes this file. Raising the cap was safe for the same reason: no prompt block projects this register, and both its consumers are SYNTHESIS's own — the next run's input, which reads the single most recent entry, and this run's CIRCLE JOURNAL fold, which reads the fresh HISTORY text produced beside it in the same reply — so the cost of a bigger cap is bounded at one record per run.
 
-**Row construction now delegates to `JOURNAL_CLASS.py` (B105, 2026-09-05).** `circle_history_manager.py`, `self_observation_manager.py`, `circle_journal_manager.py` and (for one function) `remember_manager.py` shared this same "mint an id, stamp a date, optionally chain to the prior row, optionally refuse oversize text" shape by duplication; a module-level `JournalClass` instance now owns it, and this module keeps only what makes CIRCLE_HISTORY its own — the CAP/TARGET numbers, and whitespace-collapsing the text to one paragraph before handing it over. No public name or behavior changed.
+**Row construction now delegates to `JOURNAL_CLASS.py` (B105, 2026-09-05).** `circle_history_manager.py`, `circle_observation_manager.py`, `circle_journal_manager.py` and (for one function) `remember_manager.py` shared this same "mint an id, stamp a date, optionally chain to the prior row, optionally refuse oversize text" shape by duplication; a module-level `JournalClass` instance now owns it, and this module keeps only what makes CIRCLE_HISTORY its own — the CAP/TARGET numbers, and whitespace-collapsing the text to one paragraph before handing it over. No public name or behavior changed.
 
 ## MAIN
 
     Read the command-line arguments.
     if ("--init" appears) then {
-        if (self/circle_history.toml already exists) then {
+        if (circles/circle_history.toml already exists) then {
             print that it exists and was left untouched.
             return 0.
         } else {
@@ -59,7 +59,7 @@ The register began as a single append-only bullet in `self/narrative_arc.md` and
 ## COMMAND-LINE ARGUMENTS
 
     (none)      list every entry: id, the circle it is about, and its chain link.
-    --init      create self/circle_history.toml as an empty register. Refuses
+    --init      create circles/circle_history.toml as an empty register. Refuses
                 to overwrite an existing one — it prints and exits 0.
     --show      print the newest entry in full, text included.
 
@@ -71,7 +71,7 @@ Arguments are matched by presence, not position. Anything unrecognised falls thr
 
 ## EXTERNAL FILES
 
-    self/circle_history.toml    READ by every verb; WRITTEN only by --init here.
+    circles/circle_history.toml    READ by every verb; WRITTEN only by --init here.
                                 The real per-circle writes come from the phase-2
                                 driver calling circle_history_new_render() and saving the result.
 
@@ -94,7 +94,7 @@ A module-level `JournalClass` instance (`JOURNAL_CLASS.py`, B105), configured wi
 Delegates to `_JC.doc()`: loads the register if the file exists; otherwise returns a fresh in-memory register — name, `next_id` of 1, the preamble, and an empty entry list. So every read path works before the file has ever been created.
 
 ### _rel()
-`PATH` rendered for printing, tolerant of `PATH` having been rebound outside the tree (the probe suite's own technique) — `PATH.relative_to(ROOT)` would otherwise raise. Added with B105: this module was the one register-with-a-CLI still missing the fix `self_observation_manager.py` and `circle_journal_manager.py` already carried, found when B105's own new direct test rebound `PATH` the same way and hit exactly that raise.
+`PATH` rendered for printing, tolerant of `PATH` having been rebound outside the tree (the probe suite's own technique) — `PATH.relative_to(ROOT)` would otherwise raise. Added with B105: this module was the one register-with-a-CLI still missing the fix `circle_observation_manager.py` and `circle_journal_manager.py` already carried, found when B105's own new direct test rebound `PATH` the same way and hit exactly that raise.
 
 ### circle_history_read()
 Delegates to `_JC.read()`: the record list, in file order.

@@ -71,10 +71,12 @@ sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent
 del _pl
 import identity as ID              # SELF_ID + the display name
 import issue_commands as IC        # /issue-label-update, issue-relationship-add
-import roster as R                 # B29: the one roster every reader shares
+import part_roster as R                 # B29: the one roster every reader shares
 import record_verify as CI       # the corruption gate, run before anything opens
-from record_paths import ROOT, SANDBOX, PART_TAGS   # phase-1 step 0: one home
-                                   # for path constants (2026-08-16)
+from record_paths import (ROOT, PART_TAGS, SANDBOX_CIRCLES, record_dir,       # phase-1 step 0:
+                          record_rel)   # one home for path constants (2026-08-16)
+import record_paths as _RP
+SANDBOX = _RP.SANDBOX              # a probe seam: test_quote_as_lands reads circle.SANDBOX
 import seam                        # the I/O seams + failure record
 import setting_manager as SET             # self/settings.toml — the override register
 import phase_clock as PC           # wall-clock per phase + the close heartbeat
@@ -114,8 +116,8 @@ from propose_lifecycle import (proposal_unruled_list,      # stage 8, 2026-09-03
 # propose names) are all gone since 2026-09-03: every suite calls the owner.
 import help_system as HS           # phase-2 stage 5 (built 4th)
 from help_system import command_help_render, junk_help
-import vetting as VT               # phase-2 stage 4 (built 6th)
-from vetting import proposal_vet
+import proposal_vetting as VT      # phase-2 stage 4 (built 6th)
+from proposal_vetting import proposal_vet
 from circle_rounds import (circle_round_run, circle_blind_round_run,    # phase-2 stage 7:
                     part_token_table)                   # the turn engine
 # (graph_now/_propose_approve/_propose_command_shape are deliberately
@@ -295,11 +297,19 @@ CONSOLE_NAME = ID.user_name_read()
 # PART_TAGS (parts/<dir> -> transcript tag, B29) moved to record_paths.py with
 # its comment, 2026-08-16 — imported at the top of this file.
 
-# All seven parts attend. The agent-teams path spawns all seven every circle
-# (CLAUDE.md: "across 7 named parts"; "All part agents activate"), so the
-# coordinator does too — omitting one is the desync described in README
-# §Roster. B29: derived from roster.py rather than hand-typed.
-DEFAULT_PARTS = R.DIR_NAMES
+# The default roster IS THE DEFAULT GROUP'S MEMBERS — the `ifs` row of the groups register —
+# B117 stage 1 (R466/R467, 2026-09-07): never the parts/ scan again, so a directory added under
+# parts/ cannot widen the plain live open (MAX_MEMBERS is 9). The scan is the fallback only
+# where no `ifs` row exists (a fresh bundle's empty delegate).
+
+
+def _default_parts_read() -> list[str]:
+    import group_manager as _GA
+    members = _GA.group_resolve(_GA.DEFAULT_GROUP)
+    return list(members) if members else list(R.DIR_NAMES)
+
+
+DEFAULT_PARTS = _default_parts_read()
 
 # The Soul's speaking rule — history, kept here rather than in the prompt.
 #
@@ -381,7 +391,7 @@ def issue_graph_redraw() -> None:
     runs: a ruling Self types at cmd> or embeds as an annotation, applied
     by issue_commands.issue_command_apply() over the circle's own batch; and a
     `[proposed: ...]` row a part offered, accepted at the vetting
-    checkpoint and applied by that same function through vetting.py.
+    checkpoint and applied by that same function through proposal_vetting.py.
     Drawing at the close rather than at each
     mutation means one picture per circle instead of one per ruling, and
     means the picture a person opens afterwards is of the graph they
@@ -403,7 +413,7 @@ def issue_graph_redraw() -> None:
     import subprocess
     try:
         r = subprocess.run(
-            [sys.executable, "ui/issue_draw.py", "issues/", "--if-stale"],
+            [sys.executable, "ui/issue_draw.py", record_rel("issues") + "/", "--if-stale"],
             cwd=str(ROOT), capture_output=True, text=True,
             encoding="utf-8", errors="replace")
     except Exception as e:                       # noqa: BLE001 — see docstring
@@ -455,7 +465,7 @@ def issue_graph_redraw() -> None:
 # comments and R202 included. The propose half of that moved AGAIN on
 # 2026-09-03, to propose_lifecycle.py (cohesion re-homing stage 8). The
 # names this file still calls are imported at the top.
-# Vetting MOVED to vetting.py, 2026-08-16 (phase 2 stage 4, built
+# Vetting MOVED to proposal_vetting.py, 2026-08-16 (phase 2 stage 4, built
 # sixth): graph_now (per Self's ruling — _propose_approve is its one
 # consumer), _practice_describe/_practice_approve/_propose_describe/
 # _propose_approve/_propose_deny and vet_pending_proposals — verbatim,
@@ -547,8 +557,8 @@ def main() -> int:
                          f"A reduced roster is for TESTING — omitted parts are "
                          f"absent from the circle and stay unaware of it.")
     ap.add_argument("--group", default=None,
-                    help="open on a NAMED roster (coordinator/group_manager.py, "
-                         "self/groups.toml) instead of --parts — a "
+                    help="open on a NAMED group (coordinator/group_manager.py, "
+                         "groups/<name>/group.toml) instead of --parts — a "
                          "deliberately different roster, not a reduced one, "
                          "so the REDUCED LIVE ROSTER warning below does not "
                          "fire for it. Mutually exclusive with --parts.")
@@ -558,7 +568,9 @@ def main() -> int:
                          "docs/MEMORY_DESIGN.md): expand topic-matched seeds "
                          "into each part's BLOCK 4. Default: off. 'withheld' "
                          "computes and logs the packs without delivering "
-                         "them — the trial's control arm.")
+                         "them — the control arm of the recall trial, closed "
+                         "R460 (2026-09-06); kept for a future trial, no UI "
+                         "sends it.")
     ap.add_argument("--no-prewarm", action="store_true",
                     help="skip stream_prewarm() — the sequential, zero-output-token "
                          "calls that write each part's cached prompt prefix "
@@ -673,7 +685,7 @@ def main() -> int:
             emit("command", f"     {p}")
         emit("command", f"\n     {len(DEFAULT_PARTS)} part(s) would have been in this "
               f"circle: {', '.join(DEFAULT_PARTS) or '(none)'}")
-        emit("command", "     python coordinator/roster.py")
+        emit("command", "     python coordinator/part_roster.py")
         return 2
 
     if not args.live and not args.dry_run:
@@ -697,8 +709,17 @@ def main() -> int:
         emit("command", "--group and --parts were both given — use one, not "
                         "both.")
         return 2
+    # A BARE OPEN NEEDS A DEFAULT GROUP — R468, B120 stage 4 (2026-09-07): one installed group,
+    # or one whose group.toml says `default = true`; otherwise --group is required and this is
+    # the one sentence that says so. No literal group name is depended on.
+    if not used_group:
+        why = _RP.group_default_refusal_read()
+        if why:
+            emit("command", f"  {why}")
+            return 2
+    import group_manager as GA
+    import process_core_prompt_projection as PCP
     if used_group:
-        import group_manager as GA
         resolved = GA.group_resolve(args.group)
         if resolved is None:
             emit("command", f"no group named {args.group!r} — "
@@ -706,9 +727,24 @@ def main() -> int:
                             f"exists")
             return 2
         parts = resolved
+        # THE GROUP'S TREE — R467, B117 stage 3 (2026-09-07): a circle opened on a group reads
+        # and writes that group's RECORD, groups/<name>/. group_set() rebinds record_paths'
+        # constants and runs every follower (roster's tables, in place), so PART_TAGS and
+        # record_dir() below already answer for this group. Before anything reads the record.
+        if args.group != _RP.DEFAULT_GROUP:
+            _RP.group_set(args.group)
     else:
         parts = [p.strip() for p in args.parts.split(",") if p.strip()]
-    bad = [p for p in parts if p not in PART_TAGS or not (ROOT / "parts" / p).is_dir()]
+    # BLOCK 1's group layer (R464, B115, 2026-09-07): the group row's `layer` file, or the IFS
+    # layer for a row without one and for every circle opened without --group. Set BEFORE the
+    # one group_shared_read() below, which composes it in. A missing file refuses the open.
+    PCP.circle_identity_layer_set(GA.group_layer_read(args.group) if used_group else None)
+    # ...and its word for one of its members (D104): the IFS group declares "part", a group that
+    # declares nothing gets "role", and a circle opened without --group gets the family's, as the
+    # layer above does. Set here so BLOCK 1 never mixes the two words in one prompt.
+    PCP.circle_identity_words_set(
+        (GA.group_member_words_read(args.group) or PCP.DEFAULT_WORDS) if used_group else None)
+    bad = [p for p in parts if p not in PART_TAGS or not (record_dir(ROOT, "parts") / p).is_dir()]
     if bad:
         emit("command", f"unknown part(s): {', '.join(bad)}")
         return 2
@@ -754,7 +790,7 @@ def main() -> int:
     #
     # A RESUME still knows its open time up front: it is the argument.
     def circle_path(t: str) -> pathlib.Path:
-        return (ROOT if args.live else SANDBOX) / "circles" / f"circle_{t}.md"
+        return (record_dir(ROOT, "circles") if args.live else SANDBOX_CIRCLES) / f"circle_{t}.md"
 
     ot: str | None = args.resume
     guard: WriteGuard | None = None
@@ -765,7 +801,7 @@ def main() -> int:
             return 2
         closed = ROOT / "work" / "logs" / f"close_{ot}.json"
         import short_term_manager as STM
-        done = STM.short_term_glob(ROOT / "parts", ot)      # either suffix (B96)
+        done = STM.short_term_glob(record_dir(ROOT, "parts"), ot)      # either suffix (B96)
         if args.live and closed.is_file():
             emit("command", f"\n  circle_{ot} is already closed — refusing to reopen it.")
             emit("command", f"     close report: {closed.relative_to(ROOT)}")
@@ -949,7 +985,7 @@ def main() -> int:
     if not args.resume:
         try:
             import circle_state
-            base = ((ROOT if args.live else SANDBOX) / "circles").resolve()
+            base = (record_dir(ROOT, "circles") if args.live else SANDBOX_CIRCLES).resolve()
             openc = [c for c in circle_state.circle_open_read()
                      if _within(c["path"].resolve(), base)]
         except Exception as e:                                   # noqa: BLE001
@@ -1311,6 +1347,13 @@ def main() -> int:
     import recall_index as RC
     RC.recall_clear()
     RC.recall_arm_set(args.recall_arm)
+    # AND THE INDEX IS ARMED HERE, ON A BACKGROUND THREAD — R470/B121. It
+    # overlaps the capture, the pre-warm and the opening round, all of which are
+    # API waits, so the fastembed model load and the first-ever embed of six
+    # cold parts are paid before anyone types rather than inside the first
+    # part's turn. Returns immediately; a failure is reported and costs nothing,
+    # because recall_execute()'s own lazy refresh is still the fallback.
+    RC.recall_index_arm_start(parts, live=args.live)
     pdir = None
     try:
         import prompt_capture
@@ -1810,7 +1853,7 @@ def main() -> int:
     # that has not touched it, and `python memory/issue_commands.py
     # <that file>` is how it gets there once Self has read it.
     if issue_cmds and not aborted:
-        cdir = (ROOT / "circles") if args.live else (SANDBOX / "circles")
+        cdir = record_dir(ROOT, "circles") if args.live else SANDBOX_CIRCLES
         crec = cdir / f"commands_{ot}.toml"
         crec.write_text(IC.issue_dump(issue_cmds, circle_ref), encoding="utf-8",
                         newline="\n")

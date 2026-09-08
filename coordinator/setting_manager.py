@@ -13,7 +13,7 @@ THE REGISTER OVERRIDES A CONSTANT; IT DOES NOT REPLACE ONE. Every value here
 still has its constant, in its own module, with the paragraph of reasoning
 that says why the number is what it is. That paragraph is load-bearing in
 this project — remember_manager.py's own comments say four of its numbers are
-"Claude's arithmetic, not a ruling, flagged for Self", and ifs_model's
+"Claude's arithmetic, not a ruling, flagged for Self", and record_model's
 REGISTERS says "CAP IS IMPORTED, NOT COPIED" directly above the line that
 imports it. Moving a number away from its explanation is how this project
 has gone wrong before, so nothing moves. The call site reads
@@ -88,8 +88,16 @@ except ModuleNotFoundError:                                  # 3.10 and older
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
+import record_paths as _RP                                         # noqa: E402
 
-REGISTER = ROOT / "self" / "settings.toml"
+REGISTER = _RP.SELF_DIR / "settings.toml"
+
+
+@_RP.group_follow
+def _register_rebind() -> None:
+    """The CURRENT group's settings — B117 stage 4 (2026-09-07); self/ is per group (R467)."""
+    global REGISTER
+    REGISTER = _RP.SELF_DIR / "settings.toml"
 
 ACTIVE = "active"
 PENDING = "pending"
@@ -615,7 +623,7 @@ def setting_tuning_read(provider) -> dict:
             _say(f"  self/settings.toml: {provider.name} declares no tuning "
                  f"called {key!r} — ignored")
             continue
-        import roster as R
+        import part_roster as R
         why = R.part_context_value_verify(knob.as_question(), str(raw))
         if why is not None:
             # RULED 2026-08-28: a stored value that fails validation is
@@ -640,14 +648,14 @@ def setting_tuning_write(provider, key: str, raw) -> tuple:
     knob = _knobs(provider).get(key)
     if knob is None:
         return False, f"{provider.name} has no setting called {key}"
-    import roster as R
+    import part_roster as R
     why = R.part_context_value_verify(knob.as_question(), str(raw))
     if why is not None:
         return False, f"{raw!r} {why.strip()}"
     doc = dict(setting_read())
     tune = dict(doc.get(TUNING) or {})
     mine = dict(tune.get(_slug(provider)) or {})
-    import roster as R
+    import part_roster as R
     mine[key] = R.part_canonical_read(knob.as_question(), str(raw))
     tune[_slug(provider)] = mine
     doc[TUNING] = tune

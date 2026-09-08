@@ -79,15 +79,16 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import remember_manager as RM                                          # noqa: E402
 import topic_manager as TOP                                           # noqa: E402
 import circle_history_manager as CH                                    # noqa: E402
-import self_observation_manager as SO                              # noqa: E402
+import circle_observation_manager as CO                              # noqa: E402
 import circle_journal_manager as CJ                                 # noqa: E402  B94 stage 4
 import practice_manager as PM                             # noqa: E402
 import part_mid_term_manager as MT                                          # noqa: E402
 import TRANSACTION_CLASS as T                                        # noqa: E402
-import roster as R                                             # noqa: E402
+import part_roster as R                                             # noqa: E402
 import backfill as BF                                          # noqa: E402  (B54)
 import llm_client as LC                                        # noqa: E402  MODEL's owner
 import LLM_response_disassembler as RD                         # noqa: E402  every read
@@ -481,7 +482,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             f"re-running would double-dream it. Delete the tag first if "
             f"you mean it.")
         return 1
-    tpath = ROOT / "circles" / f"circle_{ot}.md"
+    tpath = _RP.record_dir(ROOT, "circles") / f"circle_{ot}.md"
     try:
         transcript = tpath.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -579,7 +580,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                     _load_or(RM._real_path(part), {RM.TABLE: []}),
                     pay["memory"], ot, pay.get("continues", False),
                     salience=pay.get("salience"))
-                _stage_toml(tx, f"parts/{part}/remember.toml", doc,
+                _stage_toml(tx, _RP.record_rel(f"parts/{part}/remember.toml"), doc,
                             RM.TABLE, RM.ORDER)
                 if RM.remember_chain_qualifies(doc, rec):
                     lt_candidates.append((part, rec))
@@ -593,7 +594,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         secs = syn["sections"]
         if secs["HISTORY"].strip():
             doc, _rec = CH.circle_history_new_render(CH._doc(), ot, secs["HISTORY"])
-            _stage_toml(tx, "self/circle_history.toml", doc, CH.TABLE,
+            _stage_toml(tx, _RP.record_rel("circles/circle_history.toml"), doc, CH.TABLE,
                         CH.ORDER)
         # CIRCLE JOURNAL — B94 stage 4, 2026-09-04 (D90/R454, D92/R455; the operator:
         # "add it now" (R456), confirming the /review-item's recommended answer after
@@ -606,20 +607,20 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             doc, _rec = CJ.circle_journal_new_render(
                 CJ._doc(), ot, syn["circle_journal"],
                 provenance=syn.get("circle_journal_provenance"))
-            _stage_toml(tx, "self/circle_journal.toml", doc, CJ.TABLE, CJ.ORDER)
+            _stage_toml(tx, _RP.record_rel("circles/circle_journal.toml"), doc, CJ.TABLE, CJ.ORDER)
         if syn.get("observation"):
             # A REGISTER since 2026-08-19 (R256) — was a raw
             # append to self/self_observation_log.md, whose "## Circle <OT>
             # — synthesis" heading carried the only structure it had.
             # R358: the parsed body (CONTINUES prefix stripped), with the
             # dreaming-model fields; a bare CONTINUES staged nothing above.
-            doc, _rec = SO.self_observation_new_render(SO._doc(), ot, syn["observation"],
+            doc, _rec = CO.circle_observation_new_render(CO._doc(), ot, syn["observation"],
                                       salience=syn.get("obs_salience"),
                                       continues=bool(syn.get("obs_continues")))
-            _stage_toml(tx, "self/self_observation_log.toml", doc,
-                        SO.TABLE, SO.ORDER)
+            _stage_toml(tx, _RP.record_rel("circles/circle_observation_log.toml"), doc,
+                        CO.TABLE, CO.ORDER)
         if syn.get("self_md"):
-            tx.stage("self/self.md", (syn["self_md"] + "\n").encode("utf-8"))
+            tx.stage(_RP.record_rel("self/self.md"), (syn["self_md"] + "\n").encode("utf-8"))
         tdoc = TOP._doc()
         for item in RD.message_items_read(secs["BLOCK 2 CANDIDATE"]):
             tdoc, _rec = TOP.topic_new_render(tdoc, ot, item)
@@ -636,9 +637,9 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                                           title=item, sources=["synthesis"],
                                           circle=f"circle_{ot}")
         if RD.message_items_read(secs["BLOCK 2 CANDIDATE"]) or lt_candidates:
-            _stage_toml(tx, "self/topics.toml", tdoc, TOP.TABLE, TOP.ORDER)
+            _stage_toml(tx, _RP.record_rel("self/topics.toml"), tdoc, TOP.TABLE, TOP.ORDER)
         if RD.message_items_read(secs["BLOCK 1 CANDIDATE"]):
-            _stage_toml(tx, "self/best_practices.toml", bdoc,
+            _stage_toml(tx, _RP.record_rel("self/best_practices.toml"), bdoc,
                         "practice", PM.ORDER)
         staged = tx.changed()
         say(f"  {len(staged)} file(s) staged: "
@@ -900,9 +901,14 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
 def main() -> int:
     a = sys.argv[1:]
     if "--ot" not in a:
-        print("usage: inter_circle.py --ot <OT> [--live]")
+        print("usage: inter_circle.py --ot <OT> [--live] [--group <name>]")
         return 1
     ot = a[a.index("--ot") + 1]
+    # `--group <name>`: process a circle of that GROUP's record (groups/<name>/) — B117 stage 5
+    # (2026-09-07). Default: the ifs group. A live /close never needs it: circle.py has already
+    # set the group in this process before the close runs.
+    if "--group" in a:
+        _RP.group_set(a[a.index("--group") + 1])
     return circle_process(ot, live="--live" in a)
 
 

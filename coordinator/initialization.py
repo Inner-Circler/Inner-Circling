@@ -13,12 +13,13 @@ grammar, docs/Initialization.md the design; the rulings are R323-R332
     PART_CONTEXT_DIALOG(part)     ask a part's declared [context] questions
                                   on the COMMAND channel, validate each answer
                                   per its data_type/data_max, record the
-                                  answers through roster.part_context_write().
+                                  answers through part_roster.part_context_write().
     ISSUE_ADD_DIALOG              the first issue, composed into one
                                   description and written by cmd_issue_add().
     PART_ADD_DIALOG               a new part — NOT an element of the step; it
-                                  fires at CHECKPOINT 2 on approval, or from
-                                  /part-add typed at cmd>.
+                                  fires from /part-add typed at cmd>, and
+                                  since R483 that is its only trigger (the
+                                  CHECKPOINT 2 approval door is shut).
     /part-context-update <part>   the same dialog, PREFILLED with what is
                                   recorded, so an answer can be taken as-is
                                   or edited on the line. Any dev state, any
@@ -55,9 +56,10 @@ question without a `render` string has no path there.
 UNIQUE KEYS ARE REFUSED AT ENTRY — the operator, 2026-08-23: *"Duplicates of
 any UNIQUE KEY member (e.g. part name "Soul", issue id "n0001") must be
 detected and rejected, echo error and loop at the prompt."* A question
-declares `unique_in` (roster.UNIQUE_SPACES) and initialization_validate() refuses an answer
-already in that space. The Soul's preferred_name declares part_tags: it feeds
-identity.user_name_read(), which roster.part_verify() treats as Self's reserved name,
+declares `unique_in` (part_roster.UNIQUE_SPACES) and initialization_validate() refuses an answer
+already in that space. The home role's preferred_name (the IFS group's Soul, group.toml
+[identity], R468) declares part_tags: it feeds
+identity.user_name_read(), which part_roster.part_verify() treats as Self's reserved name,
 so a part's Tag there would refuse every later open.
 """
 
@@ -70,7 +72,7 @@ try:
 except ModuleNotFoundError:                                  # 3.10 and older
     import tomli as tomllib                                  # type: ignore
 
-import roster as R
+import part_roster as R
 import seam
 
 HERE = pathlib.Path(__file__).resolve().parent
@@ -149,7 +151,7 @@ def initialization_statements_reset() -> None:
 # transcript, no working-set entry." A CHECK_AT_USE field whose failure
 # reached only a log would satisfy the first obligation and fail the one that
 # matters to the person sitting there.
-# GATES, BOUND_RULES AND resolve_bound LIVE IN roster.py, NOT HERE — read as
+# GATES, BOUND_RULES AND resolve_bound LIVE IN part_roster.py, NOT HERE — read as
 # R.GATES / R.BOUND_RULES / R.part_bound_resolve at the use. They were briefly
 # declared in both files (a few hours on 2026-08-28), then re-exported here
 # as module aliases until 2026-09-03; a name in two files is one fact in two
@@ -203,7 +205,7 @@ def initialization_validate(question: dict, answer: str, *, part: str = "") -> s
     of Claude's, named in docs/Initialization.md §3.6: no square bracket in
     a STRING (the annotation grammar — a part quoting its own BLOCK 3 back
     into the room would stage a bracket nobody wrote)."""
-    # THE PURE CHECKS ARE roster.part_context_value_verify's — one validator, shared with
+    # THE PURE CHECKS ARE part_roster.part_context_value_verify's — one validator, shared with
     # the settings register and with provider tuning. What stays here is the
     # part that needs LIVE data: uniqueness against the roster or the issue
     # graph, which a leaf module has no business reading.
@@ -474,10 +476,12 @@ def part_questions() -> dict:
 
 def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
                     write=None) -> str:
-    """PART_ADD_DIALOG — R324 (never at a circle start: approval of a part's
-    `[proposed: /part-add "<describe>" "<Tag>"]`, or /part-add typed bare),
+    """PART_ADD_DIALOG — R324 (never at a circle start; /part-add typed bare is
+    the only trigger since R483 took the verb out of PROPOSE_SUBSET_COMMANDS,
+    so no `[proposed: /part-add ...]` can be staged to approve),
     R323 (the bracket's strings arrive prefilled — Enter keeps, typing
-    edits), R332 (the validator; part_add.part_precheck() then holds the roster
+    edits; kept for the shut door, see proposal_vetting.py), R332 (the validator;
+    part_add.part_precheck() then holds the roster
     rules). Returns "completed" or "skipped" — skipped at approval leaves
     the proposal PENDING (vetting reads the outcome).
 
@@ -563,17 +567,26 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
 def initialization_pending_dialogs_read(base: pathlib.Path | None = None) -> list[str]:
     """The parts whose PART_CONTEXT_DIALOG is due: a declared [context]
     with at least one question and EVERY answer empty (R331 — the trigger
-    is "no particulars recorded yet", read from the record). Ordered as
-    R324 speaks them — Soul, then Child, then any other declaring part in
-    roster order."""
+    is "no particulars recorded yet", read from the record). Ordered: the group's own
+    initialization head first (group.toml `initialization`, R468 — for the IFS group that is
+    Soul, then Child, the order R324 spoke them in), then any other declaring part in roster
+    order."""
     due = []
     roster, _alt, _tails, _probs = R.part_scan(base)
     for d, _t in roster:
         ctx = R.part_context_read(d, base)
         if ctx and ctx["questions"] and not any(ctx["answers"].values()):
             due.append(d)
-    head = [d for d in ("soul", "child") if d in due]
+    head = [d for d in initialization_head_read() if d in due]
     return head + [d for d in due if d not in head]
+
+
+def initialization_head_read() -> list[str]:
+    """The roles whose first-run dialogs come first — the bound group's group.toml
+    `initialization` list (R468, B120). Empty for a group that declares none; the dialogs then
+    run in roster order."""
+    import record_paths as _RP
+    return [str(d) for d in _RP.group_descriptor_read(_RP.group_read()).get("initialization", [])]
 
 
 def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:

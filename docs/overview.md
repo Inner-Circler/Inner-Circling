@@ -32,9 +32,10 @@ out a roster.
 
 An earlier draft of this document described a specific seven-part roster
 as if it shipped with the product. That was one person's own roster, not
-a set you are expected to reproduce. Look at `parts/child/` and
-`parts/soul/` for the shape a part takes, and see `/part-add` in the
-rulebook (`coordinator/process_core.md`) for how a new one joins.
+a set you are expected to reproduce. Look at `groups/ifs/parts/child/` and
+`groups/ifs/parts/soul/` for the shape a part takes, and type `/part-add`
+at the `cmd>` prompt to add one — it opens a dialog that asks what you
+need. Only you can add a part; a part cannot ask for one.
 
 ## How a circle works
 
@@ -43,10 +44,12 @@ shared rulebook and circle practices; what the issue graph currently owes;
 that part's own long-term identity, distilled; and anything addressed to
 that part alone. Statements are public and parts may address each other
 directly; no part speaks twice in a row. Each statement aims for a short
-length and is hard-capped at a configurable word count — 150 unless you
-change the `statement_max_words` setting (`/settings-list` shows every
-setting and its current value; a fresh install has none changed, so
-`self/settings.toml` does not exist until you change one). Domination is
+length and is hard-capped at a word count — 150 unless you change the
+`statement_max_words` setting. That one is a developer setting: open the
+circle with `--dev` to see it or change it. `/settings-list` shows what
+you can reach — the model on a normal run, every setting under `--dev`;
+a fresh install has none changed, so `groups/ifs/self/settings.toml` does
+not exist until you change one. Domination is
 named by parts; Self evaluates and enforces.
 
 The circle closes with `/close`: each part's closing reflection is
@@ -59,7 +62,11 @@ Processing is **synchronous**, not scheduled. The moment `/close` finishes
 writing the transcript, the same run immediately: each part reviews what
 happened in this circle and may update its own long-term identity, in
 parallel across every part (dreaming); then one pass looks across the
-whole circle for practices that should apply to everyone (synthesis).
+whole circle for practices that should apply to everyone (synthesis);
+then each part whose sources have moved has its distilled identity rebuilt
+(the refresh), and proposals saying the same thing are grouped (the
+coalesce pass). Each of those makes its own model calls, so `/close` takes
+noticeably longer than the circle's own turns.
 There is no separate scheduled task and nothing runs overnight — if this
 step fails, `/close` reports it and nothing about it is left
 half-written.

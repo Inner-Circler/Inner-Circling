@@ -58,9 +58,20 @@ THE SEARCH IS LOCAL AND ADDS NO MODEL CALL TO THE ROOM. Exact search is a
 normalized in-memory scan over the same chunk records the semantic side
 embeds — the two kinds see byte-identical corpora by construction.
 Semantic ranking is embed_store's (bge-small over fastembed, cosine).
-REFRESH IS LAZY: the first query of a circle embeds whatever moved since
-the corpus was last indexed — sub-second once warm, a few seconds on the
-first-ever build — and nothing is indexed at open or close.
+
+THE INDEX IS ARMED AT OPEN, OFF THE TURN — R470 (D70: *"D70 - a."*), built as
+B121, 2026-09-07. The refresh was lazy and nothing was indexed at open or
+close, so the first `[recall:]` of a circle paid the fastembed model load plus
+an embed of whatever had moved — the only close-speed candidate whose cost
+landed in ROOM time, in front of a person mid-circle. And it was COLD: after
+B117 moved the caches to work/recall_index/<group>/, six of seven IFS parts had
+never been indexed at all. recall_index_arm_start() now runs that build on a
+background thread from circle open, so it overlaps the pre-warm and the opening
+round and is finished before anyone types. THE LAZY PATH REMAINS THE FALLBACK:
+an arm that fails, or a part it has not reached yet, costs a statement nothing —
+the query does its own refresh exactly as before. The MODEL LOAD is the half
+that mattered most and is retained for the circle (recall_embedder_read), so a
+second query never pays it again.
 
 THE CACHES ARE DERIVED, NEVER THE RECORD: work/recall_index/*.ndjson,
 gitignored, one re-embed to rebuild.
@@ -74,6 +85,7 @@ from __future__ import annotations
 import pathlib
 import re
 import sys
+import threading
 import time
 
 HERE = pathlib.Path(__file__).resolve().parent          # coordinator/
@@ -125,6 +137,16 @@ MAX_EXCERPTS = 3
 from remember_expand import EXPAND_CAP as TOTAL_CHARS  # noqa: E402
 EXCERPT_CHARS = TOTAL_CHARS // MAX_EXCERPTS
 CACHE_DIR = P.ROOT / "work" / "recall_index"
+
+
+def recall_cache_locate(part: str) -> pathlib.Path:
+    """The embedding cache for one part of the CURRENT group — work/recall_index/<group>/
+    <part>.ndjson (B117 stage 5, 2026-09-07: keyed by group, so a band role and an IFS part
+    with the same directory name can never share a cache). Derived, never the record; a
+    missing file is one re-embed to rebuild — the pre-B117 flat files are simply orphaned."""
+    d = CACHE_DIR / P.group_read()
+    d.mkdir(parents=True, exist_ok=True)
+    return d / f"{part}.ndjson"
 
 _TRANSLATE = str.maketrans({
     "‘": "'", "’": "'", "“": '"', "”": '"',
@@ -267,7 +289,7 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
     missing file is an empty corpus, never a crash."""
     recs: list = []
     if scope == "mine":
-        pdir = root / "parts" / part
+        pdir = P.record_dir(root, "parts") / part
         # Both suffixes since B96 (R434): a .toml is chunked in the .md shape
         # it renders to, so a section's `kind` is its heading either way.
         import short_term_manager as STM
@@ -299,7 +321,7 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
                                                    row.get("date", "")))})
     elif scope == "room":
         import transcript_store as TS
-        for f in sorted((root / "circles").glob("circle_*.md")):
+        for f in sorted(P.record_dir(root, "circles").glob("circle_*.md")):
             ot = f.stem.removeprefix("circle_")
             if not _closed(ot, root):
                 continue
@@ -329,7 +351,7 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
             import issue_schema as ISC
             # the STATUS IS THE FILENAME PREFIX (CLAUDE.md's register
             # table): this glob IS the already-sent filter — only history.
-            for f in sorted((root / "issues")
+            for f in sorted(P.record_dir(root, "issues")
                             .glob("[RSDX]_n[0-9][0-9][0-9][0-9].toml")):
                 try:
                     doc = ISC.issue_read(f)
@@ -404,9 +426,15 @@ def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
                 take(r, (1, i), crumb)
     sem_query = q["semantic"] or " ".join(q["phrases"])
     if sem_query and embedder is not False:
-        embedder = embedder or ES.memory_embedder_read()
-        cache = CACHE_DIR / f"{part}.ndjson"
-        for r in ES.memory_rank(sem_query, recs, embedder, cache, MAX_EXCERPTS * 3):
+        # THE CIRCLE'S ONE EMBEDDER, and the arm's lock around the refresh
+        # (B121): the cache is a whole-file rewrite, so the background arm and
+        # a live query must not be inside memory_refresh() at the same time.
+        embedder = embedder or recall_embedder_read()
+        cache = recall_cache_locate(part)
+        with _INDEX_LOCK:
+            ranked = ES.memory_rank(sem_query, recs, embedder, cache,
+                                    MAX_EXCERPTS * 3)
+        for r in ranked:
             if r["score"] >= FLOOR:
                 take(r, (2, -r["score"]), None)
 
@@ -443,10 +471,125 @@ _PENDING: dict = {}                     # part -> latest private reply
 _ROUND_ASKED: set = set()               # parts whose recall ran this round
 _ARM = "off"                            # set by circle.py from --recall-arm
 
+# THE INDEX ARM'S OWN STATE (B121, R470). Reentrant because the arm holds the
+# lock while asking for the embedder, which takes it too — one lock, so the
+# background build and a live query can never be inside embed_store's
+# whole-file cache rewrite at the same time.
+_INDEX_LOCK = threading.RLock()
+_EMBEDDER = None                        # the circle's ONE loaded model
+_ARM_THREAD: "threading.Thread | None" = None
+_ARM_REPORT: "str | None" = None        # what the last arm did, for a probe to read
+
+
+def recall_embedder_read():
+    """The circle's embedder, loaded ONCE. recall_execute() asked embed_store
+    for a new TextEmbedding on every query, so the model load — the larger half
+    of what R470 measured — was paid again by each part that reached for
+    [recall:]. Held from the arm through /close; recall_clear() drops it."""
+    global _EMBEDDER
+    with _INDEX_LOCK:
+        if _EMBEDDER is None:
+            _EMBEDDER = ES.memory_embedder_read()
+        return _EMBEDDER
+
+
+def recall_index_arm_start(parts: list, root: pathlib.Path | None = None, *,
+                           live: bool) -> "threading.Thread | None":
+    """Build every part's embedding cache on a BACKGROUND thread, from circle
+    open. Returns the thread, or None when there is nothing to arm.
+
+    NOT `recall_arm_set`'s arm. That one is the trial flag (--recall-arm) that
+    decides whether a [recall:] bracket runs at all; this is the INDEX. They are
+    read together on purpose — a circle where no recall can execute has nothing
+    to warm, so arming there would spend seconds and a model load for nothing.
+
+    OFF THE TURN IS THE WHOLE POINT (R470). The caller starts this before the
+    pre-warm, so the build overlaps the pre-warm and the opening round — API
+    waits, which is where a local step belongs — and is finished before the
+    first Self> prompt. A daemon thread: a circle that ends first is never held
+    open by a half-built cache, and the cache is derived, so a partial one costs
+    a re-embed and nothing else.
+
+    IT CANNOT COST A STATEMENT. Every failure is caught and reported on the
+    command channel; the lazy path in recall_execute() is untouched, so a part
+    whose cache the arm never reached simply pays what it pays today. That is
+    the property the probe holds."""
+    global _ARM_THREAD, _ARM_REPORT
+    _ARM_REPORT = None
+    if not live or _ARM != "delivered" or not parts:
+        return None
+    base = root or P.ROOT
+
+    def _build() -> None:
+        global _ARM_REPORT
+        t0, done, failed = time.monotonic(), 0, ""
+        try:
+            embedder = recall_embedder_read()
+        except ES.IndexUnavailable as e:
+            _ARM_REPORT = f"unavailable: {e}"
+            seam.emit("command", f"  [recall index not armed — {e}]")
+            return
+        except Exception as e:                            # noqa: BLE001
+            _ARM_REPORT = f"failed: {e!r}"
+            seam.emit("command", f"  [recall index not armed ({e!r}) — the "
+                                 f"first query will build it instead]")
+            return
+        for part in parts:
+            try:
+                recs: list = []
+                for s in SCOPES:
+                    recs += recall_records_read(s, part, base)
+                if not recs:
+                    continue
+                # PER PART, not for the whole arm: a query that arrives
+                # mid-build waits for one part's embed, never for all seven.
+                with _INDEX_LOCK:
+                    ES.memory_refresh(recs, embedder, recall_cache_locate(part))
+                done += 1
+            except Exception as e:                        # noqa: BLE001
+                failed += f" {part}({e!r})"
+        _ARM_REPORT = f"armed {done}/{len(parts)} in {time.monotonic() - t0:.1f}s"
+        seam.emit("command",
+                  f"  [recall index armed — {done}/{len(parts)} part(s) in "
+                  f"{time.monotonic() - t0:.1f}s"
+                  + (f"; not armed:{failed}]" if failed else "]"))
+
+    _ARM_THREAD = threading.Thread(target=_build, name="recall-index-arm",
+                                   daemon=True)
+    _ARM_THREAD.start()
+    return _ARM_THREAD
+
+
+def recall_index_arm_wait(timeout: float | None = None) -> bool:
+    """Block until the arm finishes; True if it is done. Nothing in a circle
+    calls this — the whole point is that no turn waits — but a probe must be
+    able to, and so must a caller that wants a deterministic close."""
+    t = _ARM_THREAD
+    if t is None:
+        return True
+    t.join(timeout)
+    return not t.is_alive()
+
+
+def recall_index_arm_report_read() -> "str | None":
+    """What the last arm did, or None if it has not finished (or never ran)."""
+    return _ARM_REPORT
+
 
 def recall_clear() -> None:
     """At circle open. CircleEngine runs circle.py inside a long-lived UI
-    process, so module state can outlive a circle — this cannot."""
+    process, so module state can outlive a circle — this cannot. The arm's
+    thread and the retained model are the same hazard one layer over: a stale
+    arm still writing the previous circle's caches is given a moment to finish,
+    and the embedder is dropped so a new circle reloads rather than holding a
+    model open for the life of the UI process."""
+    global _EMBEDDER, _ARM_THREAD, _ARM_REPORT
+    t = _ARM_THREAD
+    if t is not None and t.is_alive():
+        t.join(5.0)
+    _ARM_THREAD, _ARM_REPORT = None, None
+    with _INDEX_LOCK:
+        _EMBEDDER = None
     _PENDING.clear()
     _ROUND_ASKED.clear()
 

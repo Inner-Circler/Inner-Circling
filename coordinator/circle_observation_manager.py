@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
 """
-self_observation_manager.py — the SELF_OBSERVATION register. SYNTHESIS's note to
-(self_observation_log.py until 2026-09-03 — B99 stage 18c under R435: a register's one reader/writer is <CLASS>_manager.py)
+circle_observation_manager.py — the CIRCLE_OBSERVATION register. SYNTHESIS's note to
+(self_observation_log.py until 2026-09-03 — B99 stage 18c under R435: a register's one reader/writer
+is <CLASS>_manager.py; self_observation_manager.py until 2026-09-07 — R-NEW, SELF_OBSERVATION was a
+misnomer: the record is addressed to Self and is never about Self)
 Self about the CIRCLE as a working body: its pace, what it avoided, where it
 went easily. Addressed to Self, about the room, never about Self.
 
-    python coordinator/self_observation_manager.py            listing
-    python coordinator/self_observation_manager.py --init     write the empty register
-    python coordinator/self_observation_manager.py --show     newest entry, in full
+    python coordinator/circle_observation_manager.py            listing
+    python coordinator/circle_observation_manager.py --init     write the empty register
+    python coordinator/circle_observation_manager.py --show     newest entry, in full
 
 RULED R256, 2026-08-19, closing B14's DESIGNED half. The log was
 `self/self_observation_log.md` and B14 called it an INERT designed datastore —
@@ -17,8 +19,10 @@ already ruled SYNTHESIS writes this file. It is a LIVE append target, so it
 converts; `self/self.md` does not, because SYNTHESIS reads it back as prompt
 input and replaces it whole — a document's shape, not a register's.
 
-    id      "SO-" DIGIT+, per-register high-water next_id, minted by the
-            COORDINATOR after SYNTHESIS returns (R170's discipline).
+    id      "CO-" DIGIT+, per-register high-water next_id, minted by the
+            COORDINATOR after SYNTHESIS returns (R170's discipline). Records
+            written before the 2026-09-07 rename carry "SO-" and keep it —
+            forward-only, one counter, both prefixes accepted by the gate.
     date    UTC ISO, microseconds. The 29 DAY-SCOPED migrated records carry
             midnight UTC of the day their own header line names — the only
             precision the .md ever held. SO-0030 carries its commit time.
@@ -56,13 +60,21 @@ HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import REGISTER_CLASS as SS                                       # noqa: E402
+import record_paths as _RP                                         # noqa: E402
 import JOURNAL_CLASS                                               # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 # Rebindable for probes — test suites never write the live register.
-PATH = ROOT / "self" / "self_observation_log.toml"
+PATH = _RP.CIRCLES_DIR / "circle_observation_log.toml"
+
+
+@_RP.group_follow
+def _path_rebind() -> None:
+    """The CURRENT group's register — B117 stage 4 (2026-09-07)."""
+    global PATH
+    PATH = _RP.CIRCLES_DIR / "circle_observation_log.toml"
 
 TABLE = "observation"
 ORDER = ("id", "date", "circle", "text", "salience", "chain", "note",
@@ -80,7 +92,7 @@ ORDER = ("id", "date", "circle", "text", "salience", "chain", "note",
 # SYNTHESIS record from here on, "self" on one Self added directly via
 # /observation-add or /observation-continue; absent means "written before
 # this field existed," not "unknown." `retired`/`purged` are present only
-# when true — see self_observation_retire()/self_observation_purge() below.
+# when true — see circle_observation_retire()/circle_observation_purge() below.
 #
 # THESE THREE ARE ALL LIVE-WINDOW WRITES, deliberately outside the phase-2
 # register gate's paired-mode scope (docs/REGISTER_GATE_DESIGN.md: "Live-
@@ -90,7 +102,7 @@ ORDER = ("id", "date", "circle", "text", "salience", "chain", "note",
 # phase-2 delta against a baseline taken at /close time; a command-pane
 # write completes and is committed before that baseline is ever read, so
 # it is simply part of the baseline by the time phase-2 runs — never a
-# delta the gate has to reason about. self_observation_retire()/self_observation_purge() below DO mutate an
+# delta the gate has to reason about. circle_observation_retire()/circle_observation_purge() below DO mutate an
 # existing record, which is exactly what "accumulate, never prune" forbids
 # SYNTHESIS's own automated writes from doing — the doctrine is a promise
 # about the MACHINE's write path, not a blanket ban on Self ever touching
@@ -104,7 +116,7 @@ ORDER = ("id", "date", "circle", "text", "salience", "chain", "note",
 # 2026-08-19 migration's account of itself); _doc() reads the file whenever
 # one exists, so that text persists and only a fresh install ever sees this.
 _PREAMBLE = (
-    "SELF_OBSERVATION -- what SYNTHESIS noticed about the CIRCLE as a "
+    "CIRCLE_OBSERVATION -- what SYNTHESIS noticed about the CIRCLE as a "
     "working body: its pace, what it avoided, where it went easily. "
     "Addressed to Self, about the room, never about Self. One record per "
     "processed circle; accumulate, never prune. No cap: nothing upstream "
@@ -124,26 +136,29 @@ def _rel() -> str:
 
 # The shared LEDGER/JOURNAL core (B105, 2026-09-05 — JOURNAL_CLASS.py). LAMBDA, NOT A VALUE:
 # path_fn re-reads PATH from THIS module's own globals on every call, so the probe suites' own
-# rebind of `self_observation_manager.PATH` keeps working exactly as it did before this existed.
+# rebind of `circle_observation_manager.PATH` keeps working exactly as it did before this existed.
 # NO CAP, deliberately — see the module docstring's own note, unchanged by this.
 _JC = JOURNAL_CLASS.JournalClass(
-    table=TABLE, id_prefix="SO-", cap=None,
-    register="self_observation", preamble=_PREAMBLE, path_fn=lambda: PATH)
+    # "CO-" SINCE THE RENAME, FORWARD-ONLY — R-NEW (2026-09-07). SO-0001..SO-0031 stay
+    # exactly as written and next_id never reset, so ids stay unique and monotonic across
+    # the boundary; register_gate.REGISTERS accepts both prefixes on this register alone.
+    table=TABLE, id_prefix="CO-", cap=None,
+    register="circle_observation", preamble=_PREAMBLE, path_fn=lambda: PATH)
 
 
 def _doc() -> dict:
     return _JC.doc()
 
 
-def self_observation_read() -> list[dict]:
+def circle_observation_read() -> list[dict]:
     return _JC.read()
 
 
-def self_observation_latest_read() -> dict | None:
+def circle_observation_latest_read() -> dict | None:
     return _JC.latest()
 
 
-def self_observation_new_render(doc: dict, circle: str, text: str,
+def circle_observation_new_render(doc: dict, circle: str, text: str,
                note: str | None = None, salience: str | None = None,
                continues: bool = False) -> tuple[dict, dict]:
     """PURE — one new entry for the phase-2 driver.
@@ -170,10 +185,10 @@ def self_observation_new_render(doc: dict, circle: str, text: str,
     return _JC.new_render(doc, fields, chain=continues)
 
 
-def self_observation_manual_render(doc: dict, text: str,
+def circle_observation_manual_render(doc: dict, text: str,
                   circle: str | None = None) -> tuple[dict, dict]:
     """PURE — one new entry Self adds directly (`/observation-add`), not
-    SYNTHESIS's own write. Same id/date/append discipline as self_observation_new_render(),
+    SYNTHESIS's own write. Same id/date/append discipline as circle_observation_new_render(),
     but `circle` is optional (a manual note need not be about one
     particular circle — matches the day-scoped shape the 29 migrated
     records already carry) and `source` is "self", never "synthesis". Row construction
@@ -188,7 +203,7 @@ def self_observation_manual_render(doc: dict, text: str,
     return _JC.new_render(doc, fields, chain=False)
 
 
-def self_observation_continue_render(doc: dict, target_id: str,
+def circle_observation_continue_render(doc: dict, target_id: str,
                     text: str) -> tuple[dict, dict]:
     """PURE — chains a NEW record onto `target_id` (`/observation-continue`).
     The same CONTINUES shape SYNTHESIS's own `continues=True` uses, but
@@ -208,7 +223,7 @@ def self_observation_continue_render(doc: dict, target_id: str,
     return _JC.new_render(doc, fields, chain=target_id)
 
 
-def self_observation_retire(doc: dict, target_id: str) -> dict:
+def circle_observation_retire(doc: dict, target_id: str) -> dict:
     """MUTATES the named record: `retired = True`. Soft delete — the
     record stays in the file (and in git history) untouched otherwise,
     just excluded from `/observation-list`'s default view. This is a
@@ -225,10 +240,10 @@ def self_observation_retire(doc: dict, target_id: str) -> dict:
     raise ValueError(f"{target_id} not found")
 
 
-def self_observation_purge(doc: dict, target_id: str) -> dict:
+def circle_observation_purge(doc: dict, target_id: str) -> dict:
     """MUTATES the named record: `text` is replaced with a short
     redaction marker and `purged = True` is set. The record SHELL
-    survives — id, date, circle, and (unlike self_observation_retire()) `chain`, since
+    survives — id, date, circle, and (unlike circle_observation_retire()) `chain`, since
     another record may point at this id and a chain target that vanished
     would be a worse defect than the content being gone. This is the one
     place this register lets content actually disappear: the operator's own
@@ -250,12 +265,12 @@ def self_observation_purge(doc: dict, target_id: str) -> dict:
     raise ValueError(f"{target_id} not found")
 
 
-def self_observation_list(include_retired: bool = False) -> str:
+def circle_observation_list(include_retired: bool = False) -> str:
     """`/observation-list` (bare) — numbered, positional (the same
     contract `/practice-list` keeps: the number shifts if what's shown
     changes). Retired records are hidden by default; `include_retired`
     (the `--all` flag) shows everything, retired and purged alike."""
-    es = self_observation_read()
+    es = circle_observation_read()
     if not include_retired:
         es = [r for r in es if not r.get("retired")]
     if not es:
@@ -276,12 +291,12 @@ def self_observation_list(include_retired: bool = False) -> str:
     return "\n".join(out)
 
 
-def self_observation_show(n: int, include_retired: bool = True) -> str:
+def circle_observation_show(n: int, include_retired: bool = True) -> str:
     """`/observation-list <n>` — one whole record, every field present.
-    Numbered against the SAME set `self_observation_list()` would show for the same
+    Numbered against the SAME set `circle_observation_list()` would show for the same
     `include_retired` value — pass the matching flag if a caller wants
     `<n>` to line up with a prior `--all` listing."""
-    es = self_observation_read()
+    es = circle_observation_read()
     if not include_retired:
         es = [r for r in es if not r.get("retired")]
     if not 1 <= n <= len(es):
@@ -300,40 +315,40 @@ def self_observation_show(n: int, include_retired: bool = True) -> str:
 
 
 # --------------------------------------------------------------- commands
-# Impure load/mutate/save wrappers around the pure render_*()/self_observation_retire()/
-# self_observation_purge() functions above — the command-pane's entry points, matching
+# Impure load/mutate/save wrappers around the pure render_*()/circle_observation_retire()/
+# circle_observation_purge() functions above — the command-pane's entry points, matching
 # remember_manager.py's add() (load, mutate, save, return the record). The
 # render_*() functions stay pure because inter_circle.py's phase-2 driver
 # needs to stage a candidate without writing (Transaction's own contract);
 # nothing here is reachable from that path.
 
-def self_observation_manual_add(text: str, circle: str | None = None) -> dict:
+def circle_observation_manual_add(text: str, circle: str | None = None) -> dict:
     """/observation-add <text>."""
-    doc, rec = self_observation_manual_render(_doc(), text, circle)
+    doc, rec = circle_observation_manual_render(_doc(), text, circle)
     PATH.parent.mkdir(parents=True, exist_ok=True)
     SS.register_write(PATH, doc, TABLE, ORDER)
     return rec
 
 
-def self_observation_continue_add(target_id: str, text: str) -> dict:
+def circle_observation_continue_add(target_id: str, text: str) -> dict:
     """/observation-continue <id> <text>."""
-    doc, rec = self_observation_continue_render(_doc(), target_id, text)
+    doc, rec = circle_observation_continue_render(_doc(), target_id, text)
     PATH.parent.mkdir(parents=True, exist_ok=True)
     SS.register_write(PATH, doc, TABLE, ORDER)
     return rec
 
 
-def self_observation_retire_now(target_id: str) -> dict:
+def circle_observation_retire_now(target_id: str) -> dict:
     """/observation-retire <id>."""
-    doc = self_observation_retire(_doc(), target_id)
+    doc = circle_observation_retire(_doc(), target_id)
     SS.register_write(PATH, doc, TABLE, ORDER)
     return next(r for r in doc[TABLE] if r["id"] == target_id)
 
 
-def self_observation_purge_now(target_id: str) -> dict:
+def circle_observation_purge_now(target_id: str) -> dict:
     """/observation-purge <id> <id> — caller has already checked the two
     ids match before reaching here (commands.py's own confirmation step)."""
-    doc = self_observation_purge(_doc(), target_id)
+    doc = circle_observation_purge(_doc(), target_id)
     SS.register_write(PATH, doc, TABLE, ORDER)
     return next(r for r in doc[TABLE] if r["id"] == target_id)
 
@@ -348,7 +363,7 @@ def main() -> int:
         print(f"  wrote {_rel()} (empty register)")
         return 0
     if "--show" in a:
-        rec = self_observation_latest_read()
+        rec = circle_observation_latest_read()
         if rec is None:
             print("  (no entries)")
             return 0
@@ -356,7 +371,7 @@ def main() -> int:
               f"{rec['date']}")
         print(f"  {rec['text']}")
         return 0
-    es = self_observation_read()
+    es = circle_observation_read()
     print(f"  {len(es)} entr{'y' if len(es) == 1 else 'ies'}")
     for r in sorted(es, key=lambda x: x.get("date", "")):
         print(f"  {r['id']}  {r['date'][:10]}  "

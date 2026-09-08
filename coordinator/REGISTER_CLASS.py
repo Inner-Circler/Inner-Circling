@@ -80,12 +80,21 @@ except ModuleNotFoundError:                                  # 3.10 and older
 # record_paths.BEST_PRACTICES directly if a future caller needs it.
 from atomic_write import record_atomic_write
 from record_paths import SELF_DIR
+import record_paths as _RP
 
 SELF = SELF_DIR
 # RULED 2026-08-16 (R202): request and relation folded into ONE
 # PROPOSE-class register — "P-N" ids, replacing R-N (never had a real
 # row) and RP-N (same) both at once. See coordinator/proposal_manager.py.
 PROPOSALS = SELF / "proposals.toml"
+
+
+@_RP.group_follow
+def _self_rebind() -> None:
+    """The CURRENT group's self/ — B117 stage 4 (2026-09-07)."""
+    global SELF, PROPOSALS
+    SELF = _RP.SELF_DIR
+    PROPOSALS = SELF / "proposals.toml"
 
 WRAP = 76
 
@@ -194,6 +203,61 @@ def register_dumps(doc: dict, table: str, order: tuple[str, ...]) -> str:
             if k not in order:
                 raise ValueError(f"[[{table}]] has unknown key {k!r}")
     return "\n".join(out).strip() + "\n"
+
+
+def register_row_update(doc: dict, table: str, *, locate, fields: dict,
+                        immutable: tuple[str, ...] = ("id",), precheck=None,
+                        listed: "list[dict] | None" = None) -> "tuple[bool, str, dict | None]":
+    """ONE row of `doc[table]` changed in place — the shared discipline every register's
+    update verb follows (R465, B116, 2026-09-07), written once here rather than once per
+    manager (redaction_manager.alias_update() and setting_manager were the two hand-rolled
+    precedents; they agreed on every rule below).
+
+        locate     an int — the 1-based number a listing printed, indexing `listed` (the rows
+                   that listing showed; default: every row of the table) — or a str id
+                   matched against the table's `id` field
+        fields     the keys to replace and their new values; nothing else on the row moves
+        immutable  keys that may never be in `fields` — refused, never silently kept. An id
+                   names a row for its whole life (never reused, never renumbered); a kind
+                   or a prefix names it at creation
+        precheck   precheck(fields, row) -> "" or the refusal text; the manager's own rule
+                   (a protected name, a cap, a state that forbids an update) runs before
+                   anything moves
+
+    Returns (ok, message, row). On a refusal nothing in `doc` has changed and `row` is None.
+    On success `row` is the mutated row, still inside `doc`, and `message` is "" — the
+    caller words its own success line and does its own save. THE SAVE STAYS WITH THE
+    MANAGER, deliberately: every manager already writes through register_write() (validate,
+    then atomic replace) and some carry a post-mutate hook a shared save would skip —
+    practice_manager's tally, for one. What is shared is the part that was being re-invented:
+    locating the row, refusing the immutable, running the precheck, touching only `fields`.
+
+    The prior value is NOT recorded here. Git is the journal (R465): a register carries at
+    most an `amended` date, which the caller passes in `fields` like any other key."""
+    rows = doc.get(table, [])
+    listed = rows if listed is None else listed
+    if not fields:
+        return False, "nothing to update", None
+    bad = [k for k in fields if k in immutable]
+    if bad:
+        return False, (f"{', '.join(bad)} is not editable — an id names its row for life; "
+                       f"delete and re-add if it was wrong"), None
+    if isinstance(locate, bool) or not isinstance(locate, (int, str)):
+        return False, f"locate must be a list number or an id, not {locate!r}", None
+    if isinstance(locate, int):
+        if not 1 <= locate <= len(listed):
+            return False, f"{locate} is not in 1..{len(listed)}", None
+        row = listed[locate - 1]
+    else:
+        row = next((r for r in rows if r.get("id") == locate), None)
+        if row is None:
+            return False, f"{locate} not found", None
+    if precheck is not None:
+        why = precheck(fields, row)
+        if why:
+            return False, why, None
+    row.update(fields)
+    return True, "", row
 
 
 def register_write(p: pathlib.Path, doc: dict, table: str,

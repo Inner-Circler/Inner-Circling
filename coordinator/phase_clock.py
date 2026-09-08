@@ -39,7 +39,7 @@ THREE THINGS, ONE MODULE:
                       hand) gets False and must not stop a beat it did
                       not start.
 
-STDLIB ONLY, DELIBERATELY. vetting.py, circle.py and inter_circle.py all
+STDLIB ONLY, DELIBERATELY. proposal_vetting.py, circle.py and inter_circle.py all
 import this; a project import here is a cycle waiting to happen.
 
 THE RECORD IS work/logs/spend_<OT>.json — this module writes no file of
@@ -220,7 +220,7 @@ PHASES = PhaseClock()
 
 def stream_timed_read(fn, *args, **kwargs):
     """Route one console read through the WAITING span — the wrapper
-    circle.py's read_line() and vetting.py's direct seam reads share, so
+    circle.py's read_line() and proposal_vetting.py's direct seam reads share, so
     every second spent at a prompt lands under one name."""
     with PHASES.span(WAITING):
         return fn(*args, **kwargs)

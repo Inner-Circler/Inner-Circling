@@ -153,6 +153,12 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "remove one, by the number /practice-list showed —\n"
      "that list's numbering, not /better-option-list's",
      "command"),
+    ("/practice-update <n> <text>",
+     "replace one practice's wording in place, by the number\n"
+     "/practice-list showed — same id, same origin; the row\n"
+     "takes today's date as `amended`. No prior wording is\n"
+     "kept: git is the journal (R465). Written immediately",
+     "command"),
     ("/remember <text>",
      "YOUR OWN private note, written at once to\n"
      "self/remember.toml — the same record [remember: ...]\n"
@@ -167,21 +173,21 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "reachable from here (R224, docs/BNF.md's\n"
      "REMEMBER_PROJECTION). Named /recall until 2026-08-21;\n"
      "/recall is still accepted", "command"),
-    # SELF_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
-    # CRUD operations and a help entry." self/self_observation_log.toml is
+    # CIRCLE_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
+    # CRUD operations and a help entry." circles/circle_observation_log.toml is
     # SYNTHESIS's own note to Self about the CIRCLE (never about Self, never
     # projected into any part's prompt) and is explicitly allowed to hold
     # personal material — /observation-purge exists because of that, not
     # despite the register's own "accumulate, never prune" rule: these are
     # live-window writes, outside the phase-2 gate's scope by the same
     # carve-out /remember and /practice-add already use (see
-    # self_observation_manager.py's ORDER comment).
+    # circle_observation_manager.py's ORDER comment).
     ("/observation-add <text>",
      "a note Self adds directly, source=\"self\" — same\n"
      "register SYNTHESIS writes to at /close, no circle\n"
      "needed. 2026-09-01", "command"),
     ("/observation-list [<n>] [--all]",
-     "bare lists every SELF_OBSERVATION entry, numbered\n"
+     "bare lists every CIRCLE_OBSERVATION entry, numbered\n"
      "(retired ones hidden unless --all); `<n>` shows one\n"
      "whole. 2026-09-01", "command"),
     ("/observation-continue <id> <text>",
@@ -207,8 +213,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # their edit on the line."* USER table: the answers are the person's own.
     ("/part-context-update <part>",
      "ask that part's context questions again — what it\n"
-     "knows about you (the Soul: where you come from; the\n"
-     "Child: your childhood). Each answer comes prefilled:\n"
+     "knows about you, the questions its own part.toml\n"
+     "declares. Each answer comes prefilled:\n"
      "Enter keeps it, type to change it, `-` clears it.\n"
      "Written to parts/<part>/part.toml at once; reaches the\n"
      "NEXT circle's prompts. 2026-08-23", "command"),
@@ -224,10 +230,10 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # (docs/Initialization.md §8 reconciling docs/part_commands_design.md).
     ('/part-add ["<describe>" "<name>"]',
      "invite a NEW part: describe that aspect of yourself\n"
-     "(up to 40 words), then its name — the same two strings\n"
-     "a part's [proposed: /part-add ...] carries. Bare opens\n"
-     "the dialog. It joins from the NEXT circle. IMMEDIATE —\n"
-     "/abort does not undo it", "command"),
+     "(up to 40 words), then its name. Yours alone — a part\n"
+     "cannot propose one (R483). Bare opens the dialog. It\n"
+     "joins from the NEXT circle. IMMEDIATE — /abort does\n"
+     "not undo it", "command"),
     ("/part-list",
      "the roster, numbered — Tag and directory, one row\n"
      "each. The number is positional (it shifts when a part\n"
@@ -236,27 +242,34 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "that part's long_term.md, verbatim, by /part-list's\n"
      "number", "command"),
     ("/part-delete <n>",
-     "remove a part — REFUSED for Soul and Child (reserved)\n"
+     "remove a part — REFUSED for the group's reserved roles\n"
      "and while a circle may be open; confirmation is typing\n"
      "the DIRECTORY name. The record survives in git\n"
      "(git log --all -- parts/<name>/)", "command"),
     # THE GROUP VERBS — a named, reusable roster (docs/CIRCLE_TYPES_DESIGN.md),
     # 2026-09-02. Same numbered/confirmation shape as the part verbs above.
-    ('/group-add "<name>" <m1>,<m2>,...',
-     "define a named roster from existing part directory\n"
-     "names — circle.py --group <name> opens on it instead\n"
-     "of --parts. IMMEDIATE — /abort does not undo it", "command"),
+    ('/group-add "<name>" <r1>,<r2>,... [layer=<path>]',
+     "write groups/<name>/group.toml — the descriptor whose\n"
+     "presence makes the folder a group (R468) — naming its\n"
+     "roles, part directories under groups/<name>/parts/;\n"
+     "circle.py --group <name> opens on it. layer= names the\n"
+     "group's own BLOCK 1 layer file (B115); omitted, the IFS\n"
+     "layer. IMMEDIATE — /abort does not undo it", "command"),
     ("/group-list",
-     "every defined group, numbered — name and its members.\n"
-     "The number is positional, same contract as\n"
-     "/part-list", "command"),
+     "every group, numbered — name and its roles. The number\n"
+     "is positional, same contract as /part-list", "command"),
     ("/group-view <n>",
-     "one group's full member list, by /group-list's number,\n"
-     "flagging any member that is no longer a real part", "command"),
+     "one group's full role list, by /group-list's number,\n"
+     "flagging any role that is no longer a real part", "command"),
+    ("/group-update <n> <r1>,<r2>,... [layer=<path>]",
+     "replace one group's roles in place, by /group-list's\n"
+     "number; the name stays (rename = delete + add); layer=\n"
+     "given replaces the group's layer file, omitted keeps it.\n"
+     "IMMEDIATE — /abort does not undo it", "command"),
     ("/group-delete <n>",
-     "remove a group — confirmation is typing the group's\n"
-     "NAME. Removes only the named roster, never the member\n"
-     "parts themselves", "command"),
+     "remove a group's descriptor — confirmation is typing the\n"
+     "group's NAME. Refused while the folder holds a record;\n"
+     "never removes the parts themselves", "command"),
     ("/topic-list",
      "the TOPIC register (TP-): open BLOCK 2 topics —\n"
      "synthesis material carried for circle review,\n"
@@ -265,6 +278,11 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "close one topic — kept as a tombstone, id never\n"
      "reused. Written immediately — /abort does not\n"
      "undo it", "command"),
+    ("/topic-update TP-nnnn <text>",
+     "replace one OPEN topic's text in place — same id,\n"
+     "same circle; the row takes today's date as `amended`.\n"
+     "No prior wording is kept: git is the journal (R465).\n"
+     "Written immediately — /abort does not undo it", "command"),
     ("/propose-list",
      "the staged proposals — pending first (what awaits\n"
      "your ruling at the next checkpoint), then settled —\n"
@@ -444,6 +462,7 @@ DEV_MIN_CMDS = ("/help", "/status")
 # listed under its own name (/recall normalises to it, see normalise_head).
 DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/practice-list", "/better-option-list", "/practice-delete",
+                 "/practice-update", "/topic-update",         # B116, R465, 2026-09-07
                  "/topic-list", "/topic-close", "/prompt-show", "/issue-apply",
                  "/issue-list", "/issue-status", "/issue-status-update",
                  "/issue-relationship-list", "/issue-add",
@@ -454,7 +473,8 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/part-context-update", "/part-context-list",
                  "/part-context-clear", "/part-add", "/part-list",
                  "/part-view", "/part-delete",
-                 "/group-add", "/group-list", "/group-view", "/group-delete")
+                 "/group-add", "/group-list", "/group-view", "/group-update",
+                 "/group-delete")
 
 # ---------------------------------------------------------- the two tables
 # R266, 2026-08-20, the operator's own words: *"There is, or needs to be, a table of
@@ -534,6 +554,9 @@ DEV_SUBSET_COMMANDS: tuple[str, ...] = (
     "/part-view", "/part-delete",            # inspection and removal are tooling
                                              # (Claude's reading; say the word to move them)
     "/group-view", "/group-delete",          # same split as the part verbs, 2026-09-02
+    "/group-update",                         # beside view/delete, B112 2026-09-06
+    "/practice-update", "/topic-update",     # beside practice-delete and the topic verbs
+                                             # (R288's split), B116 2026-09-07
 )
 
 # /dev IS IN NEITHER TABLE, and that is R199 (2026-08-16), verbatim: *"yes,
@@ -587,11 +610,21 @@ PROPOSE_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-label-update", "/issue-relationship-add",
     "/issue-evidence-add", "/practice-add", "/better-option-add",
     "/issue-add",
-    # R323, 2026-08-23: a part proposing a part is the room noticing someone
-    # not yet at the table; approval fires PART_ADD_DIALOG with the
-    # bracket's strings prefilled. [proposed: /part-add "<describe>" "<Tag>"]
-    "/part-add",
 )
+
+# /part-add IS NOT HERE, AND IS NOT DEFERRED EITHER — R483,
+# 2026-09-07, the operator: *"part-add should also not be told to or available to
+# parts."* R323 had put it in this table (a part proposing a part; approval fires
+# PART_ADD_DIALOG with the bracket's strings prefilled) and that half is withdrawn.
+# It stays a full command Self types at cmd> — only the PROPOSE door is shut.
+#
+# NOT DEFERRED_PROPOSE_COMMANDS, deliberately: that branch in annotations.py
+# carries one hardcoded `why` about resolving a quote against the live transcript,
+# so a part naming /part-add would be refused for a reason belonging to a different
+# verb. Absent from the table, it takes the ordinary path — _proposable_list()'s
+# "valid: ..." naming what a part MAY ask for, which is the honest refusal.
+# proposal_vetting.py's /part-add approval branch is unreachable by construction now;
+# it is kept, not deleted — R323 designed it and only the door was ruled shut.
 
 # THE FIVE /observation-* VERBS ARE NOT IN PROPOSE_SUBSET_COMMANDS AND MUST
 # NEVER BE, same reasoning as /settings-*/-redact-alias-* above: a part has
@@ -624,6 +657,48 @@ DEFERRED_PROPOSE_COMMANDS: tuple[str, ...] = ("/issue-evidence-add",)
 # is what R267 ruled and keeps the deferred verb because the ruling did.
 PROPOSABLE_COMMANDS: tuple[str, ...] = tuple(
     c for c in PROPOSE_SUBSET_COMMANDS if c not in DEFERRED_PROPOSE_COMMANDS)
+
+
+def command_proposable_read() -> tuple[str, ...]:
+    """What a `[proposed: ...]` may name IN THE GROUP THIS PROCESS IS ON —
+    B124's sibling, B122 (2026-09-07): the descriptor GOVERNS, it does not
+    merely describe.
+
+    `groups/<name>/group.toml`'s `proposed_commands` was written by
+    group_manager.py and read by nothing (audit-register.md #12). R483 corrected
+    every list and test_proposable_surfaces.py now makes the surfaces agree with
+    each other — but agreement is not government: the band's list is `[]` and its
+    own rulebook tells its members a `[proposed:]` bracket "names nothing on the
+    list and is reported as an error", while a band member proposing /issue-add
+    was ACCEPTED, because every surface read this module-level constant and the
+    constant is group-independent.
+
+    A DESCRIPTOR MAY ONLY NARROW. The constant above stays "what the code can
+    execute on a part's proposal"; a group's own list is intersected with it, so
+    a descriptor naming a verb the code cannot run gains nothing — the same
+    subset rule the probe already asserts, enforced here rather than reported.
+    The descriptor writes `issue-add` and the constant `/issue-add`; the slash is
+    normalised once, at this read.
+
+    THE FALLBACK IS TODAY'S CONSTANT, deliberately. A group that declares no
+    `proposed_commands` at all, a descriptor that will not parse, a tree with no
+    group resolvable — each is "no narrowing stated", never "nothing may be
+    proposed". An EMPTY list is different and is honoured: R466 ruled the band's
+    empty, and a declared empty is a decision. record_paths is imported HERE and
+    not at module scope: this module is phase 2 stage 0's cycle-breaker, and
+    group_set() rebinds record_paths' own constants after import, so the group
+    must be read at call time or a circle opened with --group would keep the
+    default group's answer."""
+    try:
+        import record_paths as _RP
+        doc = _RP.group_descriptor_read(_RP.group_read())
+    except Exception:                                       # noqa: BLE001
+        return PROPOSABLE_COMMANDS
+    declared = doc.get("proposed_commands")
+    if not isinstance(declared, list):
+        return PROPOSABLE_COMMANDS
+    named = {command_head_normalise("/" + str(c).lstrip("/")) for c in declared}
+    return tuple(c for c in PROPOSABLE_COMMANDS if c in named)
 
 
 def _disjoint() -> None:

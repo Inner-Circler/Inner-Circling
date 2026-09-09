@@ -39,7 +39,7 @@ absolute path — and both follow `--group`.
 
 ## What it does differently
 
-| | agent-teams (live) | coordinator |
+| | agent-teams (retired) | coordinator |
 |---|---|---|
 | statement delivery | `SendMessage` reply + `statement_temp.md` fallback (#43706) | the HTTP return value |
 | file writes | teammate writes lost to the mount (#69866) | one local process, direct to `D:\` |
@@ -170,7 +170,7 @@ interpreter.
 These four (plus plain speech) are the whole circle-pane verb set —
 `command_surface.py`'s PANE_OF classifies every other verb (including
 `/status`, corrected out of this list) as command-pane only, reachable at
-`cmd>` in the dual-pane UI, not here. There are 52 verbs total across both
+`cmd>` in the dual-pane UI, not here. There are 55 verbs total across both
 panes (`len(command_surface.COMMANDS)`, 2026-09-04; 43 when this line was
 written); see `docs/BNF.md`'s USER_SUBSET_COMMANDS / DEV_SUBSET_COMMANDS for
 the rest.
@@ -300,7 +300,7 @@ python coordinator\circle.py --live
 - the usage report.
 
 **Verifier exit 0 is the success condition.** It writes
-`work\logs\close_<OT>.json` exactly as the agent-teams close does, so the
+`work\logs\close_<OT>.json` exactly as the agent-teams close did, so the
 automatic dreaming/synthesis pass that runs synchronously at the end of this
 same `/close` (`coordinator/inter_circle.py`) reconciles and dreams normally
 with no changes.
@@ -346,9 +346,10 @@ only writer of that file — dreaming/synthesis — now runs synchronously
 inside the SAME live `/close` that produced the circle, never as an
 independent background process a later open could race against.
 
-**4. Do not run while an agent-teams circle is open.** Nothing collides on disk
-in sandbox mode, but the same part would be animated in two places, and the
-agent-teams close would write a short_term describing only its own half.
+**4. RETIRED — there is no agent-teams circle to collide with.** Nothing in this
+checkout can open one (see the head of this file). When it could, the same part
+would have been animated in two places, and the agent-teams close would have
+written a short_term describing only its own half.
 
 **5. Open-time collision (`--live` only).** Two circles opened in the same
 minute would both claim `circles/circle_<OT>.md`. Not reachable from a sandbox
@@ -459,11 +460,12 @@ The reminder names the repair: `circle_audit.py --backfill --commit`.
 
 ## Rollback
 
-Stop using it. `python coordinator\circle.py` writes nothing outside
-`coordinator\` unless `--live` is passed, and even then only this run's two
-file shapes. To revert a live circle: delete `circles\circle_<OT>.md`,
+Stop using it. A bare `python coordinator\circle.py` is REFUSED (R360) and writes
+nothing; `--dry-run` writes only under `work\sandbox\`; `--live` writes only this
+run's two file shapes. To revert a live circle: delete `circles\circle_<OT>.md`,
 `parts\*\short_term_<OT>.toml` (`.md` before 2026-09-04, R434), and `work\logs\close_<OT>.json`. Nothing else
-was touched. Run `/circle_close` and the agent-teams path as before.
+was touched. There is no other path to fall back to — the agent-teams mechanism is
+retired.
 
 ## The briefing SPLIT — there is no file, and no filter, any more
 
@@ -539,9 +541,13 @@ only one).
                     --dry-run REFUSES (R360) — one is required.
 --parts a,b,c       comma-separated part dirs — TESTING ONLY, see "Roster"
                     below (a reduced roster leaves the omitted parts
-                    unaware of the circle). Default: every part in
-                    parts/, including the Soul (see "The Soul" below — it
-                    IS a participant; process_core.md's own §The Soul
+                    unaware of the circle). Default: every member of the
+                    DEFAULT GROUP — the `ifs` row resolved through
+                    group_manager.group_resolve() (B117 stage 1,
+                    R466/R467), never the parts/ scan; the scan is the
+                    fallback only where no group row exists. The Soul is
+                    among them (see "The Soul" below — it IS a
+                    participant; process_core.md's own §The Soul
                     disagrees with the record, not this default).
 --group NAME        open on a NAMED group (coordinator/group_manager.py,
                     groups/<name>/group.toml — R468) instead of --parts — a deliberately
@@ -552,9 +558,10 @@ only one).
 --recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
                     expand topic-matched seeds into each part's BLOCK 4.
                     ARM is off | delivered | withheld. Default: off.
---no-prewarm        skip prewarm(), the sequential zero-output-token calls
-                    that write each part's cached prompt prefix before the
-                    opening round. Default: off (prewarm runs).
+--no-prewarm        skip llm_client.stream_prewarm(), the sequential
+                    zero-output-token calls that write each part's cached
+                    prompt prefix before the opening round. Default: off
+                    (the prewarm runs).
 --no-blind          run the PRIOR protocol: a sequential opening round,
                     instead of the default BLIND round. Default: off.
 --seed N            see "Seed" below. Default: unset (a fresh shuffle
@@ -591,9 +598,10 @@ sets the agenda.
 
 ## Roster
 
-**No, parts do not need to be named.** The default is **all seven parts,
-including the Soul** — the same roster the agent-teams path spawns.
-`--parts` exists for cheap test rounds.
+**No, parts do not need to be named.** The default is **every member of the
+default group**, the Soul included — the `ifs` row resolved through
+`group_manager.group_resolve()`, never a `parts/` scan (B117 stage 1,
+R466/R467). `--parts` exists for cheap test rounds.
 
 ### The Soul — a doctrine discrepancy that has since been resolved
 
@@ -606,7 +614,7 @@ exists anywhere in the tree, and `process_core.md` §The Soul now reads
 terrain"** (R303, 2026-08-22) — already matching the empirical record below
 rather than contradicting it.
 
-The record: it has spoken in **22 circles since 2026-06-24** (measured
+The record: it has spoken in **21 circles between 2026-06-24 and 2026-08-09** (measured
 directly against circles/*.md, matching every historical spelling — "Soul"
 and "Injured Soul"/"injured_soul", since the two are the same part across a
 rename), including this morning's `circle_2026-07-26_1112`, and it keeps its
@@ -654,8 +662,6 @@ Two practical consequences:
    no model calls and writes nothing to `parts/`, so no part carries any
    memory of it. Free, and traceless by design; a LAB test round is
    remembered by the lab's own parts and by nothing here.
-
-This is a difference from the agent-teams path, which always spawns all seven.
 
 Tunables, none of them actually in `circle.py` (this line said "at the top of
 circle.py" until audit-register.md #21 found otherwise): `MODEL`, `CACHE_TTL`

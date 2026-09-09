@@ -46,7 +46,7 @@ At close, each part is asked for a four-section record of the circle. The
 coordinator writes those, verifies them, emits a report with a size and sha256 per
 part, and commits the whole circle to git under a tag.
 
-**Measured to date: 35 circles, 95,238 words of transcript.**
+**Measured 2026-09-09: 43 circles, 127,107 words of transcript.**
 
 ## The graph
 
@@ -63,7 +63,7 @@ Where a real relation will not fit any of the five, it is recorded verbatim as
 **unrepresentable** rather than bent into the nearest available type. That file is
 a primary output: an empty one means the vocabulary is sufficient.
 
-**Measured to date: 36 nodes, 234 evidence items, 49 edges.**
+**Measured 2026-09-09: 18 nodes, 159 evidence items, 37 edges — 18 of them not retired.**
 
 ## The one property that makes it a mirror rather than a story
 
@@ -142,7 +142,7 @@ could have known that.
 
 The system can manufacture agreement, and it does.
 
-Across 34 transcripts the graph contains **zero `polarized-with` edges** — not one
+Across the 36 transcripts it cites, the graph contains **zero `polarized-with` edges** — not one
 recorded instance of two parts pursuing the same goal by opposed strategies. The
 word "challenge" appears zero times, despite being a named rule. In one circle of
 55 part statements, **2 were addressed to another part**; the rest went to me or to

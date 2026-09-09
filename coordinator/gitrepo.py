@@ -622,7 +622,7 @@ def system_git_attributes_ensure(log) -> None:
 # spends money and overwrites the publish gate's record kept an unimplemented
 # --help — nothing ran a probe over its arguments because there was no probe
 # and nothing would have invoked one.
-HOOK_MARK = "# inner-circling pre-commit v169"
+HOOK_MARK = "# inner-circling pre-commit v171"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1807,6 +1807,19 @@ case "$FILES" in *coordinator/circle_close.py*|*coordinator/circle.py*)
     run ui/tests/test_circle_engine.py
 esac
 
+# v170, audit-register.md 2026-09-09, the record-integrity band. circle.py's REFUSALS —
+# the corruption gate's, the API check's, the reduced-roster confirmation and every
+# argument refusal including R360's mode requirement — were executed by nothing, because
+# no suite could set --live: circle.py builds its client only when not dry-run, every
+# suite is dry-run, so `if args.live` and `if client is not None` were unreachable by
+# construction. test_circle_argv.py sets both with two stubs and asserts each refusal's
+# exit code AND that no transcript appeared. Fast: no model call, no thread, no circle.
+case "$FILES" in *coordinator/circle.py*|*coordinator/tests/test_circle_argv.py*\
+|*coordinator/record_verify.py*|*coordinator/llm_client.py*)
+    NOTE="  pre-commit: circle.py's refusals or a gate they consult touched"
+    run coordinator/tests/test_circle_argv.py
+esac
+
 case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*htmlify.py*)
     NOTE="  pre-commit: code touched — compiling and linting every module"
     # THE work/tools LEG NOW NAMES ITS GLOB — audit-register.md #8, 2026-09-08. It read
@@ -2150,6 +2163,20 @@ case "$FILES" in *ui/*|*coordinator/seam.py*)
     # a groups/ change runs it too (the record-safety case).
     run ui/tests/test_circle_engine_band.py
     run ui/tests/test_circling.py --fast
+    # v171, R491 (2026-09-08, the operator: "2 - diagnose and wire"), landed 2026-09-09.
+    # 518 lines of assertions sat behind the tree's ONE ALLOW entry for its whole
+    # existence. The entry's stated condition — "16 of its checks are stale" — was
+    # right: 20 passed and 15 failed, and all fifteen were judged one at a time before
+    # any was changed. Every one was STALE, none a regression, and each is now dated to
+    # the ruling that moved it (R230, R273/R274/R227, R400-R402, B64, B99). The
+    # replacements are mutation-tested: three mutants each reverting one of those rulings
+    # are each caught.
+    # BEFORE IT COULD BE WIRED, one isolation hole had to close. self/settings.toml was
+    # in neither the redirect list nor the snapshot, and it is UNTRACKED — so a stray
+    # write would have been invisible to git, to the suite and to this hook, in the MAIN
+    # checkout where the operator's file lives. --fast for the same reason test_circling
+    # takes it: the 10-20s per line exists for a human watching, not for a gate.
+    run ui/tests/circle_test.py --fast
     # v96, 2026-08-29: the Ticker flavor's adaptor probe — bridge.py
     # over real stdio, a full dry-run session, the lens RPCs, the
     # reload handshake. Joined at the merge, as the design doc's

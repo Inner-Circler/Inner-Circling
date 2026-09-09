@@ -578,8 +578,13 @@ world I was born into'. Unless you ask questions about that, or
 address "Soul: ..." directly, it is unlikely to speak.
 
 Each part gets two turns to say something before you speak again;
-then they will wait for you. You can always type `/pass` or `/round` 
-to give the parts another two responses.
+then they will wait for you. Speaking spends the first of those two,
+because your statement is followed by a round straight away. So
+`/pass` or `/round` gives them the second one, and a further `/round`
+after that is quiet — the circle tells you who is holding, and they
+keep holding until you speak again. The exception is a part you have
+addressed by name since it last spoke: it may answer even at its
+limit.
 
 **About remembering**
 

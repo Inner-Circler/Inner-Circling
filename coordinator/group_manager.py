@@ -84,7 +84,6 @@ DEFAULT_GROUP = _RP.DEFAULT_GROUP       # the group circle.DEFAULT_PARTS reads (
 # doc against constant without opening a real group.toml. Three agreeing copies read as PASS.
 ORDER = ("name", "display", "default", "roles", "reserved", "initialization", "layer",
          "member", "members", "proposed_commands", "identity")
-LIST_KEYS = ("roles", "reserved", "initialization", "proposed_commands")
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 

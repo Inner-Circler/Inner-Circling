@@ -2007,7 +2007,15 @@ def self_test() -> int:
               "and forgotten in the other is what this catches",
               _pub(_win) == _pub(_posix) == {"enable_vt_mode", "poll_key", "raw_mode"})
 
-        _wv, _pv = _key_vocab(_split[0].body), _key_vocab(_split[0].orelse)
+        # THE POSIX VOCABULARY MOVED OUT OF ITS ARM, 2026-09-09, under the "yes split"
+        # ruling: POSIX_ESC is module-level now precisely so it can be asserted on
+        # Windows, which means the else-arm no longer carries a dict literal at all and
+        # an AST-only read of it returns the empty set. Reading the real object is the
+        # stronger check anyway — it cannot drift from what the code actually looks up,
+        # where a source-shape read can. The arm is still scanned, so a table added back
+        # inside it would still be counted rather than silently ignored.
+        _wv = _key_vocab(_split[0].body)
+        _pv = set(C.POSIX_ESC.values()) | _key_vocab(_split[0].orelse)
         check("no key the POSIX arm emits is unknown to the win32 arm", not (_pv - _wv))
         # THE ONE ASYMMETRY IS DELIBERATE, so it is pinned rather than merely allowed:
         # ui/circling.py:500-509 says the dedicated cursor cluster is emitted "only where
@@ -2055,6 +2063,39 @@ def self_test() -> int:
     units5 = C.ui_burst_read("a", poll=lambda: next(fake_stream5, None))
     check("a paired astral char rides a text burst like any character",
           units5 == [("text", f"a{heart}x")])
+
+    # --- THE POSIX ESCAPE TABLE, asserted on Windows. Ruled 2026-09-09 by the
+    # operator ("yes split"), after the 2026-09-08 audit found the POSIX branch of
+    # ui/circling.py structurally unreachable here: sys.platform is win32, so the
+    # module never DEFINES those functions and no suite can import them. That
+    # branch ships — ui/circling.py is a packaging entry point and the bundle
+    # publishes to GitHub — so a recipient on Linux or macOS runs code nobody in
+    # this project has ever run. The table and its lookup moved above IS_WINDOWS
+    # and are pure, so they are covered now on every platform.
+    #
+    # THE EXEMPTION, NAMED RATHER THAN LEFT IMPLICIT, which is the whole point of
+    # the split: what remains uncovered here is _read_escape's select/stdin loop
+    # and poll_key's isatty/select wiring, plus raw_mode's termios/tty calls.
+    # Those need a real POSIX terminal and cannot be reached from this machine by
+    # any fake, because the names do not exist in this process. enable_vt_mode's
+    # Windows ctypes body is uncovered for the mirror-image reason: legacy conhost
+    # only, never Windows Terminal. Both are known gaps, not oversights. -------
+    check("every POSIX escape sequence maps to a token",
+          all(isinstance(v, str) and v for v in C.POSIX_ESC.values()))
+    check("the CSI and SS3 forms of one arrow agree",
+          C.ui_posix_escape_read("\x1b[A") == C.ui_posix_escape_read("\x1bOA") == "UP")
+    check("...and so do the three forms of Home",
+          C.ui_posix_escape_read("\x1b[H") == C.ui_posix_escape_read("\x1bOH")
+          == C.ui_posix_escape_read("\x1b[1~") == "HOME")
+    check("every token the table yields is one handle_key already knows",
+          set(C.POSIX_ESC.values()) <= {"UP", "DOWN", "LEFT", "RIGHT",
+                                        "PGUP", "PGDN", "HOME", "END"})
+    check("a bare ESC yields nothing, so _read_escape keeps reading",
+          C.ui_posix_escape_read("\x1b") is None)
+    check("...as does a partial sequence, the case that decides the loop continues",
+          C.ui_posix_escape_read("\x1b[") is None)
+    check("an unmapped sequence yields nothing rather than raising",
+          C.ui_posix_escape_read("\x1b[Z") is None)
 
     # --- poll_key's OWN wiring, not just the pairing math (audit-register.md #39,
     # 2026-09-08). The comment above said this was "untestable here", and that was true only

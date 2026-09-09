@@ -174,20 +174,12 @@ def initialization_advice_render(question: dict, answer: str, today=None) -> "st
     if answer == "" or question.get("data_type") != "NUMERIC_STRING":
         return None
     t = answer.strip()
-    if not _is_int(t):
+    if not R.part_context_is_whole_number(t):
         return None
     hi = R.part_bound_resolve(question.get("advisory_maximum"), today)
     if hi is None or int(t) <= hi:
         return None
     return question.get("advisory_note") or ""
-
-
-def _is_int(t: str) -> bool:
-    """Whole number, optionally negative. NEGATIVES ARE NEW, 2026-08-28 — the
-    old test was `answer.isdigit()`, which refuses a leading minus outright,
-    and the message it printed said "positive"."""
-    body = t[1:] if t.startswith("-") else t
-    return bool(body) and body.isdigit() and body.isascii()
 
 
 def initialization_validate(question: dict, answer: str, *, part: str = "") -> str | None:

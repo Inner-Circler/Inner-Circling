@@ -4,7 +4,7 @@
 Systems inner circle, run by a local Python coordinator that calls the
 Messages API directly.
 
-Canonical source: this markdown file. Updated 2026-09-01.
+Canonical source: this markdown file. Updated 2026-09-09.
 
 ## What this is
 
@@ -62,8 +62,12 @@ directly; no part speaks twice in a row. Each statement aims for a short
 length and is hard-capped at a word count — 150 unless you change the
 `statement_max_words` setting. That one is a developer setting: open the
 circle with `--dev` to see it or change it. `/settings-list` shows what
-you can reach — the model on a normal run, every setting under `--dev`;
-a fresh install has none changed, so `groups/ifs/self/settings.toml` does
+you can reach — three settings on a normal run, and all thirty-two under
+`--dev`. The three are `model`, which model the parts speak on;
+`redact_view`, whether the circle pane shows names, emails and phone
+numbers as opaque tokens rather than the real text; and `circle_stats`,
+whether a close prints and files its delta report. A fresh install has
+none changed, so `groups/ifs/self/settings.toml` does
 not exist until you change one. Domination is
 named by parts; Self evaluates and enforces.
 

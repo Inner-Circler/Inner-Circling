@@ -33,11 +33,15 @@ set to is one installation's own, so it never ships (packaging/runtime_only.txt)
 This is the same split part.toml makes: the questions are mechanism, the
 [context.answers] block is the person's.
 
-WHO MAY SEE A SETTING. `audience` is "dev" for all but one. The verb surface
+WHO MAY SEE A SETTING. `audience` is "dev" for all but three. The verb surface
 already works this way (R266: USER_SUBSET_COMMANDS / DEV_SUBSET_COMMANDS,
 disjoint, "dev adds, never takes away"), and this is that rule one level
 down: the verb is available either way, dev mode adds FIELDS. The operator
-chose the dev=false starter set on 2026-08-28: the model, nothing else yet.
+chose the dev=false starter set on 2026-08-28 and it has grown twice since:
+`model`, then `circle_stats` (2026-08-30) and `redact_view` (2026-08-31).
+COUNT THEM WITH setting_visible_read(dev=False) RATHER THAN FROM THIS LINE —
+3 of 32 today, and the shipped overview names all three because one of them,
+redact_view, is a privacy control a recipient would otherwise not know about.
 
 PARTS NEVER SEE ANY OF THIS, and three separate things have to hold:
 

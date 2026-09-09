@@ -2585,6 +2585,49 @@ def _surrogate_pair(hi: str, lo: str) -> str:
     return (hi + lo).encode("utf-16", "surrogatepass").decode("utf-16")
 
 
+# THE POSIX ESCAPE TABLE LIVES OUT HERE, above the platform split, for the same
+# reason _surrogate_pair does: everything platform-NEUTRAL is assertable on every
+# platform, including the only one this project has. RULED 2026-09-09 by the
+# operator ("yes split"), after the 2026-09-08 audit found the POSIX branch below
+# structurally unreachable here — sys.platform is win32, so the module never
+# defines those functions and no suite can import them. This file is a packaging
+# entry point (packaging/required.toml) and the bundle publishes to GitHub, so a
+# recipient on Linux or macOS runs that branch and nobody here ever has.
+#
+# WHAT THE SPLIT BUYS AND WHAT IT DOES NOT. The table and its lookup are pure —
+# a sequence in, a token out — and are now covered on Windows. The termios/tty/
+# select half below still cannot run here and is NAMED in an exemption rather
+# than left implicit, which is the trade R491 made for ui/tests/circle_test.py.
+# enable_vt_mode's Windows ctypes body is uncovered for the mirror-image reason
+# (legacy conhost only, never Windows Terminal) and is named in the same place.
+#
+# THE THREE FORMS, and why a Mac needs all of them:
+#   CSI    \x1b[A     the normal-cursor-key form, the default state
+#   SS3    \x1bOA     the APPLICATION-cursor-key form, left on by whatever ran
+#                     before us; several emulators use it for Home/End always
+#   tilde  \x1b[5~    what some terminals send for PgUp/PgDn/Home/End instead
+POSIX_ESC = {
+    "\x1b[A": "UP", "\x1b[B": "DOWN",
+    "\x1b[C": "RIGHT", "\x1b[D": "LEFT",
+    "\x1bOA": "UP", "\x1bOB": "DOWN",
+    "\x1bOC": "RIGHT", "\x1bOD": "LEFT",
+    "\x1b[5~": "PGUP", "\x1b[6~": "PGDN",
+    "\x1b[H": "HOME", "\x1b[F": "END",
+    "\x1bOH": "HOME", "\x1bOF": "END",
+    "\x1b[1~": "HOME", "\x1b[4~": "END",
+    "\x1b[7~": "HOME", "\x1b[8~": "END",
+}
+
+
+def ui_posix_escape_read(seq: str) -> "str | None":
+    """The token a POSIX escape sequence names, or None for anything unmapped.
+
+    PURE: no terminal, no select, no stdin, so it is assertable on every
+    platform including this one. A bare ESC and a partial sequence both return
+    None, which is what lets _read_escape below keep reading."""
+    return POSIX_ESC.get(seq)
+
+
 if IS_WINDOWS:
     import msvcrt
 
@@ -2725,17 +2768,10 @@ else:
     # Not exhaustive across every emulator that exists, and this backend
     # is still less travelled than the Windows one (see README) — but a
     # key that does nothing is now much less likely than it was.
-    _POSIX_ESC = {
-        "\x1b[A": "UP", "\x1b[B": "DOWN",
-        "\x1b[C": "RIGHT", "\x1b[D": "LEFT",
-        "\x1bOA": "UP", "\x1bOB": "DOWN",
-        "\x1bOC": "RIGHT", "\x1bOD": "LEFT",
-        "\x1b[5~": "PGUP", "\x1b[6~": "PGDN",
-        "\x1b[H": "HOME", "\x1b[F": "END",
-        "\x1bOH": "HOME", "\x1bOF": "END",
-        "\x1b[1~": "HOME", "\x1b[4~": "END",
-        "\x1b[7~": "HOME", "\x1b[8~": "END",
-    }
+    # THE TABLE MOVED OUT, 2026-09-09 — it and its lookup are module-level now
+    # (POSIX_ESC / ui_posix_escape_read, above IS_WINDOWS), so they are asserted
+    # on Windows too. What is left in here is the half that genuinely needs a
+    # POSIX terminal: select on stdin, and reading a byte at a time.
 
     def _read_escape() -> str | None:
         """Called after a bare ESC was read. The rest of a real escape
@@ -2747,9 +2783,10 @@ else:
             if not r:
                 break
             seq += sys.stdin.read(1)
-            if seq in _POSIX_ESC:
-                return _POSIX_ESC[seq]
-        return _POSIX_ESC.get(seq)
+            tok = ui_posix_escape_read(seq)
+            if tok is not None:
+                return tok
+        return ui_posix_escape_read(seq)
 
     def poll_key() -> str | None:
         if not sys.stdin.isatty():

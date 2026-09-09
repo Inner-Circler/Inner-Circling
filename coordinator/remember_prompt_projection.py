@@ -205,7 +205,7 @@ def _window(es: list[dict]) -> tuple[str, int, int]:
         #
         # THE COORDINATOR STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
         # the OT reaches no block and no message of its view — verified
-        # 2026-08-27 against render_messages() and a rendered prompt — so a
+        # 2026-08-27 against prompt_messages_render() and a rendered prompt — so a
         # part-authored tag could only ever be guessed. Stamping also covers
         # the 25 records already on file, which no instruction could.
         #

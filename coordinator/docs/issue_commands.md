@@ -20,7 +20,7 @@ Second, the verb is named `issue-label-update`, not `update` — naming exactly 
 
 Third, a *live* circle applies its recorded commands automatically at close; a *sandbox* circle records them but applies nothing, which is what lets a sandbox circle propose changes to the live tree without ever touching it.
 
-Commands are deliberately applied at circle close rather than immediately, because each part's briefing is compiled into its system prompt at circle open; a mid-circle graph write would either never reach the room in that circle, or would require rebuilding and re-caching all seven parts' prompts mid-session for no benefit.
+Commands are deliberately applied at circle close rather than immediately, because each part's briefing is compiled into its system prompt at circle open; a mid-circle graph write would either never reach the room in that circle, or would require rebuilding and re-caching all seven parts' prompts mid-circle for no benefit.
 
 Validation is strictly all-or-nothing: `issue_command_apply()` copies the entire `issues/` directory to a temp location, applies every pending command there, and runs the real gate (`issue_gate.py`) over that copy. The live tree is written only if the whole batch passes; `issue_gate.py` already accepted a directory argument for exactly this purpose.
 

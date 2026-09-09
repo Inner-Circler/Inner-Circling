@@ -2,7 +2,7 @@
 """
 circle_observation_manager.py — the CIRCLE_OBSERVATION register. SYNTHESIS's note to
 (self_observation_log.py until 2026-09-03 — B99 stage 18c under R435: a register's one reader/writer
-is <CLASS>_manager.py; self_observation_manager.py until 2026-09-07 — R-NEW, SELF_OBSERVATION was a
+is <CLASS>_manager.py; self_observation_manager.py until 2026-09-07 — R481, SELF_OBSERVATION was a
 misnomer: the record is addressed to Self and is never about Self)
 Self about the CIRCLE as a working body: its pace, what it avoided, where it
 went easily. Addressed to Self, about the room, never about Self.
@@ -139,7 +139,7 @@ def _rel() -> str:
 # rebind of `circle_observation_manager.PATH` keeps working exactly as it did before this existed.
 # NO CAP, deliberately — see the module docstring's own note, unchanged by this.
 _JC = JOURNAL_CLASS.JournalClass(
-    # "CO-" SINCE THE RENAME, FORWARD-ONLY — R-NEW (2026-09-07). SO-0001..SO-0031 stay
+    # "CO-" SINCE THE RENAME, FORWARD-ONLY — R481 (2026-09-07). SO-0001..SO-0031 stay
     # exactly as written and next_id never reset, so ids stay unique and monotonic across
     # the boundary; register_gate.REGISTERS accepts both prefixes on this register alone.
     table=TABLE, id_prefix="CO-", cap=None,

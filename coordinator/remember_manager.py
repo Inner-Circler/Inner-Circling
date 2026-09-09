@@ -22,13 +22,13 @@ that carries the four short_term sections, up to AUTHORED_WORD_CAP words.
 The in-round path (annotations.remember_apply()) is unchanged and still
 works — a part that has something it knows now need not hold it — but
 the close is what process_core.md teaches (both the annotation and,
-since R-NEW 2026-08-22, the standing guidance beside it),
+since R300 (2026-08-22), the standing guidance beside it),
 because at close the part has the whole circle to draw on rather than
 the part of it that had happened yet. ONE cap covers both paths:
 remember_has_written() is the single answer, so spending it in a round leaves
 none at close. UNLIKE an ask (asks.py), there is no
 second derivation call: the part already knows why it is writing this, so
-`derivation_guidance` (process_core.md §REMEMBER, Block 1 since R-NEW) is given at
+`derivation_guidance` (process_core.md §REMEMBER, Block 1 since R300) is given at
 authoring time instead of a model re-deriving intent after the fact from a
 statement written for a different purpose.
 

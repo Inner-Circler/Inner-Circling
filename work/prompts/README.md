@@ -38,3 +38,9 @@ turn file's block references resolve.
 embeds the part's own identity file verbatim, and a turn file carries the
 part's reply plus, since R386 (2026-08-29), a summary of what the model
 reasoned. Treat this directory exactly as you treat `groups/ifs/parts/`.
+
+That last part is yours to switch off: the reasoning summary is captured
+only while the `record_thinking` setting is on, which it is by default.
+`/settings-list` shows it and `/settings-update record_thinking no` stops
+it being written. The rest of the capture is not optional — it is the
+record R277 exists to keep.

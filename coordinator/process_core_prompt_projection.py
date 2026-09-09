@@ -14,7 +14,7 @@ register this project has already split a projection module out for
 (topic_manager.py -> topic_prompt_projection.py, issue_schema.py -> issue_prompt_projection.py,
 parts/<p>/* -> parts_prompt_projection.py). This module closes that one gap.
 
-circle_identity_text_render() is the column 2 ingredient; group_context.py's load_shared()
+circle_identity_text_render() is the column 2 ingredient; group_context.py's group_shared_read()
 now calls it and does nothing else. The two length-rule constants move here
 too — they exist only to feed this one substitution.
 
@@ -75,9 +75,9 @@ LAYER_MARK = "<!-- layer: "
 SLOT_MARK = "<!-- slot: "
 MARK_END = " -->"
 
-# THE GROUP'S LAYER. circle.py sets it at open from the groups register row's `layer` field
-# (self/groups.toml, group_manager.group_layer_read()); a circle opened without --group, a group
-# row with no `layer`, and every install this bundle ships run the IFS layer — DEFAULT_LAYER is
+# THE GROUP'S LAYER. circle.py sets it at open from the group's own descriptor `layer` field
+# (groups/<name>/group.toml, group_manager.group_layer_read()); a circle opened without --group, a
+# descriptor with no `layer`, and every install this bundle ships run the IFS layer — DEFAULT_LAYER is
 # the literal the packaging scan traces, so the file ships. A path is read relative to the tree.
 DEFAULT_LAYER = HERE / "process_ifs.md"
 _LAYER: "pathlib.Path | None" = None
@@ -198,7 +198,7 @@ def circle_identity_text_render() -> str:
 
 def group_best_practices() -> str:
     """BLOCK 1's contribution — every part reads this, identically. MOVED
-    from check_best_practices.broadcast_block(), 2026-09-02, same body;
+    from check_best_practices.group_best_practices(), 2026-09-02, same body;
     that module's own broadcast() (the eligible-row list this filters
     from) is what stays a lazy cross-import away.
 

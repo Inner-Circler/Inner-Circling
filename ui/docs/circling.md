@@ -130,7 +130,8 @@ Related pages:
                     Default: off — a bare run is the demonstration.
     --live          make it real: the parts actually think, and the record is
                     your own. Default: off — dry-run, nothing real is
-                    written. It must appear before --circle's own arguments.
+                    written. Either position — before or after --circle
+                    (ruled 2026-08-13, Q3; circling.py:3494).
     --selftest      check the program without needing a terminal. Worth running
                     before trusting a session.
     --no-color      plain text. Default: off — color is used whenever the

@@ -191,7 +191,7 @@ def part_identity_tail_render(part: str) -> str:
 def part_practices_render(part_tag: str) -> str:
     """<part_practices> — BLOCK 3's contribution for ONE part, empty for
     most parts, most circles. MOVED from check_best_practices.
-    narrowcast_block(), 2026-09-02, same body; that module's own
+    part_practices_render(), 2026-09-02, same body; that module's own
     narrowcast() (the eligible-row list this filters from) is what stays
     a lazy cross-import away.
 

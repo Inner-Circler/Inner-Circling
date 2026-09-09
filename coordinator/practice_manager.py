@@ -75,15 +75,20 @@ RECORD SHAPE
     op          STAGING ONLY, present iff state = "proposed":
                 "add" | "revise" | "delete"
     target_id   STAGING ONLY: the BP-ID a revise/delete row is about
-    sources     STAGING ONLY: [display, ...], every speaker who raised it
+    sources     PERMANENT since 2026-09-08 ("Structured"): [display, ...],
+                every speaker who raised it. Staging-only until then.
     circle      STAGING ONLY: the OT the proposal was raised in
     proposed_at STAGING ONLY: ISO timestamp
 
-A row's staging fields (op/target_id/sources/circle/proposed_at) exist
-ONLY while state = "proposed" — the vetting functions below strip them
-the moment a row resolves (accepted, revise applied, or deleted), so a
-settled row is indistinguishable from one Self typed directly with
-/practice-add.
+A row's staging fields (op/target_id/circle/proposed_at) exist ONLY while
+state = "proposed" — the vetting functions below strip them the moment a
+row resolves (accepted, revise applied, or deleted).
+
+A SETTLED PROPOSED ROW IS NO LONGER INDISTINGUISHABLE from one Self typed
+directly with /practice-add, and that is the deliberate consequence of
+keeping `sources`: a row carrying one says which members converged on it,
+and a row Self typed has none. That distinction is the point — it was
+previously recoverable only by parsing the `author` sentence.
 """
 
 from __future__ import annotations
@@ -243,7 +248,13 @@ def practice_add(text: str, addressee: str = PRACTICE_ADDRESSEE) -> tuple[bool, 
 ORDER = ("id", "addressee", "title", "origin", "in_room", "kind", "record", "amended",
          "state", "op", "target_id", "sources", "circle", "proposed_at")
 
-STAGING_ONLY = ("op", "target_id", "sources", "circle", "proposed_at")
+# `sources` SURVIVES RESOLUTION — ruled 2026-09-08, VERBATIM: "Structured". The same ruling
+# and the same reasoning as proposal_manager.py's, applied to the sibling register that shares
+# PROPOSE_CLASS: a practice can be proposed by several members converging in one circle, and
+# after resolution that list was recoverable only by reading the `author` sentence.
+# `op` and `target_id` still go — they are the staging INSTRUCTION, spent once the row is
+# ruled — and so do `circle` and `proposed_at`, for the reasons proposal_manager.py records.
+STAGING_ONLY = ("op", "target_id", "circle", "proposed_at")
 
 
 def _now() -> str:
@@ -384,10 +395,12 @@ def practice_deny(pid: str) -> tuple[bool, str]:
     """Rejected proposals are TOMBSTONED, not deleted — ruled 2026-08-12:
     a denial that leaves no trace cannot be told apart from one that
     never happened. `state` -> "denied by Self <datetime>"; staging
-    fields (op/target_id/sources/circle/proposed_at) are dropped, the
+    fields (op/target_id/circle/proposed_at) are dropped, the
     same as practice_approve() already does, so a denied row is otherwise
     indistinguishable in shape from an accepted one — only `state` says
-    which. practice_is_eligible() (above) must treat this state as non-projecting;
+    which. `sources` is KEPT on both since 2026-09-08 ("Structured"), which
+    matters most here: a denied row is the one whose wording did NOT land,
+    and who proposed it is exactly what a later reader would ask. practice_is_eligible() (above) must treat this state as non-projecting;
     it is not "proposed", so the OLD `state != "proposed"` shortcut
     would have wrongly let it through — fixed in the same change.
     Delegates to PROPOSE_CLASS.deny, the shared base — the tally rides

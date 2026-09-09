@@ -275,7 +275,7 @@ def circle_audit_git_verify(run: Run, may_commit: bool) -> None:
 def circle_audit_dream_tags_read() -> tuple[list[str], str | None]:
     """(every OT inter_circle.py has processed, or None-error). The dream/<OT>
     git tag is the durable marker inter_circle's phase-2 commit writes, and
-    already_processed() reads — ONE definition of "processed", theirs.
+    circle_is_processed() reads — ONE definition of "processed", theirs.
 
     On a git failure this returns ([], the error) rather than a bare empty
     list: an empty answer read as "nothing processed" would report every
@@ -682,7 +682,7 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
     import llm_client as LC                  # MODEL's owner (phase 2 stage 1)
     client = LC.stream_client_build()               # one builder, 2026-08-28 (stage 1)
     # PRE-EXISTING BREAK, fixed 2026-08-13 (found while removing the retired
-    # OC register): load_shared() stopped returning a 3-tuple and
+    # OC register): group_shared_read() stopped returning a 3-tuple and
     # shared_block()'s third positional arg became `minimal`, some time
     # before this file's own last edit; nothing had executed circle_audit_phase3_run() since,
     # so system_lint_verify.py's compile-only pass never caught it. Mirrors the
@@ -697,7 +697,7 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
     # is exactly why system_lint_verify and every --dry-run rehearsal stayed green.
     #
     # shared_block() ITSELF RETIRED 2026-09-02, replaced by one call,
-    # assemble_part() — see prompt_build.py's own docstring.
+    # prompt_part_assemble() — see prompt_build.py's own docstring.
     core = C.group_shared_read()
     briefing, _ = C.circle_briefing_build([])
     done = 0
@@ -876,9 +876,11 @@ def main() -> int:
                     "writes to the live tree, no model calls)")
     ap.add_argument("--group", default=None,
                     help="audit this GROUP's record (groups/<name>/) instead of the default "
-                         "group's — B117 stage 5. Default: the ifs group.")
+                         "group's — B117 stage 5. Default: the group ruled default — the one "
+                         "installed, or the one whose group.toml says default = true.")
     ap.add_argument("--snapshot", nargs="?", const="auto", metavar="DIR",
-                    help="copy the current parts/ + self/ memory files to DIR "
+                    help="copy the group's current parts/ + self/ memory files "
+                         "(groups/<group>/) to DIR "
                          "(default work/circle_audit/baseline_<timestamp>) and exit")
     ap.add_argument("--baseline", metavar="DIR",
                     help="validate the live tree against this snapshot instead of "

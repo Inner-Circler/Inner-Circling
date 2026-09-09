@@ -19,7 +19,7 @@ had ever read**. Four places in the tree described the operator from them:
 
 ```
 self/self.md                    a four-row table, hand-transcribed
-docs/origin.md §3               the same figures, in prose
+docs/origin.md (archived) §3               the same figures, in prose
 parts/learner/long_term.md      one sentence
   -> the Learner's BLOCK 3      which reached a LIVE PROMPT
 ```

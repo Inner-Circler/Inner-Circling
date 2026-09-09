@@ -2,7 +2,7 @@
 """
 part_add.py — the part-lifecycle register: create, list, view, delete a
 `parts/<name>/` directory. A14's creation path, built 2026-08-23 to
-`docs/part_commands_design.md` as `docs/Initialization.md` §8 reconciled it
+`docs/part_commands_design.md (archived)` as `docs/Initialization.md` §8 reconciled it
 (describe before name; the directory NAME derived from the Tag — an end user
 is never asked for a directory name).
 
@@ -67,9 +67,30 @@ def part_name_derive(tag: str) -> str:
 
 
 def part_precheck(name: str, tag: str, identity: str) -> str:
-    """"" when part_add() would proceed, else the one-line refusal —
-    docs/part_commands_design.md's PART_ADD_VALIDATION, live against the
-    tree as it stands right now (a fresh scan, not the import-time copy)."""
+    """"" when part_add() would proceed, else the one-line refusal — PART_ADD_VALIDATION,
+    live against the tree as it stands right now (a fresh scan, not the import-time copy).
+
+    THE CONTRACT IS WRITTEN HERE NOW, and that is the fix — audit-register.md #7,
+    2026-09-08. This docstring cited `docs/part_commands_design.md`'s PART_ADD_VALIDATION
+    as the definition, and that document left the tree at 048ccda (2026-09-07) for
+    Inner_Circling_Archive. A citation is a fine thing to leave behind; a DEFINITION is not,
+    and this one defined the behaviour of a shipped function. Restated in full, in order —
+    the order is itself part of the contract, because the first refusal wins and a caller
+    sees exactly one reason:
+
+        identity non-empty      long_term.md is read with a bare read_text(); an empty
+                                identity crashes prompt assembly rather than refusing
+        identity <= 40 words    a description, not a biography
+        tag non-empty
+        tag free of BAD_IN_TAG  `[Tag]:` IS the transcript grammar (part_roster.BAD_IN_TAG)
+        tag not already taken   case-insensitive against the live roster
+        tag not Self's          the configured user name, DEFAULT_NAME, or SELF_ID
+        name derives usably     NAME_RE, and not one of part_roster.SKIP_DIRS
+        parts/<name>/ absent    never write into an existing directory
+        roster below ceiling    MAX_MEMBERS - 1 parts (8 + lead); raising it is its own
+                                deliberate act
+
+    Kept in step by coordinator/tests/test_part_add.py, which drives each refusal by name."""
     roster, alt, _tails, _probs = R.part_scan()
     if not identity.strip():
         return ("the description is required — long_term.md is read with a "

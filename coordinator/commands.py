@@ -136,8 +136,8 @@ def statement_show(transcript: list[dict]) -> None:
 #
 # REMEMBER, added 2026-08-12, same recognizer (one regex, not a second).
 # UNLIKE the other seven kinds, a recognized remember is never left in the
-# transcript: apply_remember() strips it at the point every statement is
-# appended, before route_annotations() (or anything else) ever sees the text —
+# transcript: remember_apply() strips it at the point every statement is
+# appended, before annotation_route() (or anything else) ever sees the text —
 
 
 # --------------------------------------------------------------------------
@@ -214,7 +214,7 @@ class _NoCircleGuard:
     """The write guard a no-circle /remember uses: Self's own register, the
     real tree, and no open time — which is what makes the one-per-circle
     rule not apply (there is no circle to be one of). Duck-typed to what
-    remember_manager.remember_locate()/has_remembered() read: `.live`, `.ot`, `.check()`.
+    remember_manager.remember_locate()/remember_has_written() read: `.live`, `.ot`, `.check()`.
     WriteGuard itself admits self/remember.toml by exact path, so this
     delegates the check to it rather than re-stating the allow-list."""
     live = True
@@ -233,7 +233,7 @@ def command_remember(text: str, guard=None) -> None:
 
     THE CAP FOLLOWS THE CIRCLE. Inside one (`guard` is the loop's own, with
     an open time) the one-per-circle rule applies exactly as it does to the
-    annotation — has_remembered() reads the register back off disk, so a
+    annotation — remember_has_written() reads the register back off disk, so a
     bracket and a command in the same circle share the one use. With no
     circle there is nothing to be one of: _NoCircleGuard carries no open
     time and the cap is not consulted. Empty text is a usage line, never a

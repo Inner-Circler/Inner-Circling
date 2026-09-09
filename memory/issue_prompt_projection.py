@@ -383,7 +383,7 @@ def project_working_set(chosen: list[str]) -> tuple[str, list[str]]:
 
 
 # ------------------------------------------------- relations, for a ROOM
-# Ruled 2026-08-03. `docs/issue_relationship_types.md` went into circle_2026-08-03_2208
+# Ruled 2026-08-03. `docs/issue_relationship_types.md (archived)` went into circle_2026-08-03_2208
 # whole:
 # 1,808 tokens, 31% of a part's entire prompt. Measured use across 27 part
 # statements:
@@ -467,7 +467,7 @@ def issue_relationship_brief(chosen: "list[str] | None" = None) -> str:
     parts/<p>/part_relationships.toml (renamed from relationships.toml
     2026-08-17, R220).
 
-    `docs/issue_relationship_types.md` went into circle_2026-08-03_2208 whole — 1,808 tokens,
+    `docs/issue_relationship_types.md (archived)` went into circle_2026-08-03_2208 whole — 1,808 tokens,
     31% of a part's prompt — and across 27 part statements not one edge type
     was named once. It is an engineer's document: file paths, an edge census, a
     bug history, a section called "Where the machinery is".

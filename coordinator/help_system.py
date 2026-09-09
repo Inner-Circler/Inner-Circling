@@ -320,10 +320,16 @@ def object_class_help_text(name: str = "") -> str:
     classes = object_classes()
     if not name:
         if not classes:
+            # NO PATH IN THE MESSAGE — audit-register.md #30, 2026-09-08. This ended "See
+            # docs/dual_pane_integration.md §4." and help_system.py SHIPS
+            # (packaging/required.toml), while docs/ is in packaging/ignore.txt and the
+            # bundle's docs/ holds only overview.md. So a recipient reaching this line was
+            # sent to a file their install does not contain — a shipping gap, not a dangling
+            # reference: the document is real and present in the source tree. Naming the
+            # ruling is what a reader here can actually use.
             return ("  no object classes populated yet — content is "
                     "deliberately deferred (RULED 2026-08-10, undertaken "
-                    "depth-first when this work starts). See "
-                    "docs/dual_pane_integration.md §4.")
+                    "depth-first when this work starts).")
         out = ["  OBJECT CLASSES"] + command_help_rows_render(
             (f"/help {cname}", c.get("description", ""))
             for cname, c in classes.items())

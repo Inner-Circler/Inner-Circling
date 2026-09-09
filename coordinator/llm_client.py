@@ -537,7 +537,7 @@ def stream_call_once(system, user: str, max_tokens: int, *, kind: str,
     is who the call is made for: a part's directory name for dreaming and
     the refresh, None for the two circle-wide calls, whose file the log then
     names by kind. Recorded only while a turn log is open — a live circle's,
-    or the one process_circle() opens for a hand re-run — so a rehearsal, a
+    or the one circle_process() opens for a hand re-run — so a rehearsal, a
     dry run and `mid_term --refresh` by hand record nothing, as before."""
     # A TEST'S FAKE NAMES ITSELF; A REAL CLIENT DOES NOT. Both suites that
     # inject one set `self.model = "fake"` explicitly, and the SDK's client

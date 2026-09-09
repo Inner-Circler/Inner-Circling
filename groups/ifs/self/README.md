@@ -110,8 +110,7 @@ you rule things into them.
 
 **There is no `circle_briefing.md` delegate, and there should not be one.**
 `self/circle_briefing.md` was retired 2026-08-11: `group_attention.circle_briefing_build()` now reads
-`groups/ifs/issues/issue_model.md`, the live graph and
-`groups/ifs/self/best_practices.toml` directly
+`groups/ifs/issues/issue_model.md` and the live graph directly
 at every circle open, and the `split_briefing()` that routed the old document by
 heading is gone from the code entirely. A delegate lingered here until
 2026-08-18, correctly labelled vestigial, standing in for a file the live tree no
@@ -134,7 +133,7 @@ retired 2026-08-14 once its entries were migrated into the issue graph, and
 `issue_projection.narrative()` — the only thing that ever opened it — was
 deleted at B46, 2026-08-17 (that module is `memory/issue_prompt_projection.py`
 since 2026-09-03). The delegate outlived its reader by eight days,
-and shipped a header that told every new user `build_briefing()` concatenates
+and shipped a header that told every new user `circle_briefing_build()` concatenates
 the file into BLOCK 2 at each circle open. It had not since B46. Worse, that
 sentence was *written into it* on 2026-08-18, a day after the code went: the
 edit corrected an older stale reference and replaced it with a fresher one.

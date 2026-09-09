@@ -71,7 +71,7 @@ if (no arguments) then {
 - (`--minimal` retired with the practice mode, R360 2026-08-27 — the live rendering is the one rendering.)
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `sys`, `textwrap` (imported locally in `_box`). Sibling modules, imported locally where used: `prompt_build` (as `C` — `circle` until phase 2 stage 2 — for `C.block_order()`, `C.PART_TAGS`, `C.group_shared_read()`, `C.circle_briefing_build()`, `C.prompt_part_assemble()`; the retired `shared_block`/`system_blocks` pair became that last call 2026-09-02). No third-party packages, no network access.
+Standard library: `pathlib`, `sys`, `textwrap` (imported locally in `_box`). Sibling modules, imported locally where used: `prompt_build` (as `C` — `circle` until phase 2 stage 2 — for `C.block_order()`, `C.PART_TAGS`, `C.group_shared_read()`, `C.circle_briefing_build()`, `C.prompt_part_assemble()`; the retired `shared_block` became that last call 2026-09-02; `system_blocks()` is live). No third-party packages, no network access.
 
 ## EXTERNAL FILES
 Read: nothing directly. Everything this file reads is read indirectly through `circle.py`'s own loader/builder functions (`group_shared_read()` for `process_core.md`; `circle_briefing_build()` for circle_objectives — `issues/issue_model.md` and the live `issues/*.toml` graph), which pull in the project's objectives/core sources. The OC/open-concerns register is retired outright, 2026-08-13, and `self/issues_narrative.md` at B46, 2026-08-17; no successor source stands in either's place.

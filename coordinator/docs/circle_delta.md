@@ -10,6 +10,11 @@ circle_delta.py — what one circle changed, across the registers, in both segme
     python coordinator/circle_delta.py --ot <OT>       one circle, by open time
     python coordinator/circle_delta.py --series        part memory over every closed circle
     python coordinator/circle_delta.py --json          the payload instead of the report
+    python coordinator/circle_delta.py --group band    report on a NAMED group's record
+
+`--group <name>`: read `groups/<name>/` instead of the default group's tree (B117 stage 5).
+Default: unset — the DEFAULT GROUP, which is a rule and not a name (R468, B120 stage 4): the one
+group installed, or the one whose `group.toml` says `default = true`.
 
 ## DESCRIPTION
 

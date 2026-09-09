@@ -29,7 +29,7 @@ report at any time — so it is gitignored beside dream_<OT>.json, whose
 reasoning it shares. Nothing else is written, ever: no register moves, no
 commit, no model call.
 
-CIRCLE_STATS is the constant behind the `circle_stats` setting (R-NEW,
+CIRCLE_STATS is the constant behind the `circle_stats` setting (R405,
 2026-08-30): when true, a live /close prints this report and files the memo;
 when false, /close stays silent and only a by-hand run reports (and then
 writes no file). Default: on. The register overrides it — self/settings.toml,
@@ -44,7 +44,7 @@ exists only after the verifier ran, so the transcript it names is finished
 bytes. At a live /close the report is written (run_verifier) before circle_delta_at_close()
 fires, so the gate passes exactly when the record is complete.
 
-DREAM EVIDENCE IS ONE-DIRECTIONAL, same as already_processed(): a dream/<OT>
+DREAM EVIDENCE IS ONE-DIRECTIONAL, same as circle_is_processed(): a dream/<OT>
 tag (or, in a tree with no git history, work/logs/dream_<OT>.json) means the
 circle WAS processed; absence means "no evidence here", never "not
 processed" — the 2026-08-02 circles were processed by the retired batch path
@@ -137,7 +137,7 @@ def _tag_name(kind: str, ot: str) -> str:
 
 def _find_tag(kind: str, ot: str) -> tuple[str, str | None]:
     """(tag_name, sha-or-None). The tree's own stamped name first — what
-    already_processed() reads — then the plain `<kind>/<OT>` as a READ
+    circle_is_processed() reads — then the plain `<kind>/<OT>` as a READ
     fallback: a worktree of the main repository shares the main record but
     tag_name() stamps it `lab/` (R245 is a rule for WRITERS), so without the
     fallback a worktree run would call every processed circle unprocessed.
@@ -379,7 +379,7 @@ def _processing(ot: str, dream_sha: str | None,
                 dream_files: list[str]) -> dict:
     out: dict = {}
     # circle_history and circle_observation_log live under circles/, not self/ — b857f7c
-    # (R-NEW, 2026-09-07) moved the four one-per-circle registers. DREAM_SELF_FILES above
+    # (R480, 2026-09-07) moved the four one-per-circle registers. DREAM_SELF_FILES above
     # was updated with them and this tuple was not, so both reported total:0 against 7 and
     # 31 real rows: _rows() reads an absent file as [], which is indistinguishable from a
     # register that did not move. topics and best_practices are still self/.

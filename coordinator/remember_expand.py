@@ -152,7 +152,7 @@ def remember_select(records: list[dict], words: set, nids: set,
     score (salience weight + chain depth — the 2026-08-22 build's own
     components), then recency. Migration rows (class-bearing) and records
     with no circle field are not seeds. The CURRENT circle is excluded —
-    its transcript already rides every request via render_messages."""
+    its transcript already rides every request via prompt_messages_render."""
     depth = _chain_depth(records)
     scored = []
     for r in records:
@@ -304,7 +304,12 @@ if __name__ == "__main__":
     import argparse
     ap = argparse.ArgumentParser(description="dry report of tier A matching")
     ap.add_argument("topic")
-    ap.add_argument("--issues", default="", help="comma-separated node ids")
+    # `issue ids`, NOT `node ids` — R279, 2026-08-21: "'node' is graph speak ... do not
+    # surface 'node'. Replace it with the class of node being referenced." A usage line is
+    # named in that ruling's own scope list, and R279's sweep did not reach this module.
+    # audit-register.md #34 (undocumented flag) and #35 (the word), both 2026-09-08.
+    ap.add_argument("--issues", default="",
+                    help="comma-separated issue ids to seed tier A (default: none)")
     a = ap.parse_args()
     ids = [s.strip() for s in a.issues.split(",") if s.strip()]
     labels = remember_labels_read(ids or None)

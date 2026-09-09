@@ -77,6 +77,32 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
+
+# THE DIRECTORY ARGUMENT NOW MOVES THE WHOLE RECORD, NOT JUST THIS ONE PATH —
+# audit-register.md #5, 2026-09-08.
+#
+# The pre-commit hook runs `memory/issue_gate.py "$gdir/issues"` once per non-default group
+# (coordinator/gitrepo.py, the groups/ case). Only ISSUES followed that argument. Everything
+# else this gate reasons from stayed bound to the DEFAULT group: issue_source_read()'s
+# SELF_DIR arm, issue_schema's circle_transcript() roots, and part_roster's speaker tables.
+# So a band node citing `circle_<OT>` or a bare session ref resolved against groups/ifs/,
+# and its speaker markers were normalised with the IFS roster — a wrong answer, not a crash.
+# groups/band/issues/ holds 0 nodes today, so nothing had fired yet; the gate was passing on
+# an empty world and reporting the reassuring answer.
+#
+# GROUP_SET, NOT A --group FLAG, and that is the point: the hook's existing invocation
+# becomes correct with no hook change, because every follower (issue_schema, part_roster,
+# REGISTER_CLASS, this module's SELF_DIR below) rebinds off the one call. An argument that
+# is NOT a group's issues/ still works exactly as before — the man page calls that the
+# preview mode, and it stays.
+if len(sys.argv) > 1:
+    import record_paths as _RP                                 # noqa: E402
+    _resolved = ISSUES.resolve()
+    for _g in _RP.group_present_read():
+        if _resolved == (_RP.group_tree(_g) / "issues").resolve():
+            _RP.group_set(_g)
+            ISSUES = _RP.ISSUES_DIR
+            break
 # One copy, in the schema (2026-08-19, review tier 5 #44) — these were
 # the first of three lockstep clones the R176 sweep had to edit together.
 # Ruled 2026-08-03 (R061): a `--minimal` circle is a real circle with real

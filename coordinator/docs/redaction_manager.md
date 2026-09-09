@@ -49,7 +49,7 @@ minted into the map, so it stays stable across restarts.
 
 ## DEPENDENCIES
 Standard library: `pathlib`, `sys`. Sibling modules: `REGISTER_CLASS` (as `SS`: `register_read`,
-`register_write`, `register_now`), `roster` (as `R`: `TAGS`, `ALT_TAGS`), `identity` (as `ID`:
+`register_write`, `register_now`), `part_roster` (as `R`: `TAGS`, `ALT_TAGS`), `identity` (as `ID`:
 `self_tags()`), `record_paths` (as `P`: `REDACTION`, `REDACTION_MAP`).
 
 ## EXTERNAL FILES

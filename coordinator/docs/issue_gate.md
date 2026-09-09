@@ -6,6 +6,7 @@ issue_gate.py — the invariant gate for the issue graph: verifies claims about 
 ## SYNOPSIS
     python memory/issue_gate.py
     python memory/issue_gate.py <dir>
+    python memory/issue_gate.py groups/band/issues   a group's own record, whole
 
 ## DESCRIPTION
 Where `issue_schema.py` checks that a node document is shaped the way the schema says it should be, `issue_gate.py` checks that the *claims* the graph makes are actually true, by cross-referencing every node against the transcripts it cites. The module's docstring frames this as "everything that was never about syntax," and lists eight invariants it enforces: VERBATIM (every evidence quote appears exactly, byte-for-byte, in the transcript it cites — the docstring cites catching an em-dash silently swapped for a colon), ATTRIBUTION (a quote was actually said by the part it is filed under, catching a case where Self's own words sat filed under a part's name for a month), SPAN (a quote must not run past a speaker-marker boundary into someone else's statement), CLOSURE (a live edge is legal only when both ends are live — a root counts, since a root IS live), ATTESTATION (an attested edge must carry a real quote from a real circle; a proposed one must name who is being asked to confirm it), DIRECTION (a `leads-to`/`narrower-than` edge whose own basis text describes the target as the *derived* thing is pointing backwards), EVIDENCE (a live node must cite something — Self is quoted directly ruling out "possible issues" recorded without evidence), and AGREEMENT (`held_by` and the set of parts actually giving evidence must name the same parties).
@@ -152,11 +153,15 @@ Since the TOML migration (2026-08-03), roughly half of what this file used to ch
     }
 
 ## COMMAND-LINE ARGUMENTS
-- (no arguments): checks the live `issues/` directory (`issue_schema.ISSUES`).
-- `<dir>` (optional, positional): checks the given directory instead, as a preview — nothing is written regardless.
+- (no arguments): checks the default group's live `issues/` directory (`issue_schema.ISSUES`).
+- `<dir>` (optional, positional): checks the given directory instead. Nothing is written regardless.
+
+  **THIS IS NO LONGER ONLY A PREVIEW, and calling it one was the defect.** Since 2026-09-08 (audit-register.md #5) the argument is matched against every group's `issues/`, and on a hit the whole record moves with it — `record_paths.group_set()` fires, so `issue_source_read()`'s `SELF_DIR` arm, `issue_schema`'s `circle_transcript()` roots and `part_roster`'s speaker tables all rebind to that group. The pre-commit hook has run `memory/issue_gate.py "$gdir/issues"` once per non-default group since the `groups/` case landed, and until this change only `ISSUES` followed it: a band node citing `circle_<OT>` or a bare session ref resolved against `groups/ifs/`, and its speaker markers were normalised with the IFS roster. A wrong answer, not a crash. `groups/band/issues/` held 0 nodes, so nothing had fired — the gate was passing on an empty world.
+
+  A directory that is no group's `issues/` still behaves exactly as before: the preview, against an arbitrary directory, with the default group's record behind it.
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.issue_read()`, `S.issue_verify()`); `roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name).
+Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.issue_read()`, `S.issue_verify()`); `part_roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name).
 
 ## EXTERNAL FILES
 Read: every `*nNNNN.toml` file under the target issues directory. For each node's evidence and edge citations, the transcript files they name — `circles/circle_<ref>.md` for a `circle_`-prefixed reference, `work/sandbox/circles/circle_<ref>.md` for a `sandbox_`-prefixed one, or `self/<ref>.md` otherwise (via `issue_source_read()`), cached in-memory per path once read (`_CACHE`) to avoid re-reading a transcript for every evidence entry that cites it.

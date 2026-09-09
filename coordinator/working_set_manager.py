@@ -90,7 +90,7 @@ def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
     decision is the caller's, so a driver that wants the question can still
     call it.
 
-    THE DEFAULT FLIPPED — R-NEW, 2026-08-22, Self ruled: *"issues are important to
+    THE DEFAULT FLIPPED — R301, 2026-08-22, Self ruled: *"issues are important to
     include only when specifically discussing some set of issue and
     issue-relations — so the default ought to be to NOT include them,
     issues=none, rather than issues=all."* Blank used to mean the whole graph.
@@ -116,7 +116,7 @@ def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
     Returns a list of ids, `[]` for the whole graph (`all`), or None for no
     issues (blank or `none`). THE THREE ANSWERS ARE STILL DIFFERENT and the
     types still say so: `[]` means "no FOCUS, project everything", None means
-    "no issues in this circle at all". What changed in R-NEW is only which of
+    "no issues in this circle at all". What changed in R301 is only which of
     them BLANK selects — `none` is now the synonym for blank, and `all` is the
     word that must be typed.
 

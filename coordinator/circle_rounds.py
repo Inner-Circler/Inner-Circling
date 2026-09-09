@@ -22,7 +22,7 @@ RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodie
 This module is the split's KEYSTONE CONSUMER, deliberately last: it
 calls the transport (llm_client.stream_call), the prompt view
 (prompt_build.prompt_messages_render), the annotation system (annotations'
-apply_remember/strip_malformed_annotations/route_annotations) and the
+remember_apply/strip_malformed_annotations/annotation_route) and the
 transcript writers (transcript_store's statement_line/append) — one
 round, four owners, each reached through its own module. MAX_TOKENS /
 MAX_SINCE_SELF / TRUNCATION_MARKER travel with it: the ceiling, the
@@ -53,7 +53,7 @@ from transcript_store import statement_line, circle_transcript_append, circle_tr
 # that hitting it means genuine runaway generation, not a part finishing a slightly
 # long thought. Raised 400 -> 600 (2026-07-26): at 400 a part that overran twice was
 # silently dropped from the circle, and a dropped statement is unrecoverable — the
-# nightly cannot distinguish it from chosen silence. Truncation is an error, not a
+# close's backfill cannot distinguish it from chosen silence. Truncation is an error, not a
 # statement; see part_statement_ask().
 # Raised 600 -> 1000, ruled 2026-08-04. The truncation retry was firing on
 # statements of ~87 words, which is nowhere near 600 tokens of output — this
@@ -149,20 +149,32 @@ def part_statement_ask(client, part: str, blocks: list[dict], transcript: list[d
         if reply.truncated:
             # Do NOT downgrade a truncation to a pass. A part that tried to speak
             # and was cut off would otherwise be indistinguishable from a part that
-            # chose silence — and the nightly's transcript safety net deliberately
+            # chose silence — and the close's own transcript safety net deliberately
             # exempts genuinely silent parts, so nothing downstream would ever catch
             # it. That was the one data-loss path in this pipeline with no net.
             # Keep what was said and mark it: the marker is line-TRAILING, so
             # circle_close_verify.py::parts_that_spoke() still counts the statement, the
             # part still writes a short_term, and dreaming still sees engagement.
             if not reply.empty:
+                # NAMES WHAT ACTUALLY RUNS — audit-register.md #9, 2026-09-08. This said
+                # "review before the nightly runs", and there is no nightly: the tool was
+                # renamed circle_audit.py on 2026-08-19 and the batch shape it implemented
+                # was removed by R228. Worse, the instruction was pointless as well as
+                # wrong — the transcript safety net
+                # (inter_circle.short_term_backfill_step) runs automatically at every live
+                # close, so by the time anyone reads this line the repair has already
+                # happened. Telling the operator to act before a thing that does not exist,
+                # on the one unrecoverable data-loss path in the pipeline, is the worst place
+                # in the tree to be carrying a retired name.
                 seam.fail(f"{PART_TAGS[part]} truncated twice at {MAX_TOKENS} tokens — "
                      f"incomplete statement KEPT and marked in the transcript; "
-                     f"review before the nightly runs")
+                     f"the close's own backfill will not touch it — review it yourself")
                 return RD.message_statement_read(reply.text.strip() + " " + TRUNCATION_MARKER)
             seam.fail(f"{PART_TAGS[part]} truncated twice at {MAX_TOKENS} tokens with "
                  f"no recoverable text — statement LOST; this part may now read "
-                 f"as silent to the nightly")
+                 f"as silent to the close's own backfill "
+                 f"(inter_circle.short_term_backfill_step), which exempts a genuinely "
+                 f"silent part")
             return None, None
     return RD.message_statement_read(reply.text)
 
@@ -172,7 +184,7 @@ def part_statement_ask(client, part: str, blocks: list[dict], transcript: list[d
 # open_transcript, append, the working-set history and the no-trace
 # discard of an unspoken open, statement_line, and the whole resume
 # cluster (render_line/render_transcript/parse_transcript/
-# rebuild_state/load_for_resume) - verbatim, comments included. The
+# circle_transcript_state_rebuild/load_for_resume) - verbatim, comments included. The
 # names this file still calls are imported at the top.
 
 # ------------------------------------------------------------------ scheduler
@@ -213,7 +225,7 @@ BLIND_CLOSE = ("[BLIND ROUND ENDS — the {n} statement(s) above were made witho
 # awareness and potential reply."*
 #
 # The statements already reached every part — they are appended to the
-# transcript and render_messages rebuilds each part's view from it, so the
+# transcript and prompt_messages_render rebuilds each part's view from it, so the
 # One part sees the Child's and another's, attributed, from the next round
 # on. What was missing was the MOMENT: the block arrived as ordinary
 # conversation history, split around a part's own turn, and nothing asked
@@ -455,7 +467,13 @@ def part_token_table(parts: list[str], sysblocks: dict, since_self: dict | None 
 
     L = ["", "  SYSTEM PROMPT, in tokens"
          + ("" if measured else "  (ESTIMATED — see the note below)"), "",
-         "  circle briefing (shared, cached):  "
+         # "circle briefing" UNTIL 2026-09-08 (audit-register.md #26): one printed line
+         # named the block two ways, because its own sub-count below already says
+         # "objectives". <circle_objectives> is the BNF's name for it, and
+         # self/circle_briefing.md — the file the old label came from — retired 2026-08-11.
+         # circle_briefing_build() and the `briefing` parameter keep their names: those are
+         # pinned by the grammar and are not drift. The LABEL was.
+         "  circle identity + objectives (shared, cached):  "
          + " + ".join([shared_line(0, "practices"),
                        shared_line(1, "objectives")]),
          ""]
@@ -482,7 +500,7 @@ def part_token_table(parts: list[str], sysblocks: dict, since_self: dict | None 
 def part_addressed_since(transcript: list[dict], part: str) -> bool:
     """Has `part` been addressed BY NAME since it last spoke?
 
-    `[To: Part]` is the marker; `render_messages` already shows it to every
+    `[To: Part]` is the annotation; `prompt_messages_render` already shows it to every
     listener, so being addressed is a fact the room can see. Only statements
     after this part's own last one count — an address it has already answered
     is spent.
@@ -491,7 +509,7 @@ def part_addressed_since(transcript: list[dict], part: str) -> bool:
     neither half (2026-08-18). Left in, a remember-only turn would set
     `last` and spend an address this part never heard answered, and a
     withheld `to` would read as an address nobody was shown. Same predicate
-    as render_messages/rebuild_state/statements — transcript_store.circle_transcript_is_withheld()
+    as prompt_messages_render/circle_transcript_state_rebuild/statements — transcript_store.circle_transcript_is_withheld()
     exists because these four have to agree and used to do so by accident."""
     tag = PART_TAGS.get(part, "")
     last = -1

@@ -4,7 +4,7 @@ part_dreaming.py — DREAMING: one PART's pass over the circle that just closed.
 
 MOVED OUT OF inter_circle.py, 2026-09-03 (cohesion re-homing stage 11, NEXT.md B99; the
 names are Q-D's — part_dreaming for the per-part pass, circle_synthesis for the circle-wide
-one). inter_circle.py keeps the DRIVER (process_circle: the marker, the capture, the seven
+one). inter_circle.py keeps the DRIVER (circle_process: the marker, the capture, the seven
 calls in parallel, the transaction, the commit, the diagnostic); this module is what one
 part's pass IS. Every function below is the verbatim body it had there; only the file moved.
 
@@ -244,7 +244,7 @@ def _call(system: str, user: str, max_tokens: int, *,
     until then every call this module made was labelled "dreaming", the
     synthesis and the diagnostic included. `record=True` writes the request
     to the circle's capture as it is sent, when a turn log is open (a live
-    /close, or the one process_circle() opens for a hand re-run); `part` is
+    /close, or the one circle_process() opens for a hand re-run); `part` is
     who it is for, None for the circle-wide synthesis. The diagnostic is
     never recorded — it writes nothing, and the ruling left it out.
 

@@ -177,7 +177,7 @@ STATE_GLOBS = [
     ("issues", "*.toml"),
     ("work/manifests", "*.json"),
     ("circles", "*.md"),
-    # circles/ HOLDS THE CIRCLE'S OWN METADATA TOO — R-NEW (2026-09-07): the four registers whose
+    # circles/ HOLDS THE CIRCLE'S OWN METADATA TOO — R480 (2026-09-07): the four registers whose
     # rows are one-per-circle and frozen once written live beside the transcripts they are about.
     # This glob is taught BEFORE any of them moves: a .toml arriving in a directory swept only for
     # *.md leaves the corruption gate silently not reading it, which is the failure this gate exists
@@ -375,12 +375,24 @@ def record_sweep(root: Path = ROOT) -> tuple[list[Finding], int]:
 
 
 def record_report_lines_render(findings: list[Finding]) -> list[str]:
-    """The actionable block a caller prints. One stanza per corrupted file."""
+    """The actionable block a caller prints. One stanza per corrupted file.
+
+    THE CALLER IS main(), AND IT WAS NOT — audit-register.md #15, 2026-09-08. This function
+    had exactly two references in the tree: its own definition and one assertion in
+    test_record_verify.py. main() hand-rolled the same three-line stanza five lines below,
+    so a SHIPPED module — the corruption gate run at every circle open and at
+    circle_audit.py phase 0 — carried two copies of one format with only one of them
+    reachable, and the probe asserted the unreachable one.
+
+    THEY HAD ALREADY DRIFTED, which is the finding rather than the risk: this emitted
+    "  {path}" where main() emitted "  FAIL  {path}", and indented the two detail lines by
+    six spaces where main() used ten. main()'s wording is the one people have actually read
+    at a failed open, so it is what survives here."""
     lines: list[str] = []
     for f in findings:
-        lines.append(f"  {f.path}")
-        lines.append(f"      {f.defect}")
-        lines.append(f"      {f.remedy}")
+        lines.append(f"  FAIL  {f.path}")
+        lines.append(f"          {f.defect}")
+        lines.append(f"          {f.remedy}")
     return lines
 
 
@@ -390,10 +402,8 @@ def main() -> int:
     print(f"Integrity: {seen} operational state file(s) + {rulebooks} rulebook(s)")
     if findings:
         print()
-        for f in findings:
-            print(f"  FAIL  {f.path}")
-            print(f"          {f.defect}")
-            print(f"          {f.remedy}")
+        for line in record_report_lines_render(findings):
+            print(line)
         print(f"\nINTEGRITY FAIL — {len(findings)} corrupted file(s). "
               f"Do NOT open a circle until resolved.")
         return 1

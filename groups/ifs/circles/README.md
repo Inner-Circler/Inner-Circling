@@ -41,6 +41,12 @@ when the file is absent — shipping them changes nothing except that you can
 read the shape before there is anything in it. Written by the coordinator,
 never by hand, exactly like the transcripts.
 
+**A fifth file appears here only if you rule on the issue graph from inside
+a circle.** `commands_<OT>.toml` records the `/issue-...` rulings one circle
+made, beside the transcript that occasioned them. Those verbs are developer
+verbs, so an ordinary circle never produces one; a circle opened with
+`--dev` may.
+
 **The transcript is the record.** Everything downstream — each part's
 short_term, the close report, the safety net that backfills a lost
 short_term — is derived from it. Do not edit these files. If a circle

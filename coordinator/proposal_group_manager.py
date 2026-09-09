@@ -45,7 +45,7 @@ set with the current hash and a `note` saying why — the queue is still
 vetted, just ungrouped, and the next set change retries. Every invalid
 line is dropped with a note, never guessed at.
 
-WRITTEN IMMEDIATELY, NEVER CIRCLE-COMMITTED — vet_pending_proposals()'s
+WRITTEN IMMEDIATELY, NEVER CIRCLE-COMMITTED — proposal_vet()'s
 own pattern for the registers it rules: this file is real on disk the
 moment it changes and sits uncommitted until a human commits it.
 

@@ -183,7 +183,19 @@ def record_dir(base: pathlib.Path, kind: str) -> pathlib.Path:
 
 def record_path(base: pathlib.Path, rel: str) -> pathlib.Path:
     """A record-relative path ("parts/<p>/remember.toml", "self/topics.toml") under `base`,
-    through record_dir() — the group's tree under the real ROOT, flat anywhere else."""
+    through record_dir() — the group's tree under the real ROOT, flat anywhere else.
+
+    ONE CALLER, AND IT IS A SUITE THE HOOK DOES NOT RUN — audit-register.md #16, 2026-09-08.
+    `ui/tests/circle_test.py:251` is the only use in the tree, and that suite is the single
+    ALLOW entry in test_hook_template.py (see gitrepo.py for the measured reason it stays
+    unwired: it does not terminate). So this is public API on the most-imported module in
+    the tree — 80 importers — exercised by nothing that runs.
+
+    KEPT, NOT DELETED, and the reason is the pair above it. record_dir() answers "which
+    directory" and this answers "which file", against the same base-vs-ROOT rule; deleting
+    the second would leave every caller needing a file to re-derive the split by hand, which
+    is exactly the duplication record_dir() was introduced to end. It is one line of logic
+    with no branch of its own. Revisit if circle_test.py is ever retired outright."""
     top, _sep, rest = rel.partition("/")
     d = record_dir(base, top)
     return d / rest if rest else d

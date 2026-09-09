@@ -18,7 +18,7 @@ BLOCK 1'S PRACTICES MOVED HERE TOO, 2026-09-02 (closing the gap this
 docstring itself used to describe): `group_context_block_render()`, below, merges group_shared_read()'s
 text with process_core_prompt_projection.group_best_practices() — the DECISION
 that Block 1 is "core, then a blank line, then the broadcast" lives in the
-one file responsible for Block 1, not in prompt_build.py's assemble_part().
+one file responsible for Block 1, not in prompt_build.py's prompt_part_assemble().
 Before this, group_shared_read() alone was Block 1's core but not its full text,
 which was the one place this module fell short of the exclusive-assembler
 shape role_context.py already achieves for Block 3's narrowcast half.

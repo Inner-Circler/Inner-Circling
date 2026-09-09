@@ -195,7 +195,7 @@ def lands_detect(transcript: list[dict], text: str) -> list[dict]:
 
 def lands_numbers_read(guard) -> set[int]:
     """Which statement numbers already have a lands record THIS circle,
-    read back off disk — has_remembered()'s own discipline, and for the
+    read back off disk — remember_has_written()'s own discipline, and for the
     same reason: the answer must survive a resume, and the file is the
     only thing that does."""
     import remember_manager as RM
@@ -249,10 +249,14 @@ def main() -> int:
     """--demo renders the matcher against a small transcript. There is
     nothing to verify here that test_quote_as_lands.py does not verify
     properly; this exists so the rules can be READ off a run."""
+    # GENERIC SPEAKERS — audit-register.md #1, 2026-09-08. This demo needs two distinct
+    # non-Self speakers and nothing more; it used two real part Tags, and this module SHIPS,
+    # so every bundle carried them. What the demo shows is the MATCHER, which never looks at
+    # a name.
     transcript = [
-        {"speaker": "idealist", "display": "Idealist",
+        {"speaker": "alpha", "display": "Alpha",
          "text": "The dream didn’t stay a dream."},
-        {"speaker": "judge", "display": "Judge",
+        {"speaker": "beta", "display": "Beta",
          "text": "The bar was set before the outcome and kept after."},
         {"speaker": ID.SELF_ID, "display": "Self",
          "text": "The dream didn't stay a dream."},

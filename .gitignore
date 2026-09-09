@@ -164,6 +164,11 @@ work/logs/circle_audit*.log
 # so have never conflicted; they stay until they do.
 work/graph/issue_graph.svg
 work/graph/issue_graph.html
+# Another group's picture, beside the default group's — audit-register.md #6, 2026-09-08.
+# The two literal names above stay: the default group's picture is the one a person has
+# open and the one every document points at.
+work/graph/issue_graph_*.svg
+work/graph/issue_graph_*.html
 work/graph/coordinator_graph.svg
 work/graph/coordinator_graph.html
 work/graph/coordinator_graph.toml

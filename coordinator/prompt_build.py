@@ -35,7 +35,7 @@ import setting_manager as SET             # the length rule's two numbers
 
 # THE FOUR BLOCKS' OWN ASSEMBLERS, 2026-09-02 (docs/CIRCLE_TYPES_DESIGN.md).
 # Re-exported by NAME, unchanged, so every existing external caller
-# (30+ for load_shared, 50+ for build_briefing, plus read_ro/strip_settled/
+# (30+ for group_shared_read, 50+ for circle_briefing_build, plus read_ro/strip_settled/
 # strip_to_identity/identity_tail/PART_OBJECTIVES_EMPTY's own callers —
 # grep-confirmed before this move) keeps working via `prompt_build.
 # group_shared_read`/`prompt_build.circle_briefing_build`/etc. or a
@@ -107,7 +107,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 # THE LENGTH RULE, ruled by the operator 2026-08-28, in his own sentence:
 # "aim for 60 words or fewer and never exceed 150; reformulate down to less
 # than 150 in all cases." process_core.md carries that sentence with these two
-# numbers as placeholders, and load_shared() puts them in.
+# numbers as placeholders, and group_shared_read() puts them in.
 #
 # ONE SOURCE FOR BOTH PLACES THE NUMBER APPEARS, which is the actual fix. The
 # rulebook said "never exceed 100" while circle_rounds.py's truncation retry told a
@@ -163,10 +163,25 @@ def prompt_cache_control_read() -> "dict | None":
 #                      there too, folded in 2026-08-11)
 #                      + best practices. SHARED.
 #   circle_objectives  what we are doing here.
-#                      issues OWED, better options
-#                      AVAILABLE. SHARED.
+#                      issues OWED, the relations
+#                      between them, open topics.
+#                      SHARED.
+#                      (said "better options
+#                      AVAILABLE" until 2026-09-08 —
+#                      better options merged into
+#                      best_practices.toml at R133,
+#                      2026-08-11, and reach BLOCKS
+#                      1 and 3, never this one. This
+#                      comment was the source the
+#                      rulebook's own AVAILABLE
+#                      copied from: audit-register.md
+#                      #24.)
 #   part_identity      who you are. long_term +
-#                      relationships. PER PART.
+#                      the distillate. PER PART.
+#                      (said "+ relationships" until
+#                      2026-09-08; part_relationships
+#                      stopped being a BLOCK 3 source
+#                      2026-08-22, R302.)
 #   part_objectives    what has not stabilised into
 #                      either identity yet: your ask
 #                      fragments, anything addressed

@@ -687,6 +687,25 @@ _BLOCK1_MARKERS = ["## Best practices", "### Better options (for Self)"]
 # reachable.
 _BLOCK2_MARKERS = ["## Issues", "## Relations between issues",
                    "## Topics for this circle's review"]
+# "## Your relationships" IS KEPT, DELIBERATELY, AND IT IS NOT THE SAME CASE AS THE DEAD
+# _BLOCK2_MARKERS ENTRY ABOVE — audit-register.md #19, checked and reversed 2026-09-08.
+#
+# The finding was right about the writer: no BLOCK 3 has carried that heading since
+# 2026-08-22, the register was renamed at R220 and retired that day, and docs/BNF.md records
+# `<relationships_distillate> ::= ε ; GENUINELY UNREAD NOW`. Removing the marker and its
+# branch was the obvious next step, and it is wrong.
+#
+# THESE MARKERS PARSE THE ARCHIVE, NOT THE PRESENT. block_items() runs over every capture
+# under work/prompts/, and work/prompts/2026-08-21_1139/Block3_*_identity.md — five of the
+# seven parts — still contain "## Your relationships", because they were captured while the
+# heading was live. Those files are permanent by ruling (2026-08-01: "absolutely save them
+# locally, verbatim, for each part. Dreaming and synthesis will be watching for patterns to
+# be selected in the coming years"). Drop the marker and the tool silently mis-splits a
+# capture it is the only reader of.
+#
+# WHICH IS THE DIFFERENCE FROM THE B46 CASE ABOVE: that marker's emitter went before the
+# R277 capture layout existed, so NO capture ever contained it — nothing to read. This one
+# has readers on disk. The test suite's two relationship checks assert exactly that.
 _BLOCK3_MARKERS = ["## Your relationships", "## Your best practices",
                    "## REMEMBER"]
 _BLOCK4_MARKERS = ["## What you have chosen to remember"]
@@ -735,6 +754,12 @@ def block_items(name: str, text: str) -> list[dict]:
         if "" in secs:
             items.append({"label": "identity (long_term + distillate)",
                           "chars": len(secs[""])})
+        # UNREACHABLE FOR A NEW CAPTURE, LIVE FOR AN OLD ONE — see _BLOCK3_MARKERS' own note.
+        # No BLOCK 3 has emitted this heading since 2026-08-22, so nothing captured from that
+        # day on takes this branch; work/prompts/2026-08-21_1139's five Block3 files do, and
+        # they are kept permanently. The label below still says "relationship: ", the
+        # pre-R220 word, and that is CORRECT here: it describes bytes written before the
+        # rename, and renaming it would misdescribe the file being read.
         if "## Your relationships" in secs:
             items += _sub_items(secs["## Your relationships"], _HEADING_ITEM,
                                 "## Your relationships (heading)",

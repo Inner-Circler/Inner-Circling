@@ -227,7 +227,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "the first-run dialog then asks again at the next\n"
      "open. 2026-08-23", "command"),
     # THE PART-LIFECYCLE VERBS — A14's creation path, stage 5, 2026-08-23
-    # (docs/Initialization.md §8 reconciling docs/part_commands_design.md).
+    # (docs/Initialization.md §8 reconciling docs/part_commands_design.md (archived)).
     ('/part-add ["<describe>" "<name>"]',
      "invite a NEW part: describe that aspect of yourself\n"
      "(up to 40 words), then its name. Yours alone — a part\n"
@@ -447,7 +447,7 @@ DEV_MIN_CMDS = ("/help", "/status")
 # propose may name — deliberately NARROWER than every real command-pane
 # verb (KNOWN_CMDS): propose-approval runs at checkpoints where no
 # circle may be open (before the NEXT circle's prompts are warmed —
-# vet_pending_proposals()'s own "checkpoint 2"), so /round, /pass,
+# proposal_vet()'s own "checkpoint 2"), so /round, /pass,
 # /close, /abort, /status, /tokens, /issue-evidence-list — anything circle-pane-
 # only or transcript-dependent — would be nonsense to "approve" here.
 # This is dispatch_dev_cmd()'s own accepted-heads set, named once so

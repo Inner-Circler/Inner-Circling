@@ -115,6 +115,13 @@ class Transaction:
     def __init__(self, root: pathlib.Path, run_id: str):
         self.root = pathlib.Path(root).resolve()
         self.run_id = run_id
+        # `work/nightly/` KEEPS THE RETIRED NAME, DELIBERATELY — audit-register.md #29,
+        # 2026-09-08, where two agents disagreed and this is the answer. Its sibling took the new
+        # name at the 2026-08-19 rename (circle_audit.py's lock and baselines are under
+        # work/circle_audit/) and this staging root did not, so it reads as a straggler. It is a
+        # PATH, not prose: renaming it moves a directory every in-flight transaction resolves,
+        # for no reader's benefit — and packaging/scaffold/work/nightly/README.md ships the
+        # explanation to anyone who opens it. Recorded here so the next sweep does not re-open it.
         self.dir = self.root / "work" / "nightly" / run_id
         self.staging = self.dir / "staging"
         self.rollback = self.dir / "rollback"

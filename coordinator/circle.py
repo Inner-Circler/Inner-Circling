@@ -111,7 +111,7 @@ from annotations import (remember_self_apply, REMEMBER_RE,
 from propose_lifecycle import (proposal_unruled_list,      # stage 8, 2026-09-03:
                                proposal_unruled_show,  # the PROPOSE LIFECYCLE
                                proposal_stage)  # left annotations.py
-# The test-surface re-exports this file carried (apply_remember, extract_
+# The test-surface re-exports this file carried (remember_apply, extract_
 # annotations, statement_line, three help_system names, and last the four
 # propose names) are all gone since 2026-09-03: every suite calls the owner.
 import help_system as HS           # phase-2 stage 5 (built 4th)
@@ -357,7 +357,7 @@ DEFAULT_PARTS = _default_parts_read()
 # identity read-layer (read_ro/strip_settled/strip_to_identity),
 # circle_objectives construction (circle_briefing_build + ISSUE_MODEL),
 # the four-block assembly (ORDER/block_order/system_blocks/
-# load_shared) and the transcript-to-messages view (render_messages)
+# group_shared_read) and the transcript-to-messages view (prompt_messages_render)
 # - verbatim, comments included. shared_block()+system_blocks()'s
 # two-step dance was RETIRED 2026-09-02 in favour of one call,
 # prompt_part_assemble() (prompt_build.py) — see role_context.py/
@@ -438,7 +438,7 @@ def issue_graph_redraw() -> None:
 # short_term_collect, _prompt_blocks_changed and circle_resumable_list — MOVED to
 # circle_close.py, 2026-09-03 (cohesion re-homing stage 12, B5/C: that file
 # IS the close step; the verifier it shelled out to is circle_close_verify.py).
-# This file reads them as CC. commit_sandbox, commit_circle and run_verifier —
+# This file reads them as CC. commit_sandbox, circle_commit and run_verifier —
 # the durable close records — are transcript_store's since 2026-08-16.
 
 
@@ -450,14 +450,14 @@ def issue_graph_redraw() -> None:
 
 # --------------------------------------------- the annotation system
 # MOVED to annotations.py, 2026-08-16 (phase 2 stage 3): ASK_RE and the
-# whole bracket grammar (_propose_command_shape/extract_annotations —
+# whole bracket grammar (_propose_command_shape/annotation_extract —
 # PRACTICE_KINDS and BPID_RE went with the six retired keywords,
 # 2026-08-20), REMEMBER's write path (REMEMBER_RE/
 # apply_remember/apply_self_remember), the malformed/retired strip
 # (strip_malformed_annotations; RETIRED_REQUEST_RE and
 # NEAR_MISS_PROPOSED_RE are gone — an unrecognised bracket is dialog
 # text now), live routing
-# (route_annotations), proposal_unruled_list, the close-time coalescing
+# (annotation_route), proposal_unruled_list, the close-time coalescing
 # (_norm_text/
 # proposal_collect/proposal_coalesce/_normalize_edge/
 # proposal_convergence_queue — RETIRED 2026-09-04, B98), the staging writer (
@@ -468,8 +468,8 @@ def issue_graph_redraw() -> None:
 # Vetting MOVED to proposal_vetting.py, 2026-08-16 (phase 2 stage 4, built
 # sixth): graph_now (per Self's ruling — _propose_approve is its one
 # consumer), _practice_describe/_practice_approve/_propose_describe/
-# _propose_approve/_propose_deny and vet_pending_proposals — verbatim,
-# comments included. main() imports vet_pending_proposals at the top;
+# _propose_approve/_propose_deny and proposal_vet — verbatim,
+# comments included. main() imports proposal_vet at the top;
 # the test surface reaches everything else on vetting directly.
 
 
@@ -543,8 +543,9 @@ def main() -> int:
         pass
     ap = argparse.ArgumentParser(description="IFS circle — local coordinator")
     ap.add_argument("--live", action="store_true",
-                    help="write to circles/ and parts/<name>/short_term_<OT>.toml "
-                         "and run coordinator/circle_close_verify.py at close")
+                    help="write to the group's own record — groups/<group>/circles/ and "
+                         "groups/<group>/parts/<name>/short_term_<OT>.toml — and run "
+                         "coordinator/circle_close_verify.py at close")
     ap.add_argument("--dry-run", action="store_true",
                     help="no network, no API key needed; every part passes")
     ap.add_argument("--parts", default=",".join(DEFAULT_PARTS),
@@ -552,8 +553,15 @@ def main() -> int:
                     # while the default has been every part in the roster —
                     # and the roster is now whatever parts/ holds (R123), so
                     # any number written here is wrong for someone.
+                    # NAMES THE MECHANISM THE CODE USES — audit-register.md #18, 2026-09-08.
+                    # It said "all N part(s) in parts/", six lines below the comment stating
+                    # "never the parts/ scan again" (B117 stage 1, R466/R467): the default is
+                    # the DEFAULT GROUP'S MEMBERS, and the scan is only the fallback where no
+                    # group row exists. The path was wrong too — there is no parts/ at the
+                    # root, it is groups/<group>/parts/. The COUNT was always right, being
+                    # computed.
                     help=f"comma-separated part dirs (default: all "
-                         f"{len(DEFAULT_PARTS)} part(s) in parts/). "
+                         f"{len(DEFAULT_PARTS)} member(s) of the default group). "
                          f"A reduced roster is for TESTING — omitted parts are "
                          f"absent from the circle and stay unaware of it.")
     ap.add_argument("--group", default=None,
@@ -1120,7 +1128,7 @@ def main() -> int:
     # was a whole-graph price line plus the "N tokens fewer" comparison: a
     # price nobody paid, bought with a doubled wait. The price of what
     # THIS open actually sends still prints below, every open.
-    # None, NOT [] — R-NEW 2026-08-22 flipped the default to "no issues", and
+    # None, NOT [] — R301 (2026-08-22) flipped the default to "no issues", and
     # --resume does not re-ask. Leaving this at `[]` would have made resume the
     # one path that still silently brought the whole graph in.
     chosen: "list[str] | None" = None
@@ -1178,7 +1186,7 @@ def main() -> int:
     toks = sum(_shared) + _own
     # Three states now, not two — `chosen` is None (no issues), [] (the whole
     # graph) or a list. `if chosen else "whole graph"` read None as the whole
-    # graph, which after R-NEW is the one thing it never means.
+    # graph, which after R301 is the one thing it never means.
     emit("command", "\nstatic prefix, "
           + ("THIS working set" if chosen
              else "no issues" if chosen is None else "whole graph")
@@ -1765,7 +1773,7 @@ def main() -> int:
             issue_cmds.append(c)
             # ECHOED TO THE RECORD, WITHHELD FROM THE ROOM (ruled 2026-08-04).
             # `append` writes the transcript file; the `cmd` flag keeps
-            # render_messages from ever showing it to a part. Both halves are
+            # prompt_messages_render from ever showing it to a part. Both halves are
             # needed: the file is what the gate will verify the edge against.
             transcript.append({"speaker": ID.SELF_ID, "display": SELF_DISPLAY,
                                "text": cmd, "cmd": True})
@@ -2008,7 +2016,7 @@ def main() -> int:
         if args.live:
             emit("command", "     or repair by hand:  circle_audit.py --backfill --commit")
         # else: circle_audit.py --backfill only ever touches a LIVE close's
-        # short_terms (backfill_step() is step 0 of a LIVE process_circle) —
+        # short_terms (short_term_backfill_step() is step 0 of a LIVE circle_process) —
         # a dry-run circle never reaches dreaming, so --resume is the only
         # real repair here.
         PC.PHASES.stop_heartbeat()
@@ -2017,6 +2025,11 @@ def main() -> int:
     if args.live:
         with PC.PHASES.span("close.verifier"):
             circle_close_verifier_run(ot)
+        # THE SPAN LABEL KEEPS THE PRE-B99 NAME, DELIBERATELY — audit-register.md #22,
+        # 2026-09-08. It is not prose: rulings/R470.toml cites `close.commit_circle` verbatim,
+        # with its measured 32.59s, as the phase that must finish before dreaming. Renaming
+        # it to match transcript_store.circle_commit() would silently break that citation,
+        # and a ruling is the one record a rename may not reach.
         with PC.PHASES.span("close.commit_circle"):
             circle_commit(ot, written)
         # PHASE 2 — dreaming then synthesis, synchronous, AFTER the circle's
@@ -2031,10 +2044,10 @@ def main() -> int:
         # THE WHOLE NARRATIVE IS TECHNICAL DETAIL, gated together
         # (2026-09-01) — dreaming/synthesis progress, staging + gate,
         # mid_term refresh, git-commit mechanics, even the failure
-        # diagnosis text process_circle() prints on its own way out. Safe
+        # diagnosis text circle_process() prints on its own way out. Safe
         # to gate as one block because the FAILURE case has its own
         # unconditional signal regardless: the fail() call right below,
-        # which fires whenever process_circle() returns non-zero whether
+        # which fires whenever circle_process() returns non-zero whether
         # or not its own narration was ever shown.
         if ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
                               say=lambda s: emit("command", s) if CS.dev_mode

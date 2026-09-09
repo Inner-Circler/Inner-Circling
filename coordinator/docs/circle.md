@@ -29,7 +29,7 @@ warning, the pre-open vetting checkpoint, the working set and topic questions, t
 open time, the transcript, the prompt capture, the pre-warm, the opening round, the Self> loop,
 and the close (short_terms, verifier, commit, phase 2). Everything it calls lives elsewhere:
 `seam` (the I/O seams), `write_guard`, `transcript_store`, `prompt_build`, `llm_client`,
-`circle_rounds`, `annotations`, `vetting`, `command_surface`, `commands`, `help_system`,
+`circle_rounds`, `annotations`, `proposal_vetting`, `command_surface`, `commands`, `help_system`,
 `quote_as_lands`, `prompt_capture`, `token_count`, `inter_circle`, and the issue-graph code under
 `memory/`.
 
@@ -92,7 +92,7 @@ if (still unset) then { emit llm_client.KEY_MISSING_HELP — how to get a key, w
 if (findings) then { emit each path/defect/remedy; "The circle was NOT opened"; return 2 }
     emit "ok (N files)"
 if (a key-source note applies) then { emit it }
-if (client) then { emit "api check:"; why = preflight_api(client, dry); if why then { emit it; return 2 } else {
+if (client) then { emit "api check:"; why = stream_api_preflight(client, dry); if why then { emit it; return 2 } else {
         emit "ok" } }
 if (not --resume) then {
     openc = circle_state.circle_open_read() under this mode's circles/ (a failure to tell counts as one)
@@ -212,7 +212,7 @@ if (record and the raw line carried a remember) then { append a remember_only en
         record = cmd, or the raw line with malformed annotations stripped when a remember was carried
         quote_as_lands.lands_quote_apply(guard, transcript, cmd)                BEFORE the append (R155/R251)
         append {Self, cmd[, raw]} to the transcript and "[Self]: <record>" to the file
-        route_annotations(Self, cmd, live); since_self = all 0; state["last"] = None
+        annotation_route(Self, cmd, live); since_self = all 0; state["last"] = None
         circle_round_run(...)
     AFTER THE LOOP:
 if (issue_cmds and not aborted) then {
@@ -251,7 +251,7 @@ checkout now.
   `--dry-run` also off the run is refused, not sandboxed.
 - `--dry-run`: no network, no API key needed; every part passes; writes only under
   `work/sandbox/`. Default: off — see the line above.
-- `--parts <dirs>`: comma-separated part directories. Default: every part in `parts/` (the roster).
+- `--parts <dirs>`: comma-separated part directories. Default: every member of the DEFAULT GROUP — the `ifs` row resolved through `group_manager.group_resolve()`, never the `parts/` scan (B117 stage 1, R466/R467, 2026-09-07); the scan is the fallback only where no group row exists, as in a fresh bundle's empty delegate. There is no `parts/` at the repository root either; it is `groups/<group>/parts/`. This bullet said "every part in `parts/` (the roster)" until 2026-09-08 (audit-register.md #18) — while the `--group` bullet three lines below documented the default-group rule correctly, so the page disagreed with itself across two adjacent entries.
   A reduced LIVE roster asks for `yes` unless `--yes`.
 - `--group <name>`: open on a NAMED group — its own `groups/<name>/group.toml` (R468, B120;
   `coordinator/group_manager.py`, `/group-add`; `/group-update <n>` replaces its roles in place,
@@ -265,7 +265,7 @@ checkout now.
 - `--recall-arm off|delivered|withheld`: tier A recall (`remember_expand.py`, `docs/MEMORY_DESIGN.md`)
   — expand topic-matched seeds into each part's BLOCK 4. Default: `off`. `withheld` computes and
   logs the packs without delivering them, the trial's control arm.
-- `--no-prewarm`: skip `prewarm()`, the sequential zero-output-token calls that write each part's
+- `--no-prewarm`: skip `llm_client.stream_prewarm()` — named `prewarm()` here until 2026-09-08, and there is no such function in the tree; `circle.py`'s own `--help` string had it right, so this page contradicted the tool it documents — the sequential zero-output-token calls that write each part's
   cached prompt prefix before the opening round. Default: off (prewarm runs).
 - `--no-blind`: run the PRIOR protocol, a sequential opening round, instead of the default BLIND
   round. Default: off.
@@ -286,9 +286,9 @@ record is non-empty); 2 nothing was opened (refused, cancelled, bad arguments).
 
 ## DEPENDENCIES
 Standard library: `argparse`, `atexit`, `datetime`, `os`, `pathlib`, `random`, `re`, `sys`.
-This project: `identity`, `issue_commands`, `roster`, `record_verify`, `record_paths`, `seam`,
+This project: `identity`, `issue_commands`, `part_roster`, `record_verify`, `record_paths`, `seam`,
 `setting_manager`, `phase_clock`, `write_guard`, `command_surface`, `llm_client`, `prompt_build`,
-`annotations`, `quote_as_lands`, `propose_lifecycle`, `help_system`, `vetting`, `circle_rounds`,
+`annotations`, `quote_as_lands`, `propose_lifecycle`, `help_system`, `proposal_vetting`, `circle_rounds`,
 `commands`, `transcript_store`, `working_set_manager`, `circle_close`, `token_count` (all
 top-level); `issue_prompt_projection`, `circle_state`, `prompt_capture`, `group_manager`,
 `short_term_manager`, `initialization`, `recall_index`, `topic_manager` (the open-time topics
@@ -296,6 +296,12 @@ line; `topics` until 2026-09-03), `inter_circle`, `gitrepo` (imported lazily ins
 Third party, live runs only: `anthropic`, `python-dotenv` (optional).
 
 ## EXTERNAL FILES
+
+**`parts/`, `self/`, `issues/` and `circles/` below are RECORD-RELATIVE**, and the record is the
+group's: they resolve through `record_paths.record_rel()` to `groups/<group>/parts/` and so on
+(R467/B117). None of the four exists at the tree root — a path here is what to look for INSIDE a
+group's tree, not what to type at a shell.
+
 Read: `parts/*/part.toml` (the roster), `process_core.md`, `self/best_practices.toml`,
 `parts/*/mid_term.md`, `issues/*.toml`, `issues/issue_model.md`
 (through `prompt_build`); `.env` (only when `ANTHROPIC_API_KEY` is unset); the transcript on
@@ -317,7 +323,7 @@ Withdrawn on a run that dies before its first statement: the transcript, the wor
 entry, the capture.
 
 ## NETWORK ACCESS
-The Anthropic Messages API, through `llm_client`: one `preflight_api` request, the per-part
+The Anthropic Messages API, through `llm_client`: one `stream_api_preflight` request, the per-part
 pre-warm, every statement and its retry, every short_term and its retry, the token counts of
 `token_count.block_tokens`, and phase 2's own calls. None of it under `--dry-run`. Nothing else.
 
@@ -393,10 +399,10 @@ if (it did not speak) then { emit "did not speak — no short_term"; continue }
         dest = <sandbox|ROOT>/parts/<p>/short_term_<OT>.toml   (.md before 2026-09-04, R434)
 if (dest exists) then { emit "kept — written before the interrupt"; count it written; continue }
         attempt 1, and attempt 2 only if a section is missing or the reply was truncated:
-            text, stop = call(client, part, blocks, render_messages(part, transcript, SHORT_TERM_PROMPT), 5000, dry,
+            text, stop = call(client, part, blocks, prompt_messages_render(part, transcript, SHORT_TERM_PROMPT), 5000, dry,
                     kind="short_term")
 if (a section is still missing) then { emit "FAILED — not written"; count it failed; continue }
-if (splitting off the close remember would lose a heading) then { text, recorded = apply_remember(...) (the strict
+if (splitting off the close remember would lose a heading) then { text, recorded = remember_apply(...) (the strict
         path) }
 else { text, recorded = apply_close_remember(...) }
 if (recorded) then { emit "remember written" }

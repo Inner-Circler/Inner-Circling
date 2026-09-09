@@ -9,7 +9,7 @@ Verbatim move - bodies and comments unchanged, except console output
 goes through `seam.emit` by attribute access (the seam contract).
 
 GRAMMAR AND COALESCING ONLY, deliberately: the vetting loop that RULES
-on what is staged here (vet_pending_proposals and the approve/deny
+on what is staged here (proposal_vet and the approve/deny
 executors) is a separate concern - it EXECUTES commands at approval
 time - and stays in circle.py until its own stage. graph_now() stays
 with it: _propose_approve is its one consumer. The shared constants
@@ -103,8 +103,8 @@ _REMEMBER_OPEN = r"\[remember:"
 # test_circling's copy becomes one ast.literal_eval.
 # "recall" JOINED 2026-08-30 (R400-R402): the parts' private search. Its
 # EXECUTION never reaches this grammar's routing — recall_index.recall_apply
-# strips every recall bracket before extract_annotations runs, exactly as
-# apply_remember does for remember — but the ONE parser must still accept
+# strips every recall bracket before annotation_extract runs, exactly as
+# remember_apply does for remember — but the ONE parser must still accept
 # the form: test_annotation_exemplars holds every process_core.md exemplar
 # to ASK_RE, and a taught spelling the parser refuses is the drift that
 # suite exists to catch.
@@ -131,7 +131,7 @@ ASK_RE = re.compile(
 # annotation_malformed_strip() and nothing else -- apply_recall() is called from
 # circle_rounds.py alone, on the PART path -- so a recall typed at the circle prompt
 # was neither executed nor stripped nor refused. withheld() was False for it,
-# render_messages() showed it to all seven parts as ordinary Self speech, and
+# prompt_messages_render() showed it to all seven parts as ordinary Self speech, and
 # annotation_route() echoed a staging promise nothing keeps. E06's shape.
 #
 # DECLARED AS A SUBTRACTION, the same way command_surface builds
@@ -540,7 +540,7 @@ def remember_strip(text: str) -> str:
 
     THIS IS THE ROOM BOUNDARY, NOT THE RECORD BOUNDARY. Ruled 2026-08-14,
     built 2026-08-18: the bracket is removed from the LIVE CIRCLE_DIALOG —
-    render_messages(), the circle pane, every other entity's view — and
+    prompt_messages_render(), the circle pane, every other entity's view — and
     RETAINED, unredacted, in the transcript file. So this runs on what goes
     to the room, and never on what goes to disk. docs/BNF.md, REMEMBER.
 
@@ -565,7 +565,7 @@ def remember_apply(guard, part: str, display: str, text: str) -> tuple[str, bool
 
     THE RETURNED TEXT IS THE ROOM'S, NOT THE RECORD'S — changed 2026-08-18,
     building the 2026-08-14 ruling. What this returns still goes to
-    transcript.append(), render_messages(), the circle pane and
+    transcript.append(), prompt_messages_render(), the circle pane and
     annotation_route(), all with the bracket gone. What goes to the TRANSCRIPT
     FILE no longer comes from here at all: the caller keeps its own raw text
     and writes THAT, bracket intact, so Coordinator's durable record is
@@ -579,7 +579,7 @@ def remember_apply(guard, part: str, display: str, text: str) -> tuple[str, bool
     Only the file-line write, which now takes the raw text, sits outside
     that guarantee, and by construction that string reaches no entity.
 
-    THE CAP IS PER PART PER CIRCLE, resume-safe: has_remembered() reads
+    THE CAP IS PER PART PER CIRCLE, resume-safe: remember_has_written() reads
     remember.toml back off disk rather than the transcript. That was
     originally forced — the annotation survived nowhere else — and since
     2026-08-18 it survives in the transcript FILE, so the choice is now
@@ -624,7 +624,7 @@ def remember_apply(guard, part: str, display: str, text: str) -> tuple[str, bool
 #
 # THE PRICE OF LENIENCE IS AN ORDERING RULE, and it is stated in
 # process_core.md, in both the annotation and the standing guidance
-# beside it (R-NEW 2026-08-22): the remember goes LAST,
+# beside it (R300, 2026-08-22): the remember goes LAST,
 # after the four sections. short_term_collect() re-checks the four
 # headings AFTER the split and falls back to the strict ASK_RE parse if
 # any went missing, so a part that puts it in the middle loses the
@@ -656,7 +656,7 @@ def remember_close_apply(guard, part: str, display: str,
     short_term reply. Returns (short_term_text, recorded).
 
     SAME CAP, SAME REGISTER, SAME PRIVACY as the in-round path above —
-    has_remembered() is the single answer to "has this part already used
+    remember_has_written() is the single answer to "has this part already used
     its one this circle", so a part that spent it in a round has none
     left at close, and the close bracket is dropped with a note. Written
     with remember_manager.AUTHORED_WORD_CAP rather than RECORD_CAP: this is the
@@ -699,11 +699,11 @@ def remember_self_apply(guard, display: str, text: str) -> tuple[str, bool]:
 
     WRITES, as of 2026-08-17 (B48) — RULED 2026-08-17 (R206): the
     destination is self/remember.toml, mirroring a part's own file.
-    remember_manager.py's part-parametrized add()/has_remembered() ALREADY
+    remember_manager.py's part-parametrized add()/remember_has_written() ALREADY
     generalize to Self (remember.SELF = "self", added 2026-08-15 with the
     R193 self.md migration — this function is the first LIVE caller of
     that path, not a second implementation of it). Same cap discipline a
-    part gets: has_remembered(SELF, guard) reads self/remember.toml back
+    part gets: remember_has_written(SELF, guard) reads self/remember.toml back
     off disk, resume-safe, same as a part's; a second use this circle
     warns and is dropped, same message shape remember_apply() gives a
     part.
@@ -785,7 +785,7 @@ def annotation_malformed_strip(text: str, display: str,
     Emits its OWN warning here, inline, rather than leaving it to
     annotation_route() — the same shape remember_apply() already uses for its
     "second REMEMBER — dropped" notice. annotation_route() runs AFTER this
-    (same ordering as apply_remember/apply_self_remember: strip first,
+    (same ordering as remember_apply/apply_self_remember: strip first,
     THEN append, THEN route), so by the time it sees the text a malformed
     annotation is simply gone — which is why its own malformed-detail branches
     are removed in the same change, not left as dead code that can no

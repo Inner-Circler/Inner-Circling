@@ -450,7 +450,7 @@ REGISTERS: dict[str, dict] = {
         # NO CAP: nothing upstream bounds an OBSERVATION section, so a cap
         # here would fail on legitimate output rather than enforce a
         # contract. See circle_observation_manager.py's own note.
-        # TWO PREFIXES, AND ONLY HERE — R-NEW (2026-09-07): CIRCLE_OBSERVATION became
+        # TWO PREFIXES, AND ONLY HERE — R481 (2026-09-07): CIRCLE_OBSERVATION became
         # CIRCLE_OBSERVATION and the id change is FORWARD-ONLY, so SO-0001..SO-0031 stay
         # as written and CO- is minted from the next close. The FIRST entry is what the
         # manager mints; the rest are accepted spellings. A single string still works
@@ -519,7 +519,7 @@ def _fixed_point(data: bytes, spec: dict) -> bool:
 
 def _prefixes(prefix) -> tuple:
     """A spec's id_prefix as a tuple. A single string is the shape every register but
-    CIRCLE_OBSERVATION uses; the FIRST entry is what the manager mints (R-NEW, 2026-09-07)."""
+    CIRCLE_OBSERVATION uses; the FIRST entry is what the manager mints (R481, 2026-09-07)."""
     return (prefix,) if isinstance(prefix, str) else tuple(prefix)
 
 
@@ -576,7 +576,7 @@ def register_verify(rel: str, data: bytes | None,
         dupes = sorted({i for i in ids if ids.count(i) > 1})
         if dupes:
             out.append(M._f("FAIL", "DUPLICATE-ID", rel, f"reused: {dupes}"))
-        # A SPEC MAY NAME SEVERAL ACCEPTED PREFIXES — R-NEW (2026-09-07), for
+        # A SPEC MAY NAME SEVERAL ACCEPTED PREFIXES — R481 (2026-09-07), for
         # CIRCLE_OBSERVATION's forward-only SO- -> CO- change. Every prefix is
         # accepted on a row that already exists; the manager mints the first.
         pres = _prefixes(pre)

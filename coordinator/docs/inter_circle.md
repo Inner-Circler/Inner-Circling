@@ -8,6 +8,11 @@ inter_circle.py — what happens between circles: each part dreams, then one pas
 
     python coordinator/inter_circle.py --ot 2026-08-15_1900 --live    process it
     python coordinator/inter_circle.py --ot 2026-08-15_1900           rehearse it
+    python coordinator/inter_circle.py --ot <OT> --group band --live  a named group's re-run
+
+`--group <name>`: process a circle of `groups/<name>/`'s record. Parsed from argv by hand, not by
+argparse (`:910-911`), which is why a flag scan that reads `add_argument` calls alone will miss it.
+Default: unset — the DEFAULT GROUP, which is a rule and not a name (R468, B120 stage 4).
 
 ## DESCRIPTION
 
@@ -62,7 +67,7 @@ The guard is careful in one specific direction: it must never answer "not proces
         print the usage line and return 1.
     }
     Take the open time that follows it.
-    Run process_circle for that circle, live only if "--live" is present.
+    Run circle_process for that circle, live only if "--live" is present.
 
 ## COMMAND-LINE ARGUMENTS
 
@@ -73,7 +78,7 @@ The guard is careful in one specific direction: it must never answer "not proces
 
 ## DEPENDENCIES
 
-Every register module it writes through — `remember_manager`, `topic_manager`, `circle_history_manager`, `circle_observation_manager`, `practice_manager` — plus `part_mid_term_manager` for the re-derivation, `TRANSACTION_CLASS` for staging, `backfill` for step 0, `part_dreaming` and `circle_synthesis` for the two model passes, `llm_client` and `LLM_response_disassembler`, `setting_manager`, `phase_clock`, `prompt_capture`, `roster`, `REGISTER_CLASS`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
+Every register module it writes through — `remember_manager`, `topic_manager`, `circle_history_manager`, `circle_observation_manager`, `practice_manager` — plus `part_mid_term_manager` for the re-derivation, `TRANSACTION_CLASS` for staging, `backfill` for step 0, `part_dreaming` and `circle_synthesis` for the two model passes, `llm_client` and `LLM_response_disassembler`, `setting_manager`, `phase_clock`, `prompt_capture`, `part_roster`, `REGISTER_CLASS`, and `gitrepo` for the marker tag. `concurrent.futures` runs the parts in parallel. The issue-graph code under `memory/` is on the import path.
 
 ## EXTERNAL FILES
 

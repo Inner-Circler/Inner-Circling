@@ -75,8 +75,13 @@ alt_tags = []
 # contradict R132 in their own tree.
 #
 # THE RENDER SENTENCES ARE DRAFTS, for the operator to rewrite in the Soul's
-# voice; the measurement in the comment above (20/25 against 1/25) is why they
-# are first person and why they are sentences rather than a table.
+# voice. They are first person, and sentences rather than a table, because a
+# part reads them as its own knowledge of the person it belongs to — not as a
+# record it has been handed.
+#
+# EACH ONE IS SENT. An answered question with a `render` travels in BLOCK 3 on
+# every turn of every circle, so delete a sentence here to stop that answer
+# leaving the machine, and see README.md's Privacy section.
 
 [context]
 purpose = "Tell me a bit about where you come from"

@@ -341,13 +341,13 @@ def proposal_vet(where: str, live: bool,
     WRITTEN IMMEDIATELY: each approve/deny calls its own register's
     SS.register_write() as it happens, one row at a time. Neither
     self/best_practices.toml nor self/proposals.toml is ever in
-    commit_circle()'s path list — nothing here commits either, at any
+    circle_commit()'s path list — nothing here commits either, at any
     checkpoint — so a ruling made here is a real, valid file on disk the
     moment it is made, sitting uncommitted until a human commits it,
     same as any direct /practice-add. A COMMAND-kind propose IS NOT AN
     EXCEPTION TO THIS, though its approve_fn may ALSO write issues/*.toml
     (via issue_commands.issue_command_apply(), for an issue-relationship-add shape) or run some
-    other command's own effect — issues/ is not in commit_circle()'s path
+    other command's own effect — issues/ is not in circle_commit()'s path
     list either, the same as every other register here, and neither is a
     direct-typed `/issue-relationship-add`'s own edge write: a graph ruling
     has always sat uncommitted after /close, by the same design

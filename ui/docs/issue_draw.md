@@ -95,7 +95,9 @@ Read: every `issues/*nNNNN.toml` file under the given directory (via `issue_sche
 
 Also read, by `issue_draw_is_stale()` under `--if-stale`: the mtimes of `issue_graph.svg` and `issue_graph.html` themselves, and the mtimes of the same `issues/*nNNNN.toml` glob `issue_draw_read()` walks. Neither file existing counts as stale.
 
-Written: `issue_graph.svg` and `issue_graph.html` in the output directory — the NAMED constant `OUT_DIR` = `<repo>/work/graph/` when drawing from `issues/`, or beside the given `graph.json` when drawing from a snapshot. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
+Written: `issue_graph.svg` and `issue_graph.html` in the output directory — the NAMED constant `OUT_DIR` = `<repo>/work/graph/` when drawing from `issues/`, or beside the given `graph.json` when drawing from a snapshot.
+
+**THE STEM IS PER GROUP since 2026-09-08 (audit-register.md #6).** `issue_draw_out_bind()` matches the `issues/` argument against every group's tree and points `OUT_SVG`/`OUT_HTML` at that group's own pair: the DEFAULT group keeps the plain `issue_graph.*` — it is the picture a person has open and the one `.gitignore` names literally — and any other group draws `issue_graph_<name>.*` beside it. Still ONE folder; R365 is unchanged. Before this, one pair of filenames served every group, so a band close overwrote the IFS picture, and `issue_draw_is_stale()` compared THIS group's newest source mtime against the OTHER group's picture — able to answer "not stale" and skip the draw entirely. The binding happens BEFORE the staleness question, because that question reads both constants. A directory that is no group's `issues/` leaves the default names alone. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
 
 ## NETWORK ACCESS
 None. The generated HTML is deliberately self-contained (SVG inlined) so it needs no network access to view either.
@@ -329,7 +331,7 @@ note pointing at the toggle.
 **Run at a close, 2026-08-27 (R365).** `coordinator/circle.py::issue_graph_redraw()`
 shells out to `python ui/issue_draw.py <record_rel("issues")>/ --if-stale` — the
 CURRENT group's issue directory, `groups/ifs/issues/` by default — at every LIVE
-`/close`, positioned immediately after `vetting.proposal_vet()` and
+`/close`, positioned immediately after `proposal_vetting.proposal_vet()` and
 immediately before `circle_close_mark()`. That position is the whole
 design: both routes by which a circle moves the graph are complete by then
 — the circle's own `issue_cmds` batch, applied a few statements earlier, and

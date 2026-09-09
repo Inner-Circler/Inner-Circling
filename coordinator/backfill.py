@@ -16,7 +16,7 @@ fed to dreaming unrepaired and unflagged.
 WHY IT IS ITS OWN MODULE. B54, 2026-08-19. The detect half lived in
 circle_audit.py's phase 2 and the repair half in its phase 3, entangled with
 that file's Run/phase/transaction machinery and callable by nothing else — and
-NOTHING CALLED EITHER on the path that now matters. `process_circle()` runs
+NOTHING CALLED EITHER on the path that now matters. `circle_process()` runs
 synchronously at every live `/close` (B3/R189) and did neither, with dreaming
 as the first thing it does. The logic moved here so both drivers share ONE
 implementation: circle_audit at audit time, inter_circle as step 0 of every

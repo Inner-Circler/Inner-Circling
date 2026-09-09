@@ -143,7 +143,7 @@ Every record in file order; and the record with the latest date, chosen by sorti
     if (nothing is left) then { raise ValueError — an empty observation is
         nothing to record. }
     Work on a deep COPY; this function writes nothing.
-    Mint "SO-" plus next_id, zero-padded to four digits; stamp the UTC time,
+    Mint "CO-" plus next_id, zero-padded to four digits; stamp the UTC time,
         the circle, and the verbatim text.
     if (a salience was given) then { record it. }
     if (continues was asked for and the register is not empty) then {

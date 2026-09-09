@@ -52,8 +52,12 @@ RECORD SHAPE:
                  deleted)
     author       backfilled from sources/circle at resolution, same
                  _provenance()-shaped pattern every register here uses
-    sources      STAGING ONLY: [display, ...], every speaker whose
-                 last stance converged on this proposal this circle
+    sources      PERMANENT since 2026-09-08 ("Structured"): [display, ...],
+                 every speaker whose last stance converged on this
+                 proposal in the circle it was staged in. Staging-only
+                 until then, flattened into `author` and dropped — which
+                 left "which members converged on this?" answerable only
+                 by parsing a sentence. The list stays a list.
     circle       STAGING ONLY: the circle_<OT> transcript ref of the
                  circle this was staged in — stamped in the prefixed
                  form by proposal_row_stage() itself (circle_ref(), R243 2026-08-19;
@@ -63,8 +67,11 @@ RECORD SHAPE:
     proposed_at  STAGING ONLY: ISO timestamp
 
 Staging fields are dropped the moment a row resolves — a settled row
-carries only id/kind/text/state/author, same discipline as every other
-propose-class register in this project.
+carries id/kind/text/state/author AND `sources`, the last of these since
+2026-09-08 ("Structured"). Every other propose-class register here shares
+the discipline and the exception: the LIST is kept because prose degrades
+a list, and `circle`/`proposed_at` are single values `author` and `state`
+already carry.
 
 APPROVAL'S GRAPH-WRITING SIDE (for a "command" row shaped like
 issue-relationship-add) lives in circle.py's `_propose_approve()`, not here — this
@@ -105,7 +112,21 @@ import record_paths as _RPf                                                # noq
 _RPf.group_follow(_proposals_rebind)
 ORDER = ("id", "kind", "text", "state", "author", "sources", "circle",
          "proposed_at")
-STAGING_ONLY = ("sources", "circle", "proposed_at")
+# `sources` SURVIVES RESOLUTION — ruled 2026-09-08, VERBATIM: "Structured".
+#
+# It was dropped here with `circle` and `proposed_at`, after _provenance() flattened both into
+# the `author` string ("Alpha, Beta in circle_2026-09-08_1234"). That is lossy in the one
+# direction provenance is ever used: asking which speakers converged on something, across
+# circles, meant parsing prose. The 1:1 WORDING was never at risk — every row keeps its own
+# `text`, tombstoned and never deleted, and the coalesce enacts the primary member's own words
+# rather than model-merged prose — but the SOURCE LIST was structured only until the moment
+# the row was ruled on.
+#
+# `circle` AND `proposed_at` STILL GO. The circle is preserved in `author` and is a single
+# value a sentence carries perfectly well; `proposed_at` is staging bookkeeping, and the
+# resolution timestamp lives in `state`. Only the field that was a LIST — the one prose
+# genuinely degrades — is kept.
+STAGING_ONLY = ("circle", "proposed_at")
 
 
 def _now() -> str:

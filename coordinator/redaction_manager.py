@@ -20,7 +20,7 @@ pane, never in any lower tab."* "The original design" is a design document
 from a separate, unrelated personal project (a diary app) this project's
 own `ui/ticker/` flavor adapted a UI from, but whose fuller redaction
 model (a curated alias registry with stable reversible ids) was dropped
-when that flavor shipped (`docs/TICKER_RESEARCH_DESIGN.md`).
+when that flavor shipped (`docs/TICKER_RESEARCH_DESIGN.md (archived)`).
 `ui/ticker/bridge.py`'s own `do_redact()`/`_redact_one()` stays the
 simpler, fixed version it always was; this module is the fuller model,
 for `ui/circling.py` alone.

@@ -126,7 +126,7 @@ if ("--stats" is in argv) then {
 
 ## DEPENDENCIES
 Standard library: `datetime`, `hashlib`, `json`, `pathlib`, `re`, `sys`,
-`threading`. Sibling modules: `roster` (as `R`, for `R.TAGS` → `PART_TAGS`
+`threading`. Sibling modules: `part_roster` (as `R`, for `R.TAGS` → `PART_TAGS`
 — `PART_TAGS_BY_DIR`, a matching alias for `R.TAG_BY_DIR`, was deleted
 2026-09-01, audit-register.md #30: nothing in this module read it), `record_paths`
 (`ROOT`, `SANDBOX`), `atomic_write` (`record_atomic_write`). No third-party packages, no external

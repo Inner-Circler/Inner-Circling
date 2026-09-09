@@ -182,7 +182,7 @@ def system_git_is_main_checkout() -> bool:
 # The stamp R245 ruled, 2026-08-19: a lab tree's tags are STAMPED as practice,
 # never skipped. A lab exists to prove the real thing works, and a lab that
 # skips tagging cannot rehearse the close/process path at all — which is the
-# path already_processed() lives on and the one most worth rehearsing.
+# path circle_is_processed() lives on and the one most worth rehearsing.
 LAB_SEGMENT = "lab"
 
 
@@ -195,7 +195,7 @@ def system_git_tag_name_read(*parts: str) -> str:
     WRITE. The tag namespace is the one thing a worktree does not isolate —
     files are contained by construction (record_paths.ROOT derives from __file__),
     refs are not, because `.git` is shared and every worktree reads one
-    namespace. already_processed() is the double-dream guard and it reads
+    namespace. circle_is_processed() is the double-dream guard and it reads
     these refs by EXACT name, so an unstamped lab tag would make the MAIN
     tree refuse to process a real circle — a refusal that would not look like
     a lab problem when it happened.
@@ -441,8 +441,38 @@ def system_git_attributes_ensure(log) -> None:
 # every path the hook names exists, and asserts no suite defines main()
 # without calling it (ui/tests/circle_test.py had 518 lines of assertions behind
 # an uncalled main() for its whole existence). ui/tests/circle_test.py is the one
-# ALLOW entry: it runs now, but 16 of its checks are stale against B51(3)
-# and R202 and it is wired only once those are realigned.
+# ALLOW entry, and its reason is REPLACED, 2026-09-08 (audit-register.md #16/#42).
+#
+# THE OLD REASON HAD EXPIRED. It read "16 of its checks are stale against B51(3) and R202
+# and it is wired only once those are realigned" — and B51 is closed; it no longer appears
+# in NEXT.md at all. An ALLOW entry whose condition has been met reads as an oversight, and
+# the next person to check would have wired it.
+#
+# I CLAIMED IT DID NOT TERMINATE. THAT WAS WRONG, and the correction is the useful part.
+# Written 2026-09-08 on a ten-minute run that produced no output; the operator then ruled
+# "diagnose and wire", and the diagnosis says otherwise. (The name that stood here instead of
+# "the operator" is why this file's own shipped-surface gate refused the first commit of this
+# comment — sanitize.py, 1 HIGH, owner-name. R253 working exactly as ruled, on the file that
+# carries the hook that runs it.)
+# The suite prints its plan and then paces itself
+# at 10-20 SECONDS PER LINE, by design, over 93 scripted lines — 15 to 31 minutes, silent in
+# between. Ten minutes was simply not a long enough wait. `--fast` collapses the delay and is
+# the mode to iterate in; its own usage block says so at :10-11.
+#
+# THE REAL REASON IS THE ONE THIS ENTRY GAVE ALL ALONG: its checks are stale. Run with
+# --fast, 20 pass and 15 FAIL — against the "16 of its checks are stale" this entry has said
+# since it was written. What had expired was only its PRECONDITION ("wired once B51(3) and
+# R202 are realigned"): B51 is closed, and the realignment is still owed.
+#
+# IN A WORKTREE IT NEEDS ONE MORE THING FIRST, and this is documented friction rather than a
+# defect: checkout gives every work/sandbox/circles/ transcript a new mtime, so circle_state
+# reports several circles open and the run times out waiting for "transcript: ". Age them —
+# `.venv/Scripts/python.exe .claude/skills/run-inner-circling/driver.py age-transcripts` —
+# exactly as test_circle_engine.py needs.
+#
+# Its own header (ui/tests/circle_test.py:28-52) documents a SEPARATE reason two verbs are
+# excluded from it: /issue-apply and the node-id-first /issue status shell out with no
+# --dry-run and no root override, so nothing in-process can redirect them at a scratch copy.
 #
 # Also v61: the two `if [ -f <new-name> ]; else <old-name>` legs are gone.
 # v52 scoped them to "the merge window ... a v53 may drop it"; the mark is
@@ -592,7 +622,7 @@ def system_git_attributes_ensure(log) -> None:
 # spends money and overwrites the publish gate's record kept an unimplemented
 # --help — nothing ran a probe over its arguments because there was no probe
 # and nothing would have invoked one.
-HOOK_MARK = "# inner-circling pre-commit v164"
+HOOK_MARK = "# inner-circling pre-commit v169"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -686,7 +716,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # v15 (v14 was superseded same-session, before ever being committed) adds
 # test_remember_manager.py, test_strip_malformed_markers.py, and test_self_mark.py
 # to the SAME case block v13 fixed — all three exercise
-# circle.py's annotation system directly (apply_remember/
+# circle.py's annotation system directly (remember_apply/
 # apply_self_remember/extract_markers/route_markers/
 # strip_malformed_markers/apply_self_mark/record_mark) and the first was
 # missing from the trigger for the same reason v13 named: circle.py is
@@ -1005,7 +1035,7 @@ PRE_COMMIT = f'''#!/bin/sh
 # v33 ADDS coordinator/prompt_build.py to the block-overlap trigger —
 # phase 2 stage 2 (2026-08-16) moved the prompt's construction (the
 # identity read-layer, minimal case, circle_briefing_build, the four-block
-# assembly, render_messages) out of circle.py, and prompt blocks'
+# assembly, prompt_messages_render) out of circle.py, and prompt blocks'
 # sources are exactly what that case's checker guards. Also joins the
 # practice/annotation trigger: the assembly reads the practice blocks.
 #
@@ -1444,7 +1474,7 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     run coordinator/tests/test_circle_history_manager.py
     # test_remember_manager.py/test_strip_malformed_markers.py were missing from
     # this list — both exercise circle.py's annotation system directly
-    # (apply_remember/apply_self_remember/extract_markers/route_markers/
+    # (remember_apply/apply_self_remember/extract_markers/route_markers/
     # strip_malformed_markers) and belong exactly where circle.py already
     # triggers this case. Added 2026-08-12 alongside the E06 bracket-
     # annotation fix these two files cover.
@@ -1525,6 +1555,13 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     run coordinator/tests/test_proposal_vetting.py
     run coordinator/tests/test_issue_commands.py
     run coordinator/tests/test_issue_status_cmd.py
+    # v168, audit-register.md #3 (2026-09-08). test_issue_status_cmd.py asserts commands.py's
+    # ORCHESTRATION with subprocess.run patched, and says so in its own header — so the writer
+    # below it (the rename, the status field, the history line, the untracked-file fallback) was
+    # executed by nothing. This suite drives it for real on a synthetic node in a temp directory
+    # under work/, and asserts the name and the field move TOGETHER, which is the half-apply the
+    # gap could ship.
+    run coordinator/tests/test_issue_status_write.py
     # v51 closes v49's recorded debt: test_help_system was claimed by
     # v35's comment and invoked by nothing — 77 checks, run green before
     # wiring, riding the case its subject (help_system.py) already
@@ -1600,7 +1637,7 @@ esac
 # (project_stats.md) is deleted; the tool stays and prints on demand.
 # Removed rather than repathed: there is nothing left to point it at.
 
-# v72, R-NEW 2026-08-23: `work/pending/` joins this trigger. A branch's ruling
+# v72, R320 (2026-08-23): `work/pending/` joins this trigger. A branch's ruling
 # and progress note live THERE now, not at the two logbooks' tails, so a commit
 # that adds one must reach the checker that validates it -- otherwise the
 # first reading of a malformed pending entry is the merge, which is the one
@@ -1744,8 +1781,45 @@ case "$FILES" in *prompts/*)
     run coordinator/prompt_capture.py --verify
 esac
 
-case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*)
+# THE CLOSE STEP GETS A CLOSE RUN — audit-register.md #3, 2026-09-08.
+#
+# ui/tests/test_circle_engine.py is the ONLY suite in the tree that drives a full /close:
+# short_terms collected and written, the .toml located and parsed back with all four
+# sections, the close path reaching commit_sandbox. It rode `*ui/*|*coordinator/seam.py*`
+# and nothing else — so a commit to coordinator/circle_close.py, WHICH IS THE CLOSE STEP,
+# fired test_close_marker, test_short_term_manager, the four system_*_verify gates and two
+# packaging scripts, and not one collection of a short_term. A commit to circle.py fired
+# 50-odd suites and none of the five UI ones.
+#
+# test_close_marker.py does import circle_close and call it for real, which is why
+# test_hook_template's property 5 accepts it — but what it asserts is the marker/report
+# DECISION TABLE. This is exactly the blind spot that meta-gate documents about itself:
+# "A SECONDARY-SUBJECT CLAIM IS A CLAIM, and nothing here checks one."
+# SUBJECT_OF["test_circle_engine.py"] is "circling", so circle.py and circle_close.py are
+# the secondary subject nothing verified.
+#
+# ITS OWN CASE, NOT AN ADDITION TO THE ui/ ONE, and the cost is why. That case runs FIVE
+# suites including two more real dry-run circles; hanging it off every circle.py commit
+# would make the commonest commit in this tree noticeably slower for four suites nobody
+# asked for. This runs the one that drives a close.
+case "$FILES" in *coordinator/circle_close.py*|*coordinator/circle.py*)
+    NOTE="  pre-commit: the close step or its driver touched — running a real dry-run close"
+    run ui/tests/test_circle_engine.py
+esac
+
+case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*htmlify.py*)
     NOTE="  pre-commit: code touched — compiling and linting every module"
+    # THE work/tools LEG NOW NAMES ITS GLOB — audit-register.md #8, 2026-09-08. It read
+    # `*work/tools/*`, which fires on all 24 .py files in that directory, while the SCOPE
+    # below reaches 2. So 22 files triggered a linter that never looked at them, and nothing
+    # else compiles them either: work/ is deliberately outside CODE_DIRS, so
+    # file_line_endings_verify.SCOPE_DIRS does not reach them. The trigger was NARROWED
+    # rather than the scope widened, which is what the v148 comment below already argues
+    # for: a lint gate that fails on a file the change never touched is a gate someone
+    # bypasses. This is the v50 defect one directory later — a trigger claiming coverage the
+    # scope does not deliver — and the agreement probe could not see it, because it compared
+    # DIRECTORY NAMES and discarded the glob. It compares the glob now.
+    #
     # v148, B113: work/tools/ joins the TRIGGER because a LEG joined system_lint_verify's
     # SCOPE — ("work/tools", "*htmlify.py"), the tool and its probe and nothing else in
     # that directory (memory_probe.py carries an unused import today, and a whole-directory
@@ -1845,6 +1919,18 @@ esac
 case "$FILES" in *coordinator/circle.py*|*coordinator/circle_close.py*|*coordinator/tests/test_close_marker.py*)
     NOTE="  pre-commit: circle.py's open-time failure reports touched"
     run coordinator/tests/test_close_marker.py
+esac
+
+# v167, audit-register.md #4 (2026-09-08). discard_unspoken() had ZERO references in the tree
+# outside its own definition — its two primitives were unit-covered, which is what made the
+# ASSEMBLY's gap invisible. The suite drives circle.py's real pre-warm failure path with a stubbed
+# stream_prewarm (reached in dry-run: it takes args.dry_run as a parameter) and asserts no
+# transcript survives. It is triggered on circle.py itself because the mechanism IS circle.py's,
+# and on transcript_store.py because circle_transcript_discard_empty is what it calls.
+case "$FILES" in *coordinator/circle.py*|*coordinator/transcript_store.py*\
+|*coordinator/tests/test_discard_unspoken.py*)
+    NOTE="  pre-commit: the no-trace discard touched"
+    run coordinator/tests/test_discard_unspoken.py
 esac
 
 # v134, B96 (R434, 2026-09-04): the SHORT_TERM record is .toml, through ONE
@@ -2051,6 +2137,13 @@ case "$FILES" in *ui/*|*coordinator/seam.py*)
     # unstaged afterwards; that is the harness reporting what moved, not a
     # failure.
     run ui/tests/test_circling_selftest.py
+    # v168, audit-register.md #7 (2026-09-08). ui_main_loop's `engine is not None` branch — the
+    # product path since R314 — had 164 of 165 lines unhit, and the selftest asserted one property
+    # about it by READING ITS SOURCE, because the only suite reaching main() replaces the loop
+    # with `lambda: 0`. This one calls it with a fake engine and patched module-level I/O, so the
+    # alternate-screen contract (entered, and restored in the finally EVEN ON AN EXCEPTION) is
+    # executed rather than read.
+    run ui/tests/test_ui_main_loop.py
     run ui/tests/test_circle_engine.py
     # v152, B117 stage 6: the same engine on the second GROUP — opened and closed in dry-run,
     # groups/ifs/ proved byte-identical after. Its subject is circling.py, so it rides here;
@@ -2142,11 +2235,28 @@ case "$FILES" in *coordinator/circle_delta.py*|*coordinator/circling_verify.py*\
 |*coordinator/remember_expand.py*|*coordinator/remember_prompt_projection.py*\
 |*coordinator/ruling_migrate.py*|*coordinator/token_count.py*\
 |*coordinator/topic_prompt_projection.py*|*memory/issue_index.py*\
+|*coordinator/circle_history_manager.py*|*coordinator/circle_journal_manager.py*\
+|*coordinator/circle_observation_manager.py*|*coordinator/circle_state.py*\
+|*coordinator/dream_history_manager.py*|*coordinator/identity.py*\
+|*coordinator/part_mid_term_manager.py*|*coordinator/part_roster.py*\
+|*coordinator/proposal_group_manager.py*|*coordinator/proposal_manager.py*\
+|*coordinator/redaction_manager.py*|*coordinator/remember_manager.py*\
+|*coordinator/setting_manager.py*|*coordinator/topic_manager.py*\
+|*memory/issue_schema.py*|*memory/issue_commands.py*|*packaging/scan.py*\
+|*coordinator/ruling_sweep.py*|*coordinator/gitrepo.py*\
+|*ui/ticker/lens_index.py*|*ui/ticker/ticking_index.py*\
 |*coordinator/tests/test_entry_points.py*)
     # v144, 2026-09-04 (audit-register.md #13). Fourteen shipping __main__ entry points had
     # no exerciser at all before this suite — several have their own suite, and every one of
     # those exercises library functions while leaving the __main__ block dark. This trigger
     # and its invocation land together, same rule v99's own comment states two blocks below.
+    #
+    # THE SECOND FOURTEEN, 2026-09-08 (audit-register.md #8). ENTRY_POINTS grew by fourteen
+    # register managers and readers on 2026-09-07 and this case did not, so the suite ran for
+    # 13 of the 27 modules it covers — editing setting_manager.py fired 52 checks and not this
+    # one. test_hook_template.py now PARSES ENTRY_POINTS and fails if any listed path does not
+    # reach here, so the next time the list grows the gate says so instead of the trigger
+    # quietly covering less.
     NOTE="  pre-commit: an untested-until-now __main__ entry point touched"
     run coordinator/tests/test_entry_points.py
 esac
@@ -2501,7 +2611,7 @@ POST_COMMIT = _backup_push_hook("post-commit", POST_COMMIT_MARK, "commit")
 POST_MERGE_MARK = "# inner-circling post-merge v4"
 POST_MERGE_FAMILY = "# inner-circling post-merge v"
 
-# v2, R-NEW 2026-08-24: THE LOGBOOK FOLD RUNS HERE.
+# v2, R338 (2026-08-24): THE LOGBOOK FOLD RUNS HERE.
 #
 # `coordinator/assign_ids.py --write` was the one step in the whole
 # branch-and-merge mechanism that a human had to remember, and on 2026-08-24
@@ -2708,7 +2818,7 @@ def system_git_hooks_ensure(log) -> None:
     # UNCONDITIONAL, so in a bundle every commit failed at line one.
     #
     # THE WORST OF THAT WAS NOT THE HUMAN'S COMMIT. transcript_store's
-    # commit_circle() runs through the same hook at every /close, so a
+    # circle_commit() runs through the same hook at every /close, so a
     # recipient who ran --git-setup would have had every circle silently
     # refused at the moment it was committed — R130's exact shape, rebuilt
     # in every bundle.
@@ -2880,7 +2990,7 @@ def system_git_ignored_untrack(log) -> list[str]:
 # a disk-failure safeguard, and exactly what the rule is meant to permit.
 #
 # WHAT THE LITERAL RULE COST. `commit_paths` calls this, so from 09:21 every
-# circle close silently failed to commit. `commit_circle` is non-fatal by
+# circle close silently failed to commit. `circle_commit` is non-fatal by
 # design, so it printed and the circle closed clean. circle_2026-08-09_1520
 # is the one live circle that closed in that window: its transcript, seven
 # short_terms and close report sat UNTRACKED and were swept up by hand in

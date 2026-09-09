@@ -49,7 +49,7 @@ import setting_manager as SET                                         # noqa: E4
 import annotations as MK                                       # noqa: E402  the remember split
 import LLM_response_disassembler as RD                         # noqa: E402  every read of a reply
 import llm_client as LC                                        # noqa: E402  call, build_client
-import prompt_build as PB                                      # noqa: E402  render_messages
+import prompt_build as PB                                      # noqa: E402  prompt_messages_render
 import transcript_store as TS                                  # noqa: E402  write_lf, parse, resume
 import short_term_manager as STM                               # noqa: E402  THE record's one reader/writer (B96)
 from record_paths import ROOT, SANDBOX, PART_TAGS, record_dir        # noqa: E402
@@ -152,7 +152,7 @@ def _failed_phase2(base: pathlib.Path) -> list[str]:
     has nothing to say either. The circle simply never moved anyone's identity,
     silently, from then on.
 
-    THE TAG IS THE RESOLUTION, not the file. already_processed() reads
+    THE TAG IS THE RESOLUTION, not the file. circle_is_processed() reads
     `dream/<OT>` as the durable evidence a run succeeded — all-or-nothing
     staging means a failed run leaves nothing else behind — so a re-run that
     works clears this report without anyone tidying up a log. Asked through
@@ -323,7 +323,7 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
             # gate let the circle back in for exactly this case. The
             # first write is the record; re-deriving would overwrite it
             # with a second telling (and pay for the call again). Listed
-            # in `written` so commit_circle stages it — the interrupt
+            # in `written` so circle_commit stages it — the interrupt
             # died before any commit.
             seam.emit("command", f"  {part:<12} kept — written before the interrupt")
             written.append(part)
@@ -334,7 +334,7 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
 
     # THE CALLS RUN IN PARALLEL — B89/R420, 2026-08-31, on mid_term.refresh()'s
     # own proven pattern (B77): ONLY _short_term_call() (the API request, its
-    # own client) runs on a worker thread. Every write — apply_remember /
+    # own client) runs on a worker thread. Every write — remember_apply /
     # apply_close_remember (both touch `guard`), the file write, and every
     # seam.emit() — happens back HERE, on this thread, one finished part at a
     # time via as_completed(), so nothing mutates a file or prints a line
@@ -378,21 +378,21 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
             # .md would put a private note into the one document another
             # process reads on the part's behalf.
             #
-            # FALLBACK ON A LOST SECTION. split_close_remember() takes
+            # FALLBACK ON A LOST SECTION. remember_close_split() takes
             # everything after the opener, which is what makes a "]" inside a
             # long memory safe; if a part wrote the bracket mid-reply instead
             # of last, that would swallow a heading. So the split is checked,
             # not trusted: if any of the four went missing, the strict ASK_RE
-            # path (apply_remember) runs instead — it keeps the sections and
+            # path (remember_apply) runs instead — it keeps the sections and
             # gives up only the lenience.
             #
             # THE CHECK RUNS BEFORE ANY WRITE, and that ordering is the whole
-            # correctness of the fallback. split_close_remember() is PURE, so
+            # correctness of the fallback. remember_close_split() is PURE, so
             # it can be consulted first — RD.message_close_split() is that
             # consultation. Deciding afterwards — writing the lenient record,
             # then noticing a heading had gone — would leave the
             # swallowed-heading version on file AND have the strict retry
-            # refuse itself as a second use this circle, since has_remembered()
+            # refuse itself as a second use this circle, since remember_has_written()
             # would already be True. One cap, read once, spent once.
             if not RD.message_close_split(text):
                 text, recorded = MK.remember_apply(

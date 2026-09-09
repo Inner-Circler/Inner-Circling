@@ -106,6 +106,40 @@ OUT_DIR = ROOT / "work" / "graph"
 OUT_SVG = OUT_DIR / "issue_graph.svg"
 OUT_HTML = OUT_DIR / "issue_graph.html"
 
+
+def issue_draw_out_bind(issues_dir: pathlib.Path) -> None:
+    """Point OUT_SVG/OUT_HTML at the picture belonging to the group whose issues/ this is —
+    audit-register.md #6, 2026-09-08.
+
+    ONE FOLDER, TWO CONSEQUENCES, AND THE SECOND IS THE BAD ONE. R365 ruled ONE output
+    folder and that is unchanged; what was missing is that the FILENAMES were group-blind
+    while circle.py:1977 runs the redraw at every live close OF ANY GROUP, handing over that
+    group's own issues/ (group-aware since 60af4de). So a band close overwrote the IFS
+    group's picture — and worse, issue_draw_is_stale() compared THIS group's newest source
+    mtime against the SHARED picture's mtime, so after an IFS close wrote a fresh picture a
+    band close would decide "not stale", print nothing, and never draw at all. Silent, and
+    the reverse of what the staleness test exists to guarantee.
+
+    THE DEFAULT GROUP KEEPS THE PLAIN NAME. Its picture is the one a person has open, the
+    one .gitignore names literally, and the one every doc points at; renaming it to buy
+    symmetry would cost all three for nothing. Another group gets `issue_graph_<name>.*`
+    beside it.
+
+    A DIRECTORY THAT IS NO GROUP'S issues/ CHANGES NOTHING — a hand-run against an arbitrary
+    directory, or a graph.json snapshot, keeps the default names, exactly as before."""
+    global OUT_SVG, OUT_HTML
+    try:
+        resolved = issues_dir.resolve()
+    except OSError:                                    # pragma: no cover — a vanished path
+        return
+    for name in _RP.group_present_read():
+        if resolved != (_RP.group_tree(name) / "issues").resolve():
+            continue
+        stem = "issue_graph" if name == _RP.DEFAULT_GROUP else f"issue_graph_{name}"
+        OUT_SVG = OUT_DIR / f"{stem}.svg"
+        OUT_HTML = OUT_DIR / f"{stem}.html"
+        return
+
 # issue_schema.py lives in memory/, not beside this script — it moved here
 # 2026-08-13 (coordinator/ -> work/graph/, alongside its own output), so
 # unlike before, Python's automatic script-directory sys.path entry no
@@ -207,7 +241,7 @@ W, H = 2400, 1250
 #                   was drawn in a grey one hex step from `related-to`'s and
 #                   named nowhere in the key.
 #
-# Glosses are the one-line form of docs/issue_relationship_types.md, which owns the
+# Glosses are the one-line form of docs/issue_relationship_types.md (archived), which owns the
 # meanings.
 # `_check_vocabulary()` below now fails if this table and issue_schema ever
 # disagree again; nothing checked it before, which is why it drifted silently
@@ -1091,6 +1125,11 @@ def main() -> int:
     # ARE news. Ignored for a graph.json snapshot: that has no picture of
     # its own for the live graph's staleness to be a claim about.
     at_close = "--if-stale" in sys.argv[1:]
+    # BEFORE THE STALENESS QUESTION, NOT AFTER IT (audit-register.md #6). The whole failure
+    # was that "is the picture behind?" got asked of the wrong picture, so the binding has
+    # to happen before anything reads OUT_SVG/OUT_HTML — issue_draw_is_stale() reads both.
+    if arg.is_dir():
+        issue_draw_out_bind(arg)
     if at_close and arg.is_dir() and not issue_draw_is_stale(arg):
         return 0
     if arg.is_dir():
@@ -1188,8 +1227,16 @@ def main() -> int:
     # generic (there is no other graph in work/graph/ for it to be
     # disambiguated from, but nothing about the name said which graph this
     # was). `graph-live.*` above is the old sibling that name replaced.
-    svg_path = gp.parent / "issue_graph.svg"
-    html_path = gp.parent / "issue_graph.html"
+    # THE WRITER AND THE STALENESS TEST NOW SHARE THEIR PATHS — audit-register.md #6,
+    # 2026-09-08, and this was the sharper half of that finding. These two lines rebuilt the
+    # names inline while issue_draw_is_stale() read OUT_SVG/OUT_HTML, so the two ends of the
+    # same question — "is the picture behind?" and "where do I put the picture?" — had
+    # SEPARATE ANSWERS that only agreed by looking alike. Making the filenames group-aware
+    # in the constants alone would have moved one end and not the other, which is the exact
+    # shape of the bug being fixed. A snapshot render keeps writing beside its own
+    # graph.json, which is why gp.parent stays in the fallback.
+    svg_path = OUT_SVG if gp.parent == OUT_DIR else gp.parent / OUT_SVG.name
+    html_path = OUT_HTML if gp.parent == OUT_DIR else gp.parent / OUT_HTML.name
     svg_path.write_text(svg, encoding="utf-8", newline="\n")
     html_path.write_text(
         issue_html_build(g, svg, order, inbound, g_live, svg_live or ""),

@@ -265,7 +265,7 @@ def short_term_backfill_step(ot: str, say) -> int:
     No error anywhere.
 
     HERE, NOT IN circle.py's /close, and B54 named the trade: a step 0 inside
-    process_circle keeps the manual `--ot` re-run covered by the same guard,
+    circle_process keeps the manual `--ot` re-run covered by the same guard,
     where a call from /close would leave that path bare. It costs
     inter_circle a second responsibility, which is the price.
 
@@ -295,7 +295,7 @@ def short_term_backfill_step(ot: str, say) -> int:
     # the moment needs_backfill() ever found real work — which nothing had,
     # since the live wiring's first exercise is still pending (see
     # CLAUDE.md, "There is no nightly"). shared_block() ITSELF RETIRED
-    # 2026-09-02 alongside the fix, replaced by one call, assemble_part().
+    # 2026-09-02 alongside the fix, replaced by one call, prompt_part_assemble().
     import prompt_build as C
     core = C.group_shared_read()
     briefing, _ = C.circle_briefing_build([])
@@ -399,7 +399,7 @@ def _capture_paths(ot: str, dirty: "list[str] | None" = None
     """Every file in the circle's capture directory, and whether any of them
     is new or changed since the last commit. R412/R413, 2026-08-31.
 
-    WHY THE DREAM COMMIT CARRIES THEM: commit_circle() runs BEFORE this
+    WHY THE DREAM COMMIT CARRIES THEM: circle_commit() runs BEFORE this
     module and takes the capture as it stood; every processing turn recorded
     since — dreaming, synthesis, the refresh, the coalesce pass at close —
     and the manifest they rewrote land after it, and nothing else commits
@@ -478,8 +478,17 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
     """circle_process()'s body — everything but the capture log's lifetime."""
     confirmed = confirmed or []
     if circle_is_processed(ot):
-        say(f"  circle {ot} is already processed (git tag dream/{ot}) — "
-            f"re-running would double-dream it. Delete the tag first if "
+        # NAME THE MARKER THAT REFUSED — audit-register.md #6, 2026-09-08. There are TWO since
+        # 2026-08-24 and either refuses; this said "git tag dream/<OT> ... Delete the tag first",
+        # which is the WRONG INSTRUCTION whenever the marker FILE was the refuser — deleting the
+        # tag changes nothing, and a tree with no git history has no tag to delete at all.
+        # Reachable today: :751-757 sets `tag = None` on a capture-only refused commit while :772
+        # still writes the marker file.
+        marker = circle_dream_marker_read(ot)
+        which = (f"work/logs/{marker.name}" if marker.is_file()
+                 else f"git tag dream/{ot}")
+        say(f"  circle {ot} is already processed ({which}) — "
+            f"re-running would double-dream it. Remove that marker first if "
             f"you mean it.")
         return 1
     tpath = _RP.record_dir(ROOT, "circles") / f"circle_{ot}.md"
@@ -695,7 +704,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             paths = [ROOT / rel for rel in staged]
             paths += [MT.part_mid_term_locate(p) for p in parts if MT.part_mid_term_locate(p).is_file()]
             # THE CIRCLE'S CAPTURE RIDES THIS COMMIT (R412/R413): the turns
-            # recorded since commit_circle() took the directory, and the
+            # recorded since circle_commit() took the directory, and the
             # manifest they rewrote. AND IT COMMITS EVEN WHEN NOTHING WAS
             # STAGED — an empty staging is right for mid_term.md, a
             # re-derivable cache, and wrong for the capture, which is the

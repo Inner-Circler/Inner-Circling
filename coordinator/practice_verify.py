@@ -117,7 +117,7 @@ def _routing_check() -> list[str]:
 
     EACH REAL FUNCTION RUNS ONCE PER TAG, its output reused (2026-08-19,
     review tier 5 #53): the loops below used to re-call
-    PM.practice_narrowcast()/narrowcast_block() — each a fresh parse of the register
+    PM.practice_narrowcast()/part_practices_render() — each a fresh parse of the register
     — inside the per-part and per-proposal iterations, so one hook run
     re-parsed the same unchanged TOML seventy-odd times. Calling once
     and comparing many times checks the identical outputs; what the

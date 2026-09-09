@@ -23,7 +23,7 @@ subject is the two-pane INTEGRATION design — a concept this rename does not
 touch. "Dual pane" still names the shape: an upper CIRCLE pane and a lower
 COMMAND pane.
 
-WHAT THIS VALIDATES. `docs/circling_and_evolving.md` proposes a circle pane
+WHAT THIS VALIDATES. `docs/circling_and_evolving.md (archived)` proposes a circle pane
 (conversation only) and a command pane (rulings only), built so that output
 landing in one can never corrupt input focused in the other — by
 construction, because the two are disjoint. This harness tests the
@@ -1055,7 +1055,14 @@ class AppState:
 # screen — so it cannot race with rendering by construction.
 # --------------------------------------------------------------------------
 
-PARTS: tuple[str, ...] = ("Judge", "Mourner", "Learner")
+# GENERIC BY DESIGN — audit-register.md #1, 2026-09-08. These three name the DEMO
+# simulator's threads and nothing else; they never touched the roster, the record, or a
+# real circle. They were three real part Tags, and this module SHIPS
+# (packaging/required.toml), so every bundle carried them — three of the 84 MEDIUM findings
+# packaging/sanitize.py raises and its own docstring explains: "a part name ... these
+# identify a living relationship, not a mechanism." A demo needs placeholders, not somebody's
+# inner life, and a recipient reading their own bundle should not meet another person's parts.
+PARTS: tuple[str, ...] = ("Alpha", "Beta", "Gamma")
 
 
 class AgentSimulator:
@@ -1066,8 +1073,8 @@ class AgentSimulator:
     anything.
 
     EVERY STATEMENT IS NUMBERED FROM ONE SHARED, LOCK-PROTECTED COUNTER
-    ACROSS ALL THREADS — "Judge statement 7", "Mourner statement 8",
-    "Judge statement 9" — a single global sequence, not one per part. That
+    ACROSS ALL THREADS — "Alpha statement 7", "Beta statement 8",
+    "Alpha statement 9" — a single global sequence, not one per part. That
     is what turns "did scrolling away from the live edge ever lose one?"
     into something checkable by eye: the numbers must run consecutively
     with no gaps, regardless of which part said which one. A per-part

@@ -31,7 +31,7 @@ WHAT STAYS WHERE IT WAS, and why each is not a "reply read":
   - providers.read()/thinking_record(): WHERE a piece sits in a reply is the
     vendor's business (R382). message_burst() takes the provider's Turn and asks the
     provider for the thinking; it never touches a content block.
-  - annotations.py's ASK_RE family, split_close_remember(), recall_index's
+  - annotations.py's ASK_RE family, remember_close_split(), recall_index's
     RECALL_RE: the ANNOTATION grammar, cited by docs/BNF.md's own @file
     tags — and they read Self's typed input as much as a part's reply
     (apply_self_remember, annotations_in at the opening prompts). The
@@ -216,7 +216,7 @@ _SELFNAME_RE = re.compile(
 )
 # A PART THAT SPEAKS AND THEN SIGNS OFF HAS SPOKEN (R262, 2026-08-20). The
 # pass test below is WHOLE-TEXT and always has been, so a part that said
-# its piece and put `[pass]` on the end had that marker carried verbatim
+# its piece and put `[pass]` on the end had that annotation carried verbatim
 # into the transcript and into the room, where it read as a third party
 # passing. DELIBERATELY NARROW: only a whole final LINE that is nothing but
 # the bracketed form. A statement ending in the word "pass" is a part using
@@ -233,8 +233,8 @@ def message_is_pass(text: "str | None") -> bool:
 def message_statement_read(text: str) -> "tuple[str | None, str | None]":
     """(statement, to_whom), or (None, None) for a pass. Strips, in order,
     the sign-off, a leading self-name, and the [To: ...] address — BEFORE
-    anything else reads it: the record, the room, render_messages' rebuild
-    of every other part's view, and route_annotations all take their text
+    anything else reads it: the record, the room, prompt_messages_render's rebuild
+    of every other part's view, and annotation_route all take their text
     from here, and none of them should ever see the sign-off."""
     if message_is_pass(text):
         return None, None

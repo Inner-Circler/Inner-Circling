@@ -11,7 +11,8 @@ reader blind to the new part. B29 collapsed those ten into one list here.
 WHAT R123 CHANGED, AND WHY IT MATTERED MORE. The one list was still typed by
 hand, in a module that SHIPS — so the bundle carried seven names that are one
 person's parts, exported as though they were mechanism. It was already broken
-by it: `export/parts/` holds two delegates, so a recipient's roster named five
+by it: `export/parts/` held two delegates (that directory was retired 2026-08-08),
+so a recipient's roster named five
 directories that do not exist and `circle.py --live` would have opened on them.
 
     *"TWO parts, Soul and Child, are shipped as
@@ -37,7 +38,7 @@ Each arrived the same way: as a per-part literal in a module that SHIPS,
 keyed by a part NAME. `identity_tail` is the last of that class B29 and
 R123 began removing. The marker is still narrow, and the test is whether a
 key is a fact about one part or a policy about all of them. `REMEMBER_GUIDANCE`
-was the only policy that had been living here and it LEFT, R-NEW 2026-08-22,
+was the only policy that had been living here and it LEFT, R300 (2026-08-22),
 for process_core.md and BLOCK 1 — so this module now carries per-part facts
 and nothing else, which is what the test always implied.
 
@@ -671,7 +672,7 @@ def statement_re(tags):
 # `identity_tail` to the marker: a per-part tail differs per part by
 # definition, this does not.
 #
-# REMEMBER_GUIDANCE WAS THAT POLICY AND IS GONE FROM HERE — R-NEW,
+# REMEMBER_GUIDANCE WAS THAT POLICY AND IS GONE FROM HERE — R300,
 # 2026-08-22. Its own argument finished the journey: text that is policy
 # about all of them belongs with the other policy, in process_core.md and
 # BLOCK 1, beside the `[remember: ...]` annotation it governs. Keeping it

@@ -613,7 +613,7 @@ def recall_pending_read(part: str) -> str | None:
 
 def recall_pending_pop(part: str) -> str | None:
     """Read AND CLEAR this part's private reply in one step — the one call
-    render_messages() actually reaches for. Its own docstring already said
+    prompt_messages_render() actually reaches for. Its own docstring already said
     the delivery is singular ("the latest <recall_result>... appended to
     the tail"); until B82 (2026-08-31) nothing enforced that, and a reply
     rode along unexpired on every one of a part's later turns for the rest
@@ -631,7 +631,7 @@ def recall_apply(part: str, display: str, text: str, *,
     backtick-quoted one (`` `[recall: ...]` ``) is left untouched, prose
     about the syntax rather than a use of it (B82). Returns (stripped_text,
     asked). The returned text is the ROOM's; the caller keeps its own raw
-    text for the transcript FILE, bracket intact — apply_remember()'s own
+    text for the transcript FILE, bracket intact — remember_apply()'s own
     contract, kept exactly (docs/BNF.md, RECALL).
 
     NEVER RAISES: a recall failure is a private error reply and a loud

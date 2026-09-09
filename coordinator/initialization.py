@@ -604,7 +604,7 @@ def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:
 
     THE COMMIT — §4.4: nothing at cmd> commits, but this is the one
     open-time step that writes the record, so it commits what it wrote,
-    once, its own paths only, non-fatal, the commit_circle() manner."""
+    once, its own paths only, non-fatal, the circle_commit() manner."""
     import sys
     if not live or resume or yes:
         return []
@@ -638,7 +638,7 @@ def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:
 
 def _commit(paths: list[str]) -> None:
     """One commit for the step's own writes, own paths only, non-fatal —
-    git is the rollback target, not part of the open (commit_circle()'s
+    git is the rollback target, not part of the open (circle_commit()'s
     words). The message names what moved, never the answers."""
     try:
         import gitrepo as G

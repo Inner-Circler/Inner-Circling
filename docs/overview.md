@@ -37,12 +37,27 @@ a set you are expected to reproduce. Look at `groups/ifs/parts/child/` and
 at the `cmd>` prompt to add one — it opens a dialog that asks what you
 need. Only you can add a part; a part cannot ask for one.
 
+## Why every path starts `groups/ifs/`
+
+A **group** is one roster and the whole record it keeps — its parts, its
+issue graph, its registers, its transcripts — under `groups/<name>/`. What
+makes a folder a group is the `group.toml` in it, exactly as a `part.toml`
+is what makes a folder a part. This installation ships one, `ifs`, which is
+why every path in this document begins that way; it is the default, so no
+command here needs naming it.
+
+Nothing obliges you to add another, and most people never will. If you do,
+`/group-list` shows what exists and `/group-add` creates one, and a circle
+opened on a named group reads and writes only that group's tree — a
+different roster for a different purpose, never a second opinion on the
+same one.
+
 ## How a circle works
 
 Self posts a topic. Each part's prompt is built fresh, in four blocks: the
-shared rulebook and circle practices; what the issue graph currently owes;
-that part's own long-term identity, distilled; and anything addressed to
-that part alone. Statements are public and parts may address each other
+shared rulebook, the circle's practices, and the note the last circle left
+for this one; what the issue graph currently owes; that part's own
+long-term identity, distilled; and anything addressed to that part alone. Statements are public and parts may address each other
 directly; no part speaks twice in a row. Each statement aims for a short
 length and is hard-capped at a word count — 150 unless you change the
 `statement_max_words` setting. That one is a developer setting: open the

@@ -118,9 +118,9 @@ def self_test() -> int:
     # An agent line arrives for the OTHER pane while the above is
     # mid-typed. This is exactly what AgentSimulator does via the queue;
     # here it's done directly since self_test has no event loop.
-    state.circle.append("[Judge]: an independent line, interleaved")
+    state.circle.append("[Alpha]: an independent line, interleaved")
     check("circle received the interleaved line",
-          state.circle.lines[-1] == "[Judge]: an independent line, interleaved")
+          state.circle.lines[-1] == "[Alpha]: an independent line, interleaved")
     check("focus did NOT move because the OTHER pane received output",
           state.focus == "command")
     check("the in-progress command buffer survived the interleaved line",
@@ -427,8 +427,8 @@ def self_test() -> int:
     eng.out_queue.get_nowait()  # the explanatory message
 
     check("_strip_resume drops an existing --resume pair",
-          C._strip_resume(["--parts", "child,idealist", "--resume", "2026-08-01_0900"])
-          == ["--parts", "child,idealist"])
+          C._strip_resume(["--parts", "alpha,beta", "--resume", "2026-08-01_0900"])
+          == ["--parts", "alpha,beta"])
     check("_strip_resume is a no-op when there's nothing to strip",
           C._strip_resume(["--parts", "child"]) == ["--parts", "child"])
 
@@ -440,6 +440,41 @@ def self_test() -> int:
     s2._submit(s2.command, "quit")
     check("'quit' submitted in the command pane sets state.running False",
           s2.running is False)
+
+    # --- the OPENING refusal, audit-register.md #13 ------------------
+    # _opening_refusal() and its only call site had ZERO references across ui/tests/ and
+    # were executed by nothing. What they guard is stated at the call site: without the
+    # refusal, _dispatch_no_circle() runs instead and rebinds seam.read_line to the no-block
+    # stub for the duration of the call, so "an engine thread that reaches a real question
+    # inside that window would be handed '' for an answer." The operator had no way to see
+    # that on 2026-08-21 — which is the whole reason the sentence names the question and the
+    # pane it is waiting in.
+    #
+    # `opening` is the LAST arm of _phase(): running, the Self> loop not yet reached, and not
+    # parked on a circle-channel question. Set exactly that, so the branch is reached the way
+    # the engine reaches it rather than by calling the helper directly.
+    eng_op = C.CircleEngine(queue.Queue())
+    eng_op._thread = type("T", (), {"is_alive": lambda self: True})()
+    eng_op.loop_reached = False
+    eng_op.waiting_for_input = False
+    eng_op.pending_prompt = "working set (issue ids, or 'none')"
+    check("_phase() reports 'opening' while the API check and pre-warm run",
+          eng_op._phase() == "opening")
+    eng_op.out_queue = queue.Queue()
+    ret = eng_op.submit_command("status")
+    said = eng_op.out_queue.get_nowait()[1] if not eng_op.out_queue.empty() else ""
+    check("a command typed while opening is REFUSED, not dispatched", ret is None)
+    check("...and the refusal names the question the circle is waiting on",
+          "working set" in said)
+    check("...and the pane it is waiting in",
+          "circle pane" in said)
+    check("...and what was refused", "status" in said)
+    eng_op.pending_prompt = None
+    eng_op.out_queue = queue.Queue()
+    eng_op.submit_command("status")
+    said_bare = eng_op.out_queue.get_nowait()[1] if not eng_op.out_queue.empty() else ""
+    check("with no pending prompt it still refuses, without inventing a question",
+          "still opening" in said_bare and "asking" not in said_bare)
 
     # --- help/revert pane-resize signal -----------------------------
     # the operator: "If help is invoked, resize the panes to 1/5th and 4/5ths.
@@ -590,7 +625,7 @@ def self_test() -> int:
 
     s_fin = C.AppState(6, 6, backend=_Done())
     s_fin.focus = "circle"
-    s_fin.circle.append("[Judge]: a statement")
+    s_fin.circle.append("[Alpha]: a statement")
     sig_fin = s_fin.on_finished()
     check("the end hands focus to the command pane, with a full redraw",
           s_fin.focus == "command" and sig_fin == "focus"
@@ -715,7 +750,7 @@ def self_test() -> int:
     s_sp._submit(s_sp.circle, "first words")
     check("the first line in an empty pane takes no spacer",
           s_sp.circle.lines == ["[You]: first words"])
-    s_sp.circle.append("[Judge]: a reply")
+    s_sp.circle.append("[Alpha]: a reply")
     s_sp._submit(s_sp.circle, "second words")
     check("a later line is prefaced by two empty rows",
           s_sp.circle.lines[-3:] == ["", "", "[You]: second words"])
@@ -1069,7 +1104,7 @@ def self_test() -> int:
 
         eng9c = C.CircleEngine(queue.Queue())
         captured_argv.clear()
-        eng9c.start(extra_argv=["--live", "--dry-run", "--parts", "judge"],
+        eng9c.start(extra_argv=["--live", "--dry-run", "--parts", "alpha"],
                    live=False)
         check("--live/--dry-run in extra_argv are stripped regardless — "
               "the `live` parameter is the only door, RULED 2026-08-13",
@@ -1130,38 +1165,38 @@ def self_test() -> int:
     vars(C)["ui_main_loop"] = lambda *a, **k: 0
     real_argv = sys.argv
     try:
-        sys.argv = ["circling.py", "--circle", "--parts", "judge"]
+        sys.argv = ["circling.py", "--circle", "--parts", "alpha"]
         captured_start.clear()
         check("bare --circle: live=False, no --live/--dry-run leaks into extra_argv",
               C.main() == 0 and captured_start
-              and captured_start[-1] == (["--parts", "judge"], False))
+              and captured_start[-1] == (["--parts", "alpha"], False))
 
-        sys.argv = ["circling.py", "--live", "--circle", "--parts", "judge"]
+        sys.argv = ["circling.py", "--live", "--circle", "--parts", "alpha"]
         captured_start.clear()
         check("--live BEFORE --circle: live=True — the one door R330/Q3 rules",
-              C.main() == 0 and captured_start[-1] == (["--parts", "judge"], True))
+              C.main() == 0 and captured_start[-1] == (["--parts", "alpha"], True))
 
-        sys.argv = ["circling.py", "--circle", "--live", "--parts", "judge"]
+        sys.argv = ["circling.py", "--circle", "--live", "--parts", "alpha"]
         captured_start.clear()
         check("--live AFTER --circle: still live=True (argv.index(\"--circle\") "
               "sees it either side) — main() forwards --live in extra_argv "
               "unfiltered, same as start()'s own docstring says its caller "
               "may; start() is what strips it (stage 8's own case 3)",
               C.main() == 0
-              and captured_start[-1] == (["--live", "--parts", "judge"], True))
+              and captured_start[-1] == (["--live", "--parts", "alpha"], True))
 
-        sys.argv = ["circling.py", "--dev", "--circle", "--parts", "judge"]
+        sys.argv = ["circling.py", "--dev", "--circle", "--parts", "alpha"]
         captured_start.clear()
         check("--dev typed BEFORE --circle is still forwarded (2026-09-01 fix "
               "for the position start() never sees)",
               C.main() == 0
-              and captured_start[-1] == (["--parts", "judge", "--dev"], False))
+              and captured_start[-1] == (["--parts", "alpha", "--dev"], False))
 
-        sys.argv = ["circling.py", "--circle", "--dev", "--parts", "judge"]
+        sys.argv = ["circling.py", "--circle", "--dev", "--parts", "alpha"]
         captured_start.clear()
         check("--dev typed AFTER --circle forwards once, not duplicated",
               C.main() == 0
-              and captured_start[-1] == (["--dev", "--parts", "judge"], False))
+              and captured_start[-1] == (["--dev", "--parts", "alpha"], False))
     finally:
         sys.argv = real_argv
         C.CircleEngine.start = real_start
@@ -1687,10 +1722,10 @@ def self_test() -> int:
           C.ui_line_wrap("exactly twenty chars", 20) == ["exactly twenty chars"])
     check("a long line breaks on spaces, never mid-word",
           all(len(r) <= 24 for r in C.ui_line_wrap(
-              "[Judge]: a long statement that must wrap", 24)))
+              "[Alpha]: a long statement that must wrap", 24)))
     check("...and loses nothing — the words come back in order",
-          " ".join(C.ui_line_wrap("[Judge]: a long statement that must wrap", 24)).split()
-          == "[Judge]: a long statement that must wrap".split())
+          " ".join(C.ui_line_wrap("[Alpha]: a long statement that must wrap", 24)).split()
+          == "[Alpha]: a long statement that must wrap".split())
     check("the continuation carries the source line's own indent, so an "
           "indented block does not fall back under a label column",
           [r[:4] for r in C.ui_line_wrap("    focus n0021 and a long tail here", 22)]
@@ -2020,6 +2055,49 @@ def self_test() -> int:
     units5 = C.ui_burst_read("a", poll=lambda: next(fake_stream5, None))
     check("a paired astral char rides a text burst like any character",
           units5 == [("text", f"a{heart}x")])
+
+    # --- poll_key's OWN wiring, not just the pairing math (audit-register.md #39,
+    # 2026-09-08). The comment above said this was "untestable here", and that was true only
+    # while msvcrt was reached directly: it is a module-level name, so a fake one drives the
+    # real poll_key on any platform. What this reaches that _surrogate_pair alone does not:
+    # the \xe0 scan-code lead, the kbhit()/getwch() pairing handshake, and the ungetwch()
+    # push-back — the last of which is the one branch whose failure REORDERS a person's
+    # keystrokes rather than dropping one. -------------------------------------------------
+    if hasattr(C, "msvcrt"):
+        class _FakeMsvcrt:
+            def __init__(self, keys): self.keys, self.pushed = list(keys), []
+            def kbhit(self): return bool(self.keys or self.pushed)
+            def getwch(self): return self.pushed.pop() if self.pushed else self.keys.pop(0)
+            def ungetwch(self, c): self.pushed.append(c)
+
+        real_msvcrt = C.msvcrt
+        try:
+            C.msvcrt = _FakeMsvcrt(["q"])
+            check("poll_key returns a plain character unchanged", C.poll_key() == "q")
+
+            C.msvcrt = _FakeMsvcrt(["\xe0", "H"])          # the extended-key lead + scan code
+            check("poll_key maps an \\xe0 scan code through the extended table",
+                  C.poll_key() == C._WIN_SCAN_EXT.get("H"))
+
+            C.msvcrt = _FakeMsvcrt(["\ud83d", "\udc94"])   # a real emoji keystroke
+            check("poll_key pairs a surrogate pair into ONE astral character",
+                  C.poll_key() == heart)
+
+            # THE DEGRADATION, AND THE ORDERING GUARANTEE. A lone high surrogate is corrupt
+            # input; the follower must come back NEXT, not be swallowed.
+            fake = _FakeMsvcrt(["\ud83d", "z"])
+            C.msvcrt = fake
+            lone = C.poll_key()
+            check("a lone high surrogate passes through unpaired", lone == "\ud83d")
+            check("...and its non-surrogate follower is pushed back, not consumed",
+                  C.poll_key() == "z")
+            check("...so the isprintable() gates drop the surrogate and keep the follower",
+                  not lone.isprintable() and "z".isprintable())
+
+            C.msvcrt = _FakeMsvcrt([])
+            check("poll_key returns None when nothing is waiting", C.poll_key() is None)
+        finally:
+            C.msvcrt = real_msvcrt
     s_emoji = C.AppState(circle_height=3, command_height=3)
     s_emoji.handle_key(heart)
     check("handle_key inserts it into the input buffer",
@@ -2218,8 +2296,11 @@ def self_test() -> int:
     blob = "".join(out)
     check("render_full ran without raising and drew both headers",
           "CIRCLE" in blob and "COMMANDS" in blob)
+    # C.PARTS[0], NOT A LITERAL — audit-register.md #1, 2026-09-08. This named a real part
+    # Tag in a SHIPPED file, and it was a silent coupling besides: renaming the demo's
+    # placeholders would have failed this check for a reason that looks unrelated to them.
     check("render_full shows the interleaved agent line",
-          "Judge" in blob)
+          C.PARTS[0] in blob)
 
     # The header's scroll tag: both counts appear once scrolled.
     out2: list[str] = []

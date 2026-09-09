@@ -103,9 +103,20 @@ coordinator sends, to Anthropic:
   -- the rulebook
   -- your issue graph as it is projected for that circle,
   -- that part's own distilled identity
+  -- **any first-run answers that part renders.** The dialog at your
+     first open asks about you; a part sends back only the answers it
+     declares a `render` sentence for, and the shipped Soul declares
+     four -- the year you were born, your sex at birth, your race, and
+     where you were raised. They are rewritten into that part's own
+     voice ("My human was raised in ...") and travel in every prompt
+     for as long as they are recorded. Every question is optional and
+     blank is a complete answer; `/part-context-list` shows exactly
+     what is held, and `/part-context-clear <part>` erases it.
 - the circle transcript:
   -- every statement, including everything you have typed as Self
-  -- your name is never sent
+  -- your name is never sent -- `given_name` and `preferred_name`
+     deliberately declare no `render`, so they stay on this machine and
+     name your console prompt only
 
 That is the whole mechanism — the cloud has no memory of a part, so its
 context has to be sent on every turn. What you say in a circle goes to
@@ -683,7 +694,9 @@ circle this came from.
 
 `/part-add` at the cmd> prompt opens the dialog that creates one: a
 Tag, a description, and the files a part needs to be spoken to.
-`coordinator/process_core.md` §New parts is the rule it follows. **A part
+`coordinator/process_core.md` §New {members} is the rule it follows — the
+heading reads literally like that in the file; `{members}` becomes "parts"
+only when a prompt is assembled. **A part
 is never created without Self's explicit agreement**, and that rule is in
 the rulebook every part reads.
 
@@ -865,10 +878,6 @@ groups/ifs/issues/
   .venv\Scripts\python memory\issue_gate.py
       watch for   GATE PASS — every invariant satisfied
       and the "quote(s) verified verbatim" count. It should not fall.
-
-groups/ifs/self/best_practices.toml
-  .venv\Scripts\python coordinator\practice_verify.py
-      watch for   PASS — tally, ids, addressees and routing all hold
 
 a part's identity sources
   .venv\Scripts\python coordinator\part_mid_term_manager.py

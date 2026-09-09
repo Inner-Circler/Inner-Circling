@@ -53,7 +53,7 @@ None — a bare run prints the report.
 
 ## DEPENDENCIES
 Standard library: `pathlib`, `sys`, `tomllib` (`tomli` on 3.10), `re` (inside
-`setting_source_default_read()`). Sibling modules: `roster` (inside the tuning functions:
+`setting_source_default_read()`). Sibling modules: `part_roster` (inside the tuning functions:
 `part_context_value_verify()`, `part_canonical_read()`), `atomic_write` (inside `_dump()`), `seam`
 (inside `setting_corrections_flush()` when no emitter is given). Nothing imports `anthropic`: the
 gate that reads this module must stay runnable inside the pre-commit hook.

@@ -12,6 +12,11 @@ circle_close_verify.py (circle_close.py until 2026-09-03) — the close verifier
     python coordinator/circle_close_verify.py
     python coordinator/circle_close_verify.py --prune
     python coordinator/circle_close_verify.py --claude-home /path/to/.claude
+    python coordinator/circle_close_verify.py --group band --reconcile --open-time <OT>
+
+`--group <name>`: verify against `groups/<name>/`'s record instead of the default group's tree
+(B117 stage 5). Default: unset — the DEFAULT GROUP, which is a rule and not a name (R468, B120
+stage 4): the one group installed, or the one whose `group.toml` says `default = true`.
 
 ## DESCRIPTION
 
@@ -121,7 +126,7 @@ The second exists because of a specific failure shape: a write that succeeds at 
 
 ## DEPENDENCIES
 
-`roster` for the mapping from a transcript tag to a part's directory. `argparse`, `hashlib`, `json`, `os`, `shutil`, `sys`, `collections`, `datetime`, `pathlib`.
+`part_roster` for the mapping from a transcript tag to a part's directory. `argparse`, `hashlib`, `json`, `os`, `shutil`, `sys`, `collections`, `datetime`, `pathlib`.
 
 ## EXTERNAL FILES
 

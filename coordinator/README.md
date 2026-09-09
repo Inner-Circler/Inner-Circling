@@ -17,6 +17,26 @@ Either mechanism can be used for any given circle.
 
 ---
 
+## A RECORD PATH IS RELATIVE TO ITS GROUP'S TREE
+
+**`parts/`, `self/`, `issues/` and `circles/` do not exist at the repository root.** They
+are the four kinds inside a GROUP's tree, and a group's tree is `groups/<name>/` — R466/R467,
+B117, 2026-09-07. So every record path written in this file and in the man pages —
+`self/best_practices.toml`, `circles/working_sets.toml`, `parts/<p>/remember.toml`,
+`issues/issue_model.md` — is shorthand for `groups/<group>/…`, resolving to `groups/ifs/…`
+for the default group.
+
+**Stated here once rather than rewritten at forty sites** (audit-register.md #27, 2026-09-08).
+The convention was already how every document wrote these paths and was declared nowhere: a
+reader who tried one against the tree found nothing there, and `record_paths.py`'s own account
+of the shape (`:18`, `:144`) is a comment inside code, not something a reader of prose meets.
+
+`coordinator/record_paths.py` is the one lookup either way — `record_rel("self/topics.toml")`
+for the ROOT-relative string git and the hook take, `SELF_DIR / "topics.toml"` for the
+absolute path — and both follow `--group`.
+
+---
+
 ## What it does differently
 
 | | agent-teams (live) | coordinator |
@@ -353,7 +373,7 @@ run; noted for live use.
 
 Statements were rendered to listeners as bare `Judge: …` while the transcript
 recorded `[Judge] [To: Child]: …` — the parts could not see who a statement was
-addressed to, desyncing perception from the durable record. `render_messages()`
+addressed to, desyncing perception from the durable record. `prompt_messages_render()`
 now carries the addressing.
 
 ## Opening a circle — the order, and why it is that order

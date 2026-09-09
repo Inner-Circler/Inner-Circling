@@ -12,7 +12,7 @@ append), the working-set history and the no-trace discard of an
 unspoken open, the statement line grammar and its exact inverse
 (parse_transcript proves itself against render_transcript before any
 resume), replaying a transcript back into loop state, and the durable
-close records (commit_sandbox/commit_circle/run_verifier).
+close records (commit_sandbox/circle_commit/run_verifier).
 
 WHAT DOES NOT. short_term_collect is circle_close.py's (circle.py's until
 2026-09-03) — it calls the Messages API per part, which makes it close
@@ -34,6 +34,7 @@ import sys
 import command_surface as CS
 import identity as ID              # SELF_ID + the display name
 import part_roster as R
+import record_paths as _RP
 import seam
 import working_set_manager as WS   # the working_sets register (stage 10; REGISTER_CLASS went with it)
 from record_paths import ROOT, SANDBOX, SANDBOX_CIRCLES, record_dir
@@ -166,6 +167,22 @@ _HEAD_RE = re.compile(r"# Circle — (.*) — (\d{4}-\d{2}-\d{2}_\d{4})")
 TAG_TO_PART = dict(R.DIR_BY_TAG_ALL)
 
 
+@_RP.group_follow
+def _tag_to_part_rebind() -> None:
+    """Follow the group — audit-register.md #5, 2026-09-08.
+
+    THIS DICT IS A COPY, AND THAT IS WHY A GROUP MOVE STOPPED AT THE PARSER. part_roster
+    rebinds DIR_BY_TAG_ALL in place on every record_paths.group_set(), so every reader holding
+    that object follows; this line took a snapshot of it at import instead, so the ONE reader
+    that decides whether a statement line is a known speaker did not. The visible symptom was
+    circling_verify.py reporting the band's two transcripts as "parse_transcript refuses —
+    unknown speaker tag [Orchestrator]" while the same file parses fine once this follows.
+    Mutated IN PLACE for the same reason part_roster mutates: `from transcript_store import
+    TAG_TO_PART` and `TS.TAG_TO_PART` must both see it."""
+    TAG_TO_PART.clear()
+    TAG_TO_PART.update(R.DIR_BY_TAG_ALL)
+
+
 def circle_transcript_line_render(e: dict) -> str:
     """The exact line `append` was given for this entry.
 
@@ -231,13 +248,13 @@ def circle_transcript_is_withheld(e: dict) -> bool:
                         bracket still reaches the transcript file.
 
     FOUR READERS MUST AGREE, and until this existed they agreed by
-    coincidence. render_messages() must not show it to a part;
+    coincidence. prompt_messages_render() must not show it to a part;
     circle_transcript_state_rebuild() must not move a counter for it; statements() must not
     let /issue-evidence-add address it; part_addressed_since() must count it as
     neither a statement nor an address. Each was its own `e.get("cmd")`
     test or no test at all, so adding a second member meant finding all
     four — and the one that gets missed fails silently, in one direction
-    only. The live/resume divergence rebuild_state's own comment records is
+    only. The live/resume divergence circle_transcript_state_rebuild's own comment records is
     exactly that shape, and part_addressed_since() had no test whatsoever."""
     # recall_only joined 2026-08-30 (R402), the THIRD member: a statement
     # that was ENTIRELY a [recall: ...] — the query reaches the file, the
@@ -253,7 +270,7 @@ def _split_remember(e: dict) -> None:
     what the room may see.
 
     THE RESUME PATH'S HALF OF THE 2026-08-14 RULING, built 2026-08-18. The
-    live loop strips the bracket before `text` reaches render_messages(), and
+    live loop strips the bracket before `text` reaches prompt_messages_render(), and
     writes the unstripped line to the file. Reading that file back without
     this would hand the bracket straight to the next prompt — every part
     would read a private note that was never in the room, and the leak would
@@ -395,7 +412,7 @@ def circle_transcript_parse(raw: str) -> tuple[str, str, list[dict]]:
             if note:
                 # A statement whose LAST paragraph is only its
                 # [remember: ...] bracket writes bytes indistinguishable
-                # from a Coordinator note — and render_messages() carries
+                # from a Coordinator note — and prompt_messages_render() carries
                 # every Coordinator line into every part's prompt, so reading
                 # it as one handed the private annotation to the whole
                 # room on resume (found 2026-08-19; the round-trip check
@@ -605,7 +622,7 @@ def circle_sandbox_commit(ot: str) -> None:
 def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     """Every path this circle's own commit stages. PURE — no git, no writes —
     so what a close records can be asserted without a repository, which is
-    what nothing could do while this list lived inside `commit_circle`.
+    what nothing could do while this list lived inside `circle_commit`.
 
     THE TWO REGISTERS JOINED 2026-08-26, on the operator's word, after a
     real circle's leftovers deadlocked a `pull-main`: the lab's tree was
@@ -617,7 +634,7 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
         proposals.toml      written by vetting DURING and AT the close
 
     The close's own order is what makes staging them here correct rather
-    than hopeful: `vet_pending_proposals("at close", ...)` runs before
+    than hopeful: `proposal_vet("at close", ...)` runs before
     `circle_close_mark()`, which runs before the short_terms, the verifier
     and this commit, so both files are final by the time it fires. And
     SYNTHESIS does not write either — it reads confirmed proposals — so the
@@ -681,7 +698,7 @@ def circle_commit(ot: str, written: list[str]) -> None:
         # "note" are routine narration, dev-gated same as everywhere else in
         # the close. "fail" is the one kind that always reaches the pane —
         # there is no OTHER signal for this commit's own failure (unlike
-        # circle_close_verifier_run()/process_circle(), which each have their own
+        # circle_close_verifier_run()/circle_process(), which each have their own
         # unconditional fail() at the call site), so hiding it here would be
         # silent, not quiet.
         if CS.dev_mode or kind == "fail":

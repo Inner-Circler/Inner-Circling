@@ -5,7 +5,7 @@ between the round it was spoken in and the row Self rules on.
 
 MOVED OUT OF annotations.py, 2026-09-03 (cohesion re-homing stage 8, B99; the name is the
 BNF's own section, PROPOSE LIFECYCLE). annotations.py keeps the BRACKET GRAMMAR — ASK_RE,
-extract_annotations(), the remember paths, route_annotations() — and this module reads it as
+annotation_extract(), the remember paths, annotation_route() — and this module reads it as
 MK. Every function below is the verbatim body it had there; only the file moved.
 
 RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodies untouched:
@@ -205,7 +205,7 @@ def proposal_unruled_list(transcript: list[dict],
                                                # remember is a private note,
                                                # never Self-facing. In
                                                # practice this never fires:
-                                               # apply_remember() strips a
+                                               # remember_apply() strips a
                                                # remember before the
                                                # transcript ever stores it,
                                                # so none survives to reach

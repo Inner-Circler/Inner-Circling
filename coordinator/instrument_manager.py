@@ -10,7 +10,7 @@ what it puts into a prompt.
 WHAT THIS IS FOR. Two published psychological instruments measured this
 installation's operator on 2025-11-30, and their results lived until
 2026-08-27 in two PNG screenshots that no code had ever read. Four places in
-the tree described the operator from them — `self/self.md`, `docs/origin.md`
+the tree described the operator from them — `self/self.md`, `docs/origin.md (archived)`
 §3, `parts/learner/long_term.md`, and through that last one the Learner's live
 BLOCK 3 — and all four read a PERCENTILE as though it were a SCORE. That is
 not a wording slip: the instruments report both quantities, they disagree

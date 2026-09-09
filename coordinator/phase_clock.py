@@ -71,6 +71,9 @@ class PhaseClock:
         self._stack: list[tuple[str, float]] = []
         self._close_t0: float | None = None
         self._hb_stop: threading.Event | None = None
+        # THE THREAD ITSELF, kept so stop_heartbeat() can JOIN it. Flagging a thread
+        # to stop does not stop it; only waiting for it does. See stop_heartbeat().
+        self._hb_thread: "threading.Thread | None" = None
         self.notify = None          # callable(str) | None — bound by the caller
 
     # ------------------------------------------------------------- spans
@@ -125,9 +128,22 @@ class PhaseClock:
                 f"aim. The phases list in the spend report says where it went.")
 
     # ------------------------------------------------------ the heartbeat
-    def start_heartbeat(self, interval: float, notify=None) -> bool:
+    def start_heartbeat(self, interval: float, notify=None, quiet_since=None) -> bool:
         """Begin the every-`interval` progress line. Returns False when a
-        beat is already running — the second caller must NOT stop it."""
+        beat is already running — the second caller must NOT stop it.
+
+        AND THE SECOND CALLER'S CADENCE IS DISCARDED WITH IT, which the return
+        value is the only warning of. Arming at 3s for the whole run makes a
+        later 10s arming a no-op; that is intended where one beat serves the
+        process, and it is a silent surprise anywhere else. Honour the return.
+
+        `quiet_since` IS WHAT MAKES THIS THE RULED BEHAVIOUR RATHER THAN AN
+        APPROXIMATION OF IT. Without it the beat marks elapsed time — it fires
+        every `interval` whether or not anything was printed in between. The
+        operator ruled a gap *"between any output and another output"*, so a
+        callable returning seconds-since-the-last-line is passed in and a tick
+        is skipped while the program is still talking. Omitted, the old
+        timer behaviour stands, which is what the close's own arming wants."""
         with self._lock:
             if self._hb_stop is not None:
                 return False
@@ -135,14 +151,60 @@ class PhaseClock:
         if notify is not None:
             self.notify = notify
 
+        # POLLED, NOT ON A GRID. `while not stop.wait(interval)` woke on a fixed
+        # cadence measured from the ARMING, and a tick that found the program
+        # still talking was simply dropped — so output landing just after a
+        # tick pushed the first mark to the tick after next, and a silence of
+        # up to TWICE the interval went unmarked. Measured at 5.96s with a
+        # 3-second interval, which is the rule failing at its own number.
+        #
+        # Waking often and deciding cheaply is the fix: two float comparisons
+        # four times a second cost nothing, and the mark then lands within a
+        # quarter-second of the moment the silence actually reaches `interval`.
+        #
+        # SIZED TO THE INTERVAL, never a flat constant. A fixed 0.25 quietly
+        # makes every interval below it unreachable — the beat cannot mark
+        # faster than it wakes — and the probes drive this at hundredths of a
+        # second precisely so they need no real waiting. A quarter of the
+        # interval keeps the mark within 25% of its due moment at any cadence,
+        # and is 0.25s at the ruled three seconds.
+        POLL = max(0.005, min(0.25, interval / 4))
+
         def _beat() -> None:
-            while not stop.wait(interval):
+            # From the ARMING, so the first mark is a full interval away and
+            # not immediate.
+            last_mark = time.monotonic()
+            while not stop.wait(POLL):
+                # STILL TALKING IS NOT WAITING. Checked before the phase, so a
+                # long phase that is reporting as it goes stays unmarked.
+                if quiet_since is not None and quiet_since() < interval:
+                    continue
+                # AND A MARK IS ITSELF NOT OUTPUT. The terminal's dot
+                # deliberately does not reset the output stamp — otherwise the
+                # second dot would never come — so the cadence BETWEEN marks is
+                # kept here rather than read from quiet_since.
+                if time.monotonic() - last_mark < interval:
+                    continue
                 cur = self.current()
                 if cur and cur[0] == WAITING:
                     continue            # a human is typing; do not spin at them
                 fn = self.notify
                 if fn is None:
                     continue
+                # STOPPED MEANS STOPPED, checked as late as possible — the cheap
+                # half. The loop wakes on POLL rather than on the interval, so a
+                # thread already PAST its wait when stop.set() lands is several
+                # times more likely than it was, and a beat arriving after
+                # stop_heartbeat() returned is a line printed over whatever the
+                # caller went on to say.
+                #
+                # THIS CHECK ALONE ONLY NARROWS THE WINDOW; stop_heartbeat()'s
+                # join is what closes it. A thread descheduled between here and
+                # fn() below still prints, however late the check is made — which
+                # is exactly the failure test_phase_clock.py caught about one run
+                # in six, and which a blocking notify reproduces every time.
+                if stop.is_set():
+                    return
                 total = self.close_seconds()
                 tail = f" ({total:.0f}s since /close)" if total is not None else ""
                 line = (f"  … still {cur[0]} ({cur[1]:.0f}s){tail}" if cur
@@ -151,16 +213,45 @@ class PhaseClock:
                     fn(line)
                 except Exception:       # noqa: BLE001 — a beat must cost nothing
                     pass
+                # STAMPED EVEN IF fn RAISED. A notify that throws every time
+                # would otherwise leave last_mark untouched and the beat would
+                # retry it four times a second for the rest of the run.
+                last_mark = time.monotonic()
 
-        threading.Thread(target=_beat, name="phase-heartbeat",
-                         daemon=True).start()
+        t = threading.Thread(target=_beat, name="phase-heartbeat", daemon=True)
+        with self._lock:
+            self._hb_thread = t
+        t.start()
         return True
+
+    # THE JOIN IS THE WHOLE PROMISE — 2026-09-09. Setting the Event only ASKS the beat
+    # to stop; a thread already past its own stop check goes on to call notify, and
+    # that line lands on top of whatever the caller said next. The loop's late check
+    # narrows that window to a few instructions and cannot close it, which is what
+    # test_phase_clock.py's "stopped means stopped" was failing on about one run in
+    # six — load-dependent, so it never reproduced in a quiet loop and read as a flaky
+    # test rather than the real defect it is.
+    #
+    # A BOUNDED join, and never on our own thread:
+    #   TIMEOUT   a notify that blocks for ever must not wedge a close. The state is
+    #             cleared BEFORE the join, so a later start_heartbeat() still works
+    #             even if this one times out; the thread is a daemon and dies with
+    #             the process.
+    #   SELF      stop_heartbeat() called from inside a notify would join itself and
+    #             raise. The identity test makes that a no-op instead.
+    # The lock is released before joining — the beat takes it in current(), so holding
+    # it across the join would deadlock the very thread we are waiting for.
+    HB_JOIN_TIMEOUT = 5.0
 
     def stop_heartbeat(self) -> None:
         with self._lock:
             stop, self._hb_stop = self._hb_stop, None
-        if stop is not None:
-            stop.set()
+            thread, self._hb_thread = self._hb_thread, None
+        if stop is None:
+            return
+        stop.set()
+        if thread is not None and thread is not threading.current_thread():
+            thread.join(self.HB_JOIN_TIMEOUT)
 
     # --------------------------------------------------------- the record
     def snapshot(self) -> dict:

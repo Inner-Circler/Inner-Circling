@@ -558,12 +558,6 @@ only one).
 --recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
                     expand topic-matched seeds into each part's BLOCK 4.
                     ARM is off | delivered | withheld. Default: off.
---no-prewarm        skip llm_client.stream_prewarm(), the sequential
-                    zero-output-token calls that write each part's cached
-                    prompt prefix before the opening round. Default: off
-                    (the prewarm runs).
---no-blind          run the PRIOR protocol: a sequential opening round,
-                    instead of the default BLIND round. Default: off.
 --seed N            see "Seed" below. Default: unset (a fresh shuffle
                     every round).
 --yes               skip the reduced-live-roster confirmation prompt.

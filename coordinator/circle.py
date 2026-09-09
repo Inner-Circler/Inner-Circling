@@ -63,6 +63,7 @@ import pathlib
 import random
 import re
 import sys
+import threading
 
 import pathlib as _pl
 sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
@@ -379,7 +380,66 @@ DEFAULT_PARTS = _default_parts_read()
 # its just a spinner." The aim is REPORTED, never enforced: a slow close must
 # not fail a close that otherwise held (the spend report's own rule).
 CLOSE_AIM_SECONDS = SET.setting_value_read("close_aim_seconds", 300)
-CLOSE_HEARTBEAT_SECONDS = SET.setting_value_read("close_heartbeat_seconds", 10)
+# close_heartbeat_seconds is READ BY inter_circle.py NOW, not here — the close
+# shares the one beat armed at open, and a constant nothing reads is a claim
+# that something still does.
+# THE GENERAL RULE'S CADENCE — the operator, 2026-09-09: *"If there is ever a
+# measured delay of over 3 seconds between user input and any output -- or
+# between any output and another output (rather than waiting on user input) --
+# and there is a clock to watch this, then a progress indication, e.g. a
+# concatenated "." is to be added (every 3 seconds)."*
+#
+# ITS OWN SETTING, NOT close_heartbeat_seconds. That one is the CLOSE's
+# cadence and its default is 10; folding the two would change the close's
+# rhythm as a side effect of a rule about the whole run, and a setting is
+# supposed to be the one place a value is chosen.
+PROGRESS_SECONDS = SET.setting_value_read("progress_seconds", 3)
+
+
+def system_progress_arm() -> None:
+    """Start this run's progress beat. Safe to call more than once.
+
+    STOP FIRST, so this run's beat is its own. main() runs more than once in a
+    UI process, and every early return between the arming and the close — an
+    /abort above all — leaves one going; a second arming returns False and the
+    new run would inherit the old one's notify. Stopping first bounds that to
+    "between runs" rather than "forever", and costs nothing when none runs.
+
+    ONE BEAT FOR THE RUN. The close used to arm a second at its own cadence;
+    a second arming silently discarded it, so the close keeps its stopwatch
+    (close_begin) and shares this one.
+
+    CALLED FROM TWO DOORS. The circle open, before the SDK import; and
+    circle_file(), because --file-circle returns long before the open's arming
+    and its git commit was measured at 57s and 71s on the two newest closes,
+    unmarked — a recovery the close itself prints to a person who is already
+    worried about whether their circle survived."""
+    PC.PHASES.stop_heartbeat()
+    PC.PHASES.start_heartbeat(PROGRESS_SECONDS,
+                              notify=system_progress_render,
+                              quiet_since=seam.system_output_quiet_seconds)
+
+
+def system_progress_render(line: str) -> None:
+    """What a beat looks like, per window and per dev state.
+
+    THE DOT IS AN EXAMPLE, NOT A MANDATE — *"a progress indication, e.g. a
+    concatenated '.'"*. A phase name is technical detail, which this project
+    already gates on dev, so:
+
+        dev on          the phase line, which says WHICH slow thing is running
+        a command pane  a plain still-working line; a pane holds lines, and
+                        dots cannot concatenate there — CircleEngine._emit
+                        drops end= and flush= by design
+        a terminal      the concatenated dot, which is the one window where it
+                        joins onto one line and the one window with no loop of
+                        its own to draw an indicator from"""
+    if CS.dev_mode:
+        emit("command", line)
+    elif seam.COMMAND_PANE:
+        emit("command", "  … still working")
+    else:
+        seam.system_progress_tick()
 
 
 def issue_graph_redraw() -> None:
@@ -579,25 +639,16 @@ def main() -> int:
                          "them — the control arm of the recall trial, closed "
                          "R460 (2026-09-06); kept for a future trial, no UI "
                          "sends it.")
-    ap.add_argument("--no-prewarm", action="store_true",
-                    help="skip stream_prewarm() — the sequential, zero-output-token "
-                         "calls that write each part's cached prompt prefix "
-                         "before the opening round. Without it, the opening "
-                         "round pays the cache-write cost on the first real "
-                         "turn instead — redundantly, per concurrently-firing "
-                         "part, under the default BLIND round. CACHE_TTL is "
-                         "1h (chosen because circles pause longer than the "
-                         "5m default), so a warmed cache ordinarily survives "
-                         "to the opening round; it can still go stale if the "
-                         "gap before the first real turn exceeds that hour. "
-                         "Independent of --no-blind, which controls the "
-                         "opening round's own protocol, not whether the "
-                         "cache is warmed first.")
-    ap.add_argument("--no-blind", action="store_true",
-                    help="run the PRIOR protocol: a sequential opening round. "
-                         "CIRCLE_DESIGN.md requires each protocol change to keep "
-                         "the ability to run what came before, because these "
-                         "change the loop that runs live circles.")
+    # --no-prewarm AND --no-blind ARE RETIRED, 2026-09-09 (the operator:
+    # *"remove --no-prewarm, remove --no-blind"*). Both were opt-outs nothing in
+    # the tree ever passed: --no-prewarm arrived in the first commit with no
+    # help text and no ruling, --no-blind on 2026-08-01 in the commit that built
+    # the blind round, and a sweep of every .py, .md, .toml, .txt and .json
+    # found no invocation of either — only prose. The pre-warm now always runs
+    # (subject to its own early returns: a dry run and a provider with no cache
+    # both skip it inside stream_prewarm), and the opening round is always
+    # BLIND. circle_round_run() is untouched and still runs every round after
+    # the opening.
     ap.add_argument("--seed", type=int,
                     help="seed for random.shuffle, which sets the order parts are "
                          "polled within a round. Fixing it makes a test repeatable; "
@@ -609,17 +660,34 @@ def main() -> int:
                          "The transcript must round-trip byte-for-byte or the "
                          "resume is refused. No topic prompt and no opening "
                          "round: the circle continues where it stopped.")
+    # HIDDEN FROM --help, UNCHANGED IN BEHAVIOUR — 2026-09-09, the operator:
+    # *"leave --dev handling unchanged but remove it from the circle.py help
+    # response: it is hidden."* argparse.SUPPRESS drops the option from the
+    # rendered --help and touches nothing about parsing: every form below still
+    # works, and `if args.dev` still sets CS.dev_mode exactly as it did.
+    #
+    # THE PROSE MOVED, IT WAS NOT LOST. What this help string said is now in
+    # _dev_bool's docstring above and in coordinator/docs/circle.md, which is
+    # where a supported-but-hidden flag belongs: absent from --help, present in
+    # the manual. The four forms, for a reader who reaches this line —
+    #     (absent)      dev off, the default
+    #     --dev         on   (const=True; type= is never applied to a const)
+    #     --dev=true    on    --dev true   on   (the space form parses too)
+    #     --dev=false   declines to turn it on; it cannot turn a set flag off,
+    #                   because the branch below is `if args.dev` with no else
+    # It is the standalone terminal's only door since R286 took /dev off the
+    # circle prompt; the command pane has its own unlisted `dev`.
     ap.add_argument("--dev", nargs="?", const=True, default=False, type=_dev_bool,
-                    help="open with dev mode ON — the DEV-table verbs, the "
-                         "help hierarchy, and the coalesce/pre-warm/opening-"
-                         "round progress lines all answer at this terminal's "
-                         "Self> prompt. Default: off (also settable "
-                         "explicitly as --dev=false). Bare --dev, same as "
-                         "--dev=true. The standalone terminal's only door "
-                         "since 2026-08-21: /dev at the circle prompt is "
-                         "gone (dev is the command pane's own unlisted verb).")
+                    help=argparse.SUPPRESS)
     ap.add_argument("--list-resumable", action="store_true",
                     help="show circles that have a transcript but no close report")
+    ap.add_argument("--file-circle", metavar="OPEN_TIME", default=None,
+                    help="file a closed circle whose save git refused, then "
+                         "reflect on it — R506. Nothing is restarted and "
+                         "nothing is re-asked: the circle is already complete "
+                         "on disk, so this repeats the save alone and then "
+                         "runs the dreaming and synthesis the close skipped. "
+                         "Refuses a circle that has already been reflected on.")
     ap.add_argument("--dev-cmd", nargs=argparse.REMAINDER, metavar="VERB ...",
                     help="run ONE always-available command directly from the "
                          "shell, no circle needed — the ic.py replacement, "
@@ -653,6 +721,13 @@ def main() -> int:
 
     if args.list_resumable:
         return CC.circle_resumable_list()
+
+    # BEFORE THE MODE CHECK, like --list-resumable above it: this acts on a
+    # circle that has already closed, so it opens nothing and needs neither
+    # --live nor --dry-run. It DOES write and it DOES call the model, which
+    # is why it names the circle explicitly rather than guessing the newest.
+    if args.file_circle:
+        return CC.circle_file(args.file_circle)
 
     if args.dev_cmd is not None:
         if not args.dev_cmd:
@@ -850,6 +925,18 @@ def main() -> int:
         guard = WriteGuard(args.live, ot)
         path = circle_path(ot)
 
+    # THE BEAT STARTS HERE, BEFORE THE SDK IMPORT — moved up from just before
+    # the record sweep, 2026-09-09. `stream_client_build()` below pays the
+    # first `import anthropic` in the process: measured 1.7-2.8s across eight
+    # runs on a warm tree, of which the import alone is 2.45s. Under three
+    # seconds only by the margin of a warm file cache, and the first launch
+    # after a reboot crosses it with nothing on screen. Nothing between here
+    # and the sweep needs the beat off, and a dot before the banner is honest.
+    #
+    # IT CANNOT REACH FURTHER BACK. The interpreter start and `import circle`
+    # are 0.33-0.56s more, and no Python of ours is running yet to mark them.
+    system_progress_arm()
+
     client = None
     if not args.dry_run:
         # THE PROVIDER BUILDS IT — stage 2 of the socket (R382). This block
@@ -942,8 +1029,58 @@ def main() -> int:
     # "<check>: <result>" string in a single call is what makes the two
     # environments agree, so the check's outcome must be known before
     # anything is emitted for it.
-    with PC.PHASES.span("open.integrity_check"):
-        _findings, _seen = CI.record_sweep()
+
+    # THE TWO CHECKS RUN AT ONCE — the operator's ruling, 2026-09-09. They contend for
+    # nothing: the sweep is disk and CPU and opens no socket, the preflight is one network
+    # round trip and reads no file. Measured on circle 2026-09-09_1122, the pair cost
+    # 4.53s + 1.42s in series; concurrently the pair costs the longer of the two.
+    #
+    # THE BEAT ABOVE STILL NAMES THE SWEEP, which is why it is armed first and why this
+    # ordering is not arbitrary. current() reports the INNERMOST open span, so while both
+    # run it names the preflight — but the preflight is the short one (1.42s against
+    # PROGRESS_SECONDS, 3), so it has popped before the first beat can fire, and every
+    # beat a person actually sees is the sweep's. The long operation is still the one
+    # named on screen.
+    #
+    # THE ORDER OF OUTPUT IS UNCHANGED, and that is why the results are held rather than
+    # emitted where they are found: integrity, then the key-source note, then the api line.
+    # A reader (and every probe that greps this output) sees exactly what it saw before.
+    #
+    # WHAT IT COSTS, NAMED: a corrupted tree now spends ONE preflight call, where the
+    # serial order refused before reaching it. The refusal message no longer claims
+    # otherwise. Nothing is WRITTEN either way, which is what the 2026-08-09 ruling
+    # actually protects — no transcript, no working-set entry, no topic asked for.
+    #
+    # PhaseClock.span() is safe on two threads: it is lock-guarded and pops its OWN
+    # (name, t0) entry rather than the top of the stack, so two open spans record
+    # correctly and neither leaves the stack lying about who is open.
+    _sweep: dict = {}
+
+    def _open_integrity_sweep() -> None:
+        try:
+            with PC.PHASES.span("open.integrity_check"):
+                _sweep["out"] = CI.record_sweep()
+        except BaseException as _exc:                            # noqa: BLE001
+            _sweep["exc"] = _exc                                 # re-raised on the main thread
+
+    _sweep_thread = threading.Thread(target=_open_integrity_sweep,
+                                     name="open-integrity-sweep")
+    _sweep_thread.start()
+
+    # THE API CHECK, as early as it can be run: the client exists, and nothing
+    # has been typed or written. See the preflight block above for the ruling.
+    _note = stream_key_source_note()
+    _why = None
+    if client is not None:
+        # The span wraps the WHOLE check, so the timing goes around it, not through it.
+        with PC.PHASES.span("open.api_check"):
+            _why = stream_api_preflight(client, args.dry_run)
+
+    _sweep_thread.join()
+    if "exc" in _sweep:
+        raise _sweep["exc"]
+    _findings, _seen = _sweep["out"]
+
     if _findings:
         emit("command", "\nintegrity check: FAILED")
         emit("command", f"\n  !! {len(_findings)} operational file(s) are corrupted. "
@@ -953,29 +1090,23 @@ def main() -> int:
             emit("command", f"         {_f.defect}")
             emit("command", f"         {_f.remedy}")
         emit("command", "\n     Nothing was written — no transcript, no working-set "
-                        "entry, no API call.\n     Repair or restore the file(s) "
+                        "entry, no topic asked for.\n     Repair or restore the file(s) "
                         "above, then open again.")
         return 2
     emit("command", f"\nintegrity check: ok ({_seen} files)")
 
-    # THE API CHECK, as early as it can be run: the client exists, and nothing
-    # has been typed or written. See the preflight block above for the ruling.
     # No blank line ahead of it: the integrity check above already opened
     # this section, and the two checks read as one block, not two.
-    if note := stream_key_source_note():
-        emit("command", f"\n  !! {note}")
+    if _note:
+        emit("command", f"\n  !! {_note}")
     if client is not None:
-        # The span wraps the WHOLE check — test_providers.py greps this file
-        # for the walrus line verbatim, so the timing goes around it, not
-        # through it.
-        with PC.PHASES.span("open.api_check"):
-            if why := stream_api_preflight(client, args.dry_run):
-                emit("command", "api check: FAILED")
-                emit("command", f"\n  !! {why}")
-                emit("command", "\n     Nothing was written — no transcript, no working-set "
-                      "entry.\n     Fix the key and open again; the topic has not "
-                      "been asked for yet.")
-                return 2
+        if _why:
+            emit("command", "api check: FAILED")
+            emit("command", f"\n  !! {_why}")
+            emit("command", "\n     Nothing was written — no transcript, no working-set "
+                  "entry.\n     Fix the key and open again; the topic has not "
+                  "been asked for yet.")
+            return 2
         emit("command", "api check: ok")
 
     # IS A CIRCLE ALREADY OPEN? CLAUDE.md has required this before any write
@@ -1417,19 +1548,23 @@ def main() -> int:
     except Exception as e:                                   # noqa: BLE001
         fail(f"per-turn capture could not be opened: {e}")
 
-    if not args.no_prewarm:
-        if CS.dev_mode:
-            emit("command", "\npre-warming caches:")
-        try:
-            with PC.PHASES.span("open.prewarm"):
-                stream_prewarm(client, parts, sysblocks, args.dry_run)
-        except Exception as e:                                   # noqa: BLE001
-            # The 2026-08-09 traceback's exact site. Seven API calls, and a
-            # failure in any of them used to print a stack trace over a
-            # transcript that was already on disk.
-            emit("command", f"\n  !! PRE-WARM FAILED — {stream_failure_explain(e)}")
-            discard_unspoken()
-            return 2
+    # ALWAYS — the --no-prewarm opt-out is retired (2026-09-09). The three
+    # outcomes are stream_prewarm's own and unchanged: a dry run returns before
+    # any call, so does a provider with no prompt cache, and otherwise one
+    # zero-output-token call per part writes the shared prefix. A --resume
+    # re-warms too, as it always did: this sits ahead of the resumed branch.
+    if CS.dev_mode:
+        emit("command", "\npre-warming caches:")
+    try:
+        with PC.PHASES.span("open.prewarm"):
+            stream_prewarm(client, parts, sysblocks, args.dry_run)
+    except Exception as e:                                   # noqa: BLE001
+        # The 2026-08-09 traceback's exact site. Seven API calls, and a
+        # failure in any of them used to print a stack trace over a
+        # transcript that was already on disk.
+        emit("command", f"\n  !! PRE-WARM FAILED — {stream_failure_explain(e)}")
+        discard_unspoken()
+        return 2
 
     transcript: list[dict] = []
     if topic:
@@ -1476,13 +1611,12 @@ def main() -> int:
 
     if resumed:
         _, transcript, since_self, state = resumed
-    elif args.no_blind:
-        if CS.dev_mode:
-            emit("command", "\nopening round — SEQUENTIAL (prior protocol, --no-blind).")
-        with PC.PHASES.span("round"):
-            circle_round_run(client, parts, sysblocks, transcript, since_self, state,
-                      guard, path, args.dry_run, live=args.live)
     else:
+        # BLIND, ALWAYS — the --no-blind opt-out is retired (2026-09-09). It
+        # existed so the PRIOR sequential protocol could still be run for the
+        # opening round; nothing in the tree ever passed it and no probe ever
+        # covered the branch. circle_round_run() is NOT orphaned by this: it is
+        # what runs every round after the opening, from the Self> loop below.
         if CS.dev_mode:
             emit("command", "\nopening round — BLIND (parallel; CIRCLE_DESIGN §1).")
         with PC.PHASES.span("round"):
@@ -1678,9 +1812,14 @@ def main() -> int:
         # toggle is the command pane's own unlisted `dev`; the standalone
         # terminal opens with --dev. A `/dev` typed here now falls through
         # to UNKNOWN COMMAND like any other slash word, and is never spoken.
-        if (not CS.dev_mode and cmd.startswith("/")
-                and CS.command_head_normalise(cmd.split(" ", 1)[0])
-                not in CS.USER_SUBSET_COMMANDS):
+        # THE ALLOWED QUESTION IS command_surface's — 2026-09-09. It was
+        # `not in USER_SUBSET_COMMANDS` here, which made a `-list` verb's
+        # availability depend on which of two tables it happened to sit in;
+        # the operator ruled every `-list` verb runnable regardless of dev.
+        if (cmd.startswith("/")
+                and not CS.command_is_allowed(
+                    CS.command_head_normalise(cmd.split(" ", 1)[0]),
+                    CS.dev_mode)):
             # R266, 2026-08-20: DEV MODE ADDS, IT NEVER TAKES AWAY. This
             # refused EVERY remaining "/" verb with dev off, which made the
             # user's own issue commands, practices, topics and recall
@@ -1889,6 +2028,10 @@ def main() -> int:
               f"aborted")
 
     if aborted:
+        # THE BEAT ENDS WITH THE CIRCLE, not only with a close. It is armed at
+        # open now, so an abort is a path that has one running and never
+        # reached the close's stop.
+        PC.PHASES.stop_heartbeat()
         emit("circle", f"\naborted. transcript kept: {path}")
         if args.live and any(e["speaker"] in PART_TAGS for e in transcript):
             emit("command", "  NOTE: no short_terms were collected. Parts that spoke have no")
@@ -1974,10 +2117,13 @@ def main() -> int:
     # the vetting checkpoint, which is human time, and before the first
     # automated step. Everything below is what the <=5-minute aim covers,
     # and while it runs the command pane hears something at least every
-    # CLOSE_HEARTBEAT_SECONDS, even if only the beat.
+    # PROGRESS_SECONDS, even if only the beat.
+    # THE STOPWATCH ONLY. The beat was armed at open and is already running at
+    # PROGRESS_SECONDS; arming a second one here returned False and silently
+    # discarded its own close_heartbeat_seconds anyway, so that arming is
+    # gone rather than left looking effective. close_begin() is what supplies
+    # the "(Ns since /close)" suffix the beat's dev line carries.
     PC.PHASES.close_begin()
-    PC.PHASES.start_heartbeat(CLOSE_HEARTBEAT_SECONDS,
-                              notify=lambda s: emit("command", s))
 
     if args.live:
         with PC.PHASES.span("close.redraw_graph"):
@@ -2031,7 +2177,7 @@ def main() -> int:
         # it to match transcript_store.circle_commit() would silently break that citation,
         # and a ruling is the one record a rename may not reach.
         with PC.PHASES.span("close.commit_circle"):
-            circle_commit(ot, written)
+            filing = circle_commit(ot, written)
         # PHASE 2 — dreaming then synthesis, synchronous, AFTER the circle's
         # own commit (R167: a phase-2 failure leaves the circle safely
         # committed; R168: failures write a report, get one diagnostic
@@ -2046,14 +2192,32 @@ def main() -> int:
         # mid_term refresh, git-commit mechanics, even the failure
         # diagnosis text circle_process() prints on its own way out. Safe
         # to gate as one block because the FAILURE case has its own
-        # unconditional signal regardless: the fail() call right below,
-        # which fires whenever circle_process() returns non-zero whether
-        # or not its own narration was ever shown.
-        if ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
-                              say=lambda s: emit("command", s) if CS.dev_mode
-                                            else None):
+        # unconditional signal regardless: the fail() calls below, which
+        # fire whether or not that narration was ever shown.
+        #
+        # A CIRCLE THAT IS NOT FILED IS NOT REFLECTED ON. R506, 2026-09-09,
+        # the operator: "Stop, do not reflect on a circle that is not filed.
+        # Do support reflection if the circle is later filed." At
+        # 2026-09-09_1122 the gate refused this commit and phase 2 ran
+        # anyway, writing dreaming and synthesis into the live tree on top of
+        # a circle git had declined — and then failed its OWN commit for the
+        # same reason, leaving the operator one re-run away from dreaming
+        # twice. Reflection is now downstream of the filing, not beside it.
+        #
+        # "refused" ONLY. A tree that keeps no history has not refused
+        # anything (R349's Tier 1), and withholding dreaming there would
+        # punish the supported case rather than the broken one.
+        if filing == "refused":
+            fail("the circle is written but NOT FILED — git refused the "
+                 "commit; see the 'fail' line above for why. Nothing you "
+                 "wrote is lost, and no reflection has run on it. When the "
+                 "refusal is fixed, file it and reflect in one step:\n"
+                 f"    python coordinator\\circle.py --file-circle {ot}")
+        elif ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
+                                say=lambda s: emit("command", s) if CS.dev_mode
+                                              else None):
             fail("phase 2 (dreaming/synthesis) did not complete — the "
-                 "circle itself is committed; see work/logs/"
+                 "circle itself is filed; see work/logs/"
                  f"dream_error_{ot}.json and re-run by hand")
     else:
         emit("command", "  (sandbox mode: verifier not run — it reads the live tree)")

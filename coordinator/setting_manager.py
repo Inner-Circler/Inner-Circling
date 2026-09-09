@@ -196,12 +196,15 @@ SPEC: tuple[Setting, ...] = (
        "The length a part is told never to exceed",
        "NUMERIC_STRING", 2000, "dev", "next_circle",
        "coordinator/prompt_build.py::LENGTH_MAX_WORDS", unit="words"),
-    # THE BLIND ROUND AND THE PRE-WARM ARE DELIBERATELY ABSENT. Both already
-    # have a control a person can reach — --no-blind and --no-prewarm — and
-    # this register exists for values that have none. Adding them would mean
-    # giving argparse a settings-sourced default, which is a second way to
-    # say the same thing and the kind of scope creep that turns a small
-    # mechanism into a large one.
+    # THE BLIND ROUND AND THE PRE-WARM ARE DELIBERATELY ABSENT, AND NOW HAVE NO
+    # CONTROL AT ALL. The reason recorded here was that each already had one a
+    # person could reach, --no-blind and --no-prewarm; the operator retired both
+    # flags on 2026-09-09 and neither behaviour is switchable any more. That
+    # REMOVES a reason to keep them out and supplies no reason to put them in:
+    # a setting here would still mean giving argparse a settings-sourced
+    # default for a value nothing has ever wanted to change — no invocation of
+    # either flag existed anywhere in the tree across its whole life. If one is
+    # ever wanted, it is a ruling and a row, not a reinstated flag.
     # ---- what a part is given and allowed to keep
     _s("remember_word_cap",
        "How long a part's own remembered note may be",
@@ -351,7 +354,18 @@ SPEC: tuple[Setting, ...] = (
     _s("close_heartbeat_seconds",
        "How often the close reports progress while it works",
        "NUMERIC_STRING", 120, "dev", "next_circle",
-       "coordinator/circle.py::CLOSE_HEARTBEAT_SECONDS", unit="seconds"),
+       "coordinator/inter_circle.py::CLOSE_HEARTBEAT_SECONDS", unit="seconds"),
+    # DEV, LIKE ITS SIBLING ABOVE, AND THAT IS A QUESTION RATHER THAN A
+    # CONCLUSION. The rule it serves is about a person watching a blank screen,
+    # which argues for `user` — but the dev=false set is exactly three today
+    # (model, circle_stats, redact_view), it is the operator's own 2026-08-28
+    # selection, and each of the two widenings since was ruled. Adding a fourth
+    # is his call, and test_setting_manager.py pins the set precisely so it
+    # cannot be widened by someone passing through. Raised, not taken.
+    _s("progress_seconds",
+       "How long a silence may last before the app says it is still working",
+       "NUMERIC_STRING", 120, "dev", "next_circle",
+       "coordinator/circle.py::PROGRESS_SECONDS", unit="seconds"),
     # ---- what the service charges
     # THESE PRICE A REPORT; THEY DO NOT SPEND ANYTHING. Immediate, because
     # nothing in flight depends on them and a person correcting a price

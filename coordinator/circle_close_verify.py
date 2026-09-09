@@ -385,6 +385,61 @@ def _pc_shape(where: str, obj: dict, spec: dict, out: list) -> None:
                        + ", contract says one of " + repr(allowed))
 
 
+def circle_close_group_of(path: Path) -> "str | None":
+    """The group whose tree holds `path`, or None. Derived from
+    record_paths.group_present_read(), so only a folder carrying a group.toml
+    (R468) can ever be returned — never a string parsed out of the path."""
+    for g in _RP.group_present_read():
+        try:
+            path.relative_to(_RP.group_tree(g))
+        except ValueError:
+            continue
+        return g
+    return None
+
+
+def circle_close_transcript_resolve(root: Path, rel: object
+                        ) -> "tuple[Path | None, str | None, str | None, str | None]":
+    """(path, group, note, failure) for the transcript ONE close report names.
+    Distinct from circle_transcript_resolve(), which finds TODAY's transcript
+    for a live close; this reads a report that may be months old.
+
+    A THE-TREE-MOVED IS NOT A DEFECT, for the same reason a renamed parts/
+    directory is not (close_contract.toml [era]). A report records the
+    transcript's path as it stood at the close, and B117 (R467, 2026-09-07)
+    took every circle from `circles/` to `groups/<name>/circles/` — eleven
+    reports written between 2026-07-26 and 2026-08-21 carry the older path and
+    were TRUE WHEN WRITTEN.
+
+    So a path that is not on disk is looked for by BASENAME in every group's
+    circles/: exactly one match resolves it and is NOTED, none fails as
+    before, and more than one FAILS rather than guessing which circle the
+    report closed. Derived from the groups present — no hand-kept date, no old
+    path written down, so the next move is absorbed without an edit here."""
+    if not isinstance(rel, str) or not rel:
+        return None, None, None, "names " + repr(rel) + ", which is not a path"
+    p = root / rel
+    if p.is_file():
+        return p, circle_close_group_of(p), None, None
+
+    base = rel.replace("\\", "/").rsplit("/", 1)[-1]
+    hits = [(_RP.group_tree(g) / "circles" / base, g)
+            for g in _RP.group_present_read()
+            if (_RP.group_tree(g) / "circles" / base).is_file()]
+    if len(hits) == 1:
+        found, g = hits[0]
+        return found, g, ("names '" + rel + "', which the tree moved to '"
+                          + found.relative_to(root).as_posix()
+                          + "' — the report was true when written"), None
+    if len(hits) > 1:
+        return None, None, None, (
+            "names " + repr(rel) + ", which is not on disk, and "
+            + str(len(hits)) + " groups hold a circle by that name ("
+            + ", ".join(g for _f, g in hits) + ") — which circle the report "
+            "closed cannot be derived")
+    return None, None, None, ("names " + repr(rel) + ", which is not on disk")
+
+
 def circle_close_postcondition_verify(name: str, report: dict, root: Path,
                         contract: dict) -> "tuple[list[str], str]":
     """Every rule in close_contract.toml against ONE close report. Returns
@@ -412,19 +467,33 @@ def circle_close_postcondition_verify(name: str, report: dict, root: Path,
 
     ot = report.get("open_time")
     rel = report.get("transcript")
-    tpath = (root / rel) if isinstance(rel, str) else None
+    tpath, tgroup, moved, tfail = circle_close_transcript_resolve(root, rel)
 
     # names_its_own_transcript
-    if tpath is None or not tpath.is_file():
-        out.append(name + " [names_its_own_transcript]: names "
-                   + repr(rel) + ", which is not on disk")
+    if tfail or tpath is None:
+        out.append(name + " [names_its_own_transcript]: "
+                   + (tfail or ("names " + repr(rel) + ", which is not on disk")))
         return out, ""
     if isinstance(ot, str) and isinstance(rel, str) and ot not in rel:
         out.append(name + " [names_its_own_transcript]: open_time " + ot
                    + " is not the transcript it names, " + rel)
 
-    # THE ONE READER of a transcript's speaker tags — never a second regex
-    spoke = parts_that_spoke(tpath)
+    # EVERY REPORT IS READ WITH ITS OWN GROUP'S ROSTER — B117 stage 3's
+    # mechanism, which this sweep never called. The speaker grammar and
+    # DIR_NAMES below are the CURRENT group's; a band report read with the
+    # IFS roster finds no speaker at all and fails every row it carries.
+    # Restored in `finally`: a sweep must not leave the process bound to
+    # the last report's group.
+    bound = _RP.group_read()
+    try:
+        if tgroup and tgroup != bound:
+            _RP.group_set(tgroup)
+        # THE ONE READER of a transcript's speaker tags — never a second regex
+        spoke = parts_that_spoke(tpath)
+        roster = list(R.DIR_NAMES)
+    finally:
+        if _RP.group_read() != bound:
+            _RP.group_set(bound)
     rows = {r.get("part"): r for r in parts if isinstance(r, dict)}
 
     # A DIRECTORY RENAME IS NOT A DEFECT (see close_contract.toml). A row
@@ -436,7 +505,7 @@ def circle_close_postcondition_verify(name: str, report: dict, root: Path,
     renamed_rows: set = set()
     paired_speakers: set = set()
     unmatched = {p: n for p, n in spoke.items() if p not in rows}
-    for part in [p for p in rows if p not in R.DIR_NAMES]:
+    for part in [p for p in rows if p not in roster]:
         n = rows[part].get("statements")
         mate = next((s for s, m in unmatched.items() if m == n), None)
         if mate is None:
@@ -505,14 +574,18 @@ def circle_close_postcondition_verify(name: str, report: dict, root: Path,
                        + str(part) + " is present but its byte count is "
                        + repr(row.get("bytes")))
 
-    # The rename note rides out AFTER every rule has run: only the two
+    # The dispositions ride out AFTER every rule has run: only the two
     # NAME-based postconditions skipped the paired rows, which is what
-    # close_contract.toml says happens.
+    # close_contract.toml says happens. A report can carry both — a circle
+    # that moved trees AND a part directory renamed since.
+    tail: list[str] = []
+    if moved:
+        tail.append(moved)
     if renamed:
-        return out, (name + ": " + ", ".join(renamed)
-                     + " — a parts/ directory renamed since the close; "
-                       "the report was true when written")
-    return out, ""
+        tail.append(", ".join(renamed)
+                    + " — a parts/ directory renamed since the close; "
+                      "the report was true when written")
+    return out, ((name + ": " + "; ".join(tail)) if tail else "")
 
 
 def circle_close_postcondition_sweep(root: Path, open_time: "str | None" = None) -> int:
@@ -559,19 +632,33 @@ def circle_close_postcondition_sweep(root: Path, open_time: "str | None" = None)
     if stamps and open_time is None:
         oldest = stamps[0]
         seen = set(stamps)
-        circles = _RP.record_dir(root, "circles")
-        for t in sorted(circles.glob("circle_*.md")):
-            ot = t.name[len("circle_"):-len(".md")]
-            if ot < oldest:
-                continue
-            if ot not in seen:
-                fails.append(t.name + ": closed after close reporting began ("
-                             + oldest + ") and has no close report")
-        before = sum(1 for t in circles.glob("circle_*.md")
-                     if t.name[len("circle_"):-len(".md")] < oldest)
-        if before:
-            notes.append(str(before) + " transcript(s) predate the oldest "
-                         "close report (" + oldest + ") and are out of scope")
+        # EVERY GROUP'S CIRCLES, not the bound one's — B129, 2026-09-09. This
+        # walked `record_dir(root, "circles")`, so a circle in any OTHER group
+        # that closed after close reporting began and has NO close report was
+        # invisible to the census. The reports themselves were already read
+        # group-blind until the same day's fix; this is the other half, and
+        # the half that asks the question the other direction.
+        #
+        # Derived from group_present_read(), so a new group is censused
+        # without an edit. Measured before wiring: on 2026-09-09 neither group
+        # had a transcript in scope without a report, so this widened the
+        # question without changing today's answer.
+        for g in _RP.group_present_read():
+            circles = _RP.group_tree(g) / "circles"
+            for t in sorted(circles.glob("circle_*.md")):
+                ot = t.name[len("circle_"):-len(".md")]
+                if ot < oldest:
+                    continue
+                if ot not in seen:
+                    fails.append(g + "/" + t.name + ": closed after close "
+                                 "reporting began (" + oldest + ") and has no "
+                                 "close report")
+            before = sum(1 for t in circles.glob("circle_*.md")
+                         if t.name[len("circle_"):-len(".md")] < oldest)
+            if before:
+                notes.append(str(before) + " " + g + " transcript(s) predate "
+                             "the oldest close report (" + oldest
+                             + ") and are out of scope")
 
     n_rules = len(contract.get("postcondition", []))
     print("  " + str(checked) + " report(s) read against the transcript each "

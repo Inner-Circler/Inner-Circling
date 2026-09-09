@@ -79,6 +79,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 import issue_schema as S
 from atomic_write import record_atomic_write                                       # noqa: E402
 import seam                                                                # noqa: E402
+import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
+                           # heartbeat must not spin at someone typing
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -568,10 +570,10 @@ def issue_add(label: str, desc: str, absence: str, *, guard=None,
                              f"is written as a LEAD")
         return False
     if interactive and not desc:
-        desc = seam.read_line("  description (what the issue IS; Enter to "
+        desc = PC.stream_timed_read(seam.read_line, "  description (what the issue IS; Enter to "
                               "leave it for later): ").strip()
     if interactive and not absence:
-        absence = seam.read_line("  absence (what its ABSENCE looks like; Enter "
+        absence = PC.stream_timed_read(seam.read_line, "  absence (what its ABSENCE looks like; Enter "
                                  "to leave it for later): ").strip()
     complete = bool(desc and absence)
     status = "live" if complete else "lead"

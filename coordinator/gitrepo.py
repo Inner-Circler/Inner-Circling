@@ -120,6 +120,55 @@ class GitError(RuntimeError):
 #
 # THE FLAG IS A TOP-LEVEL OPTION and must precede the subcommand.
 # `git status --no-optional-locks` exits 129: `status` has no such option.
+# A GIT FAILURE'S OUTPUT LEADS WITH SOMEBODY ELSE'S SUCCESS — 2026-09-09, the
+# operator, reading a close: *"'commit failed: OK' is worse than awkward... what
+# does it mean?"*, over this line:
+#
+#     !! commit failed: OK    no CR and no NUL in 76 path(s) ...
+#
+# `system_git_run` returns stdout+stderr merged, and `git commit` runs the
+# pre-commit hook as a child whose output passes straight through. The hook
+# announces every check it PASSES, so the merged text opens with a wall of OK
+# and whatever actually refused is at the END. Printing that text after the
+# words "commit failed:" reads as though OK were the reason.
+#
+# THE TAIL IS WHERE A FAILURE REPORTS, and the head is where a success does. So
+# the message names the exit code (which was not shown at all), then the last
+# few lines that are not a hook's own pass marker.
+_PASS_MARKERS = ("  OK ", "  ok ", "  did ", "  DID ", "  note ", "  NOTE ")
+
+
+def _failure_tail(out: str, keep: int = 6) -> list[str]:
+    """The last `keep` lines of a git failure that are not a pass marker."""
+    lines = [ln.rstrip() for ln in out.splitlines() if ln.strip()]
+    meat = [ln for ln in lines
+            if not any(ln.startswith(m) or ln.lstrip().startswith(m.strip())
+                       for m in _PASS_MARKERS)]
+    return (meat or lines)[-keep:]
+
+
+def system_git_failure_explain(out: str) -> str:
+    """One line naming the likeliest cause, for the head of a failure report.
+
+    NAMED, NEVER GUESSED AT LENGTH: each branch is a string git or this
+    project's own hook actually emits. Anything unrecognised says so rather
+    than inventing a diagnosis — an honest "no reason given" beats a confident
+    wrong one, which is the whole defect this replaces."""
+    low = out.lower()
+    if "index.lock" in low:
+        return ("another git process holds .git/index.lock (it is SHARED with "
+                "every worktree) — report it, never remove it silently")
+    if "pre-commit" in low and "refus" in low:
+        return "the pre-commit hook refused; its reason is below"
+    if "nothing to commit" in low or "no changes added" in low:
+        return "git found nothing to commit in those paths"
+    if "please tell me who you are" in low or "user.email" in low:
+        return "git has no identity configured for this repository"
+    if "hook" in low:
+        return "a git hook exited non-zero; its last output is below"
+    return "git gave no recognised reason; its last output is below"
+
+
 def system_git_run(*args: str, check: bool = False, read_only: bool = False) -> tuple[int, str]:
     cmd = ["git"] + (["--no-optional-locks"] if read_only else []) + list(args)
     try:
@@ -605,7 +654,7 @@ def system_git_attributes_ensure(log) -> None:
 # included") was false from v138 until now. The suite gained the case that makes it true; the mark
 # moves because the rendered body did, and an unbumped mark leaves the installed hook stale in a
 # way only HOOK_MARK's own difference would have caught.
-# v161, 2026-09-07 (R485): coordinator/ifs_model.py -> coordinator/record_model.py. The
+# v174, 2026-09-07 (R485): coordinator/ifs_model.py -> coordinator/record_model.py. The
 # name is the only thing that was IFS about it; the RECORD it models is every group's. TWO arms
 # carry the literal path — the register-gate case and the SHORT_TERM case — so renaming one and
 # not the other would leave a case matching nothing, silently, which is this changelog's most
@@ -615,14 +664,14 @@ def system_git_attributes_ensure(log) -> None:
 # coordinator/proposal_vetting.py and coordinator/roster.py -> coordinator/part_roster.py, under
 # R435. FIVE arms carry a literal path between them — the annotation-surface case, the
 # practice/annotation case, the roster case, the record-paths case, and two `run` lines — and the
-# same trap as v161 above applies to every one of them.
+# same trap as v174 above applies to every one of them.
 #
 # v163, 2026-09-08 (E36): a case for packaging/conform_packaging.py and its new
 # suite. The script had NO trigger at all, which is how a default action that
 # spends money and overwrites the publish gate's record kept an unimplemented
 # --help — nothing ran a probe over its arguments because there was no probe
 # and nothing would have invoked one.
-HOOK_MARK = "# inner-circling pre-commit v171"
+HOOK_MARK = "# inner-circling pre-commit v174"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1287,7 +1336,55 @@ case "$FILES" in *issues/*|*coordinator/tests/test_issue_gate.py*\
     run coordinator/tests/test_issue_gate.py
 esac
 
-case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
+# v174, 2026-09-09, the operator's ruling ("Narrow it"). THE RECORD'S OWN CHECKS, SPLIT
+# OUT FROM THE CODE SUITES BELOW. One case used to carry both: its 92 patterns matched
+# either a record path or one of 88 module paths, and matching EITHER ran all 43
+# invocations. So a live close — whose two commits carry short_terms, the registers and
+# nothing else — ran 37 test suites for modules the commit could not have changed.
+# Measured on circle 2026-09-09_1122: 57 scripts fired per commit, and re-running them
+# took ~85s against a phase of 57.28s, so the battery WAS the phase.
+#
+# THE SPLIT IS BY WHAT A CHECK READS, NOT BY WHERE ITS FILE LIVES. This case runs
+# whatever reads the RECORD, so it keeps the full union trigger and fires exactly as
+# often as the old single case did. The case below keeps the module patterns alone.
+# A commit touching code AND records fires both, and nothing runs twice: the seven
+# invocations here are not repeated there.
+#
+# test_inter_circle.py IS HERE, AND IT IS THE EXPENSIVE ONE (~24s). It stays on the
+# record trigger because it REHEARSES against the newest CLOSED circle —
+# `ots[-1]` after filtering for a close report — and snapshots every live register to
+# prove the rehearsal wrote nothing. A records-only commit is precisely when a new
+# closed circle has appeared, so this is the moment its rehearsal has something new to
+# say. Moving it below would have been the largest single saving and the one real loss
+# of detection; it is not a code-only suite despite being a suite.
+#
+# THE OTHER EIGHT SUITES THAT READ OUTSIDE THEIR OWN TEMP TREE stay below, deliberately:
+# four read `packaging/scaffold/` and four read `coordinator/process_core.md`, and a
+# close commit touches neither. Their triggers cover those paths in the case below.
+# TWO FLAGS, ONE MODULE LIST. The record checks must ALSO fire for a code change — a
+# module that reads the record is exactly where a record check earns its keep — so the
+# naive split (two cases, two pattern lists) would have needed the 88 module patterns
+# written twice and kept in step by hand. That is the duplicate-fact defect
+# system_unique_home_verify.py exists to refuse, in a file it cannot see into. Flags
+# instead: the record trigger is the data patterns OR the module list, and the module
+# list is written once.
+#
+# `if`, NOT a `&&` with a brace group — the hook runs under `set -e`, where a && whose
+# test fails is a non-zero command at the top level and kills the hook. The two blocks
+# below are the whole reason this is spelled out.
+IC_RECORD=""
+IC_CODE=""
+case "$FILES" in *parts/*|*self/*|*circles/*.toml*)
+    IC_RECORD=1
+esac
+
+# v174: THE CODE SUITES. Module paths only — the three record patterns
+# (*parts/*, *self/*, *circles/*.toml*) are gone from this trigger and live in the case
+# above. `*packaging/scaffold/groups/*` replaces the two narrower scaffold patterns this
+# case used to carry, so a scaffold edit under parts/, circles/ or issues/ still reaches
+# test_scaffold_delegates.py — those were previously reached only by the `*parts/*` and
+# `*self/*` patterns now removed, which is the one gap this split could have opened.
+case "$FILES" in *groups/*/group.toml*\
 |*coordinator/practice_manager.py*|*coordinator/practice_verify.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
 |*coordinator/prompt_build.py*|*coordinator/annotations.py*|*coordinator/propose_lifecycle.py*\
@@ -1302,8 +1399,7 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
 |*coordinator/tests/test_topic_manager.py*|*coordinator/inter_circle.py*\
 |*coordinator/part_dreaming.py*|*coordinator/circle_synthesis.py*\
 |*coordinator/tests/test_inter_circle.py*|*coordinator/circle_history_manager.py*\
-|*packaging/scaffold/groups/ifs/self/*|*coordinator/tests/test_scaffold_delegates.py*\
-|*groups/*/group.toml*|*packaging/scaffold/groups/*/group.toml*\
+|*packaging/scaffold/groups/*|*coordinator/tests/test_scaffold_delegates.py*\
 |*coordinator/JOURNAL_CLASS.py*|*coordinator/tests/test_journal_class.py*\
 |*coordinator/tests/test_circle_history_manager.py*\
 |*coordinator/tests/test_part_dreaming_grounding.py*\
@@ -1338,6 +1434,24 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
 |*memory/issue_status.py*|*memory/issue_commands.py*|*coordinator/PROPOSE_CLASS.py*\
 |*coordinator/process_core_prompt_projection.py*|*coordinator/quote_verify.py*\
 |*memory/issue_prompt_projection.py*)
+    IC_RECORD=1
+    IC_CODE=1
+esac
+
+# THE RECORD'S OWN CHECKS. Fires for a record change OR a code change, so this is
+# exactly as often as the single case fired before the split.
+if [ -n "$IC_RECORD" ]; then
+    NOTE="  pre-commit: the record, or code that reads it, was touched"
+    run coordinator/circle_audit.py --selfcheck
+    run coordinator/practice_verify.py
+    run coordinator/logbook_ruling_verify.py
+    run memory/issue_prompt_projection.py
+    run coordinator/quote_verify.py
+    run coordinator/system_setting_verify.py
+    run coordinator/tests/test_inter_circle.py
+fi
+
+if [ -n "$IC_CODE" ]; then
     # v138, audit-register 2026-09-04 #2/#6/#11: five modules whose SUITES this
     # case already invokes (test_issue_status_cmd, test_issue_commands,
     # test_proposal_manager, test_practice_verify, quote_verify itself) were
@@ -1383,7 +1497,8 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     # v104 were independently taken on master by the test_redaction.py
     # wiring and the scaffold-staleness advisory; this tree's redundant
     # copy of the former was dropped rather than kept as a duplicate case.)
-    run coordinator/circle_audit.py --selfcheck
+    # v174: circle_audit --selfcheck moved to the RECORD case above — it reads
+    # parts/ and self/, so it belongs on the trigger that fires for them.
     # v130, 2026-09-03: settings.py -> setting_manager.py + system_setting_verify.py (B99's
     # residue, Q-6); the case runs the verifier and the register's suite.
     # v129, 2026-09-03: redaction.py -> redaction_manager.py + stream_redaction.py (the pipeline,
@@ -1428,13 +1543,12 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     # v113, 2026-09-03: check_best_practices.py SPLIT into practice_manager.py (the
     # register, stage 7a) and practice_verify.py (this verifier, stage 7b — R435,
     # R440). Both join the trigger; the invocations follow the verifier's new name.
-    run coordinator/practice_verify.py
+    # v174: practice_verify, logbook_ruling_verify, issue_prompt_projection and
+    # quote_verify all READ the record, so they moved to the record case above.
+    # Their SUITES stay here — those build their own bytes and test the code.
     run coordinator/tests/test_practice_verify.py
     run coordinator/tests/test_practice_annotations.py
-    run coordinator/logbook_ruling_verify.py
-    run memory/issue_prompt_projection.py
     run coordinator/tests/test_issue_prompt_projection.py
-    run coordinator/quote_verify.py
     # test_quote_verify.py RETIRED 2026-08-15 with the relationships
     # target (v27) — successor probes arrive with the register gate.
     run coordinator/tests/test_topic_manager.py
@@ -1450,7 +1564,10 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     # the exact "triggered and uninvoked" defect v45 named, caught this time
     # before a second commit, not after one.
     run coordinator/tests/test_circle_journal_manager.py
-    run coordinator/tests/test_inter_circle.py
+    # v174: test_inter_circle.py moved to the RECORD case above — alone among the
+    # suites here it rehearses against the newest CLOSED circle and snapshots every
+    # live register, so a records-only commit is exactly when it has something new
+    # to check. It is also the most expensive script either case runs (~24s).
     # v133, 2026-09-04: B91's grounding check on a part's DREAMING memory.
     run coordinator/tests/test_part_dreaming_grounding.py
     # v56, B54: the transcript safety net. Its detect+repair moved out of
@@ -1539,7 +1656,8 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     # test_hook_template.py's stray-suite check, which only runs when this
     # file is touched. process_core.md joins the trigger because setting_manager.py
     # now gates its length rule against a literal being typed back in.
-    run coordinator/system_setting_verify.py
+    # v174: system_setting_verify moved to the RECORD case above — it reads
+    # self/settings.toml. Its suite stays here.
     run coordinator/tests/test_setting_manager.py
     # v94: the provider socket (R382 stage 2, R383's closed registry). Its
     # subjects — llm_client.py, prompt_build.py, circle.py — already fire this
@@ -1570,7 +1688,7 @@ case "$FILES" in *parts/*|*self/*|*circles/*.toml*\
     # v68: the two probes the 2026-08-21 series added (see HOOK_MARK's note).
     run coordinator/tests/test_dispatch_partition.py
     run coordinator/tests/test_issue_add.py
-esac
+fi
 
 # v110, found while building B97: the Block 1-4 assembly split of 2026-09-02
 # (group_context.py/group_attention.py out of prompt_build.py;
@@ -2040,6 +2158,31 @@ case "$FILES" in *packaging/package.py*|*packaging/test_package.py*|*packaging/s
     # looked. runtime_only.txt was repathed in the same move and ignore.txt was
     # not. test_package.py now asserts both halves of resolve()'s branch order.
     run packaging/test_package.py
+esac
+
+case "$FILES" in *coordinator/seam.py*|*coordinator/phase_clock.py*|*coordinator/tests/test_progress_indication.py*)
+    NOTE="  pre-commit: the >3s progress indication — its cadence, and its silence"
+    # v173, 2026-09-09. Its own arm because the mechanism spans three modules
+    # that each already trigger a DIFFERENT suite: seam.py runs test_seam,
+    # phase_clock.py runs test_phase_clock, and neither would have run this.
+    # The clause it protects is the one that can hurt somebody — the beat must
+    # stay silent while a person is typing — and that guard is only true
+    # because every console read in the tree is inside the WAITING span. A
+    # future read added outside it re-opens the hazard silently, which is
+    # exactly the kind of thing a probe is for.
+    run coordinator/tests/test_progress_indication.py
+esac
+
+case "$FILES" in *packaging/shipped_references.py*|*packaging/test_shipped_references.py*)
+    NOTE="  pre-commit: the scan for references a recipient cannot resolve"
+    # v172, 2026-09-09. Its own arm rather than a place in the list above,
+    # because that arm's suite is test_package.py and this module's proof is a
+    # different file. A shared arm would have run the wrong probe and reported
+    # a pass — the triggered-but-uninvoked shape v45 was written for.
+    # The suite is pure: it drives the classifier over synthetic source held in
+    # itself and reads the ship set read-only. It makes no model call, writes
+    # nothing, and cannot open a circle.
+    run packaging/test_shipped_references.py
 esac
 
 case "$FILES" in *packaging/conform_packaging.py*|*packaging/test_conform_packaging.py*)
@@ -3261,7 +3404,9 @@ def system_git_paths_commit(paths: list[pathlib.Path], message: str, log,
         return True
     rc, out = system_git_run("commit", "-m", message, "--only", "--", *rel)
     if rc != 0:
-        log("fail", f"commit failed: {out}")
+        log("fail", f"commit failed (git exit {rc}) — {system_git_failure_explain(out)}")
+        for ln in _failure_tail(out):
+            log("fail", f"    {ln}")
         _unstage(ours, log)
         return False
     log("did", f"commit {system_git_head_read()} — {message}")

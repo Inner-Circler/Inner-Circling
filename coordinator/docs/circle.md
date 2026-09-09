@@ -10,7 +10,7 @@ python coordinator/circle.py --dry-run
 python coordinator/circle.py --live
 python coordinator/circle.py (--live | --dry-run) [--parts <dir>,<dir>,... | --group <name>]
                               [--recall-arm off|delivered|withheld]
-                              [--no-prewarm] [--no-blind] [--seed <n>] [--yes] [--dev]
+                              [--seed <n>] [--yes] [--dev]
                               [--resume OPEN_TIME] [--list-resumable]
 python coordinator/circle.py --dev-cmd VERB [args...]
 ```
@@ -145,15 +145,12 @@ if (pdir) then { emit "prompts captured: <dir> (KB, parts, verified byte-for-byt
     else { emit "prompts NOT captured — sandbox mode" }
     except: fail("prompt capture FAILED: ...")
     try: prompt_capture.prompt_turn_log_open(pdir, OT)  except: fail("per-turn capture could not be opened")
-if (not --no-prewarm) then {
-    emit "pre-warming caches:"; prewarm(client, parts, sysblocks, dry)
+    emit "pre-warming caches:" (dev only); stream_prewarm(client, parts, sysblocks, dry)
     on any exception: emit "PRE-WARM FAILED — <explanation>"; discard_unspoken(); return 2
-}
     transcript = []; if topic then append the topic entry (speaker Self, is_topic, header = topic)
     since_self = {p: 0}; state = {"last": None}; issue_cmds = []; circle_ref = "<circle|sandbox>_<OT>"
     emit "/help for commands"
 if (resumed) then { transcript, since_self, state come from it }
-elif (--no-blind) then { emit "opening round — SEQUENTIAL"; circle_round_run(...) }
 else { emit "opening round — BLIND"; circle_blind_round_run(...) }
     disarm _opened (the circle has had its opening round)
     THE SELF> LOOP — forever:
@@ -265,16 +262,16 @@ checkout now.
 - `--recall-arm off|delivered|withheld`: tier A recall (`remember_expand.py`, `docs/MEMORY_DESIGN.md`)
   — expand topic-matched seeds into each part's BLOCK 4. Default: `off`. `withheld` computes and
   logs the packs without delivering them, the trial's control arm.
-- `--no-prewarm`: skip `llm_client.stream_prewarm()` — named `prewarm()` here until 2026-09-08, and there is no such function in the tree; `circle.py`'s own `--help` string had it right, so this page contradicted the tool it documents — the sequential zero-output-token calls that write each part's
-  cached prompt prefix before the opening round. Default: off (prewarm runs).
-- `--no-blind`: run the PRIOR protocol, a sequential opening round, instead of the default BLIND
-  round. Default: off.
 - `--seed N`: see the Seed section below. Default: unset (a fresh shuffle every round).
 - `--yes`: skip the reduced-live-roster and new-vs-resume confirmation prompts. Default: off.
 - `--resume OPEN_TIME`: reopen an unclosed circle, e.g. `--resume 2026-08-02_1259`; the transcript
   must round-trip byte-for-byte or the resume is refused. Default: unset.
-- `--dev[=BOOL]`: open with dev mode on — DEV-table verbs, the help hierarchy, and progress lines
-  all answer at this terminal's `Self>` prompt. Bare `--dev` means `--dev=true`. Default: off.
+- `--dev[=BOOL]`: open with dev mode on — DEV-table verbs, the help hierarchy, the room's own
+  `/help` listing the command verbs, and progress lines all answer at this terminal's `Self>`
+  prompt. Bare `--dev` means `--dev=true`; `--dev true` and `--dev false` parse too. Default: off.
+  **HIDDEN FROM `--help` since 2026-09-09** and supported exactly as before — this page is where a
+  hidden flag is documented. `--dev=false` declines to turn dev on; it cannot turn it off, since
+  the branch that reads it has no `else`.
 - `--list-resumable`: show circles that have a transcript but no close report, then exit.
   Default: off.
 - `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed

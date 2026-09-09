@@ -110,8 +110,16 @@ all) when MEMORY is empty. Print RESOLUTION only when it applies.
 
 MEMORY
     Either one memory as plain prose, or — if you are continuing the prior memory
-    rather than starting a new thread — a first line reading exactly "CONTINUES"
-    followed by the memory. Empty if you are letting the prior memory stand.
+    rather than starting a new thread — the word CONTINUES at the very start,
+    then the memory. Both of these are read the same way:
+
+        CONTINUES
+        The dread is the same one, and it has a name now.
+
+        CONTINUES The dread is the same one, and it has a name now.
+
+    Empty if you are letting the prior memory stand, and CONTINUES on its own
+    with nothing after it says the same thing.
 
 SALIENCE
     Required whenever MEMORY is not empty. Your own sense of how charged this memory

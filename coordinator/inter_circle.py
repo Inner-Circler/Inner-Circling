@@ -94,6 +94,14 @@ import llm_client as LC                                        # noqa: E402  MOD
 import LLM_response_disassembler as RD                         # noqa: E402  every read
                                                                # of a reply (2026-09-02)
 import setting_manager as SET                                         # noqa: E402
+
+# THE HAND RE-RUN'S OWN CADENCE, and the setting's owner since 2026-09-09.
+# circle.py held this constant while it armed the close's beat; it no longer
+# does — the beat is armed once at circle open now, at progress_seconds, and a
+# second arming is a silent no-op. What is left for close_heartbeat_seconds to
+# govern is exactly this module run from the CLI against a past circle, where
+# no open ever happened and nothing else is beating.
+CLOSE_HEARTBEAT_SECONDS = SET.setting_value_read("close_heartbeat_seconds", 10)
 import part_dreaming as PD                                     # noqa: E402  DREAMING, and the
                                                                # shared _call (stage 11)
 import circle_synthesis as SYN                                 # noqa: E402  SYNTHESIS (stage 11)
@@ -501,8 +509,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
     # THE HEARTBEAT, for the hand re-run path: under a live /close circle.py
     # is already beating and this returns False; run from the CLI it starts
     # one, so the every-10-seconds rule (2026-08-30) holds either way in.
-    PC.PHASES.start_heartbeat(SET.setting_value_read("close_heartbeat_seconds", 10),
-                              notify=say)
+    PC.PHASES.start_heartbeat(CLOSE_HEARTBEAT_SECONDS, notify=say)
     if live:
         with PC.PHASES.span("inter.backfill"):
             rc0 = short_term_backfill_step(ot, say)

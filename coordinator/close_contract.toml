@@ -124,3 +124,26 @@ sandbox_report_marker = "mode"
 # postconditions do not run. Every other rule still does, and a row whose
 # count does NOT match any unmatched speaker still fails.
 renamed_directory = "paired by statement count, then noted"
+
+# A MOVED TREE IS NOT A DEFECT EITHER, and for the same reason. A report names
+# the transcript's path as it stood at the close, and B117 (R467, 2026-09-07)
+# took every circle from `circles/` to `groups/<name>/circles/` — eleven
+# reports written between 2026-07-26 and 2026-08-21 carry the older path and
+# were TRUE WHEN WRITTEN.
+#
+# So a path that is not on disk is looked for by BASENAME in every group's
+# circles/: exactly one match resolves the report and is noted, none fails as
+# before, and MORE THAN ONE FAILS — a report whose circle cannot be told from
+# another group's is not verifiable, and guessing would be worse than refusing.
+# Derived from the groups present; no old path is written down here, so the
+# next move is absorbed without an edit.
+relocated_transcript = "resolved by basename within one group, then noted"
+
+# EVERY REPORT IS READ WITH ITS OWN GROUP'S ROSTER — R466/R467. The speaker
+# tags a transcript carries are its GROUP's Tags, and so is the roster the
+# rename pairing above is measured against. A band report read with the IFS
+# roster finds no speaker at all and fails every row it carries, which is what
+# this sweep did from 2026-09-07 until it was fixed. The group is the tree the
+# transcript resolves inside; the process is rebound for the read and restored
+# after, so a sweep leaves the bound group where it found it.
+report_group = "the group whose tree holds the transcript"

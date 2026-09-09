@@ -47,22 +47,30 @@ from record_paths import CIRCLES_DIR                                     # noqa:
 # ------------------------------------------------------------------ the question
 # THE WORDS ARE THE OPERATOR'S — R330, 2026-08-23: *"Ensure
 # the working set question is presented in terms of "Do you have specific
-# issues you would like to focus on today ('?' to review) ? ""*. It was
+# issues you would like to focus on today ('?' to review) ? ""*. IN TERMS OF
+# is what he asked for and what the wording below keeps; "you would like to"
+# is trimmed as verbose on his own reading of the assembled string. It was
 # `CIRCLE issues (blank = none, 'all', '?'): ` — a legend, not a question. The
 # GRAMMAR below is unchanged: blank is still no issues, `none` and `all` are
 # still accepted; `all` is simply no longer advertised. `?` lists and re-asks,
 # as it always did. The dual pane's blank-answer echo read its legend out of
 # the old prompt's "blank = ..." and now takes its "(blank)" fallback.
 #
-# THE LEGEND RETURNED, IN HIS WORDS — R344,
-# 2026-08-25 (D61 a): *"blank for no, 'all', or a comma separated list of
-# line numbers"* — added after he typed "16" at a numbered-in-his-head
-# listing that carried no numbers and no hint of what an answer looks like.
-# The `?` listing is numbered now and digits-only tokens ARE line numbers;
-# issue ids keep their `n` prefix and still work.
-WORKING_SET_PROMPT = ("\nDo you have specific issues you would like to focus "
-                      "on today ('?' to review) ? (blank for no, 'all', or a "
-                      "comma separated list of line numbers) ")
+# THE LEGEND LIVES WITH THE NUMBERS IT DESCRIBES — R344 (D61 a, 2026-08-25)
+# put it in his words, *"blank for no, 'all', or a comma separated list of
+# line numbers"*, after he typed "16" at a numbered-in-his-head listing that
+# carried neither numbers nor a hint of what an answer looks like. Both
+# halves of that are owed, and only one of them belongs in the question: the
+# `?` listing is numbered now, so the sentence about line numbers is printed
+# under the lines it counts (WORKING_SET_LEGEND, emitted by the `?` branch
+# of working_set_ask) and the question is a question again. The GRAMMAR is
+# untouched by either move: blank and `none` are no issues, `all` is the
+# whole live graph, `?` lists and re-asks, digits-only tokens ARE line
+# numbers, and issue ids keep their `n` prefix.
+WORKING_SET_PROMPT = ("\nDo you have specific issues to focus on today? "
+                      "('?' to review) ")
+WORKING_SET_LEGEND = ("    answer with line numbers, or 'all', or blank "
+                      "for none")
 
 
 def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
@@ -160,6 +168,12 @@ def working_set_ask(IP, prompt: str = WORKING_SET_PROMPT, *, read_line):
             for i, nid in enumerate(sorted(g), 1):
                 label = (g[nid]["doc"].get("label") or "(no label)")
                 seam.emit("circle", f"    {i:>2}  {nid}  {label[:64]}")
+            # THE LEGEND, UNDER THE LINES IT COUNTS. Printed only when there
+            # is a listing to answer against — a graph that will not load has
+            # no numbers, so the sentence about line numbers would name
+            # nothing.
+            if g:
+                seam.emit("circle", WORKING_SET_LEGEND)
             prefill = ""
             continue
         pairs = working_set_parse(raw)

@@ -669,15 +669,46 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     # rely on sat untracked forever — "never add -A" means nothing else
     # ever swept it in.
     paths += sorted(record_dir(ROOT, "circles").glob(f"commands_{ot}.toml"))
+    # THE COALESCE REGISTER JOINED 2026-09-09 (B130), on the same reasoning
+    # and after the same symptom. proposal_group_manager is its one writer and
+    # the close's coalesce refresh moves it — R356's "once, at circle end" —
+    # but it was in NEITHER machine commit, so `git log` over it showed two
+    # commits in the register's whole life: the B117 move, and a hand repair.
+    # Every close left it dirty, which is what deadlocked a pull-main in 2026-08.
+    #
+    # THE ORDER MAKES IT CORRECT, not hopeful, exactly as for the two above:
+    # circle.py runs the coalesce refresh, then proposal_vet("at close"), then
+    # the short_terms, the verifier and this commit. The OPEN-time refresh
+    # writes it too, and that write is carried by THAT circle's own close —
+    # the same lifecycle working_sets.toml has had since it was added here.
     paths += [p for p in (record_dir(ROOT, "circles") / "working_sets.toml",
-                          record_dir(ROOT, "self") / "proposals.toml") if p.is_file()]
+                          record_dir(ROOT, "self") / "proposals.toml",
+                          record_dir(ROOT, "self") / "coalesce.toml") if p.is_file()]
     return paths
 
 
-def circle_commit(ot: str, written: list[str]) -> None:
+def circle_commit(ot: str, written: list[str]) -> str:
     """Record this circle in git: the transcript, each short_term it wrote, and
     the close report. ONLY those paths — never `add -A`, so a file you were
     editing while the circle ran is not swept into a machine commit.
+
+    Returns WHICH OF THREE THINGS HAPPENED, because the caller must tell them
+    apart (R506, 2026-09-09: "Stop, do not reflect on a circle that is not
+    filed"):
+
+        "committed"   the commit landed. Reflection may run.
+        "refused"     git is here and said no — a gate, a lock, a conflict.
+                      THE CIRCLE IS NOT FILED, and phase 2 must not run on it.
+        "no_git"      this tree keeps no history: no repository, or git with
+                      no identity yet (R349's fresh install, "Tier 1").
+                      Reflection RUNS — a tree that cannot file anything has
+                      not refused this circle, and withholding dreaming there
+                      would punish the supported case. inter_circle draws the
+                      same line for its own commit.
+
+    Refused and cannot-file are the distinction this function existed for four
+    weeks without making: it returned None, so `circle.py` could not tell a
+    refusal from a success and dreamed either way.
 
     Non-fatal by design. git is the rollback target, not part of the circle; a
     missing repository must not cost you a closed circle.
@@ -690,7 +721,7 @@ def circle_commit(ot: str, written: list[str]) -> None:
     try:
         import gitrepo as G
     except ImportError:
-        return
+        return "no_git"
     marks_ = {"ok": "  ", "did": "  ", "warn": "  ", "note": "  ", "fail": "  !! "}
 
     def log(kind, msg):
@@ -704,11 +735,29 @@ def circle_commit(ot: str, written: list[str]) -> None:
         if CS.dev_mode or kind == "fail":
             seam.emit("command", f"{marks_[kind]}{msg}")
 
+    # THE TWO TIERS THAT ARE NOT A REFUSAL, tested BEFORE the attempt — the
+    # same two inter_circle tests before its own commit, in the same order and
+    # for the same reason: each would come back False from commit_paths() and
+    # read as "git said no". A FILESYSTEM test for the first, so it answers
+    # alike on a machine with no git binary; `.git` is a FILE in a worktree,
+    # hence exists() and not is_dir().
+    if not (ROOT / ".git").exists():
+        log("note", "no git history in this tree — the circle is written but "
+                    "not filed, which is this tree's normal state")
+        return "no_git"
+    if not G.system_git_identity_is_known():
+        G.system_git_unconfigured_report(log)
+        log("note", "git is not configured — the circle is written but not "
+                    "filed")
+        return "no_git"
+
     paths = circle_commit_paths(ot, written)
     if CS.dev_mode:
         seam.emit("command")
-    G.system_git_paths_commit(paths, f"circle {ot}: {len(written)} short_term(s)", log,
-                   tag=G.system_git_tag_name_read("circle", ot))
+    landed = G.system_git_paths_commit(
+        paths, f"circle {ot}: {len(written)} short_term(s)", log,
+        tag=G.system_git_tag_name_read("circle", ot))
+    return "committed" if landed else "refused"
 
 
 def circle_close_verifier_run(ot: str) -> int:

@@ -39,6 +39,13 @@ import pathlib
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent                      # this tree's own root, e.g. <checkout>/
 SANDBOX = ROOT / "work" / "sandbox"     # moved from coordinator/sandbox, R176, 2026-08-15
+# THE DIRECTORIES HOLDING RUNNING CODE — the one home, and every scope that needs it derives
+# from here: system_lint_verify.SCOPE, file_line_endings_verify.SCOPE_DIRS, the hook's own lint
+# trigger, ruling_sweep's scan. test_system_lint_verify asserts each derivation agrees.
+# IT LIVES IN THIS MODULE, not in a verifier, because file_line_endings_verify SHIPS and
+# system_lint_verify does not — a shipped gate may not import a dev-only one. This module is
+# stdlib-only (pathlib) and so importable from a checker running under bare python.
+CODE_DIRS = ("coordinator", "memory", "ui", "packaging")
 GROUPS_DIR = ROOT / "groups"            # every group's tree (B117 stage 1; the default's too, stage 2)
 SHIPPED_GROUP = "ifs"                   # IFS_CIRCLE — the GROUP a fresh bundle carries (packaging/groups.toml)
 # A GROUP DESCRIBES ITSELF — R468, B120 (2026-09-07): groups/<name>/group.toml, whose presence is

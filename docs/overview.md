@@ -62,7 +62,7 @@ directly; no part speaks twice in a row. Each statement aims for a short
 length and is hard-capped at a word count — 150 unless you change the
 `statement_max_words` setting. That one is a developer setting: open the
 circle with `--dev` to see it or change it. `/settings-list` shows what
-you can reach — three settings on a normal run, and all thirty-two under
+you can reach — three settings on a normal run, and all thirty-three under
 `--dev`. The three are `model`, which model the parts speak on;
 `redact_view`, whether the circle pane shows names, emails and phone
 numbers as opaque tokens rather than the real text; and `circle_stats`,

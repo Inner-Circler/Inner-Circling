@@ -325,7 +325,11 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
             # with a second telling (and pay for the call again). Listed
             # in `written` so circle_commit stages it — the interrupt
             # died before any commit.
-            seam.emit("command", f"  {part:<12} kept — written before the interrupt")
+            # NAMES ITS ARTIFACT LIKE ITS TWO SIBLINGS (2026-09-09): this is
+            # the short_term branch too, reached on a resume where the file was
+            # already written before the interrupt.
+            seam.emit("command", f"  {part:<12} short_term  kept — written "
+                                 f"before the interrupt")
             written.append(part)
             continue
         todo.append(part)
@@ -401,7 +405,15 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
                 text, recorded = MK.remember_close_apply(
                     guard, part, PART_TAGS[part], text)
             if recorded:
-                seam.emit("command", f"  {part:<12} remember written")
+                # THE NOUN, NOT THE VERB — 2026-09-09. This line and the
+                # `wrote <path>` one below report DIFFERENT ARTIFACTS: a
+                # remember record extracted from the reply and appended to that
+                # part's own remember.toml, and the part's short_term file for
+                # this circle. Two writers, two files, two facts. They read as
+                # one thing said twice only because both opened with the part's
+                # name and a past-tense verb, which is what the operator saw.
+                # Each names what it wrote instead.
+                seam.emit("command", f"  {part:<12} remember    -> remember.toml")
             # THE RECORD IS TOML SINCE R434 (B96, 2026-09-04) — four named keys,
             # the reply's prose verbatim, through the one writer. THE FORMAT
             # CHECK IS ON THE FILE, NOT THE REPLY: after the write the record is
@@ -426,7 +438,25 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
                                      f"read back whole: {', '.join(empty)}")
                 continue
             written.append(part)
-            seam.emit("command", f"  {part:<12} wrote {dest}")
+            # RELATIVE TO THE TREE, not absolute. `dest` is a full path whose
+            # leading drive-and-checkout prefix is identical on every row and
+            # every circle, so it is width spent on nothing while pushing the
+            # part of the name that differs off the line. Every other register
+            # writer in this project already prints relative_to(ROOT); this one
+            # did not.
+            #
+            # AND THE PREFIX IS NOT WRITTEN HERE EITHER, which the gate had to
+            # teach me: quoting a real one as an example put a machine path in
+            # a file that SHIPS, and packaging/sanitize.py refused the commit
+            # at HIGH severity. The rule it enforces does not care that the
+            # path is in a comment explaining its own removal.
+            # A sandbox path can sit outside ROOT, so the relative form is
+            # attempted and the absolute kept when it does not apply.
+            try:
+                shown = dest.relative_to(ROOT).as_posix()
+            except ValueError:
+                shown = str(dest)
+            seam.emit("command", f"  {part:<12} short_term  -> {shown}")
     if failed:
         seam.fail(f"short_term NOT WRITTEN for: {', '.join(failed)} — these parts spoke "
              f"but have no record; the transcript safety net will backfill them "
@@ -453,6 +483,93 @@ def _prompt_blocks_changed(orig: pathlib.Path, new: pathlib.Path,
         if not ha or ha != hb:
             out.append(p)
     return out
+
+
+def circle_file(ot: str) -> int:
+    """FILE a closed circle that git refused, then reflect on it. R506,
+    2026-09-09, the operator: "Stop, do not reflect on a circle that is not
+    filed. Do support reflection if the circle is later filed."
+
+    NOTHING IS RESTARTED AND NOTHING IS RE-ASKED. A circle whose filing was
+    refused is COMPLETE on disk — the transcript, every short_term, the close
+    report. Only the git step is missing, so this repeats only the git step,
+    and then runs the reflection the close skipped. One command, because the
+    person holding a refused circle is not the person who should have to run
+    two.
+
+    Refuses a circle that has already been reflected on: circle_is_processed()
+    is the double-dream guard and it reads the same two markers inter_circle
+    does. Under R506 that pairing cannot arise from a live close any more —
+    reflection is downstream of the filing — but the guard costs nothing and
+    2026-09-09_1122 is the tree's one example of the shape.
+
+    Read-only until the filing itself: every refusal below leaves the circle
+    exactly as it was found."""
+    transcript = record_dir(ROOT, "circles") / f"circle_{ot}.md"
+    if not transcript.is_file():
+        seam.emit("command", f"\n  no transcript for {ot} — nothing to file. "
+                             f"circle.py --list-resumable shows the circles "
+                             f"that have one.")
+        return 2
+    if not (ROOT / "work" / "logs" / f"close_{ot}.json").is_file():
+        seam.emit("command", f"\n  {ot} has no close report, so it was never "
+                             f"closed — filing is for a circle whose CLOSE "
+                             f"finished and whose save was refused. Resume it "
+                             f"instead: circle.py --resume {ot}")
+        return 2
+
+    # IS IT FILED ALREADY? Asked of git only where git can answer. Outside a
+    # repository `git tag -l` exits 128 and prints "fatal:" to the capture, so
+    # reading the OUTPUT alone calls an unfilable circle filed; with no git
+    # BINARY, system_git_run raises. Both are the tier-1 tree R349 supports,
+    # where the honest answer is "nothing here is filed" and the reflection
+    # below is the whole of what this command can do.
+    import gitrepo as G
+    filed = False
+    if (ROOT / ".git").exists():
+        try:
+            rc, out = G.system_git_run(
+                "tag", "-l", G.system_git_tag_name_read("circle", ot),
+                read_only=True)
+            filed = rc == 0 and bool(out.strip())
+        except G.GitError:
+            filed = False
+    if filed:
+        seam.emit("command", f"\n  {ot} is already filed.")
+    else:
+        written = sorted(p.parent.name for p in
+                         STM.short_term_glob(record_dir(ROOT, "parts"), ot))
+        seam.emit("command", f"\n  filing {ot} — {len(written)} short_term(s)")
+        # THE BEAT, FOR A PATH THAT RETURNS BEFORE THE OPEN'S ARMING. The
+        # commit below was measured at 57s and 71s on the two newest closes,
+        # and this command is what circle.py prints to someone whose close was
+        # refused — a person already worried about whether their circle
+        # survived, watching a dead terminal. The reflection that follows
+        # inherits this beat: inter_circle's own arming returns False while one
+        # runs, so it gets three seconds and the silence guard rather than its
+        # own bare ten-second timer.
+        import circle as C
+        C.system_progress_arm()
+        outcome = TS.circle_commit(ot, written)
+        if outcome == "refused":
+            seam.emit("command", "\n  git refused again — see the 'fail' line "
+                                 "above. The circle is unchanged and no "
+                                 "reflection has run; fix the refusal and run "
+                                 "this again.")
+            return 1
+        if outcome == "no_git":
+            seam.emit("command", "\n  this tree keeps no git history, so there "
+                                 "is nothing to file into — reflecting anyway, "
+                                 "which is the supported shape here.")
+
+    import inter_circle as ICP
+    if ICP.circle_is_processed(ot):
+        seam.emit("command", f"  {ot} has already been reflected on — "
+                             f"nothing further to do.")
+        return 0
+    seam.emit("command", "  reflecting (dreaming, then synthesis):")
+    return ICP.circle_process(ot, live=True,
+                              say=lambda s: seam.emit("command", s))
 
 
 def circle_resumable_list() -> int:

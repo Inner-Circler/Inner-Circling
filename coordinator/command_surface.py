@@ -612,6 +612,48 @@ PROPOSE_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-add",
 )
 
+# ALLOWED ALWAYS, LISTED ONLY UNDER DEV — the operator, 2026-09-09: *"allow
+# -list commands regardless of dev state.  Do not reveal them in help unless
+# dev=true."* A THIRD STATE, which the two tables above cannot express between
+# them: USER is allowed-and-listed, DEV is dev-only-and-dev-listed, and this is
+# allowed-and-unlisted.
+#
+# IT IS THE SAME DISTINCTION HE DREW EARLIER THE SAME DAY about the room's own
+# help — *"I like that they are present but not exposed, adding --dev option
+# should expose them"* — applied to the command pane's listings. R266's "dev
+# adds, it never takes away" is untouched: nothing becomes harder to RUN, and
+# two verbs that were dev-only become runnable by anyone.
+#
+# DERIVED, NEVER HAND-LISTED. A fifteenth `-list` verb added next year joins
+# this set by existing; a hand list would not have it and nothing would say so.
+# The suffix IS the rule he stated, so the suffix is what the code reads.
+LIST_SUBSET_COMMANDS: tuple[str, ...] = tuple(
+    sorted(h for h, _p in PANE_OF.items() if h.endswith("-list")))
+
+
+def command_is_allowed(head: str, dev: bool) -> bool:
+    """May this verb RUN at this dev state? The question every dispatch gate
+    asks, in one place so the three of them cannot drift.
+
+    THREE GATES ASKED IT SEPARATELY UNTIL 2026-09-09 and one of them would have
+    been missed: circle.py's Self> refusal, help_system's listing, and
+    ui/circling.py's cmd> JUNK rule. The third is the one that turns a
+    dev-table verb typed at the command pane into junk, and a ruling applied to
+    the other two alone would have held at Self> and not at cmd>."""
+    return dev or head in USER_SUBSET_COMMANDS or head in LIST_SUBSET_COMMANDS
+
+
+def command_is_listed(head: str, dev: bool) -> bool:
+    """May this verb appear in a LISTING at this dev state?
+
+    A `-list` verb is deliberately absent with dev off even when it is in the
+    user table — that is the whole of the second half of the ruling, and it is
+    why this is a different question from command_is_allowed() rather than the
+    same one twice."""
+    if head in LIST_SUBSET_COMMANDS:
+        return dev
+    return dev or head in DEV_MIN_CMDS or head in USER_SUBSET_COMMANDS
+
 # /part-add IS NOT HERE, AND IS NOT DEFERRED EITHER — R483,
 # 2026-09-07, the operator: *"part-add should also not be told to or available to
 # parts."* R323 had put it in this table (a part proposing a part; approval fires

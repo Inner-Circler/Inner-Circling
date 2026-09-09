@@ -1312,6 +1312,14 @@ class CircleEngine:
         # focus handover on "closing" belongs after the lines the close
         # printed before it, not a tick earlier). main_loop never appends
         # a "state" item to a pane — see its drain, beside "prefill".
+        # SOMETHING REACHED A READER — the stamp the progress beat's "still
+        # talking is not waiting" guard reads. This method REPLACES seam.emit
+        # rather than wrapping it, so the stamp seam.emit sets in its own body
+        # is never set here; without this call quiet_since() grows forever and
+        # the beat marks every three seconds all circle long, however much the
+        # program is saying. Before the "state" early-out below on purpose: a
+        # UI signal is still the coordinator having spoken.
+        self._S.system_output_mark()
         if channel == "state":
             self.close_state = text
         self.out_queue.put((channel, text))
@@ -1848,8 +1856,13 @@ class CircleEngine:
         # verb regardless of dev, and with one it forwarded the line for the
         # loop's gate to refuse. Decided HERE now, where the line is typed,
         # and answered with the listing that does not name the verb (R199).
-        if (pane == "command" and head in self._CS.DEV_SUBSET_COMMANDS
-                and not self._CS.dev_mode):
+        # THROUGH command_is_allowed SINCE 2026-09-09, not the DEV table
+        # directly. The operator ruled every `-list` verb runnable regardless
+        # of dev, and two of them (/topic-list, /issue-relationship-list) were
+        # in that table — so read directly, this pane would have gone on
+        # calling them junk while Self> had started running them.
+        if (pane == "command"
+                and not self._CS.command_is_allowed(head, self._CS.dev_mode)):
             self.out_queue.put(("command", self._junk_help(text)))
             return None
         if pane == "command":
@@ -1969,6 +1982,13 @@ class CircleEngine:
         C, S = self._C, self._S
         self._orig_emit, self._orig_read_line = S.emit, S.read_line
         S.emit, S.read_line = self._emit, self._read_line
+        # THIS RUN HAS A COMMAND PANE — set with the seams it belongs to, and
+        # restored with them in the `finally` below. help_system's room help
+        # reads it to decide whether it may say "the command pane" at all;
+        # standalone circle.py leaves it at its False default and is told
+        # about no pane it has not got.
+        self._orig_command_pane = S.COMMAND_PANE
+        S.COMMAND_PANE = True
         # THE PROCESS-WIDE ACCUMULATORS, ZEROED BEFORE EVERY CIRCLE. Ruled by
         # the operator 2026-08-30 — *"support multiple circles in one app
         # context. In fact, assume the ticker will be running permanently"* —
@@ -2022,6 +2042,7 @@ class CircleEngine:
                 sys.argv = old_argv
                 os.chdir(old_cwd)
                 S.emit, S.read_line = self._orig_emit, self._orig_read_line
+                S.COMMAND_PANE = self._orig_command_pane
                 # The close is over however main() ended — the cmd> row
                 # must not read "closing" over an engine that is gone.
                 self.close_state = ""

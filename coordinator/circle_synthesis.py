@@ -100,7 +100,8 @@ OBSERVATION
     Appended to Self's own observation log. What you noticed about the CIRCLE as a
     working body — its pace, what it avoided, where it went easily. Addressed to Self,
     about the room, never about Self. If a prior observation exists below, either
-    continue it — a first line reading exactly "CONTINUES" followed by the observation —
+    continue it — the word CONTINUES at the very start, then the observation, either
+    on the line below it or beside it on the same line; both are read the same way —
     or let it stand and leave this section EMPTY; an observation you choose not to
     change is not a failure. A new thread simply starts as plain prose.
 

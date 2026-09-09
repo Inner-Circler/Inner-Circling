@@ -220,6 +220,75 @@ def _verb_pairs(heads, specs: dict[str, tuple[str, str]]) -> list[tuple[str, str
     return [_gloss(h, specs) for h in sorted(dict.fromkeys(heads))]
 
 
+# THE FORMS, IN EVERYDAY LANGUAGE — the operator, 2026-09-09: *"An everyday
+# language form of this must follow help output where such a proper
+# construction is required."* A spec line teaches the SHAPE of an argument and
+# nothing else; whether the quotes are typed, and whether a value may contain
+# a space, is exactly what a reader cannot get from `"label"` versus
+# `<how Self moves>` — and getting it wrong is silent. A quoted value typed
+# without its quotes does not fail: it stops at the first space and the
+# remainder becomes the next argument.
+#
+# NAMES NO FILE AND NO LINE, by the same ruling. This is a reader's note, not
+# a maintainer's.
+#
+# EACH ROW IS EARNED, NOT LISTED. The legend is a function of the lines
+# actually printed above it, so a page showing only `<...>` forms is not told
+# about quoting, and a page with no argument forms at all gets nothing. That
+# is what "where such a construction is required" means, computed rather than
+# remembered — the alternative is a fixed block that goes stale the first time
+# a page's verb set changes.
+_ARGUMENT_LEGEND: tuple[tuple[str, str, str], ...] = (
+    ('"', '"in quotes"',
+     "Type the quotes. Everything between them is one argument, "
+     "spaces included. Without them the value stops at the first "
+     "space and the rest is read as the next argument. To put a "
+     'quote mark inside one, write \\"'),
+    # ANGLE BRACKETS COVER BOTH LENGTHS, AND THE POSITION IS WHAT SAYS WHICH.
+    # `<your practice statement>` ends its form and takes the rest of the line;
+    # `<type>`, `<part>`, `<n>` and `<stmt#>` sit mid-form and take one word.
+    # Stated as one rule because it IS one rule — the reader can see where the
+    # form ends. Saying only "your own words to the end of the line" would be
+    # false for four of the five, and dropping the brackets from the short case
+    # instead would leave those four with no notation at all.
+    ("<", "<in angles>",
+     "A value you supply. Where it is the last thing in the form it "
+     "runs to the end of the line and is stored exactly as typed, "
+     "punctuation and all — nothing is split, so there is nothing to "
+     "quote. Anywhere else it is a single word with no spaces in it, "
+     "and the description says which words are allowed."),
+    ("[", "[in brackets]",
+     "Optional. Where brackets sit inside brackets, the inner one "
+     "cannot be given without the outer."),
+    ("nNNNN", "nNNNN",
+     "An issue id: the letter n followed by four digits."),
+)
+
+
+def command_argument_legend(forms: list[str]) -> list[tuple[str, str]]:
+    """The everyday-language note for whichever argument forms appear in
+    `forms` — [] when none do.
+
+    RETURNS PAIRS, NOT LINES, so the caller can measure them WITH its own rows
+    and render every hyphen on one column. Returning rendered lines gave the
+    legend a pad of its own and put its hyphens somewhere else on the page —
+    test_help_system.py's "every row's hyphen on ONE column" caught it, which
+    is what that check is for.
+
+    `forms` IS THE SPEC STRINGS, NEVER THE RENDERED PAGE. Scanning the page
+    reads the glosses too, and a gloss mentions a form without using one:
+    `/issue-add`'s own description says a partial answer becomes "a LEAD
+    (L_nNNNN)", which earned that page an issue-id row for an argument it
+    does not take. The specs are the only lines that promise what may be
+    typed."""
+    body = "\n".join(forms)
+    return [(label, text) for mark, label, text in _ARGUMENT_LEGEND
+            if mark in body]
+
+
+LEGEND_HEADING = "  READING THE FORMS ABOVE"
+
+
 # _verb_rows() (rendered _verb_pairs() output) DELETED 2026-09-01 --
 # audit-register.md #30 found it a zero-reference symbol: nothing called
 # it after the 2026-08-25 split, only comments named it.
@@ -509,7 +578,38 @@ def circle_pane_help() -> str:
 
     THE WORD CAP IS NO LONGER MENTIONED because there is no longer one:
     R255 capped a FREE-TEXT propose at 100 words, a command was always
-    exempt, and 2026-08-20 made every propose a command."""
+    exempt, and 2026-08-20 made every propose a command.
+
+    IT ANSWERS FOR THE WINDOW IT IS IN — the operator, 2026-09-09: *"Teach
+    help which window; circle.py help must not refer to pane or to commands,
+    I like that they are present but not exposed, adding --dev option should
+    expose them."* ONE call site (circle.py's bare `/help`) is reached from
+    the standalone terminal AND from the two-pane UI's circle pane, so the
+    window cannot come from the caller; `seam.COMMAND_PANE` carries it, set
+    by whoever rebinds the seams. Three renderings:
+
+        a command pane exists   today's text, unchanged. "belongs to the
+                                command pane" is true there and is the
+                                sentence that tells a reader where to go.
+        standalone, dev off     no pane, no cmd>, no command verb named.
+                                The verbs stay REACHABLE at Self> — this
+                                changes what is EXPOSED, never what is
+                                dispatched.
+        standalone, dev on      the same, plus the command verbs listed.
+
+    NOT EXPOSED IS NOT ABSENT, and that is the operator's own distinction.
+    circle.py's Self> gate still admits every USER_SUBSET_COMMANDS verb with
+    dev off; nothing here touches it. A reader who knows a verb may type it."""
+    pane = seam.COMMAND_PANE
+    dev = CS.dev_mode
+    remember_tail = (["                           The command pane can read "
+                      "them back."] if pane else [])
+    # THE POINTER STAYS, THE PANE GOES. `/help propose` is a room verb — it is
+    # in the rows above — so naming it exposes nothing the reader was not just
+    # shown, and dropping the pointer entirely would leave "a proposable
+    # command" with no way to find out which.
+    propose_where = ("('help propose' at the cmd> prompt);" if pane
+                     else "(/help propose lists them);")
     return "\n".join([
         "",
         "  IN THE ROOM you speak. Type and press Enter — that IS your turn.",
@@ -521,7 +621,7 @@ def circle_pane_help() -> str:
         "",
         "    [remember: <text>]     a private note to your own future self.",
         "                           Never shown to a part or to the room.",
-        "                           The command pane can read them back.",
+        *remember_tail,
         "    [proposed: <command>]  staged for a ruling later, and RUN when",
         "                           you approve it.",
         # NO COUNT ANY MORE — the operator's wording, 2026-08-25 (the same
@@ -531,17 +631,43 @@ def circle_pane_help() -> str:
         # while the refusal a part actually met listed 5 (2026-08-20 code
         # review). Pointing at 'help propose' names the LIVE list instead.
         "                           It must contain a proposable command",
-        "                           ('help propose' at the cmd> prompt);",
+        f"                           {propose_where}",
         "                           anything else is an error, reported here.",
         "",
         "  THE COLON AND THE SPELLING ARE REQUIRED, and no space may follow",
         "  the opening bracket. Any other bracket is ordinary speech — it is",
         "  neither captured nor removed.",
-        "",
-        "  Everything else — the issue verbs, practices, topics, prompts —",
-        "  belongs to the command pane. Its own /help lists them.",
+        *_circle_pane_tail(pane, dev),
         "",
     ])
+
+
+def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
+    """What the room's help says about everything that is NOT a room verb.
+
+    THREE ANSWERS, and the middle one is the operator's 2026-09-09 ruling.
+    With a command pane the old sentence stands and points at it. Standalone
+    with dev off the section is ABSENT — naming the verbs would expose what he
+    asked stay unexposed, and naming a pane would name one that is not there.
+    Standalone with dev on, `--dev` is what exposes them, so they are listed.
+
+    THE LISTING IS THE COMMAND-PANE SURFACE, MEASURED THE SAME WAY IT IS
+    THERE: _visible_head() is the one gate (R414), so a circle-class verb
+    never appears twice and a dev-only verb appears only under dev."""
+    if pane:
+        return ["",
+                "  Everything else — the issue verbs, practices, topics, "
+                "prompts —",
+                "  belongs to the command pane. Its own /help lists them."]
+    if not dev:
+        return []
+    heads = [h for h in _command_specs() if _visible_head(h)]
+    if not heads:
+        return []
+    return ["",
+            "  ALSO ANSWERING AT THIS PROMPT (--dev):",
+            ""] + command_help_rows_render(
+                _verb_pairs(heads, _command_specs()))
 
 
 # The level-1 production, advertised at the foot of level 0 — the operator,
@@ -643,9 +769,10 @@ def _visible_head(head: str) -> bool:
     are what a non-dev reader sees."""
     if CS.PANE_OF.get(head) == "circle":
         return False
-    if CS.dev_mode:
-        return True
-    return head in CS.DEV_MIN_CMDS or head in CS.USER_SUBSET_COMMANDS
+    # THE DEV TIER IS command_surface's QUESTION NOW, not a second copy of it
+    # here — 2026-09-09, when a `-list` verb became allowed-always and
+    # listed-only-under-dev and three gates had to agree about it.
+    return CS.command_is_listed(head, CS.dev_mode)
 
 
 def _class_tree_text(cls: str) -> str:
@@ -720,6 +847,28 @@ def _class_tree_text(cls: str) -> str:
         blocks.append(("rows", [(f"/help {cls} {name}", why)
                                 for name, why in LEVEL_ROWS]))
 
+    # THE SPECS, not the rendered page — see command_argument_legend's own
+    # docstring. The rows' left column is what command_help_pad measures below;
+    # the text blocks contribute the proposable listing, whose lines ARE specs.
+    # APPENDED BEFORE THE PAD IS TAKEN, so the legend is measured with every
+    # other row and its hyphens land on the one column.
+    # A CLASS WITH NOTHING TO SHOW SAYS SO — 2026-09-09. Every ISSUE verb a
+    # non-dev reader may run is a `-list` verb, and the operator ruled those
+    # unlisted unless dev is on, so this page rendered its description and then
+    # stopped: a dead end that reads as a rendering fault. The line NAMES NO
+    # VERB, which is the ruling's whole point; it says the page is empty on
+    # purpose rather than by accident.
+    if not any(block for kind, block in blocks if kind == "rows"):
+        blocks.append(("text", ["", "  (nothing to list here at this level)"]))
+
+    legend = command_argument_legend(
+        [p[0] for kind, block in blocks if kind == "rows" for p in block]
+        + [ln for kind, block in blocks if kind == "text"
+           for ln in block if ln.strip().startswith("/")])
+    if legend:
+        blocks.append(("text", ["", LEGEND_HEADING]))
+        blocks.append(("rows", legend))
+
     pad = command_help_pad([p for kind, block in blocks if kind == "rows"
                    for p in block])
     out: list[str] = []
@@ -785,8 +934,16 @@ def _verb_help_text(head: str) -> str:
     if cls:
         pairs.append((f"/help {cls}",
                       f"the other verbs in the {cls.upper()} class"))
+    # THE FORMS NOTE READS THE SPEC ONLY — the gloss, the `/help <class>` row
+    # and the dialog note all describe the verb rather than declaring what may
+    # be typed, and a description that merely MENTIONS a form would earn a row
+    # for an argument the verb does not take.
+    legend = command_argument_legend([spec])
+    pad = command_help_pad(pairs + legend)
     if pairs:
-        out += [""] + command_help_rows_render(pairs)
+        out += [""] + command_help_rows_render(pairs, pad)
+    if legend:
+        out += ["", LEGEND_HEADING] + command_help_rows_render(legend, pad)
     return "\n".join(out)
 
 

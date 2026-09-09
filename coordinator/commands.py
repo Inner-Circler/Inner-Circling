@@ -30,6 +30,8 @@ import re
 import issue_schema as S_
 import issue_commands as IC        # /issue-add's body and _run_captured (2026-09-03)
 import seam
+import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
+                           # heartbeat must not spin at someone typing
 import transcript_store as TS      # withheld(): recorded, never in the room
 import initialization as INIT   # the dialogs the /part-* verbs open (imports roster, seam)
 import part_roster as R
@@ -683,7 +685,7 @@ def command_group_delete(n_text: str, interactive: bool = True) -> None:
         seam.emit("command", "  /group-delete needs the command line — "
                              "not available here")
         return
-    ans = seam.read_line(f"  type the group name ({name}) to delete: ",
+    ans = PC.stream_timed_read(seam.read_line, f"  type the group name ({name}) to delete: ",
                          channel="command").strip()
     if ans != name:
         seam.emit("command", "  cancelled — nothing removed.")
@@ -832,7 +834,7 @@ def command_issue_status_set(node_id: str, val: str, trailing: list[str]) -> boo
         return False                    # refused — no effect, nothing to confirm
 
     if not yes:
-        answer = seam.read_line("  type 'yes' to apply: ").strip().lower()
+        answer = PC.stream_timed_read(seam.read_line, "  type 'yes' to apply: ").strip().lower()
         if answer != "yes":
             seam.emit("command", "  cancelled — no change made")
             return False
@@ -997,7 +999,7 @@ def command_settings_update(rest_text: str, *, interactive: bool = True) -> None
                       f"  to change it: /settings-update {key} <value>")
             seam.emit("command", "")
             return
-        answer = seam.read_line("  new value (Enter keeps it): ").strip()
+        answer = PC.stream_timed_read(seam.read_line, "  new value (Enter keeps it): ").strip()
         if not answer:
             seam.emit("command", "  kept")
             seam.emit("command", "")
@@ -1034,7 +1036,7 @@ def command_settings_update(rest_text: str, *, interactive: bool = True) -> None
         seam.emit("command", f"  to change it: /settings-update {key} <value>")
         seam.emit("command", "")
         return
-    answer = seam.read_line("  new value (Enter keeps it): ").strip()
+    answer = PC.stream_timed_read(seam.read_line, "  new value (Enter keeps it): ").strip()
     if not answer:
         seam.emit("command", "  kept")
         seam.emit("command", "")
@@ -1208,7 +1210,7 @@ def command_part_context_clear(rest: str, *, interactive: bool = True) -> None:
                              f"--dev-cmd part-context-clear {part}")
         return
     n = sum(1 for v in ctx["answers"].values() if v)
-    ans = seam.read_line(f"  erase {n} recorded answer(s) for "
+    ans = PC.stream_timed_read(seam.read_line, f"  erase {n} recorded answer(s) for "
                          f"{R.TAG_BY_DIR.get(part, part)} — type 'yes': ",
                          channel="command").strip().lower()
     if ans != "yes":

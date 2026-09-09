@@ -331,19 +331,54 @@ def message_headings_read(text: str) -> list[str]:
     return [l.strip() for l in text.splitlines() if l.startswith("## ")]
 
 
+# CONTINUES, both ways it can be written — B127, 2026-09-09. The word alone on
+# the first line, or the word leading that line with the memory beside it.
+# Optional `:`, `-` or em dash between them, because a model that writes one is
+# plainly continuing and refusing it would be pedantry.
+#
+# THE CHAIN HAD NEVER FORMED, and this is why. The prompt said "a first line
+# reading exactly CONTINUES followed by the memory", which reads both ways;
+# all three band replies in the only main-tree capture with a prior to continue
+# (work/prompts/2026-09-07_1336/) wrote `CONTINUES <the memory>` on ONE line.
+# The parser took the other reading, so `continues` was False, no chain was
+# written, and the literal word stands at the head of three stored rows. Three
+# of three, and zero rows in the whole tree carry a chain — read until now as
+# "nothing has continued yet", which was a parser miss and not a fact about
+# the record. Every history count in the salience design reads that chain.
+#
+# A WIDENED ACCEPT, NEVER A NARROWED ONE: everything that chained before still
+# chains, byte for byte. The word must be CAPITALS, which is what keeps an
+# ordinary English sentence beginning "continues..." from chaining.
+_CONTINUES = "CONTINUES"
+# ORDER IS LOAD-BEARING, and only for the packaging sanitizer: written as
+# " \t:..." the source reads `t:` and is flagged HIGH as a machine path,
+# which refuses the commit. Space first, colon second, tab last.
+_CONTINUES_SEPARATORS = " :-—\t"
+
+
 def message_continues(section: str) -> "tuple[bool, str]":
-    """(continues, body): a section whose FIRST line is the bare word
-    CONTINUES chains onto the prior record, and the body is what follows
-    it. DREAMING's MEMORY and SYNTHESIS's OBSERVATION read the same signal
-    (R358: the observation follows the dreaming model) — one split, not
-    two."""
+    """(continues, body): a section whose FIRST line leads with the word
+    CONTINUES chains onto the prior record, and the body is what follows it —
+    on that same line, on the lines after it, or both. DREAMING's MEMORY and
+    SYNTHESIS's OBSERVATION read the same signal (R358: the observation
+    follows the dreaming model) — one split, not two.
+
+    An EMPTY body is the "let the prior stand" signal, and it stays empty
+    whichever spelling produced it."""
     s = section.strip()
     if not s:
         return False, ""
     first, *rest = s.splitlines()
-    if first.strip() == "CONTINUES":
-        return True, "\n".join(rest).strip()
-    return False, s
+    head = first.strip()
+    if not head.startswith(_CONTINUES):
+        return False, s
+    tail = head[len(_CONTINUES):]
+    # The word must END there — a separator, or nothing. "CONTINUESLY" is a
+    # word this section happens to start with, not the signal.
+    if tail and tail[0] not in _CONTINUES_SEPARATORS:
+        return False, s
+    inline = tail.lstrip(_CONTINUES_SEPARATORS).strip()
+    return True, "\n".join(([inline] if inline else []) + rest).strip()
 
 
 def message_truncate(text: str, cap: int) -> str:

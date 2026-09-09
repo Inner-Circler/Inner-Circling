@@ -102,6 +102,39 @@ TRUNCATION_MARKER = "[statement truncated at the token ceiling -- incomplete]"
 # here: which request to make again is round logic.
 
 
+def statement_pass_announce(display: str, why: str = ")") -> None:
+    """A part passed: the coordinator's line, and the room's — where there is
+    a room distinct from the coordinator's pane.
+
+    TWO CHANNELS, ONE FACT, AND THEY ONLY COLLIDE IN ONE WINDOW. The operator,
+    2026-09-09: *"A circle shows this pattern or redundant output: '  Judge:
+    (passes) / Judge passes'. I prefer the first line only."* In the two-pane
+    UI and in the Ticker these land in different places and neither repeats the
+    other. In a standalone terminal both channels print to one stdout — three
+    lines, in fact, since the circle emit carries a leading newline — and there
+    the pair is exactly the repetition he read.
+
+    SO THE ROOM LINE IS SUPPRESSED ONLY WHERE THERE IS NO COMMAND PANE, and
+    that is not squeamishness about a preference. The room half is the NEWER
+    and TWICE-RULED half. R262 (2026-08-20) added it because `(passes)` went to
+    the COMMAND channel alone — *"the one place a pass was reported was the
+    pane the circle does not read"* — and R272, VERBATIM, is his own: *"A part
+    that passes writes NOTHING to the transcript; the room names it —
+    `Mourner passes` — and the record stays silent."* Dropping it everywhere
+    would reverse both, blank the two-pane room when a part passes, and
+    silently break the Ticker's front end, which matches the literal
+    `<Tag> passes` to push a pass into its live corpus and is seen by no gate
+    in this project.
+
+    THE COMMAND LINE IS THE ONE THAT CAN SAY WHY. `why` closes its own
+    parenthesis and carries the reason a post-strip pass emptied — a remember
+    recorded, a recall asked, a malformed annotation alone. The room line is
+    always the bare attribution."""
+    seam.emit("command", f"  {display}: (passes{why}")
+    if seam.COMMAND_PANE:
+        seam.emit("circle", f"\n{display} passes")
+
+
 def statement_display(text: str) -> str:
     """The statement as the ROOM SEES IT: whitespace-only lines dropped,
     every real line break kept. DISPLAY ONLY
@@ -275,8 +308,7 @@ def circle_blind_round_run(client, parts, sysblocks, transcript, since_self, sta
         text, to = results.get(part, (None, None))
         display = PART_TAGS[part]
         if text is None:
-            seam.emit("command", f"  {display}: (passes)")
-            seam.emit("circle", f"\n{display} passes")
+            statement_pass_announce(display)
             continue
         raw = text
         text, recorded = remember_apply(guard, part, display, text)
@@ -314,8 +346,7 @@ def circle_blind_round_run(client, parts, sysblocks, transcript, since_self, sta
                     entry["recall_only"] = True
                 transcript.append(entry)
                 circle_transcript_append(guard, path, statement_line(display, to, record))
-            seam.emit("command", f"  {display}: (passes{why}")
-            seam.emit("circle", f"\n{display} passes")
+            statement_pass_announce(display, why)
             continue
         # THE ROOM AND THE RECORD PART COMPANY HERE. Ruled 2026-08-14, built
         # 2026-08-18 (docs/BNF.md, REMEMBER). `text` is the ROOM's: the
@@ -552,8 +583,7 @@ def circle_round_run(client, parts, sysblocks, transcript, since_self, state,
         text, to = part_statement_ask(client, part, sysblocks[part], transcript, dry)
         display = PART_TAGS[part]
         if text is None:
-            seam.emit("command", f"  {display}: (passes)")
-            seam.emit("circle", f"\n{display} passes")
+            statement_pass_announce(display)
             continue
         raw = text
         text, recorded = remember_apply(guard, part, display, text)
@@ -591,8 +621,7 @@ def circle_round_run(client, parts, sysblocks, transcript, since_self, state,
                     entry["recall_only"] = True
                 transcript.append(entry)
                 circle_transcript_append(guard, path, statement_line(display, to, record))
-            seam.emit("command", f"  {display}: (passes{why}")
-            seam.emit("circle", f"\n{display} passes")
+            statement_pass_announce(display, why)
             continue
         # THE ROOM AND THE RECORD PART COMPANY HERE. Ruled 2026-08-14, built
         # 2026-08-18 (docs/BNF.md, REMEMBER). `text` is the ROOM's: the

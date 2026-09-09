@@ -192,19 +192,28 @@ def _cites(row: dict, ot: str) -> bool:
 # ---------------------------------------------------------- pure classifiers
 # The dream commit's own writers: the staged registers (inter_circle) plus
 # the mid_term refresh. parts/<p>/ entries are matched by basename.
-DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in (
+# WHAT INTER_CIRCLE STAGES, SPELLED ONCE — B131, 2026-09-09. It was spelled
+# twice, here and inside the rebind below, and that is why the CIRCLE JOURNAL
+# was missed when B94 (2026-09-04) added it: inter_circle stages
+# `circles/circle_journal.toml` at :619, so every dream commit carrying the
+# register was reported as carrying an UNEXPECTED file. The same defect B86
+# fixed for the prompt capture, and for the same cost — a classifier that
+# cries wolf at every close is one nobody reads on the close that matters.
+_DREAM_SELF_REL = (
     "circles/circle_history.toml", "circles/circle_observation_log.toml",
-    "self/topics.toml", "self/best_practices.toml", "self/self.md"))
+    "circles/circle_journal.toml",
+    "self/topics.toml", "self/best_practices.toml", "self/self.md")
+DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in _DREAM_SELF_REL)
 DREAM_PART_FILES = ("remember.toml", "mid_term.md")
 
 
 @_RP.group_follow
 def _dream_files_rebind() -> None:
-    """The CURRENT group's self/ — B117 stage 5 (2026-09-07); `--group` below calls group_set()."""
+    """The CURRENT group's self/ — B117 stage 5 (2026-09-07); `--group` below calls group_set().
+    Reads the one list above, so a register added to inter_circle's write set is added HERE
+    once and cannot be half-added again (B131)."""
     global DREAM_SELF_FILES
-    DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in (
-        "circles/circle_history.toml", "circles/circle_observation_log.toml",
-        "self/topics.toml", "self/best_practices.toml", "self/self.md"))
+    DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in _DREAM_SELF_REL)
 
 
 def circle_delta_is_silent(statements: int, present: bool, status: str) -> bool:

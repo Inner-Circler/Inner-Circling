@@ -74,6 +74,8 @@ except ModuleNotFoundError:                                  # 3.10 and older
 
 import part_roster as R
 import seam
+import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
+                           # heartbeat must not spin at someone typing
 
 HERE = pathlib.Path(__file__).resolve().parent
 STATEMENTS_PATH = HERE / "initialization.toml"
@@ -284,7 +286,7 @@ def part_context_dialog(part: str, *, prefill: bool = False,
             seam.emit("command", f"  {i}/{len(qs)} current: {current}")
         while True:
             try:
-                raw = seam.read_line(prompt, channel="command",
+                raw = PC.stream_timed_read(seam.read_line, prompt, channel="command",
                                      prefill=current).strip()
             except (EOFError, KeyboardInterrupt):
                 seam.emit("command", "  (cancelled — nothing recorded)")
@@ -316,8 +318,47 @@ def part_context_dialog(part: str, *, prefill: bool = False,
     elif not any(new.values()):
         seam.emit("command", st["skipped"])
         return "skipped"
+    # THE SAVE IS ANNOUNCED, AND IT IS NOT WHERE THE TIME GOES — the operator,
+    # 2026-09-09, reading a live open: *"there is a lengthy delay between these
+    # lines '6/6 Did you make much music or art? drawing, singing / Your answers
+    # have been recorded.'"* Nothing between the last answer and the completion
+    # said anything, so the wait read as a hang at the moment a first-time user
+    # has just given the most personal answers in the dialog.
+    #
+    # MEASURED AFTERWARDS, n=20: part_context_write is 0.0000s median — this
+    # notice renders and closes inside a millisecond. The minutes are in
+    # _commit() at the tail of initialization_run(), where the pre-commit hook
+    # fires 52 subprocesses (57s measured, one suite 24.8s of it), and THAT is
+    # announced separately at its own site. The line stays because a save that
+    # says nothing is still wrong when it is fast, and because a slow disk would
+    # make it earn its place; it is no longer described as the lengthy part.
+    #
+    # SAME LINE, BY HIS OWN SHAPE: the notice, then "done." appended to it. A
+    # standalone terminal honours `end=""`; the two-pane UI drops end= and
+    # flush= by design (CircleEngine._emit — they have no meaning for a
+    # line-based pane's scrollback), so there it reads as two lines. Both are
+    # true, neither is silent, and that is the whole requirement here.
+    # NO HELPER YET, DELIBERATELY. His second sentence rules a GENERAL rule —
+    # any gap over three seconds gets a progress indication where there is a
+    # clock to watch it — and that mechanism belongs at the seam, where all
+    # three windows can interpret it, with a BNF production to name it. The
+    # grammar has no `progress` production today, so naming a public helper for
+    # it now would be a spelling ahead of a term (R441). Two plain emits close
+    # the case he actually hit; the general mechanism replaces both when it
+    # lands, and this comment is how it finds them.
+    # AND IT IS THE OUTCOME, NOT AN EXTRA LINE. The completion statement used
+    # to follow — "Your answers are being processed... done." then "Your
+    # answers have been recorded." — and the operator read the pair as one
+    # thing said twice: *"do not emit redundant statements... Just the first
+    # one."* So `st["completion"]` is no longer printed here; "done." IS the
+    # dialog's completion, and the grammar says so (OUTCOME, docs/BNF.md).
+    # The SKIPPED path is untouched: nothing is saved there, so it has no
+    # progress line to end and its own statement is still the only thing that
+    # tells a reader the dialog closed.
+    seam.emit("command", "  Your answers are being processed... ",
+              end="", flush=True)
     R.part_context_write(part, new, base)
-    seam.emit("command", st["completion"])
+    seam.emit("command", "done.")
     return "completed"
 
 
@@ -357,7 +398,7 @@ def _ask(qs: list[dict], *, seeds: "dict[str, str] | None" = None,
             seam.emit("command", f"  {i}/{len(qs)} proposed: {seed}")
         while True:
             try:
-                raw = seam.read_line(prompt, channel="command",
+                raw = PC.stream_timed_read(seam.read_line, prompt, channel="command",
                                      prefill=seed).strip()
             except (EOFError, KeyboardInterrupt):
                 seam.emit("command", "  (cancelled — nothing recorded)")
@@ -513,7 +554,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
         # context dialog makes; empty twice running abandons the add.
         if not tag:
             try:
-                tag = seam.read_line("  the part needs a name — what should "
+                tag = PC.stream_timed_read(seam.read_line, "  the part needs a name — what should "
                                      "it be called? ", channel="command").strip()
             except (EOFError, KeyboardInterrupt):
                 tag = ""
@@ -523,7 +564,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
             continue
         if not describe:
             try:
-                describe = seam.read_line(
+                describe = PC.stream_timed_read(seam.read_line, 
                     f"  describe {tag} (up to 40 words): ",
                     channel="command").strip()
             except (EOFError, KeyboardInterrupt):
@@ -535,7 +576,7 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
             pass
         else:
             try:
-                name = seam.read_line(
+                name = PC.stream_timed_read(seam.read_line, 
                     f"  directory name for {tag} (letters, digits, "
                     f"underscore): ", channel="command").strip()
             except (EOFError, KeyboardInterrupt):
@@ -620,11 +661,23 @@ def initialization_run(*, live: bool, resume: bool, yes: bool) -> list[str]:
         if new_nodes and (S.ISSUES / "INDEX.md").is_file():
             written.append(str(S.ISSUES / "INDEX.md"))   # regenerated with the write
     seam.emit("command", "")
+    # THE COMMIT COMES FIRST NOW, AND IT SAYS SO. Measured 2026-09-09: this
+    # commit takes 57 SECONDS on a first-run open — one path written, but that
+    # path matches five PRE_COMMIT case arms and fires 52 subprocesses, of which
+    # test_inter_circle.py alone is 24.8s. It ran AFTER "Starting your circle..."
+    # and in silence, so the operator was told the circle was starting and then
+    # watched a blank screen for a minute. Saying "Starting your circle..." over
+    # a minute of work that is not the circle starting is the wrong order as
+    # well as the wrong silence, so the handover line now follows the work it
+    # was covering.
+    if written:
+        seam.emit("command", "  saving your answers to the record — this runs "
+                             "the project's own checks and can take a minute:")
+        _commit(written)
+    seam.emit("command", "")
     seam.emit("command", "Starting your circle...")
     seam.emit("state", "initialized")
     seam.emit("state", "")          # the engine keeps the last token; clear it
-    if written:
-        _commit(written)
     return written
 
 

@@ -83,7 +83,8 @@ shown as stable opaque ids while the transcript on disk, and what the
 model receives, stay exactly as written. `/redact-alias-add`,
 `/redact-alias-update`, `/redact-alias-delete` and `/redact-alias-list`
 keep the list, in `groups/ifs/self/redaction.toml`; part names are never
-eligible.
+eligible. The view starts OFF: turn it on with `/settings-update
+redact_view yes`, and `/settings-list` shows its current value.
 It is presentation only — a screen someone else might see — not privacy
 from the model, which is the paragraph below.
 
@@ -861,8 +862,11 @@ Use a plain-text editor, formatting OFF
     off under View -> Formatting.
 
 Keep the line endings as you found them
-    LF. A carriage return introduced by an editor is not removed by
-    anything here, and it changes every hash the file appears in.
+    LF. A carriage return introduced by an editor changes every hash the
+    file appears in. Repair one with
+    `.venv\Scripts\python coordinator\file_line_endings_verify.py --fix
+    <path>`; the pre-commit hook runs that same gate over whatever you
+    are committing, first and unconditionally.
 
 Then run the gate below for whatever you touched.
 ```

@@ -43,6 +43,8 @@ import re
 
 import part_roster as R
 import seam
+import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
+                           # heartbeat must not spin at someone typing
 from circle_close_verify import MAX_MEMBERS
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
@@ -238,7 +240,7 @@ def part_delete(n_text: str) -> None:
     seam.emit("command", "  git keeps every version (git log --all -- "
                          f"parts/{d}/); /abort does NOT undo this, and a "
                          f"restored part re-enters with a memory gap.")
-    ans = seam.read_line(f"  type the directory name ({d}) to delete: ",
+    ans = PC.stream_timed_read(seam.read_line, f"  type the directory name ({d}) to delete: ",
                          channel="command").strip()
     if ans != d:
         seam.emit("command", "  cancelled — nothing removed.")

@@ -137,6 +137,15 @@ Related pages:
     --no-color      plain text. Default: off — color is used whenever the
                     terminal supports it and the NO_COLOR environment variable
                     is unset.
+    --dev[=true|false]
+                    open with dev mode ON — forwarded to circle.py's own --dev.
+                    Turns on the DEV-table verbs, the help hierarchy, and the
+                    coalesce / pre-warm / opening-round progress lines.
+                    Default: off. Works in EITHER position — before --circle
+                    (a top-level flag here, like --live) or after it, as one of
+                    the forwarded ARGS. Omitted from this list until 2026-09-09
+                    (audit-register 2026-09-09 `#36`), while the program's own
+                    --help documented it.
     --help, -h      the full list.
 
 ## A NOTE ON THE NAME

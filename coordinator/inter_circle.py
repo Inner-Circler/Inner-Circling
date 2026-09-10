@@ -21,10 +21,15 @@ NOTHING directly):
                     writes nothing. part_relationships.toml is NOT part
                     of this payload — see "part_relationships is INERT,"
                     below.
-    2  SYNTHESIS    one circle-wide call, five inputs (R183 + R179 + R186):
-                    transcript, each part's fresh dreaming record,
-                    confirmed proposals, current self.md, the prior
-                    CIRCLE_HISTORY entry
+    2  SYNTHESIS    one circle-wide call, EIGHT inputs (R183 + R179 + R186,
+                    plus B94's journal material): transcript; each part's
+                    fresh dreaming record; that material narrowed to
+                    high-salience rows for the CIRCLE JOURNAL; confirmed
+                    proposals; current self.md; the prior CIRCLE_HISTORY
+                    entry; the prior CIRCLE JOURNAL entry; and the closing
+                    instruction. circle_synthesis.py builds all eight —
+                    this list said FIVE until 2026-09-09 and named none of
+                    the journal three (audit-register 2026-09-09 #56)
     3  VALIDATE     every payload against the writer-scope matrix and each
                     register's own rules (caps refuse, headings must hold)
     4  RENDER+STAGE each register module renders baseline + its own tail
@@ -305,8 +310,10 @@ def short_term_backfill_step(ot: str, say) -> int:
     # CLAUDE.md, "There is no nightly"). shared_block() ITSELF RETIRED
     # 2026-09-02 alongside the fix, replaced by one call, prompt_part_assemble().
     import prompt_build as C
-    core = C.group_shared_read()
-    briefing, _ = C.circle_briefing_build([])
+    import group_context as _GC
+    import group_attention as _GA
+    core = _GC.group_shared_read()
+    briefing, _ = _GA.circle_briefing_build([])
     failed: list[str] = []
     for part, n, why in todo:
         say(f"    {part}: spoke {n}x — {why}")
@@ -662,9 +669,11 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             + (", ".join(staged) if staged else "nothing to write"))
         first = circle_synthesis_is_first()
         if first:
+            # R348 is the waiver's ruling; named here, not in the line said,
+            # which ships to a recipient who has no rulings/. 2026-09-09.
             say("  first synthesis of this tree — self.md's shrink "
                 "tolerance is waived this once: the seed is not yet a "
-                "record (R348)")
+                "record")
         with PC.PHASES.span("inter.gate"):
             findings = tx.validate(first_synthesis=first)
         fails = [f for f in findings if f.level == "FAIL"]
@@ -700,7 +709,8 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         # a re-derivable cache, not part of the record), so the generic
         # handler stays correct there and the raise passes through.
         try:
-            say("\nmid_term refresh — stale parts only (R186/H3):")
+            # R186/H3 is the staleness rule.
+            say("\nmid_term refresh — stale parts only:")
             with PC.PHASES.span("inter.mid_term_refresh"):
                 mt_fails = MT.part_mid_term_refresh(say=say)
             if mt_fails:

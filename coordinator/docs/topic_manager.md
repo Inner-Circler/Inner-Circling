@@ -52,7 +52,7 @@ What makes this register unusual is that it is a **direct write with no vetting 
     --init      create self/topics.toml as an empty register. Refuses to
                 overwrite an existing one, printing and exiting 0.
     (--block, the projection printed byte for byte, was this file's until 2026-09-03; it is
-    topic_prompt_projection.py's own main now — stage 17c, so the register imports nothing above it.)
+    topic_prompt_projection.py's own main now — stage 17c, so the register imports nothing above it.) Default: off.
 
 Matched by presence, not position.
 
@@ -90,12 +90,13 @@ Every topic, open and tombstoned alike, in file order; and the open ones sorted 
         truncate the text to CAP at a word boundary; set state to "open".
     Append, advance next_id, return (the new register, the new record).
 
-Pure, so the phase-2 driver can stage the render and have the register gate verify it before anything is written. `add()` below is this function plus the save, which is what keeps the validation in exactly one place.
+Pure, so the phase-2 driver can stage the render and have the register gate verify it before anything is written. The writing caller below is this function plus the save, which is what keeps the validation in exactly one place. (This said "`add()` below", and `add()` has no successor under any spelling — a reader following it found no such function and no note saying where it went. audit-register 2026-09-09 `#42`.)
 
 ### topic_new_render(doc, circle, text)
 Render one open topic and write the register. The coordinator calls this once per BLOCK 2 candidate item after the synthesis call returns.
 
-### close(tid)
+### topic_close(tid)
+(`close()` before the B99 re-homing, 2026-09-03.)
     Load the register and find the row with this id.
     if (there is no such row) then { return (false, "<id> not found"). }
     if (the row is not open) then { return (false, naming its actual state). }

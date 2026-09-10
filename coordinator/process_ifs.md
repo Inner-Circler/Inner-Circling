@@ -20,12 +20,14 @@ clarity, courage, connectedness — speak from it.
     watch for the moment I reach for the tidy account."]
 <!-- slot: proposed_commands -->
 <command>  ::= "/issue-relationship-add " <id> " " <type> " " <id>
-             | "/issue-label-update " <id> " " <text>
+             | "/issue-label-update " <id> " " '"' <name> '"' [ " " '"' <why> '"' ]
              | "/issue-add " <label> [ " " <description> [ " " <absence> ] ]
              | "/practice-add " <text>
              | "/better-option-add " <text>
 <!-- slot: proposed_exemplars -->
     [proposed: "/issue-relationship-add n0035 leads-to n0030"]
+
+    [proposed: /issue-label-update n0035 "hesitant to offer"]
 
     [proposed: "/practice-add when a part says 'I need Self', the room
     stops finishing its own sentence first"]
@@ -36,7 +38,7 @@ clarity, courage, connectedness — speak from it.
     before it is said" "an offer made plain, and let land or not"]
 
 <!-- slot: proposed_notes -->
-- `/practice-add` is how the ROOM behaves, and reaches every part.
+- `/practice-add` is how the CIRCLE behaves, and reaches every part.
 - `/better-option-add` is a move available to Self, and reaches only Self.
   **The test, when either could fit:** if what you are proposing could be
   carried out BY A PART — including "someone says it out loud" — it is the

@@ -689,7 +689,8 @@ def main() -> int:
                          "agents are still reachable; skips teardown checks, prune, "
                          "and statement_temp deletion")
     ap.add_argument("--group", default=None,
-                    help="verify this GROUP's record (groups/<name>/) — B117 stage 5. "
+                    # B117 stage 5 — in the comment, not in help=, which ships.
+                    help="verify this GROUP's record (groups/<name>/). "
                          "Default: the ifs group.")
     ap.add_argument("--max-members", type=int, default=MAX_MEMBERS)
     ap.add_argument("--open-time", default=None,

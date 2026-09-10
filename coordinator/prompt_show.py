@@ -121,14 +121,17 @@ def prompt_show_render(target: str) -> str:
     implementation of the thing this file exists to inspect. It now calls the
     generator and slices the result by NAME."""
     import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
+    import record_paths as _RP              # PART_TAGS' own home
+    import group_context as _GC             # BLOCK 1's own assembler
+    import group_attention as _GA           # BLOCK 2's own assembler
     order = C.block_order()
     part_level = {"part_identity", "part_objectives"}
-    who = target if target != "circle" else next(iter(C.PART_TAGS))
-    if who not in C.PART_TAGS:
+    who = target if target != "circle" else next(iter(_RP.PART_TAGS))
+    if who not in _RP.PART_TAGS:
         return f"  no such part: {target}"
 
-    core = C.group_shared_read()
-    briefing, unknown = C.circle_briefing_build([])
+    core = _GC.group_shared_read()
+    briefing, unknown = _GA.circle_briefing_build([])
     blocks, note = C.prompt_part_assemble(who, core, briefing)
     if target == "circle":
         # `note`'s block-4 figure is ONE part's, and this view has no part.
@@ -197,10 +200,10 @@ def main() -> int:
         print("  usage: prompt_show.py circle | <part>")
         return 2
     target = next((x for x in a if not x.startswith("-")), "circle")
-    import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
-    if target != "circle" and target not in C.PART_TAGS:
+    import record_paths as _RP              # PART_TAGS' own home
+    if target != "circle" and target not in _RP.PART_TAGS:
         print(f"  no such part: {target}")
-        print(f"  parts: {', '.join(C.PART_TAGS)}")
+        print(f"  parts: {', '.join(_RP.PART_TAGS)}")
         return 2
     print(prompt_show_render(target))
     return 0

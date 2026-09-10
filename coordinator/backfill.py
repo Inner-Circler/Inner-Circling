@@ -136,18 +136,6 @@ def short_term_needs_backfill(ot: str) -> list[tuple[str, int, str]]:
     return out
 
 
-def short_term_header_render(part: str, ot: str, tag: str) -> str:
-    """The reconstruction's own header, carrying the R248 mark.
-
-    THE MARK IS THE POINT, not the sentence around it. `record_model` owns the
-    literal and the reader (`is_reconstructed`), so the thing that writes it
-    and the things that act on it cannot drift apart — which is what the old
-    prose-only note allowed, since nothing parsed it. The sentence itself is
-    short_term_manager's since B96: a .toml carries `reconstructed = true`
-    instead, and renders this same header back when a prompt needs it."""
-    return STM.short_term_header_render(tag, ot, reconstructed=True)
-
-
 def short_term_backfill(part: str, ot: str, tag: str, system: str,
                 call) -> tuple[str, str | None]:
     """Write one part's short_term again, from the transcript. Returns

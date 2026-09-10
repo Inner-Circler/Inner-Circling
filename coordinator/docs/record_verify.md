@@ -6,7 +6,7 @@ record_verify.py — the corruption gate: one sweep over every file this system 
 
 ## SYNOPSIS
 
-    python coordinator/record_verify.py
+    python memory/record_verify.py
 
 (As a library: `record_sweep(root)` returns findings and a file count; `record_report_lines_render(findings)` formats them. `coordinator/circle.py` calls `record_sweep()` directly at open, and `coordinator/circle_audit.py` runs it as phase 0.)
 

@@ -56,8 +56,8 @@ A small number of files carry LOAD-BEARING CRLF — for example, a close report 
 ## COMMAND-LINE ARGUMENTS
 - (no arguments): scans the entire project tree within scope.
 - `<path> [<path> ...]`: check only these specific paths (still filtered through `system_line_endings_is_in_scope()` and the grandfather list).
-- `--staged`: scan only files staged in the current git commit (via `git diff --cached --name-only --diff-filter=d -z`, excluding deletions), rather than a path list or the whole tree.
-- `--fix <path> [<path> ...]`: in addition to any of the above, strip `\r\n` down to `\n` via raw byte replacement (never a text-mode rewrite, which is what caused the problem in the first place) for every currently-offending path, then re-check and report.
+- `--staged`: scan only files staged in the current git commit (via `git diff --cached --name-only --diff-filter=d -z`, excluding deletions), rather than a path list or the whole tree. Default: off.
+- `--fix <path> [<path> ...]`: in addition to any of the above, strip `\r\n` down to `\n` via raw byte replacement (never a text-mode rewrite, which is what caused the problem in the first place) for every currently-offending path, then re-check and report. Default: off.
 
 ## DEPENDENCIES
 Standard library: `pathlib`, `sys`, `subprocess` (inside `system_line_endings_staged_read()`, to invoke `git`), `tomllib` (or the `tomli` backport on Python <3.11, inside `_grandfathered()`). External program: `git` (`git diff --cached --name-only --diff-filter=d -z`), only when `--staged` is used.

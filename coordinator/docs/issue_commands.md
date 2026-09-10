@@ -40,7 +40,7 @@ This module has no `main()` function. Its `if __name__ == "__main__":` block is 
 
 ## COMMAND-LINE ARGUMENTS
 - `record` — required positional path to a circle's `commands.toml` file (the file issue_dump()'s output produces).
-- `--dry-run` — optional flag. When set, issue_command_apply() validates the batch against the temp copy and the real gate but does not write to the live `issues/` tree, reporting only whether it *would* apply cleanly.
+- `--dry-run` — optional flag. When set, issue_command_apply() validates the batch against the temp copy and the real gate but does not write to the live `issues/` tree, reporting only whether it *would* apply cleanly. Default: off.
 
 ## DEPENDENCIES
 Standard library: `datetime`, `pathlib`, `re`, `shutil`, `subprocess`, `sys`, `tempfile`, `__future__`, and (inside `__main__` only) `tomllib`/`tomli` fallback for Python 3.10 and older. Sibling module: `issue_schema` (as `S`), for `S.ROOT`, `S.EDGE_TYPES` (the known relation-type vocabulary), `S.issue_read()`, and `S.issue_write()` — the shared TOML reader/writer for issue node files. External program: `python memory/issue_gate.py <dir>`, invoked as a subprocess by `issue_command_apply()` to validate a batch of proposed changes against the full graph-consistency gate before anything is promoted to the live tree.

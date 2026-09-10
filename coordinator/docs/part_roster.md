@@ -21,7 +21,7 @@ A separate note documents a historical rename: the seventh part's display tag wa
 The module has no `main()` function. Its top-level module body always executes, defining the roster data and derived lookup structures unconditionally; the only conditional logic is in the `if __name__ == "__main__":` guard.
 
     if (the module is run as a script, not imported) then {
-        call verify() to get the list of problems (empty if clean);
+        call part_verify() to get the list of problems (empty if clean);
         print how many parts are in ROSTER and their directory
             designations;
         if (any problems were found) then {
@@ -41,7 +41,7 @@ None. The script takes no flags or positional arguments; running it directly per
 Standard library only: `pathlib`, `__future__.annotations`. No sibling-module imports, no third-party packages, no external programs invoked.
 
 ## EXTERNAL FILES
-Read: `<repo root>/parts/` — every immediate subdirectory, and each one's `part.toml` if present. Read once at import time to build `ROSTER`/`ALT_TAGS`/`PROBLEMS`, and again on every `verify()` call, which re-scans rather than trusting the import-time snapshot so a tree edited since import is read as it is now. If `parts/` does not exist, this is treated as an empty set rather than an error.
+Read: `<repo root>/parts/` — every immediate subdirectory, and each one's `part.toml` if present. Read once at import time to build `ROSTER`/`ALT_TAGS`/`PROBLEMS`, and again on every `part_verify()` call, which re-scans rather than trusting the import-time snapshot so a tree edited since import is read as it is now. If `parts/` does not exist, this is treated as an empty set rather than an error.
 
 Written: none. The script performs no writes of any kind.
 
@@ -113,7 +113,8 @@ No stdin. When run as a script: prints the count and designations of the parts i
         nightly's own recent circles).
     }
 
-### `verify()`
+### `part_verify()`
+(`verify()` before the B99 re-homing, 2026-09-03. audit-register 2026-09-09 `#42`.)
     {
         re-run part_scan() against base (default parts/), fresh — not the
         import-time ROSTER/PROBLEMS snapshot, so a tree edited since

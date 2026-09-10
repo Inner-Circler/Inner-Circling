@@ -477,10 +477,22 @@ def practice_update(n: int, text: str) -> tuple[bool, str]:
             return f"[{row['id']}] is still proposed — rule on it before changing its text"
         return ""
 
+    # THE PRIOR TITLE IS ECHOED BACK, 2026-09-09 (audit-register 2026-09-09 #1). `shown`
+    # above filters the addressee = Self rows out, so this verb numbers rows the way
+    # /practice-list does — and /better-option-list numbers the Self rows ON THEIR OWN.
+    # Reading "3." off that list and typing it here rewrites the third CIRCLE practice,
+    # a live BLOCK 1 row, and the register keeps no prior wording to notice it by. The
+    # help gloss now carries /practice-delete's disclaimer; this makes a mis-aimed
+    # update VISIBLE the moment it lands, which a warning read beforehand cannot.
+    was = ""
+    if 1 <= n <= len(shown):
+        was = str(shown[n - 1].get("title", ""))
+
     ok, msg, row = SS.register_row_update(
         doc, "practice", locate=n, listed=shown, precheck=_precheck,
         fields={"title": body, "amended": SS.register_now()[:10]})
     if not ok:
         return False, msg + (" — /practice-list" if "1.." in msg else "")
     _PC.save(doc)
-    return True, f"updated {n}. [{row['id']}] {body[:48]}..."
+    return True, (f"updated {n}. [{row['id']}] {body[:48]}...\n"
+                  f"           was: {was[:48]}...")

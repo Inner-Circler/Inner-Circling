@@ -8,7 +8,7 @@ proposal_manager.py — the PROPOSE register: what a part has asked Self to rule
 
     python coordinator/proposal_manager.py
 
-(As a library: `entries()`, `by_id(id)`, `pending()` for the vetting queue, `proposal_row_stage(kind, text, sources, circle)` when a circle closes, and `proposal_approve(id)` / `proposal_deny(id)` / `proposal_supersede(id, circle)` when Self rules.)
+(As a library: `proposal_read()` and `proposal_pending_list()` for the vetting queue, `proposal_row_stage(kind, text, sources, circle)` when a circle closes, and `proposal_approve(id)` / `proposal_deny(id)` / `proposal_supersede(id, circle)` when Self rules. This sentence mixed two vocabularies until 2026-09-09 — `entries()`, `by_id(id)` and `pending()` are real METHODS on `PROPOSE_CLASS`, the delegate this module rides, not module-level functions here; `by_id` has no module-level successor at all. audit-register 2026-09-09 `#42`.)
 
 ## DESCRIPTION
 
@@ -69,8 +69,8 @@ Prints to stdout; reads no input. Standard output is reconfigured to UTF-8 with 
 
 ## OPERATION
 
-### entries() / by_id(pid) / pending()
-Every row in file order; one row by id; and every row still awaiting a ruling. The vetting queue reads `pending()` and nothing else.
+### proposal_read() / proposal_pending_list()
+Every row in file order, and every row still awaiting a ruling. The vetting queue reads `proposal_pending_list()` and nothing else. Both delegate to `PROPOSE_CLASS`, whose own methods are `entries()` / `by_id(pid)` / `pending()` — this heading carried those METHOD names as though they were this module's library API until 2026-09-09, and `by_id` has no module-level successor here (audit-register 2026-09-09 `#42`); reach one row by id through the delegate, or filter `proposal_read()`.
 
 ### circle_ref(circle)
     if (the value is empty, or already starts with a known transcript prefix)

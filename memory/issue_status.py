@@ -112,7 +112,8 @@ def _history_line(to: str, ruled: str, source: str, today: str) -> str:
 
 def main() -> int:
     ap = argparse.ArgumentParser()
-    ap.add_argument("nodes", nargs="+", metavar="issue")  # R279: the usage line says the class
+    # R279: the usage line says the CLASS, so metavar is "issue", not "nodes".
+    ap.add_argument("nodes", nargs="+", metavar="issue")
     ap.add_argument("--to", required=True, choices=sorted(S.STATUSES))
     ap.add_argument("--ruled", default="")
     ap.add_argument("--source", default="")

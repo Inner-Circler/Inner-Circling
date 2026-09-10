@@ -91,7 +91,8 @@ Prints to stdout through a `say` parameter (default `print`), so a caller can ca
 
 ## OPERATION
 
-### corpus(doc) / histories(doc) / latest_history(doc)
+### dream_history_corpus_read(doc) / dream_history_read(doc) / dream_history_latest_read(doc)
+(`corpus()` / `histories()` / `latest_history()` before the B99 re-homing, 2026-09-03 — this heading kept the old spelling until 2026-09-09 while the very next one carried the rename note. audit-register 2026-09-09 `#42`.)
 The `section = "dream"` rows, sorted by date then id; the `section = "history"` rows in file order; and the last of those, which is the current DREAM_HISTORY.
 
 ### dream_history_covered_read(doc) / dream_history_unfolded_read(doc)

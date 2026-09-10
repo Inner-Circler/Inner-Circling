@@ -64,7 +64,7 @@ WHERE IT RUNS
                              typed or written. A failure returns 2 and the circle is
                              never opened — no transcript, no working-set entry.
     coordinator/circle_audit.py   phase 0.
-    bare                     python coordinator/record_verify.py
+    bare                     python memory/record_verify.py
 
     There is deliberately NO override flag. "Open anyway" on a corruption finding is
     the act this gate exists to prevent, and the remedy is a git checkout away.
@@ -101,6 +101,22 @@ if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
 ROOT = Path(__file__).resolve().parent.parent
+# THE COORDINATOR/ INSERT, missing since this module joined memory/ (2026-09-09,
+# the persistence-layer move) and restored the same day. `record_paths` lives in
+# coordinator/, and while this file sat in coordinator/ Python put its own
+# directory on sys.path for free — so the bare import below worked. From memory/
+# it does not, and `python memory/record_verify.py` died at import with
+# ModuleNotFoundError: No module named 'record_paths'.
+#
+# THAT BROKE THE GATE AS A SCRIPT, WHICH IS THE WAY IT IS RUN: the pre-commit
+# hook's `run memory/record_verify.py` fires on any commit touching groups/, and
+# circle_audit.py phase 0 shells out to it. The live circle open was unaffected
+# and hid it — circle.py inserts BOTH coordinator/ and memory/ before importing
+# this as a module, so the corruption gate kept working there while refusing to
+# start anywhere else. memory/issue_gate.py and memory/issue_schema.py carry
+# exactly these two lines; this file lost them in the move.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "coordinator"))
 import record_paths as _RP                                         # noqa: E402
 # PROCESS/PROCESS_CORE module constants DELETED 2026-09-01 --
 # audit-register.md #30 found them zero-reference: the actual guard

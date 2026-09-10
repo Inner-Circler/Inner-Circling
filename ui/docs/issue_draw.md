@@ -79,7 +79,7 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
         print one issue_draw_describe() line naming what the picture shows, one line
         naming the files and the SVG's size, and one line carrying the
         HTML's file:// address (html_path.as_uri()); return 0
-    }
+    } Default: off.
 
 ## COMMAND-LINE ARGUMENTS
 - `<path>` (required, positional): either a directory of `issues/*.toml` node files (the live graph, read fresh from disk) or a path to a `graph.json` sandbox-derivation snapshot file.

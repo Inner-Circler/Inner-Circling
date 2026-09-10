@@ -60,8 +60,8 @@ The register began as a single append-only bullet in `self/narrative_arc.md` and
 
     (none)      list every entry: id, the circle it is about, and its chain link.
     --init      create circles/circle_history.toml as an empty register. Refuses
-                to overwrite an existing one — it prints and exits 0.
-    --show      print the newest entry in full, text included.
+                to overwrite an existing one — it prints and exits 0. Default: off.
+    --show      print the newest entry in full, text included. Default: off.
 
 Arguments are matched by presence, not position. Anything unrecognised falls through to the listing.
 

@@ -73,6 +73,7 @@ import register_gate as RG              # noqa: E402  the gate (stage 9, 2026-09
 import backfill as BF                                       # noqa: E402  (B54)
 import short_term_manager as STM                            # noqa: E402  (B96)
 import gitrepo as G                                         # noqa: E402
+import git_hook_script as GH   # the three shell scripts and their installer
 import TRANSACTION_CLASS as T                                     # noqa: E402
 import part_roster as R                                          # noqa: E402
 import REGISTER_CLASS as SS                                    # noqa: E402
@@ -199,7 +200,7 @@ def circle_audit_git_setup(run: Run, name: str | None, email: str | None) -> int
     log("ok", "no remote can take this material off the machine")
     G.system_git_config_ensure(log, name, email)
     G.system_git_attributes_ensure(log)
-    G.system_git_hooks_ensure(log)
+    GH.system_git_hooks_ensure(log)
     G.system_git_ignore_ensure(log)
     G.system_git_ignored_untrack(log)
 
@@ -415,7 +416,7 @@ def circle_audit_lock_release() -> None:
         pass
 
 
-def circle_audit_phase0_run(run: Run, may_commit: bool, writing: bool = False) -> bool:
+def circle_audit_preflight_run(run: Run, may_commit: bool, writing: bool = False) -> bool:
     circle_audit_hr_render("phase 0 — preflight")
     if circle_audit_transaction_verify(run):
         return False
@@ -426,7 +427,7 @@ def circle_audit_phase0_run(run: Run, may_commit: bool, writing: bool = False) -
     # WAS scripts/preflight_check.py until 2026-08-18. That script was the
     # agent-teams-era circle-open guard; its agent/team/temp checks died with that
     # runtime, and the one part still worth running — the NUL/UTF-8/JSON sweep —
-    # is now coordinator/record_verify.py, which also covers .toml and issues/
+    # is now memory/record_verify.py, which also covers .toml and issues/
     # and runs at circle open as well as here. Still a subprocess rather than an
     # import: phase 0 reports a returncode, and a gate that can take the whole
     # audit down with it on an unexpected raise is not a gate.
@@ -446,7 +447,7 @@ def circle_audit_phase0_run(run: Run, may_commit: bool, writing: bool = False) -
 
 
 # ------------------------------------------------------------------ phase 1
-def circle_audit_phase1_run(run: Run) -> list[str]:
+def circle_audit_survey_run(run: Run) -> list[str]:
     """Unprocessed = in scope and carrying no dream/<OT> tag. The scope EPOCH
     is the oldest dream tag: circles older than it are the retired batch
     nightly's era, out of audit scope by ruling (2026-08-19). Deleting the
@@ -497,7 +498,7 @@ def circle_audit_phase1_run(run: Run) -> list[str]:
 # (the three module aliases that stood here went 2026-09-03).
 
 
-def circle_audit_phase2_run(run: Run, unprocessed: list[str]) -> None:
+def circle_audit_reconcile_run(run: Run, unprocessed: list[str]) -> None:
     """Reconcile each unprocessed circle, then apply the transcript safety net:
     any part that SPOKE but has no well-formed short_term must be backfilled
     before dreaming reads it as no-engagement. A silent part is exempt."""
@@ -619,7 +620,7 @@ def circle_audit_window_describe(run: Run, baseline: pathlib.Path) -> None:
                f"— the comparison below is meaningful")
 
 
-def circle_audit_phase6_run(run: Run, baseline: pathlib.Path | None) -> None:
+def circle_audit_validate_run(run: Run, baseline: pathlib.Path | None) -> None:
     circle_audit_hr_render("phase 6 — validate" + (f" (baseline: {baseline})" if baseline else " (self-check)"))
     if baseline:
         circle_audit_window_describe(run, baseline)
@@ -657,7 +658,7 @@ def circle_audit_short_terms_missing_read(unprocessed: list[str]) -> list[tuple[
             for part, n, _why in BF.short_term_needs_backfill(ot)]
 
 
-def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
+def circle_audit_backfill_run(run: Run, tx, unprocessed: list[str], dry: bool) -> int:
     """Reconstruct lost short_terms from the transcript, into staging.
 
     The transcript is the authoritative account of what was said, so a part that
@@ -678,13 +679,15 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
         return 0
 
     import prompt_build as C   # the prompt construction (phase 2 stage 2;
+    import group_context as _GC          # BLOCK 1's own assembler
+    import group_attention as _GA        # BLOCK 2's own assembler
                                # was circle) — same identity assembly as a circle
     import llm_client as LC                  # MODEL's owner (phase 2 stage 1)
     client = LC.stream_client_build()               # one builder, 2026-08-28 (stage 1)
     # PRE-EXISTING BREAK, fixed 2026-08-13 (found while removing the retired
     # OC register): group_shared_read() stopped returning a 3-tuple and
     # shared_block()'s third positional arg became `minimal`, some time
-    # before this file's own last edit; nothing had executed circle_audit_phase3_run() since,
+    # before this file's own last edit; nothing had executed circle_audit_backfill_run() since,
     # so system_lint_verify.py's compile-only pass never caught it. Mirrors the
     # identical fix already applied in part_mid_term_project.py:159-160.
     #
@@ -692,14 +695,14 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
     # (2026-08-27) retired --minimal and dropped circle_briefing_build()'s and
     # shared_block()'s trailing `minimal` parameter entirely; this file's own
     # trailing `False` was never updated to match, so both calls raised
-    # TypeError the moment circle_audit_phase3_run() ran past its own --dry-run preview
+    # TypeError the moment circle_audit_backfill_run() ran past its own --dry-run preview
     # (:655's early return). --dry-run itself never reached this line, which
     # is exactly why system_lint_verify and every --dry-run rehearsal stayed green.
     #
     # shared_block() ITSELF RETIRED 2026-09-02, replaced by one call,
     # prompt_part_assemble() — see prompt_build.py's own docstring.
-    core = C.group_shared_read()
-    briefing, _ = C.circle_briefing_build([])
+    core = _GC.group_shared_read()
+    briefing, _ = _GA.circle_briefing_build([])
     done = 0
     for ot, part, n in todo:
         system, _ = C.prompt_part_assemble(part, core, briefing)
@@ -716,7 +719,7 @@ def circle_audit_phase3_run(run: Run, tx, unprocessed: list[str], dry: bool) -> 
             return LC.stream_call_once(system_, user_, max_tokens,
                                 kind="backfill", client=client)
 
-        text, err = BF.short_term_backfill(part, ot, C.PART_TAGS[part], system, _call)
+        text, err = BF.short_term_backfill(part, ot, _RP.PART_TAGS[part], system, _call)
         if err:
             run.fail(f"{part}/{ot}: {err} Nothing staged for this part.")
             continue
@@ -765,7 +768,7 @@ def circle_audit_synthetic_stage(tx: T.Transaction, run: Run) -> None:
            f"(stand-in for phases 3-5)")
 
 
-def circle_audit_phase7_9_run(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
+def circle_audit_commit_run(run: Run, tx: T.Transaction, findings: list, do_git: bool) -> bool:
     """7 commit · 8 verify · 9 record. Nothing here runs if phase 6 failed."""
     if any(f.level == "FAIL" for f in findings):
         run.fail("phase 6 found FAILures — refusing to commit. The live tree is "
@@ -875,8 +878,9 @@ def main() -> int:
         description="circle-record audit — phases 0-2 and 6 by default (no "
                     "writes to the live tree, no model calls)")
     ap.add_argument("--group", default=None,
+                    # B117 stage 5 — in the comment, not in help=, which ships. 2026-09-09.
                     help="audit this GROUP's record (groups/<name>/) instead of the default "
-                         "group's — B117 stage 5. Default: the group ruled default — the one "
+                         "group's. Default: the group ruled default — the one "
                          "installed, or the one whose group.toml says default = true.")
     ap.add_argument("--snapshot", nargs="?", const="auto", metavar="DIR",
                     help="copy the group's current parts/ + self/ memory files "
@@ -959,8 +963,9 @@ def main() -> int:
 
     for action in ("status", "finish", "rollback"):
         if getattr(args, f"journal_{action}_legacy"):
-            print(f"  note  --journal-{action} is --transaction-{action} since 2026-09-04 "
-                  f"(R448); the old spelling is accepted for one release")
+            # R448 is the rename's ruling; not printed, since this line ships.
+            print(f"  note  --journal-{action} is --transaction-{action} since 2026-09-04; "
+                  f"the old spelling is accepted for one release")
         if getattr(args, f"transaction_{action}") or getattr(args, f"journal_{action}_legacy"):
             return circle_audit_transaction_command_read(run, action)
 
@@ -968,7 +973,7 @@ def main() -> int:
         return circle_audit_git_setup(run, args.git_name, args.git_email)
 
     if args.selfcheck:
-        circle_audit_phase6_run(run, None)
+        circle_audit_validate_run(run, None)
         return 1 if run.failures else 0
 
     # --validate IS READ NOW, 2026-08-27. It was a documented argparse flag
@@ -1001,7 +1006,7 @@ def main() -> int:
     # exactly the runs that swap files (--backfill --commit,
     # --stage-synthetic --commit) got "git unavailable / not a repository /
     # dirty tree" as warnings and proceeded with no revert target.
-    if not circle_audit_phase0_run(run, may_commit=bool(args.commit),
+    if not circle_audit_preflight_run(run, may_commit=bool(args.commit),
                   writing=bool(args.snapshot)):
         circle_audit_lock_release()
         # matched on the stable phrase, not the file's name: the leftover may
@@ -1020,8 +1025,8 @@ def main() -> int:
             print(f"    python coordinator\\circle_audit.py --baseline last")
             return 0
 
-        unprocessed = circle_audit_phase1_run(run)
-        circle_audit_phase2_run(run, unprocessed)
+        unprocessed = circle_audit_survey_run(run)
+        circle_audit_reconcile_run(run, unprocessed)
 
         if args.backfill:
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")
@@ -1033,7 +1038,7 @@ def main() -> int:
                          f"backfill for an ALREADY-PROCESSED circle repairs the "
                          f"record but does not re-run its dreaming — see process.md "
                          f"'short_term backfill'.")
-            circle_audit_phase3_run(run, tx, scope, args.dry_run)
+            circle_audit_backfill_run(run, tx, scope, args.dry_run)
             if tx.staged():
                 circle_audit_hr_render("phase 6 — validate (staged candidate vs live)")
                 findings = tx.validate()
@@ -1047,7 +1052,7 @@ def main() -> int:
                     if f.level == "FAIL":
                         run.failures.append(f"{f.path}: {f.code}")
                 if args.commit:
-                    circle_audit_phase7_9_run(run, tx, findings, do_git=not args.no_git)
+                    circle_audit_commit_run(run, tx, findings, do_git=not args.no_git)
                 else:
                     run.ok(f"{len(tx.staged())} backfill(s) staged in "
                            f"{tx.staging.relative_to(ROOT).as_posix()} — "
@@ -1075,7 +1080,7 @@ def main() -> int:
                     if f.level == "FAIL":
                         run.failures.append(f"{f.path}: {f.code}")
                 if args.commit:
-                    circle_audit_phase7_9_run(run, tx, findings, do_git=not args.no_git)
+                    circle_audit_commit_run(run, tx, findings, do_git=not args.no_git)
                 else:
                     run.ok("validation only — pass --commit to run phases 7-9")
         else:
@@ -1086,7 +1091,7 @@ def main() -> int:
             elif base and not base.is_dir():
                 run.fail(f"baseline directory not found: {base}")
                 base = None
-            circle_audit_phase6_run(run, base)
+            circle_audit_validate_run(run, base)
         if args.prune_baselines:
             n = circle_audit_baselines_prune()
             run.ok(f"pruned {n} old snapshot(s), keeping {KEEP_BASELINES}")

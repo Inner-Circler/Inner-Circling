@@ -59,8 +59,8 @@ It supports a `--working-set`/`--live` view that restricts which nodes are summa
 
 ## COMMAND-LINE ARGUMENTS
 - (no arguments): summarises the whole `issues/` tree, every status.
-- `--working-set nNNNN,nNNNN,...` (or `--working-set=...`, or bare ids following the flag without commas — the parser accepts either): restrict the index to the named nodes plus anything they have a live edge to. Ids may be given as a bare number, `nNNNN`, or a prefixed filename stem (`L_n9999`); `issue_id_normalise()` resolves all three.
-- `--live`: adds every node whose status is `"live"` to the working set (composable with `--working-set`).
+- `--working-set nNNNN,nNNNN,...` (or `--working-set=...`, or bare ids following the flag without commas — the parser accepts either): restrict the index to the named nodes plus anything they have a live edge to. Ids may be given as a bare number, `nNNNN`, or a prefixed filename stem (`L_n9999`); `issue_id_normalise()` resolves all three. Default: off.
+- `--live`: adds every node whose status is `"live"` to the working set (composable with `--working-set`). Default: off.
 
 ## DEPENDENCIES
 Standard library: `collections`, `sys`, `datetime`, `pathlib`, `__future__.annotations`. Sibling module: `issue_schema` (as `S`, for `S.issue_nodes_read()`, `S.issue_read()`, `S.issue_unwrap()` — every field is read through the schema module so this file carries no parsing logic of its own).

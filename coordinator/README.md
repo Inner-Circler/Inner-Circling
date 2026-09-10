@@ -82,11 +82,26 @@ synchronously, inside every completing live `/close`, via
   unwritable. (A bare invocation refuses since R360 — the old bare default,
   real calls with sandboxed writes, was the practice mode R250 deprecated;
   practice lives in the lab.)
-- **`--live`** — additionally permits exactly two shapes:
-  `circles/circle_<OT>.md` and `parts/<name>/short_term_<OT>.toml` (`.md` before
-  2026-09-04, R434 — a resumed pre-B96 close still writes it), where `<OT>`
-  is *this run's* open time. It cannot overwrite a prior circle, cannot touch
-  `long_term.md` or any other per-part file, cannot write `self/`.
+- **`--live`** — additionally permits exactly these, and nothing else
+  (`write_guard.check()` is the authority; `process.md` §Write guard says the
+  same):
+  - `circles/circle_<OT>.md` — this run's transcript, where `<OT>` is *this
+    run's* open time
+  - `parts/<name>/short_term_<OT>.toml` — this run's short_terms (`.md` before
+    2026-09-04, R434 — a resumed pre-B96 close still writes it)
+  - `parts/<name>/remember.toml` — a part's own REMEMBER register. NOT stamped
+    with the open time: the same file accumulates across circles
+  - `self/remember.toml` — Self's own REMEMBER register (R206). Scoped to this
+    one file, not to `self/`
+  - `work/prompts/<OT>/` and its `<OT>_resume_<k>` siblings — this circle's
+    prompt captures
+
+  It cannot overwrite a prior circle and cannot touch `long_term.md`. **This
+  passage said "exactly two shapes ... cannot touch any other per-part file,
+  cannot write `self/`" until 2026-09-09, and both of those last two were
+  false** — the guard has admitted the two remember registers since R206, and
+  a reader authorising a paid live run was told otherwise. The Rollback recipe
+  below was short by the same two files.
 
 Identity files are opened read-only in both modes.
 
@@ -237,8 +252,16 @@ Then:
 - **Cache is working.** In the usage report, `hit rate` should be **≥ 85%**
   after two or three rounds. If it is near 0%, the prefix is changing between
   calls — stop and investigate rather than running a full circle.
-- **Pre-warm.** Each `warmed <part>` line should show ~18,000 tokens written.
-  On the *next* call those become reads at 1/20th the price.
+- **Pre-warm.** `warmed <part>` lines are printed ONLY under `--dev`
+  (`llm_client.py`'s emit sits inside `if CS.dev_mode:`), so a plain live run
+  shows none — check `work/prompts/<OT>/` instead. The FIRST part in the
+  shuffle writes the shared B1+B2 as well as its own B3, so it lands around
+  12,000-15,000 tokens; every later part writes only its own B3, around
+  3,000-6,000, because the shared half is already warm. On the next call all
+  of it becomes reads at 1/20th the price. **This bullet said "each line should
+  show ~18,000" until 2026-09-09** (audit-register 2026-09-09 `#34`) — a
+  description of the world before R277 split the shared prefix out, and asking
+  for output a non-dev run does not print.
 - **No truncation.** `[<part> ran long — asking again, shorter]` should be
   rare; `truncated twice` should never appear. If it does, the run now says so
   loudly and exits non-zero — see §Exit codes below.
@@ -256,10 +279,28 @@ Cost check against the report: expect roughly `$0.22` warm + `$0.02`/round +
 
 ---
 
-# 3. Full circle — live, all seven parts, ~$1.30 for 15 rounds
+# 3. Full circle — live, all seven parts, roughly $3-4 for 15 rounds
 
 Only after the test round passes. Do not run this concurrently with an
 agent-teams circle — two circles sharing one open-time minute would collide.
+
+**THIS HEADING SAID `~$1.30 for 15 rounds` UNTIL 2026-09-09, AND IT WAS LOW BY
+SEVERAL TIMES** (audit-register 2026-09-09 `#33`). The figure is what a person
+budgets a paid run against, so it was wrong in the direction that surprises.
+Measured from `response.usage` in every turn file of two full-roster live
+captures, at `llm_client.py`'s own current rates:
+
+```
+2026-09-09_1122   65 turns, 35 statements (~5 rounds) INCLUDING the close
+                  phase — dreaming, synthesis, mid_term         ~$1.21
+2026-08-21_1139   90 turns, 77 statements (~11 rounds), and NO close phase
+                  priced in (those captures arrived with R412/R413)  ~$3.13
+```
+
+Five rounds with a close already reaches $1.21; eleven rounds without one
+reaches $3.13. Fifteen lands above both. **Read the Meter, not this line** —
+a live run prices itself, and these are one reader's arithmetic over recorded
+token counts, exact in direction and rough in cents.
 
 ```
 python coordinator\circle.py --live
@@ -271,7 +312,9 @@ python coordinator\circle.py --live
    `...\circles\circle_<OT>.md`. (A bare invocation refuses since R360, so a
    wrong-mode run cannot happen silently.)
 2. Type your opening topic exactly as you would after `CIRCLE:` today.
-3. Pre-warm runs for all seven parts (~125,000 tokens, ~$0.50). This is the
+3. Pre-warm runs for all seven parts (~33,000-46,000 tokens, ~$0.13-0.18 —
+   measured across the two newest full-roster captures; it said 125,000 and
+   ~$0.50 until 2026-09-09, audit-register 2026-09-09 `#34`). This is the
    whole circle's identity cost, paid once.
 4. Hold the circle. `/round` to let parts continue; type to speak as Self.
 5. `/close` when done.
@@ -309,11 +352,19 @@ If the verifier exits non-zero it will name the failing part(s) as
 `MISSING-SHORT-TERM`. Re-run just the close for that part by hand, or backfill
 from the transcript as today — the existing remedy applies unchanged.
 
-**Right after `/close` returns:** check `self\narrative_<date>.md` and the
-part's `long_term.md` picked up the circle — dreaming/synthesis already ran,
-synchronously, before the close command exited. That confirms the
-coordinator's output flows through `coordinator/inter_circle.py` end to end.
-That check is the real acceptance test.
+**Right after `/close` returns:** check that each speaking part's
+`short_term_<OT>.toml` was written and that `self\self.md` moved — dreaming and
+synthesis already ran, synchronously, before the close command exited. That
+confirms the coordinator's output flows through `coordinator/inter_circle.py`
+end to end. That check is the real acceptance test.
+
+**THIS NAMED `self\narrative_<date>.md` AND `long_term.md` UNTIL 2026-09-09**
+(audit-register 2026-09-09 `#31`), and neither was a thing to check. The
+seventeen `narrative_<date>.md` files left the tree entirely on 2026-09-07,
+to an archive outside it; `long_term.md` no longer grows at all
+— two other passages of this same file say so, and `inter_circle.py`'s own
+comment agrees. So the acceptance test named one absent file and one that
+never moves, which is a test that cannot fail.
 
 ---
 
@@ -403,6 +454,13 @@ Steps 1-3 come before anything is typed, so a bad key costs a retry rather
 than a re-pasted topic. Nothing under `circles/` or `self/` is written
 before step 6.
 
+**All eight steps are `coordinator/circle_open.py` since 2026-09-09** — the
+open step left `circle.py:main()` whole, as the close step did on 2026-09-03.
+`circle.py` parses the flags, calls this, and runs the `Self>` loop.
+Its man page, `coordinator/docs/circle_open.md`, is in the development tree
+and NOT in this bundle: a page ships only for a module you can run from a
+command line (ruled 2026-08-27), and this one is a library the driver calls.
+
 **Transient failures retry on Self's ladder** — 3 attempts, 5 seconds after
 the first failure and 15 after the second, for 429, any 5xx, and connection
 or timeout errors. Fatal ones (401, 403, 404, 400) do not wait. The SDK's
@@ -461,11 +519,25 @@ The reminder names the repair: `circle_audit.py --backfill --commit`.
 ## Rollback
 
 Stop using it. A bare `python coordinator\circle.py` is REFUSED (R360) and writes
-nothing; `--dry-run` writes only under `work\sandbox\`; `--live` writes only this
-run's two file shapes. To revert a live circle: delete `circles\circle_<OT>.md`,
-`parts\*\short_term_<OT>.toml` (`.md` before 2026-09-04, R434), and `work\logs\close_<OT>.json`. Nothing else
-was touched. There is no other path to fall back to — the agent-teams mechanism is
-retired.
+nothing; `--dry-run` writes only under `work\sandbox\`; `--live` writes only what
+§*Write safety* above lists. To revert a live circle, delete this run's own files:
+
+```
+circles\circle_<OT>.md
+parts\*\short_term_<OT>.toml        (.md before 2026-09-04, R434)
+work\logs\close_<OT>.json
+work\prompts\<OT>\                  and any <OT>_resume_<k> siblings
+```
+
+**Two files a live circle may have appended to are NOT stamped with the open
+time, so deleting by `<OT>` cannot reach them** — `parts\<name>\remember.toml`
+and `self\remember.toml`. A circle only writes them if a `[remember: ...]` was
+spoken, and the register is a TOML list, so the repair is to drop the rows this
+circle's date added — or `git diff` them, since both are tracked. **This recipe
+said "Nothing else was touched" until 2026-09-09, which was wrong in exactly
+these two places.**
+
+There is no other path to fall back to — the agent-teams mechanism is retired.
 
 ## The briefing SPLIT — there is no file, and no filter, any more
 
@@ -506,9 +578,12 @@ capture in which they differ between parts.
 
 ## Known cost levers
 
-Each part's cached prefix is ~18,000 tokens. (There is no filter any more —
-see "The briefing SPLIT" above; this matches the pre-warm figure quoted
-under "What to verify".)
+The cached prefix is ~9,000 tokens SHARED by every part (blocks 1 and 2, written
+once per circle since R277) plus each part's own block 3, ~3,000-6,000. It is
+not ~18,000 per part, which is what this line said until 2026-09-09
+(audit-register 2026-09-09 `#34`) — that was the pre-R277 shape, when every part
+paid for the whole prefix. (There is no filter any more — see "The briefing
+SPLIT" above.)
 
 **Correction to an earlier estimate.** I previously said trimming the briefing
 would "roughly halve" per-circle cost. That was wrong. The briefing is 34% of
@@ -529,9 +604,12 @@ comment says so directly).
 
 ## Flags
 
-Regenerated against `coordinator/circle.py`'s own argparse definitions
-(this section previously listed 6 of the real 13, with defaults stated for
-only one).
+Regenerated against `coordinator/circle.py`'s own argparse definitions.
+**TWELVE, which is what `circle.py`'s `add_argument` calls actually count** —
+this line said "6 of the real 13" while the block below listed 11, three
+numbers for one set and none of them the code's (audit-register 2026-09-09
+`#32`). `--file-circle` was the one genuinely missing, and the program prints
+it at the user (`#16`).
 
 ```
 --live              write to circles/ and parts/<name>/short_term_<OT>.toml (R434),
@@ -574,6 +652,12 @@ only one).
 --dev-cmd VERB ...  run ONE always-available command directly from the
                     shell, no circle needed (the ic.py replacement).
                     Bypasses dev_mode entirely. Default: unset.
+--file-circle OT    file a closed circle whose save git refused, then
+                    reflect on it (R506). Nothing is restarted and nothing
+                    is re-asked: the circle is already complete on disk, so
+                    this repeats the git step alone and then runs the
+                    dreaming and synthesis the close skipped. Refuses one
+                    already reflected on. Default: unset.
 ```
 
 ## Seed

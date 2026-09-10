@@ -147,12 +147,15 @@ def main() -> int:
     # made conditional on being in a tree that HAS them.
     try:
         if (ROOT / ".git").is_file():
-            print("\n    NOTE: this is a WORKTREE. Checkout stamps every "
+            # THE REPAIR LINE NAMED A DEVELOPMENT PATH THAT NEVER SHIPS —
+            # .claude/skills/run-inner-circling/driver.py. A recipient in a
+            # linked worktree gets the diagnosis without a command they cannot
+            # run; touching the transcripts is the same repair in one line
+            # anyone has. 2026-09-09.
+            print("\n    NOTE: this is a LINKED WORKTREE. Checkout stamps every "
                   "transcript with the\n    checkout time, so a fresh one "
                   "reports its whole corpus open until\n    those mtimes age "
-                  "past 45 minutes. Age them now with:\n"
-                  "      .venv/Scripts/python.exe "
-                  ".claude/skills/run-inner-circling/driver.py age-transcripts")
+                  "past 45 minutes — wait, or set them back by hand.")
     except Exception:
         pass          # a note is never worth failing this check over
     return 1

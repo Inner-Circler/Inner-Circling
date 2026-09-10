@@ -14,7 +14,8 @@ fastembed==0.8.0
 # pre-commit hook -- and system_lint_verify.py DOES NOT SHIP. The hook
 # battery is installed in this bundle too (--git-setup) and runs the gates
 # that ship; a script it does not find, this one included, is skipped
-# rather than failing the commit (coordinator/gitrepo.py). Requiring
+# rather than failing the commit (coordinator/git_hook_script.py, which
+# holds the hook templates; gitrepo.py kept the git surface). Requiring
 # pyflakes here would have you install a package nothing in this copy
 # runs. Removed 2026-08-24.
 #

@@ -426,8 +426,9 @@ def command_propose_add(rest: str, *, record=None, guard=None) -> None:
     ot = ""
     if guard is not None:
         if not getattr(guard, "live", True):
+            # R202 is the ruling; not emitted, since this line ships. 2026-09-09.
             seam.emit("command", "  a dry-run circle's proposal is a draft — "
-                                 "not staged into the live register (R202). "
+                                 "not staged into the live register. "
                                  "Type it with no circle open, or in a live "
                                  "circle.")
             return

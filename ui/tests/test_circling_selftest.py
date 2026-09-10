@@ -2026,6 +2026,68 @@ def self_test() -> int:
               "documented cursor cluster",
               (_wv - _pv) == set(C.CURSOR_ROW_KEYS) | set(C.CURSOR_ENDS))
 
+    # --- enable_vt_mode's WINDOWS BODY, executed (audit-register 2026-09-09 #29). --
+    # The key layer's exemption above is correct and stays: the POSIX arm is UNDEFINED
+    # in this process, so no fake can reach it and the honest close is a Linux runner,
+    # which this project's local-only constraint does not have. But the exemption was
+    # covering one thing it did not have to: enable_vt_mode's win32 body was 0 of 9
+    # statements ON WINDOWS, where it is perfectly reachable — it just needs
+    # ctypes.windll patched, since a probe must not reconfigure the real console it is
+    # printing to.
+    #
+    # WHAT IT ASSERTS IS THE DOCSTRING'S OWN PROMISE: "Never fatal — if the console
+    # handle can't be reconfigured, the escapes may just not render". A legacy conhost
+    # that refuses the mode change must cost the UI nothing, and that swallow is the
+    # whole reason the try/except is there. It also pins the VT bit, so a call that
+    # silently stopped requesting ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x0004) — which
+    # would leave escapes unrendered on legacy conhost and look like a font problem —
+    # fails here rather than in someone's terminal.
+    if C.IS_WINDOWS:
+        import ctypes as _ct
+
+        class _FakeKernel32:
+            def __init__(self, blow_up: bool) -> None:
+                self.blow_up, self.set_with = blow_up, []
+
+            def GetStdHandle(self, _n):     # noqa: N802
+                return 1
+
+            def GetConsoleMode(self, _h, _ref):   # noqa: N802
+                return 1
+
+            def SetConsoleMode(self, _h, mode):   # noqa: N802
+                self.set_with.append(mode)
+                if self.blow_up:
+                    raise OSError("simulated legacy-conhost refusal, from a probe")
+                return 1
+
+        class _FakeWinDLL:
+            def __init__(self, k) -> None:
+                self.kernel32 = k
+
+        _real_windll = _ct.windll
+        for _blow_up in (False, True):
+            _k = _FakeKernel32(_blow_up)
+            _raised = None
+            try:
+                _ct.windll = _FakeWinDLL(_k)
+                C.enable_vt_mode()
+            except BaseException as _exc:                       # noqa: BLE001
+                _raised = _exc
+            finally:
+                _ct.windll = _real_windll
+            _label = "a console that REFUSES the mode change" if _blow_up else "a normal console"
+            check(f"enable_vt_mode() against {_label} does not raise — the docstring's "
+                  f"'never fatal' promise, executed", _raised is None)
+            check(f"...and it did reach SetConsoleMode ({_label})", len(_k.set_with) == 1)
+            if _k.set_with:
+                check(f"...asking for ENABLE_VIRTUAL_TERMINAL_PROCESSING (0x0004) "
+                      f"({_label})", bool(_k.set_with[0] & 0x0004))
+    else:
+        skip("enable_vt_mode's win32 body",
+             "not Windows — the arm is undefined in this process, which is the "
+             "standing exemption, not a gap this file can close")
+
     # --- ui_main_loop's RESUME SWAP, read rather than run (audit #9). ------------
     # ui_main_loop is ~409 lines and the product path since R314, and the only suite
     # that reaches C.main() REPLACES it (vars(C)["ui_main_loop"] = lambda: 0), so every
@@ -2439,11 +2501,36 @@ def self_test() -> int:
             out, _ = proc.communicate()
             ran_until_killed = True
         text = out.decode("utf-8", "replace")
+        _bare_ok = (ran_until_killed and "ModuleNotFoundError" not in text
+                    and "Traceback" not in text)
         check("bare demo path (no args, no --circle) does not crash on a "
               "coordinator-only import before any engine pushes COORD_DIR, "
               "and keeps its curses loop alive until killed",
-              ran_until_killed and "ModuleNotFoundError" not in text
-              and "Traceback" not in text)
+              _bare_ok)
+        if not _bare_ok:
+            # SAY WHICH HALF FAILED, AND SHOW THE CHILD — audit-register
+            # 2026-09-09 #30. This is the ONLY timing-dependent assertion in
+            # this file, and the pre-commit hook refuses a commit on its
+            # non-zero exit, so a failure here stops work. It exited 1 twice
+            # under load during the sweep and could not be reproduced, and
+            # the reason it could not is that the child's output was
+            # DISCARDED: a bare exit code cannot distinguish "the demo
+            # crashed" from "a loaded box could not start an interpreter in
+            # two seconds", and those want opposite responses.
+            #
+            # Not a fix for the flake — nothing here knows whether the flake
+            # is real. It is the instrumentation that makes the NEXT
+            # occurrence answerable instead of a coin toss, which is what
+            # test-gap recommended in place of a probe it could not write.
+            _why = ("the child EXITED within the 2s window "
+                    f"(returncode {proc.returncode!r}) — on a loaded box a "
+                    "child that fails to START looks exactly like this"
+                    if not ran_until_killed else
+                    "the child stayed alive but printed a traceback")
+            print(f"      bare demo: {_why}")
+            print(f"      child output ({len(text)} chars):")
+            for _line in (text.splitlines() or ["<nothing on stdout/stderr>"]):
+                print(f"        | {_line}")
     except OSError as exc:                                     # noqa: BLE001
         skip("bare demo path subprocess check",
              f"could not launch a child interpreter ({exc})")

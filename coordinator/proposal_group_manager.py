@@ -277,7 +277,8 @@ def selftest() -> int:
 
 def main() -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="the proposal coalesce (R356)")
+    # R356 is the ruling; kept out of description=, which argparse prints.
+    ap = argparse.ArgumentParser(description="the proposal coalesce")
     ap.add_argument("--refresh", action="store_true",
                     help="force one grouping pass (a real model call). "
                          "Default: off — a bare run only reports state.")

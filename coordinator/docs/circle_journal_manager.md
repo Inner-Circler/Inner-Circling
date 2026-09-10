@@ -60,8 +60,8 @@ Named CIRCLE_JOURNAL by the operator's own ruling (D90/R454, 2026-09-04) — reu
 
     (none)      list every entry: id, the circle it is about, and its chain link.
     --init      create circles/circle_journal.toml as an empty register. Refuses
-                to overwrite an existing one — it prints and exits 0.
-    --show      print the newest entry in full, text and provenance included.
+                to overwrite an existing one — it prints and exits 0. Default: off.
+    --show      print the newest entry in full, text and provenance included. Default: off.
 
 Arguments are matched by presence, not position. Anything unrecognised falls through to the listing.
 

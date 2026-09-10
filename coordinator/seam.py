@@ -159,7 +159,8 @@ def read_line(prompt: str = "", channel: str = "command",
     # leaking a Coordinator prompt into the room's pane. Only three sites
     # in this project are circle channel, and each says so explicitly:
     # working_set_manager.py's working-set question (circle.py's until
-    # 2026-09-03, stage 10) and circle.py's topic and CONSOLE_NAME
+    # 2026-09-03, stage 10), circle_open.py's topic (circle.py's until
+    # 2026-09-09, when the open step left main()) and circle.py's CONSOLE_NAME
     # speaking prompts. test_seam.py and bnf_conformance.py both count.
     #
     # `prefill` IS AN AFFORDANCE, NOT A CONTRACT, added 2026-08-20 for

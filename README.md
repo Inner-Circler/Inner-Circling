@@ -873,7 +873,7 @@ Then run the gate below for whatever you touched.
 
 ```
 anything at all
-  .venv\Scripts\python coordinator\record_verify.py
+  .venv\Scripts\python memory\record_verify.py
       watch for   INTEGRITY PASS
       a failure prints INTEGRITY FAIL and, per file, the defect and the
       remedy, then exits non-zero. There is no --force.

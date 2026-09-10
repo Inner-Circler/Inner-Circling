@@ -52,9 +52,15 @@ ISSUES_URL = "https://github.com/Inner-Circler/Inner-Circling/issues"
 # hook invokes AND ships has an entry here, so a new gate cannot arrive without
 # its sentence.
 PLAIN: dict[str, str] = {
+    # ADDED 2026-09-09. test_gate_report.py had been red on master, on this one check: the
+    # hook gained a `run` line for this script and no sentence came with it, so a stranger
+    # meeting it would have got the bare fallback. Found while stage 3 of the cohesion
+    # re-homing touched gate_report.py and its trigger fired.
+    ".claude/skills/scaffold-check/test_scaffold_check.py":
+        "The copy of the instructions shipped with the program didn't match the program.",
     "coordinator/practice_verify.py":
         "One of your saved practices didn't read back the way it was written.",
-    "coordinator/record_verify.py":
+    "memory/record_verify.py":
         "A file the program needs looks damaged.",
     "coordinator/file_line_endings_verify.py":
         "A file was saved in a format the rest of the program can't read.",
@@ -130,8 +136,8 @@ def system_gate_shape_read() -> str:
     development tree — and it is the first thing worth knowing about a failure
     report from someone else's machine."""
     try:
-        import gitrepo                                       # noqa: PLC0415
-        named = sorted({ln.split()[1] for ln in gitrepo.PRE_COMMIT.splitlines()
+        import git_hook_script as GH   # the three shell scripts and their installer
+        named = sorted({ln.split()[1] for ln in GH.PRE_COMMIT.splitlines()
                         if ln.strip().startswith(("run ", "quiet "))
                         and len(ln.split()) > 1})
     except Exception:                                        # noqa: BLE001

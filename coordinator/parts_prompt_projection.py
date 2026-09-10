@@ -52,7 +52,18 @@ import record_model as M
 
 
 def record_ro_read(p: pathlib.Path) -> str:
-    """Read-only by construction. Fails loudly rather than silently degrading."""
+    """Read-only by construction. Fails loudly rather than silently
+    degrading. Duplicate of process_core_prompt_projection.record_ro_read()
+    and memory/issue_prompt_projection.record_ro_read() — small enough that
+    importing across files to share it would carry more risk (a circular
+    import back into group_context.py) than the duplication does.
+
+    THE TWIN-NAMING WAS MISSING HERE, and only here, until 2026-09-09
+    (audit-register 2026-09-09 #64). Both siblings carried it; the
+    2026-09-09 register's own predecessor cleared this clone group on the
+    strength of "each names the other two", which was true of two of the
+    three. `git log -S "circular"` on this file returns nothing, so it was
+    never a regression — the claim was wrong when it was made."""
     return p.read_text(encoding="utf-8")
 
 

@@ -28,10 +28,14 @@ This module is both, for **one** circle. The name is precise about it: this is w
 
     1  DREAMING     one model call per part, all parts at once. Each returns a
                     payload — at most one memory — and writes nothing itself.
-    2  SYNTHESIS    one circle-wide call over five inputs: the transcript, each
-                    part's fresh dreaming record, the proposals Self confirmed,
-                    the current account of Self, and the previous circle's history
-                    entry.
+    2  SYNTHESIS    one circle-wide call over EIGHT inputs: the transcript; each
+                    part's fresh dreaming record; that material narrowed to its
+                    high-salience rows, for the CIRCLE JOURNAL; the proposals Self
+                    confirmed; the current account of Self; the previous circle's
+                    history entry; the previous circle's journal entry; and the
+                    closing instruction. This said FIVE and named none of the
+                    journal three until 2026-09-09 (audit-register 2026-09-09 #56);
+                    circle_synthesis.py builds all eight.
     3  VALIDATE     every payload against the writer-scope matrix and each
                     register's own rules — caps refuse, required headings must hold.
     4  RENDER+STAGE each register renders its own new material using the same code

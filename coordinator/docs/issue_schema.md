@@ -169,7 +169,8 @@ Stdout only, no stdin. `--render` mode prints the rendered Markdown for one node
         a rewritten memo alongside its original.
     }
 
-### `check(doc, p)`
+### `issue_verify(doc, p)`
+(`check()` before the B99 re-homing, 2026-09-03 — `:156` on this page already carried the equivalent note for `render()`. audit-register 2026-09-09 `#42`.)
     for each key in REQUIRED {
         if (missing from doc) then { record a "missing required key" failure }
     }

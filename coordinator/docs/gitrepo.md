@@ -17,7 +17,9 @@ This module centralizes every git operation the project performs automatically, 
 3. **Rollback** — checkout, revert, restore. Whether last night's dreaming run was *wrong* is a judgement no invariant can make; the scripts (elsewhere) print the exact command and stop rather than run it.
 4. **`git add -A` during an automated run.** A machine commit stages only the exact paths that run produced, via `system_git_paths_commit()`, so a nightly run at 01:11 cannot sweep up whatever a human happened to be editing at midnight.
 
-Everything else routine — repo init, git config (name/email/autocrlf), `.gitignore`/`.gitattributes` upkeep, un-tracking paths that should never have been tracked, and installing/updating the pre-commit hook — is automated and lives here.
+Everything else routine — repo init, git config (name/email/autocrlf), `.gitignore`/`.gitattributes` upkeep, and un-tracking paths that should never have been tracked — is automated and lives here.
+
+**THE HOOK TEMPLATES ARE NOT HERE ANY MORE, 2026-09-09.** `PRE_COMMIT`, `HOOK_MARK`, `POST_COMMIT`, `POST_MERGE`, `_hook_syntax_check()` and `system_git_hooks_ensure()` moved to **`coordinator/git_hook_script.py`** — 2,676 lines, most of it `/bin/sh` in a Python string, with a different audience: this surface is called by nine modules and the templates by `circle_audit.py --git-setup` alone. See `coordinator/docs/git_hook_script.md`. Anything below that describes the hook's own shape describes that file now.
 
 ## MAIN
 This file has no `main()` function in the conventional sense used elsewhere in the project; its `if __name__ == "__main__":` block calls a function literally named `main()`, but that function only implements the `--identity` read-only CLI. All other capability is a library surface with no dispatcher.
@@ -38,7 +40,7 @@ This file has no `main()` function in the conventional sense used elsewhere in t
 
 ## COMMAND-LINE ARGUMENTS
 - (none) — prints argparse's generated help and exits 0.
-- `--identity` — print the resolved git author name/email (with source) and the resolved circle display name (with source), changing nothing. Exit 0 if both git values are set, 1 if either is unset.
+- `--identity` — print the resolved git author name/email (with source) and the resolved circle display name (with source), changing nothing. Exit 0 if both git values are set, 1 if either is unset. Default: off.
 
 ## DEPENDENCIES
 Standard library: `os`, `pathlib`, `subprocess`, `sys`, `argparse`, `__future__`. External program: `git` (invoked via `subprocess.run` for every operation — version check, rev-parse, remote, status, config, init, add, diff, commit, tag, rm, ls-files). Optional third-party: `python-dotenv` (`from dotenv import load_dotenv`), used best-effort to load `.env` for `IFS_GIT_NAME`/`IFS_GIT_EMAIL`; absence is tolerated silently. Sibling module: `identity` (imported locally inside `main()`, aliased `_ID`) for the circle display name.
@@ -65,7 +67,8 @@ Stdout, via the `log(status, message)` callback that every `ensure_*` / `system_
 
 ## OPERATION
 
-### `run(*args, check=False)`
+### `system_git_run(*args, check=False)`
+(`run()` before the B99 re-homing, 2026-09-03. Its six siblings in the next heading were swept then; this one was missed until 2026-09-09 — audit-register 2026-09-09 `#42`.)
     {
         Invoke `git <args>` in ROOT, capturing combined stdout+stderr, with a 120-second timeout. Raises GitError if git itself is not runnable (OSError), if the 120s timeout expires (subprocess kills git first; the message warns a stale `.git/index.lock` may remain — until 2026-08-19 TimeoutExpired escaped raw through every "non-fatal by design" caller), or if `check=True` and the exit code is nonzero.
     }

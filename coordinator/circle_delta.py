@@ -671,7 +671,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--ot", help="the circle's open time "
                                  "(default: the newest close report)")
     ap.add_argument("--group", default=None,
-                    help="report a circle of this GROUP's record (groups/<name>/) — B117 stage 5. "
+                    # B117 stage 5 — in the comment, not in help=, which ships.
+                    help="report a circle of this GROUP's record (groups/<name>/). "
                          "Default: the ifs group.")
     ap.add_argument("--series", action="store_true",
                     help="part memory over every closed circle")

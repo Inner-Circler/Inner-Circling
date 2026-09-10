@@ -48,11 +48,11 @@ CONSOLE_NAME = ID.user_name_read()
 # THIRD COLUMN, RULED 2026-08-10: which pane a verb belongs to —
 # "circle" or "command" — per circling_and_evolving.md §5's settled
 # vocabulary split (the circle pane recognizes speech and /pass/round,
-# nothing else; every ruling verb is command-pane-only). This is a
-# CLASSIFICATION, not yet an ENFORCED restriction: until
-# docs/dual_pane_integration.md §5's steps 7-8 build the merged
-# command-pane verb surface, every one of these still only runs through
-# circle.py's single Self> loop, same as always. `/concern-circle` is
+# nothing else; every ruling verb is command-pane-only). ENFORCED since the
+# merged command-pane verb surface shipped (docs/dual_pane_integration.md §5
+# steps 7-8): PANE_OF is derived from this column, and ui/circling.py:1852
+# reads it at every cmd> line to refuse a circle-pane verb outright at
+# :1904-1912 — see the note at /close below. `/concern-circle` is
 # gone entirely (§5 step 9) — direct circle-pane speech replaced it.
 COMMANDS: tuple[tuple[str, str, str], ...] = (
     # NO `<text>` ROW SINCE 2026-08-21 (R285, the
@@ -72,15 +72,15 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "each. New with the regrammar: there was no way to\n"
      "ask this from a command at all", "command"),
     ("/issue-status nNNNN [= <value>]",
-     "that issue's lifecycle status. THE PROPERTY CONSTRUCT\n"
-     "(R261): a bare property READS it, `= <value>` WRITES\n"
+     "that issue's lifecycle status. THE PROPERTY CONSTRUCT\n"   # R261
+     "— a bare property READS it, `= <value>` WRITES\n"
      "it. A write previews via issue_status.py --dry-run,\n"
      "asks 'yes' to confirm, then applies. NO transcript\n"
      "quote needed, unlike the three ruling forms below",
      "command"),
     ("/issue-status-update nNNNN <value>",
      "the same write, spelled as a verb — an accepted\n"
-     "synonym for `/issue-status nNNNN = <value>` (R261),\n"
+     "synonym for `/issue-status nNNNN = <value>`,\n"    # R261
      "for a caller that would rather not quote an `=`",
      "command"),
     ('/issue-label-update nNNNN "name" ["why"]',
@@ -95,8 +95,11 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ('/issue-relationship-add nNNNN <type> nMMMM ["why"]',
      "rule on an issue-relationship. <type> is one of: leads-to,\n"
      "narrower-than, related-to, polarized-with, protects.\n"
+     # R079 is the ruling behind "recorded but not sent"; it is named HERE, in a
+     # comment, and not in the description, because help_system prints the
+     # description verbatim to a recipient who has no rulings/ (2026-09-09).
      "The ruling forms are RECORDED TO THE TRANSCRIPT AS\n"
-     "YOUR WORDS AND NOT SENT TO THE PARTS (R079);\n"
+     "YOUR WORDS AND NOT SENT TO THE PARTS;\n"
      "validated as a batch and applied at close —\n"
      "automatically in a LIVE circle, never in a sandbox\n"
      "one", "command"),
@@ -104,7 +107,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "attach a PRIOR statement (its number from\n"
      "/issue-evidence-list) as evidence — quote and speaker\n"
      "come from the transcript, not typed fresh. Same\n"
-     "RECORDED/NOT SENT/batch-at-close rule. R160/B40",
+     "RECORDED/NOT SENT/batch-at-close rule",           # R160/B40
      "command"),
     ('/issue-relationship-status nNNNN <type> nMMMM = retired "reason"',
      "retire an issue-relationship — the property construct\n"
@@ -112,7 +115,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "Batch-at-close like the ruling forms\n"
      "above, unlike an ISSUE's status, which applies at\n"
      "once. Only retired is built; attested/proposed need\n"
-     "a quote/an ask, not yet. R161", "command"),
+     "a quote/an ask, not yet", "command"),             # R161
     ("/issue-relationship-list",
      "every live issue with its live issue-relationships —\n"
      "type, target, status and the target's label, one\n"
@@ -123,7 +126,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "absence looks like. All three -> a LIVE issue (nobody\n"
      "holds it yet); fewer -> a LEAD (L_nNNNN) until the rest\n"
      "is written. At cmd> a missing one is asked for. A part\n"
-     "may propose it: [proposed: /issue-add \"label\" ...]. R290", "command"),
+     "may propose it: [proposed: /issue-add \"label\" ...]",   # R290
+     "command"),
     ("/issue-apply <commands.toml>",
      "apply a circle's own already-recorded rulings to\n"
      "the live graph. Ported from ic.py 2026-08-13", "command"),
@@ -139,7 +143,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/better-option-add <how Self moves>",
      "the same register, addressed to Self rather than\n"
      "the circle — how Self moves, not how the room\n"
-     "behaves. R133 merged the two files into one.\n"
+     "behaves. One register holds both.\n"              # R133 merged the two files
      "Written immediately — /abort does not undo it", "command"),
     ("/practice-list",
      "the circle's practices, numbered — every row NOT\n"
@@ -147,17 +151,18 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "/better-option-list's, since 2026-08-21)", "command"),
     ("/better-option-list",
      "how Self moves — the rows of the same register\n"
-     "addressed to Self, numbered on their own. Always\n"
-     "visible (the operator, 2026-08-21)", "command"),
+     "addressed to Self, numbered on their own. Runnable\n"
+     "at any dev state; listed only under --dev", "command"),
     ("/practice-delete <n>",
      "remove one, by the number /practice-list showed —\n"
      "that list's numbering, not /better-option-list's",
      "command"),
     ("/practice-update <n> <text>",
      "replace one practice's wording in place, by the number\n"
-     "/practice-list showed — same id, same origin; the row\n"
+     "/practice-list showed — that list's numbering, not\n"
+     "/better-option-list's. Same id, same origin; the row\n"
      "takes today's date as `amended`. No prior wording is\n"
-     "kept: git is the journal (R465). Written immediately",
+     "kept: git is the journal. Written immediately",   # R465
      "command"),
     ("/remember <text>",
      "YOUR OWN private note, written at once to\n"
@@ -170,8 +175,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "numbered, one line each; `<n>` shows one whole.\n"
      "Reads self/remember.toml directly, no circle needed.\n"
      "A part's own register is private to it and is NEVER\n"
-     "reachable from here (R224, docs/BNF.md's\n"
-     "REMEMBER_PROJECTION). Named /recall until 2026-08-21;\n"
+     "reachable from here. Named /recall until 2026-08-21;\n"   # R224, BNF REMEMBER_PROJECTION
      "/recall is still accepted", "command"),
     # CIRCLE_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
     # CRUD operations and a help entry." circles/circle_observation_log.toml is
@@ -231,7 +235,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ('/part-add ["<describe>" "<name>"]',
      "invite a NEW part: describe that aspect of yourself\n"
      "(up to 40 words), then its name. Yours alone — a part\n"
-     "cannot propose one (R483). Bare opens the dialog. It\n"
+     "cannot propose one. Bare opens the dialog. It\n"  # R483
      "joins from the NEXT circle. IMMEDIATE — /abort does\n"
      "not undo it", "command"),
     ("/part-list",
@@ -250,10 +254,10 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # 2026-09-02. Same numbered/confirmation shape as the part verbs above.
     ('/group-add "<name>" <r1>,<r2>,... [layer=<path>]',
      "write groups/<name>/group.toml — the descriptor whose\n"
-     "presence makes the folder a group (R468) — naming its\n"
+     "presence makes the folder a group — naming its\n"  # R468
      "roles, part directories under groups/<name>/parts/;\n"
      "circle.py --group <name> opens on it. layer= names the\n"
-     "group's own BLOCK 1 layer file (B115); omitted, the IFS\n"
+     "group's own BLOCK 1 layer file; omitted, the IFS\n"   # B115
      "layer. IMMEDIATE — /abort does not undo it", "command"),
     ("/group-list",
      "every group, numbered — name and its roles. The number\n"
@@ -273,7 +277,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/topic-list",
      "the TOPIC register (TP-): open BLOCK 2 topics —\n"
      "synthesis material carried for circle review,\n"
-     "unvetted by design (R184)", "command"),
+     "unvetted by design", "command"),                 # R184
     ("/topic-close TP-nnnn",
      "close one topic — kept as a tombstone, id never\n"
      "reused. Written immediately — /abort does not\n"
@@ -281,7 +285,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/topic-update TP-nnnn <text>",
      "replace one OPEN topic's text in place — same id,\n"
      "same circle; the row takes today's date as `amended`.\n"
-     "No prior wording is kept: git is the journal (R465).\n"
+     "No prior wording is kept: git is the journal.\n"  # R465
      "Written immediately — /abort does not undo it", "command"),
     ("/propose-list",
      "the staged proposals — pending first (what awaits\n"
@@ -322,7 +326,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/issue-evidence-list",
      "this circle's statements, numbered — what\n"
      "/issue-evidence-add cites by number. Named /statements\n"
-     "until 2026-08-21 (D59)", "command"),
+     "until 2026-08-21", "command"),                   # D59
     # THE SETTINGS EDITOR — 2026-08-28 (R379). COMMAND
     # pane, deliberately: cmd> only means no Self> surface, so a settings
     # change writes no transcript line and there is nothing for a part to
@@ -497,6 +501,15 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 # /issue-list), /practice-delete, /topic*, /better-option-add. Also: add a
 # path for /better-option-list and make it always visible."* So the user
 # table keeps /issue-list alone of the issue verbs; every other /issue-*
+#
+# THE "ALWAYS VISIBLE" HALF NO LONGER HOLDS, AND THE OPERATOR HAS NOT BEEN
+# ASKED WHETHER HE MEANT IT TO. The 2026-09-09 ruling below
+# (LIST_SUBSET_COMMANDS) hides EVERY `-list` verb from a listing with dev
+# off, by SUFFIX. /better-option-list ends in `-list`, so it is now runnable
+# and unlisted — the exact state this ruling's second sentence ruled against
+# for this one verb. The later ruling's words carry no table qualifier, so
+# the code follows them; the conflict is recorded here and raised, not
+# resolved by the code choosing a side.
 # — present and future — is DEV, and so are /practice-delete, the topic
 # verbs (R281, the same day) and /better-option-add.
 # "For now" is his phrase both times. What dev gates is still, as well,
@@ -744,17 +757,20 @@ def command_proposable_read() -> tuple[str, ...]:
 
 
 def _disjoint() -> None:
+    # THE RULING IDS MOVED OUT OF THESE MESSAGES, 2026-09-09. They are raised at
+    # IMPORT time, so a recipient hits them on a bad edit with no rulings/ to
+    # look any of them up in. R266 is the disjointness rule; R267 made
+    # PROPOSE a subset of USER, and R288 (2026-08-21) widened it to USER ∪ DEV.
     both = set(USER_SUBSET_COMMANDS) & set(DEV_SUBSET_COMMANDS)
     if both:
         raise AssertionError(
             f"USER_SUBSET_COMMANDS and DEV_SUBSET_COMMANDS must be disjoint "
-            f"(R266) — both hold {sorted(both)}")
+            f"— both hold {sorted(both)}")
     stray = (set(PROPOSE_SUBSET_COMMANDS)
              - set(USER_SUBSET_COMMANDS) - set(DEV_SUBSET_COMMANDS))
     if stray:
         raise AssertionError(
-            f"PROPOSE_SUBSET_COMMANDS is a SUBSET of USER ∪ DEV (R267, narrowed "
-            f"from ⊆ USER by R288, 2026-08-21) — "
+            f"PROPOSE_SUBSET_COMMANDS is a SUBSET of USER ∪ DEV — "
             f"{sorted(stray)} is in neither table")
     loose = set(DEFERRED_PROPOSE_COMMANDS) - set(PROPOSE_SUBSET_COMMANDS)
     if loose:

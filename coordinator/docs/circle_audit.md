@@ -170,40 +170,40 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
     Run phases 0, 1, 2, 6 — the default sequence — and nothing else. Given alongside a flag that selects another path (`--snapshot`, `--backfill`, `--stage-synthetic`, `--commit`) it REFUSES, naming the clash, and returns 1 rather than letting the other flag win silently. Honoured 2026-08-27; it was accepted and never read until then, so `--validate --backfill` ran the backfill without a word. (See BUGS.)
 
 `--selfcheck`
-    Run phase 6 only, against no baseline, with no lock, no git checks, and no reconcile.
+    Run phase 6 only, against no baseline, with no lock, no git checks, and no reconcile. Default: off.
 
 `--git-setup`
-    Idempotent git bootstrap: init, config, `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree.
+    Idempotent git bootstrap: init, config, `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree. Default: off.
 
 `--git-name NAME`, `--git-email EMAIL`
     Identity to use with `--git-setup`. No default is set at the argparse level deliberately — the underlying `gitrepo.system_git_identity_resolve()` falls back through `$IFS_GIT_NAME`/`$IFS_GIT_EMAIL` (shell or `.env`), then git's own existing `user.name`/`user.email` config, then unset.
 
 `--dry-run`
-    With `--backfill`: report what would be generated (and an estimated cost) without calling the model.
+    With `--backfill`: report what would be generated (and an estimated cost) without calling the model. Default: off.
 
 `--prune-baselines`
-    Delete all but the newest 14 (`KEEP_BASELINES`) snapshot directories under `work/circle_audit/`.
+    Delete all but the newest 14 (`KEEP_BASELINES`) snapshot directories under `work/circle_audit/`. Default: off.
 
 `--all-circles`
-    With `--backfill`: scan every circle on disk, not only unprocessed ones — needed because a short-term record lost after its circle was already dreamed is otherwise invisible to the normal (unprocessed-only) scope.
+    With `--backfill`: scan every circle on disk, not only unprocessed ones — needed because a short-term record lost after its circle was already dreamed is otherwise invisible to the normal (unprocessed-only) scope. Default: off.
 
 `--backfill`
-    Run phase 3: reconstruct any short-term record that is missing or malformed for a part that actually spoke in an unprocessed circle. Stages only; requires `--commit` to actually write.
+    Run phase 3: reconstruct any short-term record that is missing or malformed for a part that actually spoke in an unprocessed circle. Stages only; requires `--commit` to actually write. Default: off.
 
 `--stage-synthetic`
-    Stage one legal synthetic change, so phases 6-9 (validate/commit/verify/record) can be exercised end-to-end with no model calls and no cost.
+    Stage one legal synthetic change, so phases 6-9 (validate/commit/verify/record) can be exercised end-to-end with no model calls and no cost. Default: off.
 
 `--commit`
-    Run phases 7-9 (commit, verify, record) against whatever was staged by `--backfill` or `--stage-synthetic`. Without this flag, a run that staged something stops after validation and writes nothing to the live tree.
+    Run phases 7-9 (commit, verify, record) against whatever was staged by `--backfill` or `--stage-synthetic`. Without this flag, a run that staged something stops after validation and writes nothing to the live tree. Default: off.
 
 `--no-git`
-    With `--commit`: write the staged changes to disk but skip the `git commit` step.
+    With `--commit`: write the staged changes to disk but skip the `git commit` step. Default: off.
 
 `--transaction-status`, `--transaction-finish`, `--transaction-rollback`
     Inspect, complete, or undo an interrupted commit (a leftover transaction file from a process that died mid-file-swap). Each dispatches immediately and independently of every other flag. Default: off. The pre-B100 spellings `--journal-status` / `--journal-finish` / `--journal-rollback` (until 2026-09-04, R446/R448) are still accepted, hidden from `--help`, for one release: each prints a one-line note and does what its `--transaction-*` twin does. A leftover file named JOURNAL (left by a crash before the rename) is found and repaired exactly like a TRANSACTION; the report names whichever it found.
 
 `--log`
-    Mirror all printed output to a timestamped file under `work/logs/` (`circle_audit_<timestamp>.log`), in addition to stdout.
+    Mirror all printed output to a timestamped file under `work/logs/` (`circle_audit_<timestamp>.log`), in addition to stdout. Default: off.
 
 ## DEPENDENCIES
 
@@ -211,9 +211,9 @@ Python standard library: `argparse`, `atexit`, `datetime`, `json`, `os`, `pathli
 
 Local/sibling modules: `record_model` (as `M`) — the file model: `record_file_verify`, `record_sha`, `record_bytes_read`, `SHORT_TERM_SECTIONS`, `PARTS`, and the `Finding` result type (`level`/`code`/`path`/`message`); `register_gate` (as `RG`, since 2026-09-03) — the gate: `_tree_files`, `record_tree_compare`, `record_tree_verify`, `register_summarise`; `gitrepo` (as `G`) — all git-repository bootstrap and safety operations (`system_git_is_available`, `system_git_run`, `system_git_repo_ensure`, `system_git_remote_refuse`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_is_dirty`, `system_git_paths_commit`, `system_git_identity_resolve`, `ENV_GIT_NAME`, `ENV_GIT_EMAIL`); `TRANSACTION_CLASS` (as `T`) — the staged-write/transaction file/commit machinery: the `Transaction` class (`stage`, `staged`, `changed`, `validate`, `commit`, `verify`, `record_committed`, `run_id`, `staging`) and the module-level `transaction_read`, `transaction_report`, `transaction_finish`, `transaction_rollback`; `part_roster` (as `R`) — `TAGS` and `DIR_BY_TAG` (current-spelling part tag/directory mappings, deliberately not `DIR_BY_TAG_ALL`, since this reader only ever sees circles the audit itself processes, all postdating a 2026-08-07 tag rename); `circle_state` (as `CS`, imported locally inside circle_audit_open_verify() and circle_audit_snapshot()) — `circle_is_in_progress()`, the fails-closed open-circle probe.
 
-Inside `circle_audit_phase3_run()` only, two further dependencies are imported locally rather than at module load: `prompt_build` (as `C`, for the same identity/prompt assembly a live circle uses — `group_shared_read`, `circle_briefing_build`, `prompt_part_assemble`, `PART_TAGS`; it was `circle` until phase 2 stage 2, and `load_shared`/`shared_block`/`system_blocks` retired into `prompt_part_assemble` 2026-09-02) and `llm_client` (as `LC`, for `stream_client_build` and `stream_call_once` — the transport, which owns the `anthropic` client and the `.env` key resolution since 2026-08-28; this file built its own `Anthropic()` client until then).
+Inside `circle_audit_backfill_run()` only, two further dependencies are imported locally rather than at module load: `prompt_build` (as `C`, for the same identity/prompt assembly a live circle uses — `group_shared_read`, `circle_briefing_build`, `prompt_part_assemble`, `PART_TAGS`; it was `circle` until phase 2 stage 2, and `load_shared`/`shared_block`/`system_blocks` retired into `prompt_part_assemble` 2026-09-02) and `llm_client` (as `LC`, for `stream_client_build` and `stream_call_once` — the transport, which owns the `anthropic` client and the `.env` key resolution since 2026-08-28; this file built its own `Anthropic()` client until then).
 
-External programs: `git`, invoked throughout via `subprocess.run` (directly in this file's `circle_audit_git_run()` helper, and indirectly through every `gitrepo` function); the sibling script `coordinator/record_verify.py`, invoked as a subprocess during phase 0; the sibling script `coordinator/circle_close_verify.py --reconcile`, invoked as a subprocess during phase 2.
+External programs: `git`, invoked throughout via `subprocess.run` (directly in this file's `circle_audit_git_run()` helper, and indirectly through every `gitrepo` function); the sibling script `memory/record_verify.py`, invoked as a subprocess during phase 0; the sibling script `coordinator/circle_close_verify.py --reconcile`, invoked as a subprocess during phase 2.
 
 ## EXTERNAL FILES
 
@@ -242,7 +242,7 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
         `<baseline>/SNAPSHOT.json` -- read by circle_audit_window_describe() when a
         `--baseline` was given, to determine whether inter_circle.py
         processed any circle in the window since the snapshot was taken.
-        `.env` (project root) -- read opportunistically inside circle_audit_phase3_run()
+        `.env` (project root) -- read opportunistically inside circle_audit_backfill_run()
         if `ANTHROPIC_API_KEY` is not already set in the environment.
         `work/circle_audit/baseline_*` directories -- listed (not read as
         files) by circle_audit_baseline_resolve() and circle_audit_baselines_prune().
@@ -261,7 +261,7 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
         Transaction object during --backfill/--stage-synthetic staging
         and, if --commit is given, during the phase 7 commit swap.
         The live tree's `parts/<part>/long_term.md` etc. -- written ONLY
-        during phase 7 (inside circle_audit_phase7_9_run(), called only when --commit was
+        during phase 7 (inside circle_audit_commit_run(), called only when --commit was
         given and phase 6 validation found no FAILures), via the
         Transaction's atomic swap.
         `work/nightly/<run_id>/committed.json` -- written by
@@ -432,7 +432,7 @@ Refuses to let a snapshot be taken while a circle may be open — /close's phase
             state.
         print instructions for the three transaction-repair commands
         (--transaction-status/--transaction-finish/--transaction-rollback).
-        return True -- the caller (circle_audit_phase0_run) must stop here.
+        return True -- the caller (circle_audit_preflight_run) must stop here.
     }
 
 ### `_logger(run)`
@@ -441,7 +441,7 @@ Refuses to let a snapshot be taken while a circle may be open — /close's phase
       DID/WARN/note/FAIL) and, if kind is "fail", also appends `msg` to
       `run.failures` -- a slightly differently-formatted twin of the
       marks used inline in circle_audit_git_setup(), reused by circle_audit_transaction_command_read() and
-      circle_audit_phase7_9_run(). }
+      circle_audit_commit_run(). }
 
 ### `circle_audit_transaction_command_read(run, action)`
 
@@ -495,7 +495,7 @@ Refuses to let a snapshot be taken while a circle may be open — /close's phase
       path calls this, so a run that LOST the lock race used to delete
       the winning run's live lock on its way out. }
 
-### `circle_audit_phase0_run(run, may_commit, writing=False)`
+### `circle_audit_preflight_run(run, may_commit, writing=False)`
 
     Print the phase 0 header.
     if (circle_audit_transaction_verify() reports a leftover transaction file) then {
@@ -507,7 +507,7 @@ Refuses to let a snapshot be taken while a circle may be open — /close's phase
     }
     Run circle_audit_open_verify() and circle_audit_git_verify() (both accumulate into
     `run` rather than short-circuiting).
-    if (coordinator/record_verify.py does not exist) then {
+    if (memory/record_verify.py does not exist) then {
         run.fail.
     } else {
         Run it as a subprocess; log its last non-blank output line as
@@ -516,7 +516,7 @@ Refuses to let a snapshot be taken while a circle may be open — /close's phase
     }
     Return True if `run.failures` is still empty, else False.
 
-### `circle_audit_phase1_run(run)`
+### `circle_audit_survey_run(run)`
 
 Unprocessed = in scope and carrying no dream/<OT> tag. The scope epoch is the oldest dream tag: circles older than it are the retired batch nightly's era, out of audit scope by ruling (2026-08-19). Deleting the oldest tag — inter_circle's own "delete the tag first if you mean it" re-run path — therefore shifts the epoch backward and pulls legacy circles into scope.
 
@@ -552,7 +552,7 @@ Unprocessed = in scope and carrying no dream/<OT> tag. The scope epoch is the ol
       increment that part's count. Return the per-part statement-count
       dict. }
 
-### `circle_audit_phase2_run(run, unprocessed)`
+### `circle_audit_reconcile_run(run, unprocessed)`
 
 Reconciles each unprocessed circle against `circle_close_verify.py`, then applies what the docstring calls "the transcript safety net": any part that spoke in the transcript but has no well-formed short-term record must be backfilled before dreaming would otherwise read it as having said nothing at all. A part that stayed silent is correctly exempt -- absence for a part that never spoke is not a loss.
 
@@ -639,7 +639,7 @@ States plainly whether inter_circle.py actually processed a circle between when 
         that follows is meaningful.
     }
 
-### `circle_audit_phase6_run(run, baseline)`
+### `circle_audit_validate_run(run, baseline)`
 
     Print the phase 6 header, naming the baseline path if given, else
     "(self-check)".
@@ -676,7 +676,7 @@ States plainly whether inter_circle.py actually processed a circle between when 
       spoke in that circle is never considered -- its absence is
       correct, not a loss. Return the accumulated list. }
 
-### `circle_audit_phase3_run(run, tx, unprocessed, dry)`
+### `circle_audit_backfill_run(run, tx, unprocessed, dry)`
 
 Reconstructs lost short-term records directly from a circle's transcript, staging the result rather than writing it — mechanizing a procedure the docstring says was previously done by hand for four parts on 2026-07-26, under the same rule: only `short_term_*.toml` (`.md` before 2026-09-04, R434) is ever written here, never `long_term.md` (and never `part_relationships.toml`, while that register existed — retired 2026-08-22).
 
@@ -746,7 +746,7 @@ One legal synthetic change, used to exercise the real tree, the real gate, and t
         run.ok, reporting how many synthetic files were staged.
     }
 
-### `circle_audit_phase7_9_run(run, tx, findings, do_git)`
+### `circle_audit_commit_run(run, tx, findings, do_git)`
 
 Phases 7 (commit), 8 (verify), 9 (record) — the docstring notes explicitly that nothing here runs at all if phase 6 already found a FAILure.
 
@@ -833,6 +833,6 @@ at `/close`).
 
   Worse than decoration, and this is the part the original entry missed: `--validate --backfill` ran the BACKFILL. The flag did not merely do nothing — it LOST, silently, to whichever other flag was present.
 
-- WITHDRAWN 2026-08-27 — the `NameError: unprocessed` reported here. **It cannot occur, and the mechanism it was reasoned from does not exist.** The block is `try:` / `finally: circle_audit_lock_release()` with *no* `except` clause, so an exception raised anywhere inside the `try` runs `finally` and then propagates out of `main()`; the failure-summary line sits *after* the whole construct and is never reached on that path. The claim also placed the `--transaction-*`/`--git-setup`/`--selfcheck` early returns inside the `try` — all three are above it. On every path that does reach the summary line, `unprocessed = circle_audit_phase1_run(run)` has run: the only branch between the `try` and that assignment is `--snapshot`, which returns 0.
+- WITHDRAWN 2026-08-27 — the `NameError: unprocessed` reported here. **It cannot occur, and the mechanism it was reasoned from does not exist.** The block is `try:` / `finally: circle_audit_lock_release()` with *no* `except` clause, so an exception raised anywhere inside the `try` runs `finally` and then propagates out of `main()`; the failure-summary line sits *after* the whole construct and is never reached on that path. The claim also placed the `--transaction-*`/`--git-setup`/`--selfcheck` early returns inside the `try` — all three are above it. On every path that does reach the summary line, `unprocessed = circle_audit_survey_run(run)` has run: the only branch between the `try` and that assignment is `--snapshot`, which returns 0.
 
-- WITHDRAWN 2026-08-27 — "the distinction ... is not made anywhere in the message". The premise is right: `circle_audit_phase0_run()` does call `circle_audit_git_verify()` before phase 7, so a matched path can only be a prior run's leftover. The conclusion is wrong — `circle_audit_git_verify()` says exactly that. Its `expected and not other` branch prints *"working tree dirty in N path(s), all of them audit output — the expected state after an uncommitted backfill. Review, then commit."* Naming the leftover as a prior uncommitted backfill IS the distinction the entry reported missing.
+- WITHDRAWN 2026-08-27 — "the distinction ... is not made anywhere in the message". The premise is right: `circle_audit_preflight_run()` does call `circle_audit_git_verify()` before phase 7, so a matched path can only be a prior run's leftover. The conclusion is wrong — `circle_audit_git_verify()` says exactly that. Its `expected and not other` branch prints *"working tree dirty in N path(s), all of them audit output — the expected state after an uncommitted backfill. Review, then commit."* Naming the leftover as a prior uncommitted backfill IS the distinction the entry reported missing.

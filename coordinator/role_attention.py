@@ -63,5 +63,20 @@ def part_attention_finalize(sysblocks: dict, parts: list, topic: str,
     except Exception:                                        # noqa: BLE001
         return   # never cost an open
     for p, pack in packs.items():
-        if p in sysblocks:
+        if p not in sysblocks:
+            continue
+        # PART_OBJECTIVES_EMPTY IS AN ALTERNATIVE, NOT A PREFIX — the whole
+        # block when there is nothing, replaced outright the moment there is
+        # something. Appending gave a part with an empty remember tail and a
+        # non-empty recall pack "(nothing pending for you this circle)" and
+        # then the pack: a sentence saying nothing is pending, followed by
+        # the thing that is. No <part_objectives> production admits that
+        # string, and the grammar is right — this is the assembler catching
+        # up to it (audit-register 2026-09-09 #53). The combination is
+        # REACHABLE: the tail is cut at part_mid_term_cutoff_read() and is ε
+        # once every record predates it, while remember_expand builds the
+        # pack from the register whole, with no cutoff filter.
+        if sysblocks[p][3]["text"].strip() == PART_OBJECTIVES_EMPTY:
+            sysblocks[p][3]["text"] = pack
+        else:
             sysblocks[p][3]["text"] += "\n\n" + pack

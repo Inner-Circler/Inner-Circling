@@ -102,8 +102,8 @@ may need genuinely gone.
 
     (none)      list every entry, one line each.
     --init      create circles/circle_observation_log.toml as an empty register.
-                Refuses to overwrite an existing one, printing and exiting 0.
-    --show      print the newest entry in full.
+                Refuses to overwrite an existing one, printing and exiting 0. Default: off.
+    --show      print the newest entry in full. Default: off.
 
 Matched by presence, not position; anything unrecognised falls through to the listing.
 

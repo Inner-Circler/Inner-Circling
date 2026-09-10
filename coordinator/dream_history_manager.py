@@ -173,8 +173,9 @@ def _derive(prior: str | None, dreams: list[dict], client=None,
                  + "\n\n".join(_render_dream(d) for d in dreams))
     reply = _call("\n\n".join(parts), client=client)
     if reply.truncated:
+        # R354's rule: a truncated reply is not a record.
         say("  REFUSED — the reply stopped at max_tokens; a truncated "
-            "history is not written (R354's rule)")
+            "history is not written")
         return None
     if reply.empty:
         say("  REFUSED — empty reply; nothing written")
@@ -189,8 +190,9 @@ def _derive(prior: str | None, dreams: list[dict], client=None,
 def dream_history_bootstrap(client=None, say=print) -> int:
     doc = _load()
     if dream_history_read(doc):
+        # R359: the bootstrap derivation runs exactly once.
         say("  REFUSED — a DREAM_HISTORY record already exists; the "
-            "bootstrap runs once (R359). Use --fold for new dreams.")
+            "bootstrap runs once. Use --fold for new dreams.")
         return 2
     dreams = dream_history_corpus_read(doc)
     if not dreams:
@@ -213,7 +215,8 @@ def dream_history_bootstrap(client=None, say=print) -> int:
 def dream_history_fold(client=None, say=print) -> int:
     doc = _load()
     if not dream_history_read(doc):
-        say("  REFUSED — no history yet; run --bootstrap first (R359)")
+        # R359 again: --fold has nothing to fold into until the bootstrap ran.
+        say("  REFUSED — no history yet; run --bootstrap first")
         return 2
     pending = dream_history_unfolded_read(doc)
     if not pending:
@@ -274,11 +277,14 @@ def selftest() -> int:
 
 def main() -> int:
     import argparse
+    # R193/R319/R359 are the rulings behind this register and its one-shot
+    # bootstrap. They are named here rather than in description=/help=, which
+    # argparse prints to a recipient who has no rulings/. 2026-09-09.
     ap = argparse.ArgumentParser(
         description="DREAM_HISTORY — the bounded summary over Self's dream "
-                    "corpus (R193/R319/R359)")
+                    "corpus")
     ap.add_argument("--bootstrap", action="store_true",
-                    help="the one R359 bootstrap derivation (a real model "
+                    help="the one bootstrap derivation (a real model "
                          "call; refuses if a history exists). Default: off.")
     ap.add_argument("--fold", action="store_true",
                     help="fold every unfolded dream, one derivation each "

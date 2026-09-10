@@ -339,7 +339,8 @@ def main() -> int:
     if ph:
         print(f"  REFUSED  INDEX.md would carry placeholder id(s): "
               f"{', '.join(ph)}")
-        print(f"           issues/INDEX.md is UNCHANGED. See D36.")
+        # D36 is the decision behind the refusal; not printed, since this ships.
+        print(f"           issues/INDEX.md is UNCHANGED.")
         return 1
     (ISSUES / "INDEX.md").write_text(body, encoding="utf-8", newline="\n")
     print(f"  issues/INDEX.md — {len(live)} live ({len(roots)} root) · "

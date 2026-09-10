@@ -36,8 +36,12 @@ and the close (short_terms, verifier, commit, phase 2). Everything it calls live
 Two modes, and ONE IS REQUIRED since R360 — a bare invocation refuses (exit 2) rather than
 falling back to a default. `--dry-run` is the test rig: no model calls, every part passes, and
 writes land only under `work/sandbox/`. `--live` may write the
-live transcript, each speaking part's `short_term_<OT>.toml` (`.md` before 2026-09-04, R434), `work/logs/` (through
-`circle_close_verify.py`) and `work/prompts/<OT>/`; `WriteGuard` enforces it. Nothing is written until
+live transcript, each speaking part's `short_term_<OT>.toml` (`.md` before 2026-09-04, R434),
+`parts/<name>/remember.toml`, `self/remember.toml`, and `work/prompts/<OT>/` with its
+`<OT>_resume_<k>` siblings; `WriteGuard` enforces exactly that list and refuses everything
+else. (`work/logs/` is written by `circle_close_verify.py` as a SUBPROCESS, and so is not a
+shape the guard admits at all — this sentence listed it as one, and omitted both remember
+registers, until 2026-09-09.) Nothing is written until
 the integrity gate and the API check pass, and a run that dies before its first statement
 withdraws its transcript, its working-set entry and its capture.
 
@@ -276,7 +280,20 @@ checkout now.
   Default: off.
 - `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed
   (the `ic.py` replacement). Bypasses dev_mode entirely. Default: unset.
+- `--file-circle OPEN_TIME`: file a closed circle whose save git refused, then reflect on it
+  (R506, 2026-09-09; `circle_close.circle_file()`). Nothing is restarted and nothing is re-asked —
+  a circle whose filing was refused is COMPLETE on disk, transcript and short_terms and close
+  report, and only the git step is missing. So this repeats the git step alone and then runs the
+  dreaming and synthesis that close skipped. Refuses a circle that has already been reflected on,
+  through the same `circle_is_processed()` double-dream guard `inter_circle` uses. Default: unset.
+  **The program PRINTS this flag at the user, in the refusal that follows a failed save**, and it
+  was documented in no man page and no README until 2026-09-09 (audit-register 2026-09-09 #16) —
+  found independently by two of that sweep's agents.
 - (`--minimal` retired with the practice mode, R360 2026-08-27.)
+
+**TWELVE FLAGS, and that is the count `circle.py`'s own `add_argument` calls make.** Every one has
+a bullet above. `coordinator/README.md` said "the real 13" against a list of 11 until 2026-09-09
+(audit-register 2026-09-09 #32); three numbers for one set, none of them the code's.
 
 Exit codes: 0 a complete record; 1 the circle RAN and its record is incomplete (the failure
 record is non-empty); 2 nothing was opened (refused, cancelled, bad arguments).

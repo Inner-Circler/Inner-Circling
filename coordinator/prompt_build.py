@@ -33,74 +33,30 @@ import llm_client as _LC           # PROVIDER_IMPL — prompt_cache_control_read
                                    # provider's, stage 2 (R382)
 import setting_manager as SET             # the length rule's two numbers
 
-# THE FOUR BLOCKS' OWN ASSEMBLERS, 2026-09-02 (docs/CIRCLE_TYPES_DESIGN.md).
-# Re-exported by NAME, unchanged, so every existing external caller
-# (30+ for group_shared_read, 50+ for circle_briefing_build, plus read_ro/strip_settled/
-# strip_to_identity/identity_tail/PART_OBJECTIVES_EMPTY's own callers —
-# grep-confirmed before this move) keeps working via `prompt_build.
-# group_shared_read`/`prompt_build.circle_briefing_build`/etc. or a
-# `from prompt_build import ...` exactly as before. The real logic now
-# lives exclusively in these four files; nothing here decides what any
-# block contains any more.
+# THE FOUR BLOCKS' OWN ASSEMBLERS live in their own files, 2026-09-02
+# (docs/CIRCLE_TYPES_DESIGN.md). This file is the one EXECUTOR of the four blocks —
+# prompt_part_assemble() below — and it asks each assembler directly.
+#
+# THE RE-EXPORT FACADE THAT STOOD HERE IS RETIRED, 2026-09-09. Twelve module-level
+# aliases (group_shared_read, circle_briefing_build, ISSUE_MODEL, record_ro_read,
+# part_settled_strip, part_identity_strip, part_identity_tail_render,
+# PART_OBJECTIVES_EMPTY, part_context_block_render, part_attention_finalize, PART_TAGS)
+# let a caller reach an assembler through this module instead of through its owner.
+# Every caller now names the owner, so there is ONE route to each fact rather than two —
+# the rule system_unique_home_verify.py enforces for a constant, applied to a function.
+# PART_TAGS was the clearest case: `record_paths.PART_TAGS` was already what eight
+# production modules imported directly, and this was a second name for it.
+#
+# `import group_attention`, `import parts_prompt_projection` and
+# `import issue_prompt_projection` left with the aliases they served, so importing this
+# module no longer imports those three transitively. The sys.path insert for memory/
+# stays: it is a bootstrap other modules take advantage of, and prompt_build is imported
+# early by the driver.
 import group_context as _GC
-import group_attention as _GA
 import role_context as _RC
 import role_attention as _RA
-# read_ro/strip_settled/strip_to_identity/identity_tail moved ONE HOP
-# FURTHER, 2026-09-02: role_context.py -> parts_prompt_projection.py, on the same
-# "pull the parts/<p>/* read out" instruction group_context.py/
-# group_attention.py/topic_prompt_projection.py already answered for their own
-# registers. The alias below still resolves; nothing importing
-# prompt_build.record_ro_read (part_mid_term_manager.py, at its own module level) needed to
-# change, since it never knew or cared which file actually held the body.
-import parts_prompt_projection as _PP
-# ISSUE_MODEL moved the SAME HOP FURTHER, same day: group_attention.py ->
-# memory/issue_prompt_projection.py, on direct instruction — the prologue is
-# issue-graph material, not this assembler's just because it used to read
-# the file directly. Its own alias below resolves the same way.
-# UNLIKE THE OTHER THREE (all in coordinator/), this one crosses into
-# memory/ — group_attention.py's own circle_briefing_build() only ever imported
-# it LAZILY, at call time, never at its own module top, and that was
-# deliberate: memory/ is not guaranteed on sys.path yet at prompt_build.py's
-# import time, only by the time a circle actually opens. quote_verify.py/
-# circle.py/proposal_vetting.py resolve the same need the same way — inserting
-# memory/ themselves rather than assuming an earlier import already did.
 import sys as _sys
 _sys.path.insert(0, str(_P.ROOT / "memory"))
-import issue_prompt_projection as _IP                                # noqa: E402
-# EACH ALIAS CARRIES ITS OWNER'S NAME, 2026-09-03 (B99's residue, the estimate's item 1g).
-# They were load_shared/build_briefing/read_ro/strip_settled/strip_to_identity/
-# identity_tail/role_context_block/finalize_block4 — the spellings stage 19 retired at
-# their owners, kept alive here by the facade. The facade itself stands: this file is
-# the one executor of all four blocks, asked for directly. An alias that renames what it
-# re-exports is a second name for one fact, which is what the sweep was for.
-group_shared_read = _GC.group_shared_read
-circle_briefing_build = _GA.circle_briefing_build
-ISSUE_MODEL = _IP.ISSUE_MODEL
-record_ro_read = _PP.record_ro_read
-part_settled_strip = _PP.part_settled_strip
-part_identity_strip = _PP.part_identity_strip
-part_identity_tail_render = _PP.part_identity_tail_render
-PART_OBJECTIVES_EMPTY = _RA.PART_OBJECTIVES_EMPTY
-# role_context.part_context_block_render()/role_attention.part_attention_finalize() ADDED 2026-09-02: the two
-# remaining real-code call sites that reached an assembler directly instead
-# of through prompt_build.py (circle.py's own Phase 2 for BLOCK 4, via a
-# local `import role_attention as RA`; part_mid_term_project.py's diagnostic
-# read of a part's BLOCK 3 identity, via `import role_context as RC`) —
-# asked directly to make prompt_build.py the one executor of all four.
-# prompt_part_assemble() below already calls _RC.part_context_block_render/_RA.part_attention_stage internally for
-# the normal one-part-at-open assembly; finalize() is BLOCK 4's own later,
-# topic-dependent SECOND pass (role_attention.py's own docstring), which
-# prompt_part_assemble() never ran — this is its first re-export, not a duplicate
-# of one prompt_part_assemble() already had.
-part_context_block_render = _RC.part_context_block_render
-part_attention_finalize = _RA.part_attention_finalize
-
-# PART_TAGS — no internal use here since the block-3/4 move, 2026-09-02, but
-# real external callers still reach it as `prompt_build.PART_TAGS`
-# (block_overlap_verify.py, part_mid_term_manager.py, part_mid_term_project.py, prompt_show.py,
-# circle_audit.py, all `import prompt_build as C` then `C.PART_TAGS`).
-PART_TAGS = _P.PART_TAGS
 
 HERE = pathlib.Path(__file__).resolve().parent
 

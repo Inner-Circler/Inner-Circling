@@ -175,9 +175,9 @@ if (argv[0] == "--sources") then {
 ```
 
 ## COMMAND-LINE ARGUMENTS
-- `--sources <part>` — print each source's character count for one part; makes no derivation, no API call.
-- `--refresh [part] [--dry-run]` — derive every part in `stale`/`absent`/`legacy` state (or just `part`, if given), skipping `locked` and `fresh` parts. `--dry-run` prints what would be derived without calling the API.
-- `--lock <part>` / `--unlock <part>` — mark the part's current `mid_term.md` as Self-authored and frozen (or release that freeze); does not re-derive.
+- `--sources <part>` — print each source's character count for one part; makes no derivation, no API call. Default: off.
+- `--refresh [part] [--dry-run]` — derive every part in `stale`/`absent`/`legacy` state (or just `part`, if given), skipping `locked` and `fresh` parts. `--dry-run` prints what would be derived without calling the API. Default: off.
+- `--lock <part>` / `--unlock <part>` — mark the part's current `mid_term.md` as Self-authored and frozen (or release that freeze); does not re-derive. Default: off.
 - (no arguments) — print the state table for all parts.
 
 ## DEPENDENCIES

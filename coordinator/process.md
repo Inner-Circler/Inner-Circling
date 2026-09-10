@@ -172,7 +172,7 @@ below. (First applied 2026-07-11 for Child and Learner, `circle_2026-07-10_1223`
 
 ## Nightly
 
-**THIS HEADING IS LOAD-BEARING — `coordinator/record_verify.py`'s
+**THIS HEADING IS LOAD-BEARING — `memory/record_verify.py`'s
 PROCESS_ANCHORS names it literally as a truncation-guard anchor** (audit-
 register.md #12). The guard does not care that the section is retired; it
 only checks the heading is present, at circle open and in `circle_audit.py`

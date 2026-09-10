@@ -122,7 +122,7 @@ if ("--stats" is in argv) then {
   roots; with one, that circle's capture in whichever root has it. Default when no
   flag is given.
 - `--stats [OT]` — print the per-block, per-item character breakdown recorded in
-  the manifest at circle open, and the turn-file count and bytes.
+  the manifest at circle open, and the turn-file count and bytes. Default: off.
 
 ## DEPENDENCIES
 Standard library: `datetime`, `hashlib`, `json`, `pathlib`, `re`, `sys`,

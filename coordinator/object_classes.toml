@@ -29,7 +29,7 @@
 name = "issue"
 description = '''
 An issue — id nNNNN, human key: label. `list`/`read` are re-derived live
-from issues/*.toml on every call, never cached. No `add` — R001,
+from the issue graph on every call, never cached. No `add` — an issue is
 evidence-gated, not a field-fill. No `delete` — lifecycle is a status
 transition (see /issue-status), not deletion.
 '''

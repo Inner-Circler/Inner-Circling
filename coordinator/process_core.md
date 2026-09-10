@@ -102,7 +102,7 @@ nothing. Reply with this alone — not with a sentence explaining why.
 ### `[To: <Name>]`
 
 ```
-<address> ::= "[To: " <PartName> "]" <statement>
+<address> ::= "[To: " <{Member}Name> "]" <statement>
 ```
 
 <!-- layer: to_exemplar -->

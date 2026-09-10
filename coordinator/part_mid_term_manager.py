@@ -376,9 +376,9 @@ def part_mid_term_sources_read(part: str) -> dict:
     Returned as text so the hash and the model see exactly the same bytes —
     a hash over one view and a call over another is how a cache silently
     serves the wrong thing."""
-    import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
+    import parts_prompt_projection as _PP   # BLOCK 3's own assembler
     base = _RP.record_dir(ROOT, "parts") / part
-    lt = C.part_settled_strip(C.record_ro_read(base / "long_term.md"))
+    lt = _PP.part_settled_strip(_PP.record_ro_read(base / "long_term.md"))
     dt = part_mid_term_dreams_locate(part)
     dr = part_mid_term_dreamt_read(part)
     # FOURTH SOURCE, R178, built with the phase-2 driver 2026-08-15 (was the
@@ -641,8 +641,7 @@ def part_mid_term_refresh(only: str | None = None, dry_run: bool = False,
     buffer even though the driver's own summary line already routed
     correctly. Every live close refreshes mid_term for whichever parts
     moved, so this was not a rare case."""
-    import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
-    targets = [only] if only else list(C.PART_TAGS)
+    targets = [only] if only else list(_RP.PART_TAGS)
     todo = []
     for p in targets:
         # ONE assembly per part, threaded through state -> derive ->
@@ -729,10 +728,9 @@ def part_mid_term_refresh(only: str | None = None, dry_run: bool = False,
 
 
 def part_mid_term_list() -> str:
-    import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
     out = [f"  {'part':<14}{'state':<9}{'sources':>9}{'dreams':>8}"
           f"{'dreamt':>8}  hash"]
-    for p in C.PART_TAGS:
+    for p in _RP.PART_TAGS:
         st, info = part_mid_term_state_read(p)
         out.append(f"  {p:<14}{st:<9}{info['chars']:>9,}{info['dreams']:>8}"
                    f"{info['dreamt']:>8}  {info['hash']}")
@@ -741,7 +739,6 @@ def part_mid_term_list() -> str:
 
 def main() -> int:
     a = sys.argv[1:]
-    import prompt_build as C   # the prompt construction (phase 2 stage 2; was circle)
     if a and a[0] == "--sources":
         part = a[1]
         src = part_mid_term_sources_read(part)
@@ -788,9 +785,9 @@ def main() -> int:
         print(f"  {part} {'LOCKED' if a[0] == '--lock' else 'unlocked'}")
         return 0
     print(part_mid_term_list())
-    stale = [p for p in C.PART_TAGS if part_mid_term_state_read(p)[0] in ("stale", "absent",
+    stale = [p for p in _RP.PART_TAGS if part_mid_term_state_read(p)[0] in ("stale", "absent",
                                                        "legacy")]
-    print(f"\n  {len(stale)} of {len(C.PART_TAGS)} need derivation"
+    print(f"\n  {len(stale)} of {len(_RP.PART_TAGS)} need derivation"
           + (f": {', '.join(stale)}" if stale else ""))
     return 0
 

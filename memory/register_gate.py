@@ -323,6 +323,23 @@ def _mem_cap() -> int:
         return 12000       # see remember_manager.GATE_CHAR_CEILING for the reasoning
 
 
+def _mem_order() -> tuple[str, ...]:
+    """remember_manager.ORDER, imported rather than duplicated — the same rule _so_order()
+    below already writes down, applied to the register that most needed it.
+
+    IT MUST EQUAL remember_manager.ORDER EXACTLY: _fixed_point() re-renders a candidate with
+    this tuple, so a field the gate did not know to render back fails every staged DREAMING
+    record as NOT-FIXED-POINT. A literal copy carried that requirement as a comment and no
+    probe checked it; test_register_gate.py asserts the equality now.
+
+    Late import for the same reason _ch_cap() is late."""
+    try:
+        import remember_manager as _RM
+        return _RM.ORDER
+    except Exception:
+        return ("id", "date", "circle", "text", "chain", "class", "salience")
+
+
 def _so_order() -> tuple[str, ...]:
     """circle_observation_log.ORDER, imported rather than duplicated. Late for
     the same reason _ch_cap() is late — that module imports REGISTER_CLASS,
@@ -358,15 +375,9 @@ def _cj_order() -> tuple[str, ...]:
 REGISTERS: dict[str, dict] = {
     "parts/*/remember.toml": {
         "table": "remember",
-        # "salience" ADDED 2026-08-22 (DESIGN_V2 DREAMING extension) — MUST
-        # equal remember_manager.ORDER exactly: _fixed_point() re-renders a
-        # candidate with THIS tuple, and a mismatch here would fail every
-        # staged DREAMING record as NOT-FIXED-POINT the moment one carried
-        # a salience field the gate did not know to render back.
-        "order": ("id", "date", "circle", "text", "chain", "class",
-                  "salience"),
-        # CAP IS IMPORTED, NOT COPIED — see _mem_cap() and the
-        # circle_history row below, which learned this first.
+        # ORDER AND CAP ARE BOTH IMPORTED, NOT COPIED — see _mem_order() and
+        # _mem_cap(), and the circle_history row below, which learned it first.
+        "order": _mem_order(),
         "id_prefix": "MEM-", "cap": _mem_cap(), "per_run_max": 1,
         "preamble": False, "chain": True,
     },

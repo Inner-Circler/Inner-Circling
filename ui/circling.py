@@ -46,8 +46,20 @@ so a line lost or duplicated while scrolled away from the live edge is
 visible by eye as a gap or a repeat in the sequence, not something you'd
 have to take on faith. The bottom pane's input is a stub: pressing Enter
 there logs the text and says so; it calls nothing in `coordinator/`.
-Wiring either pane to the real system is future work, and should stay
-future work until this harness's answer is yes.
+
+THE BARE DEMO IS A DEVELOPMENT AFFORDANCE, AND IT IS ASSERTED ONLY AGAINST
+CRASHING. Since R314 the way a person opens a circle is `--circle`, so
+everything above describes a path the product does not use: the
+AgentSimulator branch, its queue, the bare-line demux and the simulator's
+shutdown are executed by no probe that checks what they DRAW.
+`ui/tests/test_ui_main_loop.py` always supplies a fake engine, and
+`test_circling_selftest.py`'s last check runs this demo as a subprocess and
+asserts only that it does not exit or print a Traceback within two seconds —
+which covers import-time breakage and nothing about the demo's behaviour.
+Stated here rather than probed: a probe over a random-timer simulator would
+assert the timer, and what could ship undetected is the demo drawing wrongly
+or dropping simulator lines, which costs a developer a confusing screen and
+costs a circle nothing (audit-register 2026-09-09 #63).
 
 WHY OUTPUT CAN'T LITERALLY "PAUSE ON CLICK". A native text selection —
 either because the app never enabled terminal mouse-reporting, or because
@@ -3517,6 +3529,18 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                    --circle --parts <dir>,<dir> --seed 1
                --live must appear in THIS argv, not only in ARGS —
                see CircleEngine.start()'s own docstring for why.
+
+               --recall-arm delivered
+               is the forwarded ARG worth naming here, because BLOCK 1
+               teaches every part `[recall: ...]` unconditionally and
+               the search only runs when a circle is armed for it:
+                   --circle --live --recall-arm delivered
+               `--recall-arm`: lets a part search its own past record,
+               a local index read that costs no model call. Default:
+               off. R460 (2026-09-06) closed the recall trial and made
+               this a plain feature; the Ticker flavor defaults it ON
+               and this door does not, which is a difference nobody has
+               ruled on — see NEXT.md.
 
   --no-color   turn color off for this run. Default: off — color is ON
                whenever stdout is a real terminal and the NO_COLOR

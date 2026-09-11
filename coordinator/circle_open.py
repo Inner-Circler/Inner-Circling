@@ -21,12 +21,13 @@ IT RETURNS ONE OF TWO THINGS, and the caller must check which:
     CircleOpen   the circle is open; this is everything the Self> loop needs
     int          it REFUSED, and this is the exit code — 2 in every case today
 
-Seven refusal paths reach that second arm: the corruption gate, the API check, a client that
-will not build, the reduced-roster confirmation, an unparseable --resume transcript, a resume
-whose circle is already closed, and a --resume with no candidate. `coordinator/tests/
-test_circle_argv.py` executes five of them against the REAL entry point with two stubs, and
-asserts after each that neither circles/ nor the sandbox gained a file — which is the 2026-08-09
-incident's own fix ("nothing is written until the API check passes") checked rather than read.
+Six refusal paths reach that second arm: the corruption gate, the API check, a client that
+will not build, an unparseable --resume transcript, a resume whose circle is already closed,
+and a --resume with no candidate. (The reduced-roster confirmation is circle.py's own, run
+before this step is entered.) `coordinator/tests/test_circle_argv.py` executes them against
+the REAL entry point with stubs, and asserts after each that neither circles/ nor the sandbox
+gained a file — which is the 2026-08-09 incident's own fix ("nothing is written until the API
+check passes") checked rather than read.
 
 WHAT DID NOT MOVE, and why each stayed:
     the three loop flags       closing_confirmed / abort_confirmed / aborted are `= False`
@@ -641,6 +642,10 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     import recall_index as RC
     RC.recall_clear()
     RC.recall_arm_set(args.recall_arm)
+    # WHAT BLOCK 2 SHOWS, so `[recall: issues ...]` leaves exactly that out and reaches every
+    # other node — R549 (D128): "not shown but not out of reach". Before the
+    # arm below, which indexes the same corpus a query reads.
+    RC.recall_issues_shown_set(IP.issue_shown_read(chosen))
     # AND THE INDEX IS ARMED HERE, ON A BACKGROUND THREAD — R470/B121. It
     # overlaps the capture, the pre-warm and the opening round, all of which are
     # API waits, so the fastembed model load and the first-ever embed of six

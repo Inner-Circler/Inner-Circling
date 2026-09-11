@@ -343,11 +343,12 @@ def circle_close_contract_read() -> dict:
     """close_contract.toml, or {} when absent. A MISSING CONTRACT IS SAID OUT
     LOUD by the caller, never passed over — R368.
 
-    ONE OF THREE IDENTICAL BODIES, deliberately: circling_verify.circling_contract_read()
-    and prompt_capture.prompt_capture_contract_read() are the others. Each verifier owns
-    its own CONTRACT constant and sits at a different layer, so a shared helper would need
-    a home none of the three has and would buy one import edge per module for ten lines of
-    tomllib boilerplate. Same trade record_ro_read() states, and the same answer."""
+    ONE OF FOUR IDENTICAL BODIES, deliberately: circling_verify.circling_contract_read(),
+    prompt_capture.prompt_capture_contract_read() and circle_open_verify.
+    circle_open_contract_read() are the others. Each verifier owns its own CONTRACT constant
+    and sits at a different layer, so a shared helper would need a home none of the four has
+    and would buy one import edge per module for ten lines of tomllib boilerplate. Same trade
+    record_ro_read() states, and the same answer."""
     try:
         import tomllib as _toml
     except ModuleNotFoundError:                              # pragma: no cover

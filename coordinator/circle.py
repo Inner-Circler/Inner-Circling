@@ -87,7 +87,8 @@ import command_surface as CS       # phase-2 stage 0 (2026-08-16): the
                                    # dev_mode is REBOUND — always
                                    # CS.dev_mode, never a from-import.
 from command_surface import KNOWN_CMDS
-from llm_client import METER, MODEL, KEY_MISSING_HELP, stream_client_build
+from llm_client import (METER, MODEL, KEY_MISSING_HELP, KEY_MISSING_BRIEF,
+                        stream_client_build, stream_key_present_read)
 # THE OTHER FOUR LEFT WITH THE OPEN STEP, 2026-09-09: stream_key_source_note,
 # stream_failure_explain, RATE_CACHE_WRITE_1H and RATE_CACHE_READ are the API check's and
 # the pre-warm's, and both of those are circle_open.py's now.
@@ -301,6 +302,27 @@ def _default_parts_read() -> list[str]:
 
 
 DEFAULT_PARTS = _default_parts_read()
+
+
+def _roster_refresh() -> None:
+    """THE ROSTER IS READ AT EVERY OPEN, not once per process — R548 (D127,
+    2026-09-11): "the part must be included next circle". circling.py and the Ticker run main()
+    more than once in one process, and DEFAULT_PARTS, PART_TAGS and the statement grammars were
+    the ones read at import, so a part /part-add wrote between two circles was missing from the
+    second. group_set() on the bound group runs every follower, the roster's own rescan among
+    them. Called first thing in main(); a circle already open is untouched.
+
+    ONLY WHEN THE ROSTER MOVED. group_set() also re-binds every register's path, and a probe
+    that points registers at scratch files before running main() — ui/tests/circle_test.py —
+    must keep them, or its writes land in the real record. So parts/ is scanned, and the group
+    re-bound only when what the scan finds differs from the tables this process holds.
+    DEFAULT_PARTS, a read of group.toml with no side effect, is read every time."""
+    global DEFAULT_PARTS
+    roster, alt, tails, _probs = R.part_scan()
+    if (roster, alt, tails) != (R.ROSTER, R.ALT_TAGS, R.IDENTITY_TAILS):
+        _RP.group_set(_RP.group_read())
+    DEFAULT_PARTS = _default_parts_read()
+
 
 # The Soul's speaking rule — history, kept here rather than in the prompt.
 #
@@ -594,6 +616,7 @@ def main() -> int:
         gitrepo.system_git_unconfigured_report_reset()
     except ImportError:
         pass
+    _roster_refresh()
     ap = argparse.ArgumentParser(description="IFS circle — local coordinator")
     ap.add_argument("--live", action="store_true",
                     help="write to the group's own record — groups/<group>/circles/ and "
@@ -704,10 +727,9 @@ def main() -> int:
                          "Refuses a circle that has already been reflected on.")
     ap.add_argument("--dev-cmd", nargs=argparse.REMAINDER, metavar="VERB ...",
                     help="run ONE always-available command directly from the "
-                         "shell, no circle needed — the ic.py replacement, "
-                         "RULED 2026-08-13 ('ic.py is a development tool... "
-                         "able to operate independently of any circle in "
-                         "progress'). Bypasses dev_mode entirely: this is "
+                         "shell, no circle needed — RULED 2026-08-13: a "
+                         "development tool able to operate independently of "
+                         "any circle in progress. Bypasses dev_mode entirely: this is "
                          "already a deliberate shell invocation, not "
                          "something that could leak into a running circle. "
                          "e.g. --dev-cmd practice-list, --dev-cmd "
@@ -740,6 +762,11 @@ def main() -> int:
     # --live nor --dry-run. It DOES write and it DOES call the model, which
     # is why it names the circle explicitly rather than guessing the newest.
     if args.file_circle:
+        # circle_file() CALLS THE MODEL (the reflection), and the client build below — where a
+        # live run's missing key gets R330's page — never runs for this dispatch (R546).
+        if not stream_key_present_read():
+            emit("command", "\n" + KEY_MISSING_HELP + "\n")
+            return 2
         return CC.circle_file(args.file_circle)
 
     if args.dev_cmd is not None:
@@ -806,6 +833,10 @@ def main() -> int:
                         "touching the record:")
         emit("command", "  it opens a real circle, and every write lands under "
                         "work/sandbox/ instead.")
+        # AND WHAT --live WILL NEED, when it is not there — R546: this is
+        # the likeliest first run of a fresh install, so the whole text rides it.
+        if not stream_key_present_read():
+            emit("command", "\n" + KEY_MISSING_HELP + "\n")
         return 2
 
 
@@ -1025,6 +1056,10 @@ def main() -> int:
         # that is actually writable instead of listing what is not.
         emit("command", "sandbox mode: writes land under work/sandbox/ only; "
                         "circles/ and parts/ are untouched.")
+    # A DRY RUN NEEDS NO KEY AND SAYS WHAT A LIVE ONE WILL — R546. The short
+    # form: the run goes on. Through the command channel, so circling.py --circle shows it too.
+    if args.dry_run and not stream_key_present_read():
+        emit("command", "\n" + KEY_MISSING_BRIEF)
 
     # THE OPEN STEP IS circle_open.py's, 2026-09-09. Everything from the corruption gate
     # to the opening round left this function; what remains here is the flags above and the

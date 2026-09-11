@@ -43,6 +43,8 @@ Scrolling up freezes what you are reading — new arrivals leave that pane alone
 
 The program checks its own house first — that the files holding your parts' memories are whole, and that it can reach the service the parts think with. **Nothing is written until both pass.** A circle that cannot start properly leaves no trace at all rather than a half-empty record.
 
+**The parts think through Anthropic's service, and that needs a key of your own.** If none is set, the window does not open: it prints what the key is, how to get one, the file it goes in, how to keep it safe, and the link, and stops. Practising (below) needs no key, and says the same in five lines.
+
 Then it asks you two things.
 
 **What is this circle about?** You can name specific issues to put in front of the room, or answer with nothing and let the circle be open. Naming issues is not narrowing the conversation — it is telling the parts what has your attention right now.
@@ -131,9 +133,12 @@ Related pages:
     --live          make it real: the parts actually think, and the record is
                     your own. Default: off — dry-run, nothing real is
                     written. Either position — before or after --circle
-                    (ruled 2026-08-13, Q3; circling.py:3494).
+                    (ruled 2026-08-13, Q3). With no API key set, the window
+                    does not open: the key's explanation prints, exit 2
+                    (R546).
     --selftest      check the program without needing a terminal. Worth running
-                    before trusting a session.
+                    before trusting a session. A mode, not a toggle. Default: not
+                    set — the window opens.
     --no-color      plain text. Default: off — color is used whenever the
                     terminal supports it and the NO_COLOR environment variable
                     is unset.

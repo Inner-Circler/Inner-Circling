@@ -31,7 +31,10 @@ history line as one act. The `n####` inside never changes.
 Node ids are allocated in your graph, counting up from the first. They
 do not
 correspond to anyone else's — an id in someone else's notes means
-nothing here.
+nothing here. The first node is asked for at your first live open — the
+initialization dialog — and after that one is added by `/issue-add` at
+the cmd> prompt (a developer verb in the two-pane interface), or by a
+part's `[proposed: /issue-add ...]` that you approve at a close.
 
 `issue_model.md` beside this file is not a node and does not go: it is the
 prologue every circle's briefing is built on, and a circle refuses to open

@@ -705,13 +705,23 @@ def system_git_paths_commit(paths: list[pathlib.Path], message: str, log,
     if not system_git_identity_is_known():
         system_git_unconfigured_report(log)
         return False
+    # A PATH THAT IS GONE IS STILL COMMITTED WHEN GIT TRACKS IT — the deletion is the change.
+    # /part-delete removes a folder and then commits it, and this loop kept only paths that
+    # exist, so that commit found nothing and the deletion sat unstaged (found 2026-09-11,
+    # R548). A gone path git never tracked is still skipped.
     rel = []
     for p in paths:
         try:
-            if p.exists():
-                rel.append(p.resolve().relative_to(ROOT).as_posix())
+            r = p.resolve().relative_to(ROOT).as_posix()
         except ValueError:
             log("warn", f"outside the repository, skipped: {p}")
+            continue
+        if p.exists():
+            rel.append(r)
+        else:
+            rc, out = system_git_run("ls-files", "--", r, read_only=True)
+            if rc == 0 and out.strip():
+                rel.append(r)
     if not rel:
         log("warn", "no existing paths to commit")
         return False

@@ -3116,6 +3116,9 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
         state.circle.append(
             "*** harness open. Parts speak on their own timers. Type here and "
             "press Enter to post. Tab moves to COMMANDS. ***")
+        # The demo needs no key; say what a live circle will (R546).
+        for ln in _key_notice_read(full=False).splitlines():
+            state.command.append(ln)
         q: "queue.Queue[str]" = queue.Queue()
         sim = AgentSimulator(q)
         sim.start()
@@ -3530,6 +3533,11 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                    --circle --parts <dir>,<dir> --seed 1
                --live must appear in THIS argv, not only in ARGS —
                see CircleEngine.start()'s own docstring for why.
+               With --live and no API key set, the window does not open:
+               what a key is, how to get one, where it goes and how to
+               keep it safe are printed here instead, and it exits 2.
+               Without --live, the same in five lines, in the command
+               pane, and the dry run goes on.
 
                --recall-arm off
                is the forwarded ARG worth naming here, because it is
@@ -3558,6 +3566,24 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
 
   --help, -h   print this and exit.
 """
+
+
+def _key_notice_read(full: bool) -> str:
+    """The configured provider's missing-key text — whole (`full`) or the five-line brief — or
+    "" when a key is set. R546 (2026-09-11): *"if circle.py or circling.py
+    is run without a LLM API key, output a description of the requirement, how to obtain and
+    place a key, its basic security concern, and a link to Anthropic."* A check that cannot
+    run answers "": a notice never stops the window opening."""
+    try:
+        for d in (COORD_DIR, COORD_DIR.parent / "memory"):
+            if str(d) not in sys.path:
+                sys.path.insert(0, str(d))
+        import llm_client as LC
+        if LC.stream_key_present_read():
+            return ""
+        return LC.KEY_MISSING_HELP if full else LC.KEY_MISSING_BRIEF
+    except Exception:                                   # noqa: BLE001
+        return ""
 
 
 def main() -> int:
@@ -3604,6 +3630,15 @@ def main() -> int:
                         if a == "--dev" or a.startswith("--dev=")), None)
         if dev_arg and dev_arg not in extra_argv:
             extra_argv.append(dev_arg)
+        # A LIVE CIRCLE WITH NO KEY NEVER OPENS THE WINDOW — R546. circle.py
+        # would stop at its client and print the whole text into the command pane, inside an
+        # alternate screen that takes it away on exit; so the terminal gets it, and exit 2.
+        # A dry run needs no key: circle.py's own short notice reaches the command pane.
+        if live:
+            notice = _key_notice_read(full=True)
+            if notice:
+                print("\n" + notice + "\n")
+                return 2
         engine = CircleEngine(queue.Queue())
         engine.start(extra_argv=extra_argv, live=live)
         return ui_main_loop(engine=engine, extra_argv=extra_argv)

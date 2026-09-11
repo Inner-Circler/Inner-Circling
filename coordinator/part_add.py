@@ -19,9 +19,14 @@ THE SEED IS THE PERSON'S OWN WORDS, VERBATIM, under a heading that says so —
 not a model rewrite. The record's first entry is theirs; dreaming exists to
 evolve the identity from there.
 
-A PART ADDED NOW JOINS THE NEXT CIRCLE. Six modules copy the roster at
-import (`circle.DEFAULT_PARTS`, `record_paths.PART_TAGS`, ...), so a directory
-created mid-process is invisible to this process — safe, and said.
+A PART ADDED NOW JOINS THE NEXT CIRCLE — R548 (D127,
+2026-09-11): *"D127 - yes, the part must be included next circle."* A plain
+circle opens on the group's `roles` (group.toml, B117), so part_add() puts
+the new name there after its files are written, and part_delete() takes it
+off `roles` and `initialization` before the folder goes; each commits the
+folder and the list together. A circle already open keeps the roster it
+opened with; circle.main() reads it again at every open, so the next circle
+in the same window has it too.
 
 DELETE IS GIT-RECOVERABLE, NEVER ARCHIVED (the 2026-08-19 ruling that
 removed the archiving mechanism): the directory is removed and the deletion
@@ -39,6 +44,7 @@ printed, which shifts when a part is removed — the same contract
 
 from __future__ import annotations
 
+import pathlib
 import re
 
 import part_roster as R
@@ -133,7 +139,8 @@ def part_precheck(name: str, tag: str, identity: str) -> str:
 
 def part_add(name: str, tag: str, identity: str) -> tuple[bool, str]:
     """Create parts/<name>/ — long_term.md first, part.toml last (the marker
-    makes it a part, so the identity must exist before membership does).
+    makes it a part, so the identity must exist before membership does) —
+    then put <name> on the group's `roles` and commit both (D127).
     IMMEDIATE: /abort does not undo it. Returns (ok, message)."""
     why = part_precheck(name, tag, identity)
     if why:
@@ -154,8 +161,45 @@ def part_add(name: str, tag: str, identity: str) -> tuple[bool, str]:
     mine = [p for p in probs if f"parts/{name}/" in p]
     if mine:
         return False, f"written but does not scan clean: {mine[0]}"
+    try:
+        desc = _group_roles_edit(add=name)
+    except Exception as e:                                      # noqa: BLE001
+        _part_commit([d], f"part-add: {name}")
+        return True, (f"{tag.strip()} is added (parts/{name}/), but it is NOT on the "
+                      f"group's list, so it will not join a circle yet ({e}). Add "
+                      f"\"{name}\" to roles in {_descriptor_shown()}.")
+    # COMMITTED, as part_delete() commits: the group.toml edit is a change to a tracked file,
+    # and a record left dirty is what stops a later merge into this tree.
+    _part_commit([d] + ([desc] if desc else []), f"part-add: {name}")
     return True, (f"{tag.strip()} is added (parts/{name}/). It joins from "
                   f"the next circle.")
+
+
+def _part_commit(paths: list, message: str) -> None:
+    """Commit this module's own writes, and say so on the command pane — never raises."""
+    try:
+        import gitrepo as G
+        G.system_git_paths_commit(paths, message,
+                                  lambda kind, msg: seam.emit("command", f"  {msg}"))
+    except Exception as e:                                      # noqa: BLE001
+        seam.emit("command", f"  (not committed — {e}; commit it by hand)")
+
+
+def _group_roles_edit(**kw) -> "pathlib.Path | None":
+    """The bound group's list, one role on or off (group_manager.group_roles_edit()) — the
+    group whose parts/ this module writes, so a probe's temp tree is the one edited."""
+    import group_manager as GM
+    return GM.group_roles_edit(R.PARTS_DIR.parent, **kw)
+
+
+def _descriptor_shown() -> str:
+    """The group.toml beside parts/, as a person would find it from the tree's root."""
+    import record_paths as _RP
+    p = R.PARTS_DIR.parent / _RP.GROUP_MARKER
+    try:
+        return p.relative_to(_RP.ROOT).as_posix()
+    except ValueError:
+        return str(p)
 
 
 def part_rows_read() -> list[tuple[str, str]]:
@@ -198,8 +242,9 @@ def part_reserved_read() -> tuple[str, ...]:
 
 def part_delete(n_text: str) -> None:
     """/part-delete <n> — confirmation is TYPING THE DIRECTORY NAME (a
-    destructive act gets a harder yes than 'yes'), then the directory is
-    removed and the deletion COMMITTED — git is the record. Refused for the
+    destructive act gets a harder yes than 'yes'), then the part comes off the
+    group's `roles` and `initialization` (D127), the directory is removed, and
+    both are COMMITTED together — git is the record. Refused for the
     group's RESERVED roles, and while a circle may be open (circle_state fails
     closed; a live round reading a vanished long_term.md is a crash, not an
     absence)."""
@@ -240,11 +285,21 @@ def part_delete(n_text: str) -> None:
     if ans != d:
         seam.emit("command", "  cancelled — nothing removed.")
         return
+    # OFF THE GROUP'S LIST FIRST (D127): a role left on `roles` with no folder makes every plain
+    # open refuse ("unknown part"), so a list that cannot be edited stops the delete here.
+    try:
+        desc = _group_roles_edit(drop=d)
+    except Exception as e:                                      # noqa: BLE001
+        seam.emit("command", f"  cancelled — nothing removed: {t} could not be taken off the "
+                             f"group's list ({e}). Take \"{d}\" off roles in "
+                             f"{_descriptor_shown()}, then delete again.")
+        return
     shutil.rmtree(R.PARTS_DIR / d)
-    seam.emit("command", f"  parts/{d}/ removed.")
+    seam.emit("command", f"  parts/{d}/ removed"
+                         + (" and taken off the group's list." if desc else "."))
     try:
         import gitrepo as G
-        G.system_git_paths_commit([R.PARTS_DIR / d],
+        G.system_git_paths_commit([R.PARTS_DIR / d] + ([desc] if desc else []),
                        f"part-delete: {d}",
                        lambda kind, msg: seam.emit("command", f"  {msg}"))
     except Exception as e:                                      # noqa: BLE001

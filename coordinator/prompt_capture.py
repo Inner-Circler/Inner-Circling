@@ -603,8 +603,9 @@ def prompt_capture_discard(d: "pathlib.Path | None") -> int:
 # relationship record) INSIDE circle_identity's "## Your identity" span —
 # treating every `## `/`### ` line as an item boundary would count those.
 # Only the LITERAL marker strings circle.py / issue_prompt_projection.py / topic_manager.py /
-# practice_manager.py / remember_manager.py / part_relationships.py already
-# hardcode start a new item; everything else is that item's body.
+# practice_manager.py / remember_manager.py already hardcode — and the one
+# part_relationships.py hardcoded until its retirement, 2026-08-22 (R309), kept
+# below as history — start a new item; everything else is that item's body.
 #
 # NEVER COSTS A CAPTURE. prompt_capture_write() calls block_items() inside a try/except
 # that degrades to a single "(item extraction failed)" entry — a parser bug
@@ -846,7 +847,7 @@ def prompt_capture_contract_read() -> dict:
     check that quietly stops checking is the defect this whole file exists
     to catch.
 
-    One of three identical bodies, deliberately — see
+    One of four identical bodies, deliberately — see
     circle_close_verify.circle_close_contract_read() for the reasoning."""
     try:
         import tomllib as _toml

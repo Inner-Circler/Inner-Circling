@@ -480,9 +480,10 @@ never rewrites history, and never adds a destination to upload to:
 
 It installs the pre-commit battery, and says so: the gates that ship —
 the corruption sweep, the issue gate, the self-check, the practices check,
-the projection — run at every commit, and the project's own probe suites,
-which are not part of this bundle, are skipped one by one rather than by
-refusing the commit. The gates below are the same checks, run by hand.
+the projection — run whenever a commit touches the record (the line-endings
+check runs at every commit), and the project's own probe suites, which are
+not part of this bundle, are skipped one by one rather than by refusing the
+commit. The gates below are the same checks, run by hand.
 
 Check what will be used, changing nothing:
 
@@ -701,16 +702,17 @@ circle would have cost without it.
 ```
 1  proposals that say the same thing are grouped, and you are asked to rule
    on every proposal still pending
-2  each part is asked for its summary of the circle, and those are written
-3  the close report is verified, and the whole circle is committed to git,
+2  if the issue graph moved — by those rulings, or by any typed during the
+   circle — its picture is redrawn; the command pane prints the path,
+   under work/graph/
+3  each part is asked for its summary of the circle, and those are written
+4  the close report is verified, and the whole circle is committed to git,
    with the report its open wrote
-4  THEN dreaming runs for every part, one circle-wide synthesis after it,
+5  THEN dreaming runs for every part, one circle-wide synthesis after it,
    and each part whose record moved has its distilled identity rebuilt
-5  and if the issue graph moved, its picture is redrawn — the command pane
-   prints the path, under work/graph/
 ```
 
-Step 4 makes model calls of its own **after** the transcript is already
+Step 5 makes model calls of its own **after** the transcript is already
 committed, so a close takes noticeably longer than the writing alone and
 adds to the circle's cost. That is the loop that turns circles into a
 part's memory; without it a part's identity never moves.
@@ -825,7 +827,7 @@ YOURS — the system expects you to update this; the API key is required.
 YOURS — the system is pretty tolerant if you update these
   groups/ifs/self/self.md       more about you
   groups/ifs/self/best_practices.toml
-                                how the circle behaves, and how you move
+                                how the CIRCLE behaves, and how you move
   groups/ifs/parts/<name>/long_term.md
                                 a part's identity
   groups/ifs/parts/<name>/part.toml

@@ -1,13 +1,13 @@
 # GITREPO(1)
 
 ## NAME
-gitrepo.py — the project's git surface: repository setup, identity resolution, ignore/attributes/hook maintenance, and path-scoped commits, shared by circle.py and circle_audit.py
+gitrepo.py — the project's git surface: repository setup, identity resolution, ignore/attributes maintenance, and path-scoped commits, shared by circle.py and circle_audit.py
 
 ## SYNOPSIS
     python coordinator/gitrepo.py
     python coordinator/gitrepo.py --identity
 
-(All other functionality — `system_git_repo_ensure`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_paths_commit`, etc. — is a library API called from `circle.py` and `circle_audit.py`, not exposed as its own CLI verbs beyond `--identity`.)
+(All other functionality — `system_git_repo_ensure`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_paths_commit`, etc. — is a library API called from `circle.py` and `circle_audit.py`, not exposed as its own CLI verbs beyond `--identity`. `system_git_hooks_ensure` is `git_hook_script.py`'s.)
 
 ## DESCRIPTION
 This module centralizes every git operation the project performs automatically, and is explicit about what it deliberately does *not* automate, because each excluded category is one where an unattended script could destroy something a human wanted:
@@ -19,7 +19,7 @@ This module centralizes every git operation the project performs automatically, 
 
 Everything else routine — repo init, git config (name/email/autocrlf), `.gitignore`/`.gitattributes` upkeep, and un-tracking paths that should never have been tracked — is automated and lives here.
 
-**THE HOOK TEMPLATES ARE NOT HERE ANY MORE, 2026-09-09.** `PRE_COMMIT`, `HOOK_MARK`, `POST_COMMIT`, `POST_MERGE`, `_hook_syntax_check()` and `system_git_hooks_ensure()` moved to **`coordinator/git_hook_script.py`** — 1,372 lines, most of it `/bin/sh` in a Python string, with a different audience: this surface is called by nine modules and the templates by `circle_audit.py --git-setup` alone. See `coordinator/docs/git_hook_script.md`. Anything below that describes the hook's own shape describes that file now.
+**THE HOOK TEMPLATES ARE NOT HERE ANY MORE, 2026-09-09.** `PRE_COMMIT`, `HOOK_MARK`, `POST_COMMIT`, `POST_MERGE`, `_hook_syntax_check()` and `system_git_hooks_ensure()` moved to **`coordinator/git_hook_script.py`** — most of that file `/bin/sh` in a Python string, with a different audience: this surface is called by nine modules and the templates by `circle_audit.py --git-setup` alone. See `coordinator/docs/git_hook_script.md`, which holds the installer's own section; nothing below reads or writes `.git/hooks/`.
 
 ## MAIN
 This file has no `main()` function in the conventional sense used elsewhere in the project; its `if __name__ == "__main__":` block calls a function literally named `main()`, but that function only implements the `--identity` read-only CLI. All other capability is a library surface with no dispatcher.
@@ -50,13 +50,11 @@ Read:
 - `ROOT/.env`, best-effort, via `_load_env()`, whenever `system_git_config_ensure()` or `main()`'s identity resolution runs.
 - `ROOT/.gitattributes`, in `system_git_attributes_ensure()`, to check whether the `* -text` rule is already present.
 - `ROOT/.gitignore`, in `system_git_ignore_ensure()`, to check which required ignore patterns are missing.
-- `ROOT/.git/hooks/pre-commit`, in `system_git_hooks_ensure()`, to check whether an inner-circling hook (and which version) is already installed.
 - The git index/working tree generally, via the various `git` subcommands (`status`, `config`, `remote`, `rev-parse`, `ls-files`).
 
 Written:
 - `ROOT/.gitattributes` — appended with `* -text` by `system_git_attributes_ensure()` if not already present.
 - `ROOT/.gitignore` — appended with any missing entries from `REQUIRED_IGNORES` by `system_git_ignore_ensure()`; existing entries are never removed or reordered.
-- `ROOT/.git/hooks/pre-commit` — written by `system_git_hooks_ensure()` if absent, or replaced if it is an out-of-date version of this project's own hook (identified by a shared `HOOK_FAMILY` marker comment); a hook belonging to someone else (no recognized marker) is left untouched with a warning.
 - The git index — via `git add`, `git rm --cached`, `git commit`, `git tag`, `git config`, `git init`, called from `system_git_repo_ensure()`, `system_git_config_ensure()`, `system_git_ignored_untrack()`, and `system_git_paths_commit()`.
 
 ## NETWORK ACCESS
@@ -134,17 +132,9 @@ An existing git identity is never silently overwritten, by design — item 2 of 
         append it (with a leading blank line if the file is nonempty and lacks a trailing newline) and log the write.
     }
 
-### `system_git_hooks_ensure(log)`
-    if (`.git/hooks` does not exist) then {
-        log a warning and skip.
-    } else if (`.git/hooks/pre-commit` exists already) then {
-        if (it contains the current HOOK_MARK) then { log ok, unchanged. }
-        else if (it contains any HOOK_FAMILY marker, i.e. an older version of this project's own hook) then { overwrite it with the current template and log the replacement, naming the old version string found. }
-        else { log a warning that a foreign hook exists and is left alone. }
-    } else {
-        write the template, chmod 0o755 (a no-op on Windows, tolerated via a caught OSError), and log the install.
-    }
-The pre-commit hook template (`PRE_COMMIT`; its version is `HOOK_MARK` in this file, v137 on 2026-09-04 — this sentence said "currently v9" until then, wrong by 128 versions, so read the constant and not this page) itself, once installed, resolves its interpreter (`.venv/Scripts/python.exe`, `.venv/bin/python`, the main tree's `.venv` via git-common-dir from a worktree, then bare `python`), runs `file_line_endings_verify.py --staged` unconditionally, then one `case "$FILES" in ...` block per trigger — among them `memory/issue_gate.py`/`test_issue_gate.py` (if `issues/` touched), the record, practice and budget verifiers (if `parts/` or `self/` touched), `logbook_ruling_verify.py` (if `rulings/`, `progress.md`, `work/pending/` or `work/instrument/LOG.md` touched), `prompt_capture.py --verify` (if `prompts/` touched), and `system_lint_verify.py` (if `coordinator/`, `memory/`, `ui/`, `packaging/`, `.claude/skills/` or `work/graph/` touched) — and on a refusal writes `work/diagnostics/gate_<time>.md` through `gate_report.py`. The `case` blocks are the one complete list; this is documentation of the hook's *shape*, not of gitrepo.py's own runtime behavior, since the hook runs later, in a separate `sh` process, at commit time.
+### `system_git_hooks_ensure(log)` — NOT HERE
+`git_hook_script.py`'s, since 2026-09-09, with `PRE_COMMIT` and `HOOK_MARK`: `coordinator/docs/git_hook_script.md`
+§THE INSTALLER is its section, and the version is that file's constant, never a number on a page.
 
 ### `system_git_ignore_ensure(log)`
     {
@@ -206,7 +196,7 @@ The pre-commit hook template (`PRE_COMMIT`; its version is `HOOK_MARK` in this f
         return False (each has already logged its own reason).
     } else {
         {
-            resolve each given path to a ROOT-relative posix string if it exists and is actually inside ROOT (paths outside ROOT are skipped with a warning, via a caught ValueError from relative_to).
+            resolve each given path to a ROOT-relative posix string when it is inside ROOT (paths outside ROOT are skipped with a warning, via a caught ValueError from relative_to), and keep it if it exists — or, gone, if `git ls-files` still tracks something under it: the deletion is the change (/part-delete's removed folder, R548). A gone path git never tracked is dropped.
         }
         if (no paths remain) then {
             log a warning and return False.

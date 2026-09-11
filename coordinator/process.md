@@ -207,12 +207,13 @@ short_terms and nothing else. Design history: `docs/NIGHTLY_DESIGN.md`.
    that spoke (`[Part]:` or `[Part] [To: …]:` lines) with no well-formed
    short_term is backfilled first. A genuinely silent part is exempt — absence
    for a non-speaking part is correct, not a loss.
-3. **Invariant gate** (`coordinator/record_model.py`). Structural checks over the
+3. **Invariant gate** (`memory/register_gate.py`, judging with
+   `coordinator/record_model.py`'s file model). Structural checks over the
    memory files: identity sections cannot vanish, content above `## Dream
    entries` is frozen, dream history is append-only, existing entry bodies are
-   immutable, historic weights are frozen, the observation log and narrative arc
-   are append-only, and every `### ` line in `## Dream entries` must parse as an
-   entry.
+   immutable, historic weights are frozen, and every `### ` line in `## Dream
+   entries` must parse as an entry. The observation log's own rule is
+   `circle_observation_manager.py`'s.
 
 ### Recency model
 

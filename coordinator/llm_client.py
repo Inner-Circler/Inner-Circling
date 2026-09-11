@@ -110,6 +110,8 @@ RECORD_THINKING = SET.setting_value_read("record_thinking", True)
 # here, and stage 2 is a refactor — moving an implementation, not a caller.
 PROVIDER_IMPL = _providers.stream_provider_active(PROVIDER)
 KEY_MISSING_HELP = PROVIDER_IMPL.missing_key_help
+KEY_MISSING_BRIEF = PROVIDER_IMPL.missing_key_brief     # the same four things, for a run that
+                                                        # goes on without a key (R546)
 
 # `--dry-run` SELECTS A PROVIDER — stage 3 (R382). It is not in REGISTRY and
 # a person cannot name it: the mode chooses it, and R383's closed set is about
@@ -652,6 +654,14 @@ def stream_key_source_note() -> "str | None":
     the 401 of 2026-08-09 was a stale environment variable shadowing a
     perfectly valid .env, and nothing in the run would have mentioned it."""
     return PROVIDER_IMPL.key_note()
+
+
+def stream_key_present_read() -> bool:
+    """Would the configured provider find its credential? Asked WITHOUT building a client, so
+    a dry run and the window's demo — which never build one — can still say what a live circle
+    will need (R546). The configured provider's, never the dry run's: that
+    one has no key to be missing."""
+    return PROVIDER_IMPL.key_present()
 
 
 # KEY_MISSING_HELP is bound near the top of this module, from

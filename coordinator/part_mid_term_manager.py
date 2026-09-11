@@ -196,7 +196,8 @@ PROMPT = "v9"   # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
                 # what makes phase 2's refresh step fire for exactly the
                 # parts that dreamed). v5, same day: relationships source
                 # is the NEWEST relationships.toml record (relationships.md
-                # converted and retired — coordinator/relationships.py).
+                # converted and retired — coordinator/relationships.py, both
+                # names until R220, 2026-08-17; the source itself DROPPED at v7).
                 # v4, 2026-08-12: dreams.toml added as a source (dream
                 # corpus moved out of long_term.md); SYSTEM gained the
                 # identity-core anti-duplication line

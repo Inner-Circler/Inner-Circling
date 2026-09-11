@@ -22,6 +22,7 @@ Exit 0 on all PASS; the tally line `SELF-TEST: ...` is what install.py reads.
 
 from __future__ import annotations
 
+import io
 import pathlib
 import queue
 import re
@@ -1163,6 +1164,10 @@ def self_test() -> int:
 
     C.CircleEngine.start = _fake_start
     vars(C)["ui_main_loop"] = lambda *a, **k: 0
+    # THE KEY CHECK IS STUBBED, so these argv cases mean the same in a tree with a key and in
+    # one without (a fresh worktree has no .env). R546's own cases follow.
+    real_notice = vars(C)["_key_notice_read"]
+    vars(C)["_key_notice_read"] = lambda full: ""
     real_argv = sys.argv
     try:
         sys.argv = ["circling.py", "--circle", "--parts", "alpha"]
@@ -1197,10 +1202,31 @@ def self_test() -> int:
         check("--dev typed AFTER --circle forwards once, not duplicated",
               C.main() == 0
               and captured_start[-1] == (["--dev", "--parts", "alpha"], False))
+
+        # R546: a live circle with no key never opens the window; the
+        # whole text goes to the terminal, where the alternate screen cannot take it away.
+        vars(C)["_key_notice_read"] = lambda full: "NO-KEY-WHOLE" if full else "NO-KEY-BRIEF"
+        sys.argv = ["circling.py", "--live", "--circle", "--parts", "alpha"]
+        captured_start.clear()
+        said, real_stdout = io.StringIO(), sys.stdout
+        sys.stdout = said
+        try:
+            rc = C.main()
+        finally:
+            sys.stdout = real_stdout
+        check("--live --circle with no key: exit 2, the whole text on the terminal, "
+              "and no engine started", rc == 2 and "NO-KEY-WHOLE" in said.getvalue()
+              and not captured_start)
+        sys.argv = ["circling.py", "--circle", "--parts", "alpha"]
+        captured_start.clear()
+        check("--circle without --live (a dry run) with no key still opens — "
+              "circle.py's own short notice is what the command pane shows",
+              C.main() == 0 and captured_start[-1] == (["--parts", "alpha"], False))
     finally:
         sys.argv = real_argv
         C.CircleEngine.start = real_start
         vars(C)["ui_main_loop"] = real_main_loop
+        vars(C)["_key_notice_read"] = real_notice
 
     # --- _open_sandbox_circles(): scoped to the engine's OWN root -------
     import record_paths as _rp                       # the live root is a group's (B117)

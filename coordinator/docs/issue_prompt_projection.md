@@ -224,10 +224,15 @@ within the two branches this function itself handles.
     emit the GLOSS text for each of the five edge types, sorted by name
     emit the CHOOSE disambiguation table (one-line test -> edge type, for
     each of the five types)
-    emit "LIVE NOW": every live edge in the whole graph (not filtered by
-    chosen), or "- none" if there are none
+    emit "LIVE NOW": one sentence saying a marked relation was derived and never confirmed,
+    then every non-retired edge in the whole graph (not filtered by chosen), read from the
+    node's own edge rows so the status survives — a `proposed` edge's line ends
+    " (proposed)", an attested one carries nothing — or "- none" if there are none
+    (2026-09-11: a proposed edge touching no focus node reaches the room only here)
 
-    ws = set(chosen or [])
+    ws = set(chosen or []); if (ws is non-empty) then { ws |= every root id }
+        — the nodes the Issues section gives whole (R547:
+        by the named ids alone, a root's proposed edges and open questions were lost)
     collect `prop`: every edge across the whole graph whose status is
     "proposed", filtered to those touching `ws` if `ws` is non-empty
     collect `opens`: every open proposal on a node or edge in scope
@@ -247,7 +252,22 @@ within the two branches this function itself handles.
     }
     return the assembled text
 
-`chosen` filters the proposed-edges and open-questions sections to those touching the working set; without it, every proposed edge and open question in the graph is shown. The live-edges section itself is never filtered by `chosen`.
+`chosen` filters the proposed-edges and open-questions sections to those touching the working set and the
+roots; without it, every proposed edge and open question in the graph is shown. The live-edges section itself
+is never filtered by `chosen`; its `(proposed)` marker is what tells a proposed edge outside that filter from
+an attested one.
+
+### `issue_shown_read(chosen)`  (R549, D128, 2026-09-11)
+    if (chosen is None) then { return the empty set }          — "none": nothing shown
+    if (chosen is empty) then { return the id of every live node }   — the whole graph
+    else { (focus, periphery) from _working_set_resolve(chosen, issue_graph_read());
+           return focus ∪ periphery }
+
+The ids this circle's `## Issues` gives a heading — circle_open hands them to
+`recall_index.recall_issues_shown_set()`, and `[recall: issues ...]` leaves exactly those
+out while reaching every other node. `_working_set_resolve()` is the one resolution
+`project_working_set()` renders, so the two cannot drift; `coordinator/tests/test_prompt_build.py`
+holds the equality against the headings actually rendered.
 
 ### `_for_room(basis)`  (nested inside `issue_relationship_brief`)
     {

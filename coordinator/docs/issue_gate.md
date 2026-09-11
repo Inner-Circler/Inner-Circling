@@ -164,7 +164,7 @@ Since the TOML migration (2026-08-03), roughly half of what this file used to ch
   A directory that is no group's `issues/` still behaves exactly as before: the preview, against an arbitrary directory, with the default group's record behind it.
 
 ## DEPENDENCIES
-Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.issue_read()`, `S.issue_verify()`); `part_roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name).
+Standard library: `pathlib`, `re`, `sys`, `__future__.annotations`. Sibling modules: `identity` (as `ID`, for `ID.self_tags()`, the configurable set of tags meaning Self, used to build the speaker regex and the speaker-lookup table so attribution is not hardcoded to a literal name); `issue_schema` (as `S`, for `S.ROOT`, `S.ISSUES`, `S.issue_read()`, `S.issue_verify()`); `part_roster` (as `R`, for `R.DIR_NAMES` and `R.DIR_BY_TAG_ALL`, the canonical part-directory list and tag-to-directory map including historical spellings, used to normalise a speaker marker to a part directory name); `record_paths` (as `_RP`, for `group_set()` on the preview-mode match and `group_follow()`, which rebuilds `SPEAKERS` in place after every `group_set()` — the roster a part was added to between two circles in one process, R548).
 
 ## EXTERNAL FILES
 Read: every `*nNNNN.toml` file under the target issues directory. For each node's evidence and edge citations, the transcript files they name — `circles/circle_<ref>.md` for a `circle_`-prefixed reference, `work/sandbox/circles/circle_<ref>.md` for a `sandbox_`-prefixed one, or `self/<ref>.md` otherwise (via `issue_source_read()`), cached in-memory per path once read (`_CACHE`) to avoid re-reading a transcript for every evidence entry that cites it.
@@ -206,8 +206,10 @@ Stdout only, no stdin. Prints a node/live-count summary, verification counts, ad
         unparsed leading region beyond that point is left unattributed
         rather than guessed at). For each marker, resolve its speaker
         name to a canonical part directory (or "self") via the SPEAKERS
-        table built from part_roster.py and identity.py; unresolvable markers
-        are silently dropped from the span list rather than raising.
+        table built from part_roster.py and identity.py — rebuilt in place at
+        every record_paths.group_set(), so it follows the roster rather than
+        the import; unresolvable markers are silently dropped from the span
+        list rather than raising.
     }
 
 ## BUGS

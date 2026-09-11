@@ -7,7 +7,7 @@ at circle open; none of them changes a file or a rule until you say so.
 
 ## The finding that motivates them
 
-Across 34 transcripts and 42 derived edges:
+Across the 34 transcripts on file on 2026-07-27 and 42 derived edges:
 
 ```
 narrower-than    attested  1   proposed  5

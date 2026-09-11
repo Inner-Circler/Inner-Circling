@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v187"
+HOOK_MARK = "# inner-circling pre-commit v189"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -557,7 +557,11 @@ esac
 # while silently ceasing to cover its subject. A trigger that names a path is
 # not the same as a trigger that names a SUBJECT, and a carve is exactly when
 # the two come apart.
-case "$FILES" in *coordinator/circle_close.py*|*coordinator/circle.py*|*coordinator/circle_open.py*)
+#
+# AND circle_rounds.py, THE TURN ENGINE: this suite runs a real round of it
+# (178 lines, measured by tracer, audit-register 2026-09-11 #4), while the
+# IC_CODE block circle_rounds.py sits in runs only the DISPLAY suite.
+case "$FILES" in *coordinator/circle_close.py*|*coordinator/circle.py*|*coordinator/circle_open.py*|*coordinator/circle_rounds.py*)
     NOTE="  pre-commit: the close step or its driver touched — running a real dry-run close"
     run ui/tests/test_circle_engine.py
 esac
@@ -640,6 +644,16 @@ case "$FILES" in *coordinator/short_term_manager.py*|*coordinator/tests/test_sho
     run coordinator/tests/test_short_term_manager.py
 esac
 
+# THE COLLECTOR, HANDED AN IMPERFECT REPLY. short_term_collect() decides whether a
+# circle's record is whole, and every other suite that reaches it runs dry, where
+# the canned reply is well-formed by construction. This one scripts the reply:
+# the resume guard, both `failed` arms, seam.fail(), and the two close-time
+# remember writers (audit-register 2026-09-11 #1).
+case "$FILES" in *coordinator/circle_close.py*|*coordinator/tests/test_short_term_collect.py*)
+    NOTE="  pre-commit: the close step's collector touched — handing it an imperfect reply"
+    run coordinator/tests/test_short_term_collect.py
+esac
+
 case "$FILES" in *coordinator/ruling_manager.py*|*coordinator/ruling_migrate.py*|*coordinator/tests/test_ruling_manager.py*|*rulings/*)
     NOTE="  pre-commit: the RULING record, its reader/writer, or its suite touched"
     run coordinator/ruling_manager.py
@@ -647,10 +661,16 @@ case "$FILES" in *coordinator/ruling_manager.py*|*coordinator/ruling_migrate.py*
 esac
 
 # coordinator/seam.py's two stated invariants -- the closed UI-signal-channel
-# set, and only circle.py's three named sites opening the "circle" read_line
-# channel -- are held by this suite and by nothing else.
-case "$FILES" in *coordinator/seam.py*|*coordinator/tests/test_seam.py*\
-|*coordinator/circle.py*)
+# set, and only three named sites opening the "circle" read_line channel -- are
+# held by this suite and by nothing else. The three sites are three MODULES,
+# each in the trigger: circle.py (the speaking prompt), circle_open.py (the
+# topic) and working_set_manager.py (the working set). ui/circling.py is here
+# because the suite reads its queue drain -- the inline second copy of the
+# UI-signal set -- and asserts it handles every channel emit() does.
+# test_hook_template.py parses the suite's own path literals and holds this
+# arm to them.
+case "$FILES" in *coordinator/seam.py*|*coordinator/tests/test_seam.py*|*coordinator/circle.py*\
+|*coordinator/circle_open.py*|*coordinator/working_set_manager.py*|*ui/circling.py*)
     NOTE="  pre-commit: seam.py's channel contract touched, or a new
   circle-channel read_line site"
     run coordinator/tests/test_seam.py
@@ -707,7 +727,8 @@ case "$FILES" in *packaging/package.py*|*packaging/test_package.py*|*packaging/s
     run packaging/test_package.py
 esac
 
-case "$FILES" in *coordinator/seam.py*|*coordinator/phase_clock.py*|*coordinator/tests/test_progress_indication.py*)
+case "$FILES" in *coordinator/seam.py*|*coordinator/phase_clock.py*|*coordinator/tests/test_progress_indication.py*\
+|*ui/circling.py*|*coordinator/circle.py*|*coordinator/circle_open.py*)
     NOTE="  pre-commit: the >3s progress indication — its cadence, and its silence"
     # Its own arm because the mechanism spans three modules that each already
     # trigger a DIFFERENT suite: seam.py runs test_seam, phase_clock.py runs
@@ -716,6 +737,12 @@ case "$FILES" in *coordinator/seam.py*|*coordinator/phase_clock.py*|*coordinator
     # person is typing -- and that guard is only true because every console read
     # in the tree is inside the WAITING span. A read added outside it re-opens
     # the hazard silently.
+    #
+    # ui/circling.py IS IN THE TRIGGER because the suite reads it by path and
+    # asserts CircleEngine._emit calls system_output_mark() -- the call whose
+    # absence killed the guard. circle.py arms the beat and chooses what it
+    # looks like; circle_open.py holds the open step's console reads. Neither
+    # fired this suite before (audit-register 2026-09-11 #4).
     run coordinator/tests/test_progress_indication.py
 esac
 
@@ -790,26 +817,43 @@ case "$FILES" in *coordinator/working_set_manager.py*|*coordinator/tests/test_wo
     run coordinator/tests/test_working_set_manager.py
 esac
 
-case "$FILES" in *ui/*|*coordinator/seam.py*\
-|*coordinator/circle.py*|*coordinator/command_surface.py*|*coordinator/stream_redaction.py*)
+case "$FILES" in *ui/*|*coordinator/seam.py*|*coordinator/circle.py*|*coordinator/circle_open.py*\
+|*coordinator/command_surface.py*|*coordinator/stream_redaction.py*|*coordinator/commands.py*\
+|*coordinator/circle_rounds.py*)
     NOTE="  pre-commit: ui/, its rebinding surface, or a coordinator module covered only from ui/tests/"
-    # THREE coordinator MODULES ARE IN THIS TRIGGER because their only
-    # executing cover lives in ui/tests/:
+    # SIX coordinator MODULES BESIDES seam.py ARE IN THIS TRIGGER because their
+    # deepest executing cover lives in ui/tests/:
     #
-    #   coordinator/circle.py            --resume's whole branch, the
-    #                                    same-minute overwrite refusal, and the
-    #                                    /issue ruling path -- driven by
-    #                                    test_ticker_bridge.py and circle_test.py,
-    #                                    never by test_circle_engine.py, which
-    #                                    forwards only a read verb and a
-    #                                    [proposed:] form.
+    #   coordinator/circle.py            the Self> loop's verbs, driven by
+    #                                    circle_test.py; the /issue ruling's
+    #                                    STAGING (issue_cmds, the transcript echo)
+    #                                    by circle_test.py, and its sandbox RECORD
+    #                                    (commands_<OT>.toml at close) by
+    #                                    test_circle_engine.py. Its live
+    #                                    APPLICATION runs under no suite.
+    #   coordinator/circle_open.py       the --resume transcript read and the
+    #                                    same-minute overwrite refusal, since the
+    #                                    2026-09-09 carve (the three --resume
+    #                                    REFUSALS are circle.py's, executed by
+    #                                    test_circle_argv.py since 2026-09-11).
     #   coordinator/command_surface.py   COMMANDS/PANE_OF, the pane-refusal
     #                                    contract, proved only by test_circling.py.
     #   coordinator/stream_redaction.py  what the circle pane redacts with.
+    #   coordinator/commands.py          565 lines executed by circle_test.py,
+    #                                    the register-isolation check among them
+    #                                    (a dry-run write must never reach a live
+    #                                    register); the IC_CODE block runs its
+    #                                    dispatch and policy suites only.
+    #   coordinator/circle_rounds.py     a real round, in circle_test.py and both
+    #                                    engine suites; its own block runs the
+    #                                    display suite.
     #
     # test_hook_template.py property 5 cannot see this class: it asks whether a
     # SUITE's own subject triggers it, never whether a MODULE's trigger reaches
-    # the suites that cover it.
+    # the suites that cover it. Its seventh property covers the half that is
+    # static -- a suite that NAMES a production path must be fired by it; the
+    # half above, a suite that merely EXECUTES a module, needs the tracer
+    # (audit-register 2026-09-11 #4).
     #
     # test_circling.py takes --fast (0-0.02s per line instead of 10-20s): the
     # delay exists to make a human watch real interleaving and tests nothing a
@@ -950,8 +994,16 @@ esac
 
 case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
 |*coordinator/record_paths.py*|*coordinator/tests/test_record_paths.py*|*coordinator/part_roster.py*\
-|*ui/tests/test_circle_engine_band.py*|*groups/*)
+|*coordinator/circle_close.py*|*coordinator/circle_open.py*|*coordinator/circle.py*\
+|*coordinator/group_manager.py*|*ui/tests/test_circle_engine_band.py*|*groups/*)
     NOTE="  pre-commit: a record-safety module touched"
+    # THE CLOSE STEP, THE OPEN STEP AND THE DRIVER ARE HERE for the band's
+    # isolation suite: "a band close touches nothing under groups/ifs/" is
+    # decided in circle_close._dest_for() and the open step's group binding,
+    # and that suite executes 99 lines of the one and 189 of the other
+    # (audit-register 2026-09-11 #4). group_manager.py is here because that
+    # suite opens a dry-run circle on a group /group-add scaffolded (2026-09-11)
+    # and proves groups/ifs/ byte-identical after it.
     run coordinator/tests/test_record_paths.py
     run ui/tests/test_circle_engine_band.py
     run coordinator/tests/test_write_guard.py

@@ -241,8 +241,8 @@ W, H = 2400, 1250
 #                   was drawn in a grey one hex step from `related-to`'s and
 #                   named nowhere in the key.
 #
-# Glosses are the one-line form of docs/issue_relationship_types.md (archived), which owns the
-# meanings.
+# Glosses are the one-line form of the vocabulary issue_prompt_projection.issue_relationship_brief()
+# generates for BLOCK 2; docs/issue_relationship_types.md (archived) was its long form.
 # `_check_vocabulary()` below now fails if this table and issue_schema ever
 # disagree again; nothing checked it before, which is why it drifted silently
 # through ten edge migrations.

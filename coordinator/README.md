@@ -434,29 +434,68 @@ Ruled 2026-08-09: *"Test the API as early as practical and error out
 gracefully on fail; do not write circle records of any sort until after the
 check passes."*
 
+Before the open step, the driver itself ASKS once: a LIVE `--parts` roster
+missing one of the default group's parts confirms with `yes` (`--yes` skips;
+anything else is exit 2). A `--group` roster is deliberate and is not asked.
+
 ```
-1  key source reported if env and
-   .env disagree
-2  API CHECK — one real
-   messages.create, max_tokens=1,
-   against the circle's own model
-3  open circles reported; confirm
-   to open a new one anyway
-4  working set prompt
-5  topic prompt
-6  OPEN TIME MINTED, path checked,
-   transcript written
-7  pre-warm, prompt capture
-8  opening round
+ 1  settings corrections flushed — the
+    first point with a surface to print on
+ 2  CORRUPTION GATE and API CHECK, run at
+    once: the sweep of parts/, self/,
+    issues/ and circles/ (NUL bytes,
+    invalid UTF-8, unparseable JSON/TOML —
+    memory/record_verify.py), and one real
+    messages.create, max_tokens=1, against
+    the circle's own model. Reported in
+    that order, the key source between
+    them if env and .env disagree.
+    EITHER REFUSES: exit 2, nothing
+    written. The gate has no --force; the
+    remedy is a repair or a git checkout
+ 3  open circles reported, and a circle
+    whose dreaming failed, once. ASKS:
+    type yes to open a new one anyway
+    (--yes skips); anything else is exit 2
+ 4  CHECKPOINT 2, not on --resume: the
+    coalesce refresh (live only), pending
+    proposals vetted, pending settings
+    folded — each before any prompt is
+    built. The refresh and the fold fail
+    open; a circle is never refused here
+ 5  INITIALIZATION — the first-run
+    dialogs: the Soul's and the Child's
+    context, and a first issue while
+    issues/ is empty. ASKS; silent when
+    nothing is due; skipped when not live,
+    on --resume, with --yes, or with no
+    terminal
+ 6  working set prompt. ASKS, only when
+    the graph has a live node
+ 7  the four blocks assembled, once, for
+    the chosen set
+ 8  topic prompt. ASKS; Ctrl-C here
+    cancels, exit 2, nothing written
+ 9  OPEN TIME MINTED, path checked — a
+    transcript already at that minute
+    REFUSES, exit 2 — transcript written,
+    working-set entry recorded
+10  BLOCK 4 finished (recall), prompt
+    capture, pre-warm — a failed pre-warm
+    discards the transcript, exit 2
+11  opening round, blind
+12  the open report
 ```
 
-Steps 1-3 come before anything is typed, so a bad key costs a retry rather
-than a re-pasted topic. Nothing under `circles/` or `self/` is written
-before step 6.
+Steps 1-2 come before anything is typed, so a bad key or a corrupt file
+costs a retry rather than a re-pasted topic. No circle record — nothing
+under `circles/` — is written before step 9; what steps 4-5 write (a
+setting, a part's context, a first issue) lands after both checks passed.
 
-**All eight steps are `coordinator/circle_open.py` since 2026-09-09** — the
+**All twelve steps are `coordinator/circle_open.py` since 2026-09-09** — the
 open step left `circle.py:main()` whole, as the close step did on 2026-09-03.
-`circle.py` parses the flags, calls this, and runs the `Self>` loop.
+`circle.py` parses the flags, asks the roster question above, calls this,
+and runs the `Self>` loop.
 Its man page, `coordinator/docs/circle_open.md`, is in the development tree
 and NOT in this bundle: a page ships only for a module you can run from a
 command line (ruled 2026-08-27), and this one is a library the driver calls.
@@ -476,8 +515,8 @@ or timeout errors. Fatal ones (401, 403, 404, 400) do not wait. The SDK's
 own `max_retries` is set to 0 for these calls so the ladder is the only
 retry behaviour there is.
 
-**An unspoken circle leaves no trace.** If the run dies between step 6 and
-step 8, the transcript and its `circles/working_sets.toml` entry are removed. The
+**An unspoken circle leaves no trace.** If the run dies between step 9 and
+step 11, the transcript and its `circles/working_sets.toml` entry are removed. The
 test is the bytes: if a single statement landed, the file differs from what
 `open_transcript` wrote and nothing is touched — a partial transcript is a
 real record and is resumable.
@@ -662,14 +701,16 @@ it at the user (`#16`).
 --list-resumable    show circles that have a transcript but no close
                     report, then exit. Default: off.
 --dev-cmd VERB ...  run ONE always-available command directly from the
-                    shell, no circle needed (the ic.py replacement).
-                    Bypasses dev_mode entirely. Default: unset.
+                    shell, no circle needed. Bypasses dev_mode entirely.
+                    Default: unset.
 --file-circle OT    file a closed circle whose save git refused, then
                     reflect on it (R506). Nothing is restarted and nothing
                     is re-asked: the circle is already complete on disk, so
                     this repeats the git step alone and then runs the
                     dreaming and synthesis the close skipped. Refuses one
-                    already reflected on. Default: unset.
+                    already reflected on. Needs an API key (it calls the
+                    model); without one it prints what a key is and exits
+                    2. Default: unset.
 ```
 
 ## Seed

@@ -430,9 +430,13 @@ def part_context_read(dir_name: str, base: pathlib.Path | None = None
 
 def _toml_str(s: str) -> str:
     """A TOML basic string literal for `s` — the four escapes tomllib
-    requires, nothing clever."""
+    requires (backslash, quote, newline, CR) plus tab, nothing clever. A raw
+    CR is `Illegal character` to tomli, and part.toml is a file
+    record_verify.py refuses the open on, so it is escaped
+    (memory/issue_commands._q() escapes the same four; tab is this file's)."""
     return '"' + (s.replace("\\", "\\\\").replace('"', '\\"')
-                  .replace("\n", "\\n").replace("\t", "\\t")) + '"'
+                  .replace("\n", "\\n").replace("\r", "\\r")
+                  .replace("\t", "\\t")) + '"'
 
 
 def part_context_write(dir_name: str, answers: dict[str, str],

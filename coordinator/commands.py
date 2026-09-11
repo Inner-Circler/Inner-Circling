@@ -629,7 +629,7 @@ def _add_practice_row(text: str, addressee: str, usage: str,
 
 
 def command_better_option_add(text: str, record=None) -> tuple[bool, str]:
-    """A row addressed to Self — how SELF moves, not how the circle behaves.
+    """A row addressed to Self — how SELF moves, not how the CIRCLE behaves.
 
     IT EXISTS SO THE ANNOTATION GRAMMAR COULD SHRINK (R270). Until it did,
     the only way to propose one was `[proposed better_option: ...]`, one of
@@ -1371,7 +1371,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
                      interactive: bool = True) -> bool:
     """The always-available verb surface (RULED 2026-08-13, Q1) — ONE
     dispatcher, THREE doors since B61 (2026-08-21): circle.py's own
-    `--dev-cmd` CLI flag (the direct ic.py replacement — a bare shell
+    `--dev-cmd` CLI flag (a bare shell
     invocation, no circle, no circling, nothing to rebind, default
     seam.emit()/seam.read_line() = real print()/input() work as-is),
     ui/circling.py's command pane when no circle is running

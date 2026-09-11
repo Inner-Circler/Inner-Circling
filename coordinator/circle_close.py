@@ -288,7 +288,12 @@ def _shown(path: pathlib.Path) -> str:
     packaging/sanitize.py refused the commit at HIGH severity. The rule it enforces
     does not care that the path is in a comment explaining its own removal.
     A sandbox path can sit outside ROOT, so the relative form is attempted and the
-    absolute kept when it does not apply."""
+    absolute kept when it does not apply.
+
+    THE SAME FOUR LINES AS inter_circle._shown(), whose occasion is a probe-rebound
+    LOGS rather than a sandbox; the three journal managers' _rel() take no argument
+    and read their own module PATH. Kept separate: a record_paths export would be a
+    new public name (R441) for four lines each caller already reads by itself."""
     try:
         return path.relative_to(ROOT).as_posix()
     except ValueError:
@@ -599,7 +604,9 @@ def circle_resumable_list() -> int:
                 note += (f" — close interrupted, "
                          f"{len(spoke - done)} short_term(s) missing")
             rows.append((ot, note, (topic or "(no topic)")[:40]))
-        except ValueError as e:
+        except (ValueError, OSError) as e:
+            # an unparseable OR an unreadable transcript is a row, never a traceback: the
+            # person running this is the one whose circle just failed to close
             rows.append((ot, "NOT RESUMABLE", str(e).split("\n")[0][:40]))
     if not rows:
         seam.emit("command", "\n  no unclosed circles.")

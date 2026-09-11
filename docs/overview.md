@@ -4,7 +4,7 @@
 Systems inner circle, run by a local Python coordinator that calls the
 Messages API directly.
 
-Canonical source: this markdown file. Updated 2026-09-09.
+Canonical source: this markdown file. Updated 2026-09-11.
 
 ## What this is
 
@@ -47,10 +47,12 @@ why every path in this document begins that way; it is the default, so no
 command here needs naming it.
 
 Nothing obliges you to add another, and most people never will. If you do,
-`/group-list` shows what exists and `/group-add` creates one, and a circle
-opened on a named group reads and writes only that group's tree — a
-different roster for a different purpose, never a second opinion on the
-same one.
+`/group-list` shows what exists and `/group-add` creates one — its folder
+with a stub identity and `part.toml` for every role you name, a stub
+`issues/issue_model.md`, a `self/self.md` with its two headings, and the
+`group.toml` last, each stub yours to rewrite — and a circle opened on a
+named group reads and writes only that group's tree — a different roster
+for a different purpose, never a second opinion on the same one.
 
 ## How a circle works
 

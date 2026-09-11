@@ -131,7 +131,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "command"),
     ("/issue-apply <commands.toml>",
      "apply a circle's own already-recorded rulings to\n"
-     "the live graph. Ported from ic.py 2026-08-13", "command"),
+     "the live graph. Ported 2026-08-13", "command"),
     ("/prompt-show circle | <part>",
      "the assembled system prompt, with placeholders\n"
      "where a circle supplies or may supply a piece.\n"
@@ -257,12 +257,14 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # THE GROUP VERBS — a named, reusable roster (docs/CIRCLE_TYPES_DESIGN.md),
     # 2026-09-02. Same numbered/confirmation shape as the part verbs above.
     ('/group-add "<name>" <r1>,<r2>,... [layer=<path>]',
-     "write groups/<name>/group.toml — the descriptor whose\n"
-     "presence makes the folder a group — naming its\n"  # R468
-     "roles, part directories under groups/<name>/parts/;\n"
-     "circle.py --group <name> opens on it. layer= names the\n"
-     "group's own BLOCK 1 layer file; omitted, the IFS\n"   # B115
-     "layer. IMMEDIATE — /abort does not undo it", "command"),
+     "make a group: a stub part under groups/<name>/parts/\n"
+     "for each role not yet there, a stub issues/issue_model.md,\n"
+     "self/self.md and circles/, then groups/<name>/group.toml —\n"
+     "the descriptor whose presence makes the folder a group\n"  # R468
+     "— naming its roles; circle.py --group <name> opens on\n"
+     "it. layer= names the group's own BLOCK 1 layer file;\n"   # B115
+     "omitted, the IFS layer. IMMEDIATE — /abort does not undo\n"
+     "it", "command"),
     ("/group-list [<n>]",
      "every group, numbered — name and its roles; `<n>`\n"
      "shows that group's descriptor. The number is\n"

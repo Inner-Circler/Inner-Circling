@@ -142,7 +142,8 @@ could have known that.
 
 The system can manufacture agreement, and it does.
 
-Across the 36 transcripts it cites, the graph contains **zero `polarized-with` edges** — not one
+Across the 36 transcripts it cited when this was written (39 on 2026-09-11), the graph
+contained **zero `polarized-with` edges** — not one
 recorded instance of two parts pursuing the same goal by opposed strategies. The
 word "challenge" appears zero times, despite being a named rule. In one circle of
 55 part statements, **2 were addressed to another part**; the rest went to me or to

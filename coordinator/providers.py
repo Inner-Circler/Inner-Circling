@@ -162,7 +162,14 @@ class Provider:
         open whenever it would otherwise be a silent trap."""
         return None
 
+    def key_present(self) -> bool:
+        """Would client() find a credential? Asked without building one, so a run that needs
+        no key (a dry run, the window's demo) can still say what a live circle will need.
+        A provider with no credential answers True — there is nothing to be missing."""
+        return True
+
     missing_key_help = ""
+    missing_key_brief = ""
 
     def cache_control(self, ttl: str) -> "dict | None":
         """The wire form of "this block is stable, cache it" — or None when
@@ -452,6 +459,18 @@ class AnthropicProvider(Provider):
             return None
         return None
 
+    def key_present(self) -> bool:
+        """client()'s own order, read and never loaded: the environment variable, else the
+        ANTHROPIC_API_KEY line of .env — which client() reaches only through python-dotenv,
+        so without that package a .env line is not a key it would find either."""
+        if os.environ.get("ANTHROPIC_API_KEY"):
+            return True
+        try:
+            from dotenv import dotenv_values
+        except ImportError:
+            return False
+        return bool((dotenv_values(ROOT / ".env") or {}).get("ANTHROPIC_API_KEY"))
+
     @staticmethod
     def _mask(k: str) -> str:
         """Enough to tell two keys apart, not enough to be one. 12 leading
@@ -556,7 +575,14 @@ class AnthropicProvider(Provider):
     # precautions."* Until then circle.py printed one line and exited, which
     # tells a first-run user what to set and nothing about how. It lives with
     # the provider because every word of it is one vendor's console.
-    missing_key_help = """\
+    #
+    # PRINTED WHEREVER A RUN HAS NO KEY — R546 (2026-09-11): *"if circle.py
+    # or circling.py is run without a LLM API key, output a description of the requirement,
+    # how to obtain and place a key, its basic security concern, and a link to Anthropic."*
+    # This whole text where a live circle cannot start; missing_key_brief below, the same four
+    # things in five lines, where the run goes on without one. The file is named by its full
+    # path, and the cost line agrees with the README's "What a circle costs".
+    missing_key_help = f"""\
 No API key was found, so no part can speak yet.
 
 Inner Circling talks to the parts through Anthropic's API, which needs a key — a
@@ -565,13 +591,15 @@ part's request to Anthropic and never leaves this folder otherwise.
 
 TO GET ONE
   1  Go to https://console.anthropic.com and sign in, or create an account.
-  2  Add a small amount of credit (Settings -> Billing). A circle costs cents,
-     not dollars.
+  2  Add a small amount of credit (Settings -> Billing). A full circle costs a
+     few dollars; each circle prints its own cost when it closes.
   3  Settings -> API Keys -> Create Key. Name it anything ("inner circling").
      Copy it when it is shown — it is shown once.
 TO INSTALL IT
   Put one line in a file named  .env  in this folder — create the file if it
   does not exist; it is plain text, never committed, never shared:
+      {ROOT / ".env"}
+  The line:
       ANTHROPIC_API_KEY=sk-ant-...the key you copied...
   Then open the circle again.
   (Setting the variable in your shell works too, but the file is remembered
@@ -590,6 +618,13 @@ KEY SECURITY
       one into .env.
     - Set a monthly spending limit in the console (Settings -> Limits), so a
       leaked key can cost no more than you chose."""
+
+    missing_key_brief = f"""\
+No API key is set. This run needs none; a live circle does.
+  what      an Anthropic API key, a string starting "sk-ant-" — the parts speak through it
+  get one   https://console.anthropic.com -> Settings -> API Keys (credit under Billing)
+  put it    one line, ANTHROPIC_API_KEY=sk-ant-..., in {ROOT / ".env"}
+  keep it   there and nowhere else: anyone who has it can spend your credit"""
 
 
 # The stop vocabulary moved ONTO AnthropicProvider at stage 5 — it is that

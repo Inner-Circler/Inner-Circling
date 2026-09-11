@@ -310,6 +310,38 @@ def issue_brief_render(p: pathlib.Path, d: "dict | None" = None) -> str:
     return f"### {p.stem} — {d.get('label','')}\n{S.issue_unwrap(d['description'])}"
 
 
+def _working_set_resolve(chosen: list[str], g: dict
+                         ) -> tuple[list[str], list[str], list[str], set[str]]:
+    """(focus, periphery, unknown, root ids) for a NAMED working set — the one resolution
+    project_working_set() renders and issue_shown_read() reports, so the two cannot drift.
+    issue_resolve() over chosen UNION roots, not chosen alone: a root's own live
+    edges pull their neighbours into periphery exactly as any other focus
+    node's would (the graph does not know "focus" and "always-shown" are
+    different reasons a node ended up in the set)."""
+    root_ids = {nid for nid, d in g.items() if d["doc"].get("root")}
+    focus, per, unknown = issue_resolve(sorted(set(chosen) | root_ids), g)
+    return focus, per, unknown, root_ids
+
+
+def issue_shown_read(chosen: "list[str] | None") -> set[str]:
+    """The ids this circle's `## Issues` gives a heading — what BLOCK 2 already carries, and so
+    what `[recall: issues ...]` leaves out (R549, D128, 2026-09-11: *"D128 -
+    c, not shown but not out of reach."*). Every other node is searchable.
+
+        None    "none": the graph was not brought in — nothing is shown
+        []      the whole live graph — every live node, roots among them (live_nodes())
+        a list  the named set's focus, the roots, and the periphery one live edge away
+
+    Built from the same resolution project_working_set() renders; test_prompt_build.py holds
+    the equality against the headings actually rendered."""
+    if chosen is None:
+        return set()
+    if not chosen:
+        return {S.issue_read(p)["id"] for p in live_nodes()}
+    focus, per, _unknown, _roots = _working_set_resolve(chosen, issue_graph_read())
+    return set(focus) | set(per)
+
+
 def project_working_set(chosen: list[str]) -> tuple[str, list[str]]:
     """The `## Issues` section for one circle's working set — the LIVE
     format: full detail for a focus node, brief for a
@@ -358,12 +390,7 @@ def project_working_set(chosen: list[str]) -> tuple[str, list[str]]:
     # #58): this used to parse every issues/*.toml twice at the top and
     # once more per rendered node.
     g = issue_graph_read()
-    root_ids = {nid for nid, d in g.items() if d["doc"].get("root")}
-    # issue_resolve() over chosen UNION roots, not chosen alone: a root's own live
-    # edges pull their neighbours into periphery exactly as any other focus
-    # node's would (the graph does not know "focus" and "always-shown" are
-    # different reasons a node ended up in the set).
-    focus, per, unknown = issue_resolve(sorted(set(chosen) | root_ids), g)
+    focus, per, unknown, root_ids = _working_set_resolve(chosen, g)
     always = [r for r in sorted(root_ids) if r not in chosen]
     L = [SECTION, "", WS_PREAMBLE]
     note = f"*Working set: {', '.join(chosen) if chosen else '(none chosen)'}"
@@ -487,14 +514,21 @@ def issue_relationship_brief(chosen: "list[str] | None" = None) -> str:
     existed since 2026-07-27 and had never been put to a room. A part named in
     one is being asked a question it has never heard.
 
-    `chosen` filters the proposed block to edges touching the working set;
+    `chosen` filters the proposed block and the open questions to what touches
+    the working set and the roots — the nodes the Issues section gives whole;
     without it, every proposed edge in the graph."""
     g = issue_graph_read()
-    live = sorted((nid, ty, to) for nid, d in g.items() for ty, to in d["edges"])
+    # LIVE NOW reads the node's own edge rows, not d["edges"]: issue_live_edges_read() strips the
+    # status, and a proposed edge that touches no named issue reaches the room ONLY through this
+    # list — unmarked, it read as attested (another session's 2026-09-11 close-out). The same
+    # non-retired filter; `proposed` rides along so the line can say so.
+    live = sorted((nid, e["type"], e["target"], e.get("status") == "proposed")
+                  for nid, d in g.items() for e in d["doc"].get("edges", [])
+                  if e.get("status") != "retired")
     L = ["## Relations between issues", "",
          "An edge is a CLAIM that one locus bears on another, IN A DIRECTION. "
-         "It can be wrong. Most were proposed by a derivation and confirmed by "
-         "no one — hold them as provisional.", "",
+         "It can be wrong. Some were proposed by a derivation and confirmed by "
+         "no one — hold those as provisional.", "",
          "**No part statement creates or retires an edge.** You may propose "
          "one or dispute one; Self rules.", "",
          "**To propose, say all four:** source, type, target, and what makes "
@@ -513,10 +547,21 @@ def issue_relationship_brief(chosen: "list[str] | None" = None) -> str:
           "and was not is a relation nobody was willing to characterise.", "",
           "**Two nodes with no edge between them is not an omission.** Whether "
           "they are related is the question.", "",
-          "**LIVE NOW**", ""]
-    L += [f"- `{a}` —{ty}→ `{b}`" for a, ty, b in live] or ["- none"]
+          "**LIVE NOW**", "",
+          # Plain-led on purpose: the suite sections LIVE NOW up to the next blank-line-plus-`**`.
+          "A relation marked *(proposed)* was derived and has never been confirmed by anyone; "
+          "the ones this room is asked about appear in full under PROPOSED below. An unmarked "
+          "relation was attested — spoken by a part in a circle, or ruled by Self.", ""]
+    L += [f"- `{a}` —{ty}→ `{b}`" + (" (proposed)" if p else "")
+          for a, ty, b, p in live] or ["- none"]
 
+    # THE ROOTS ARE IN FRONT OF THE ROOM TOO (R547): a named working
+    # set shows every root whole (R429, project_working_set()), so the filter is the named ids and
+    # the roots. By the named ids alone, a root's proposed edges and open questions were left out
+    # of every circle that named its issues.
     ws = set(chosen or [])
+    if ws:
+        ws |= {nid for nid, d in g.items() if d["doc"].get("root")}
     prop = []
     for nid, d in g.items():
         for e in d["doc"].get("edges", []):

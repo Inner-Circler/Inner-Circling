@@ -133,6 +133,19 @@ BROADCAST_ADDRESSEES = ("All parts", "Self")
 PART_ADDRESSEES = tuple(R.TAG_BY_DIR[d] for d in R.ALPHA_DIR_NAMES)
 ADDRESSEES = BROADCAST_ADDRESSEES + PART_ADDRESSEES
 
+
+def _addressees_rebind() -> None:
+    """The two tuples follow the roster at every record_paths.group_set() — a follower after
+    part_roster's own, so it reads the rescanned tables (R548: circle.py re-binds the group at
+    every open whose parts/ moved; another session's 2026-09-11 close-out). Readers use attribute
+    access (practice_verify's PM.ADDRESSEES), so reassignment is enough."""
+    global PART_ADDRESSEES, ADDRESSEES
+    PART_ADDRESSEES = tuple(R.TAG_BY_DIR[d] for d in R.ALPHA_DIR_NAMES)
+    ADDRESSEES = BROADCAST_ADDRESSEES + PART_ADDRESSEES
+
+
+_RPf.group_follow(_addressees_rebind)
+
 ID_RE = re.compile(r"^BP-(\d{4,})$")
 
 

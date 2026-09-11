@@ -67,6 +67,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 import identity as ID                                          # noqa: E402
 import issue_schema as S                                       # noqa: E402
 import part_roster as R                                              # noqa: E402
+import record_paths as _RP                                     # noqa: E402
 
 # WINDOWS CONSOLES DEFAULT TO cp1252 AND RAISE on the em-dashes and
 # arrows this project prints. Degrade instead of crashing: a probe that
@@ -96,7 +97,6 @@ ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
 # is NOT a group's issues/ still works exactly as before — the man page calls that the
 # preview mode, and it stays.
 if len(sys.argv) > 1:
-    import record_paths as _RP                                 # noqa: E402
     _resolved = ISSUES.resolve()
     for _g in _RP.group_present_read():
         if _resolved == (_RP.group_tree(_g) / "issues").resolve():
@@ -140,10 +140,26 @@ SPEAKER_RE = re.compile(r"^(?:\[To:[^\]]*\]\s*)?"
                         r"(?:\s*\[To:[^\]]*\])?(?:\s*\*\([^)]*\)\*)?\s*:", re.M)
 # B29: derived from part_roster.py — free-text normalisation, so every dir name
 # and every current-or-historical Tag (lowercased) resolves to its dir.
-SPEAKERS = {d: d for d in R.DIR_NAMES}
-SPEAKERS.update({tag.lower(): d for tag, d in R.DIR_BY_TAG_ALL.items()})
-SPEAKERS.update({s.lower(): "self" for s in ID.self_tags()})
-SPEAKERS["self"] = "self"
+# ONE DICT, REBUILT IN PLACE at every record_paths.group_set() — a follower, registered after
+# part_roster's own, so it reads the roster tables already rescanned (R548: circle.py re-binds
+# the group at every open whose parts/ moved; another session's 2026-09-11 close-out). The
+# SELF keys are read ONCE, at import, exactly as SPEAKER_RE above reads them: the two must
+# agree on who Self is, and self_tags() follows the bound group's self/identity.toml while the
+# regex does not (R234 — one graph, two verdicts, is the shape this avoids).
+_SELF_KEYS: tuple[str, ...] = tuple(s.lower() for s in ID.self_tags())
+SPEAKERS: dict[str, str] = {}
+
+
+def _speakers_rebind() -> None:
+    SPEAKERS.clear()
+    SPEAKERS.update({d: d for d in R.DIR_NAMES})
+    SPEAKERS.update({tag.lower(): d for tag, d in R.DIR_BY_TAG_ALL.items()})
+    SPEAKERS.update({s: "self" for s in _SELF_KEYS})
+    SPEAKERS["self"] = "self"
+
+
+_speakers_rebind()
+_RP.group_follow(_speakers_rebind)
 
 # Two transcripts are MIXED-ERA. Every genuine circle.py transcript opens its
 # first marker within 1389 characters, so 2000 separates the two cases with

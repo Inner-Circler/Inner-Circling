@@ -13,6 +13,7 @@ python coordinator/circle.py (--live | --dry-run) [--parts <dir>,<dir>,... | --g
                               [--seed <n>] [--yes] [--dev]
                               [--resume OPEN_TIME] [--list-resumable]
 python coordinator/circle.py --dev-cmd VERB [args...]
+python coordinator/circle.py --file-circle OPEN_TIME
 ```
 Regenerated 2026-08-21 (B65) against the module as it stood after phase 1/2 of the coordinator
 partitioning (2026-08-16), B61 (one dispatcher), R277 (the per-request capture) and
@@ -53,6 +54,9 @@ source of truth for both (R221).
 
 ## MAIN
 ```
+    _roster_refresh(): re-bind the group and run every follower, then DEFAULT_PARTS again — the
+    roster as it is NOW, so a part /part-add wrote since the process started is in this circle
+    (R548; circling.py runs main() more than once)
     parse the command line (see COMMAND-LINE ARGUMENTS)
 if (--dev) then { command_surface.dev_mode = True }                    (R286; /dev at the prompt is the other door)
 if (--list-resumable) then { return circle_resumable_list() }
@@ -64,7 +68,8 @@ if (command_dev_dispatch(head, rest) is False) then { emit "<head> needs a live 
 }
     problems = part_roster.part_verify()
 if (problems) then { emit "THE ROSTER DOES NOT VERIFY — no circle opened" + each problem; return 2 }
-if (neither --live nor --dry-run) then { emit "Choose a mode..." pointing at the lab; return 2 }   // R360
+if (neither --live nor --dry-run) then { emit "Choose a mode..." pointing at the lab;
+    and, when no API key is set, KEY_MISSING_HELP (R546); return 2 }   // R360
     parts = --parts split; refuse (return 2) any name not in PART_TAGS or without a directory
 if (--seed) then { random.seed(seed) }
 if (--live and the roster is reduced) then {
@@ -92,6 +97,8 @@ if (still unset) then { emit llm_client.KEY_MISSING_HELP — how to get a key, w
     emit the banner: mode, open time or "assigned when the topic is entered", the TREE (and
     "A WORKTREE, not the main checkout" when it is one; a LIVE run in a worktree gets a tag-
     namespace warning), the parts, the transcript path if known, the sandbox note if not live
+if (--dry-run and no API key is set) then { emit llm_client.KEY_MISSING_BRIEF — the same four
+    things in five lines; the run goes on (R546) }
     emit "integrity check:"; findings, seen = record_verify.record_sweep()
 if (findings) then { emit each path/defect/remedy; "The circle was NOT opened"; return 2 }
     emit "ok (N files)"
@@ -268,8 +275,10 @@ checkout now.
   holds (none installed, several unmarked, more than one marked) a bare open prints one sentence
   saying so and asks for `--group`.
 - `--recall-arm off|delivered|withheld`: tier A recall (`remember_expand.py`, `docs/MEMORY_DESIGN.md`)
-  — expand topic-matched seeds into each part's BLOCK 4. Default: `off`. `withheld` computes and
-  logs the packs without delivering them, the trial's control arm.
+  — expand topic-matched seeds into each part's BLOCK 4, and arm `[recall: ...]`. Default:
+  `delivered` (on), R526 2026-09-10; `off` turns it off for one circle. `withheld` computes and
+  logs the packs without delivering them — the recall trial's control arm; the trial closed at
+  R460 (2026-09-06) and the arm is kept for a future trial, sent by no UI.
 - `--seed N`: see the Seed section below. Default: unset (a fresh shuffle every round).
 - `--yes`: skip the reduced-live-roster and new-vs-resume confirmation prompts. Default: off.
 - `--resume OPEN_TIME`: reopen an unclosed circle, e.g. `--resume 2026-08-02_1259`; the transcript
@@ -282,14 +291,15 @@ checkout now.
   the branch that reads it has no `else`.
 - `--list-resumable`: show circles that have a transcript but no close report, then exit.
   Default: off.
-- `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed
-  (the `ic.py` replacement). Bypasses dev_mode entirely. Default: unset.
+- `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed.
+  Bypasses dev_mode entirely. Default: unset.
 - `--file-circle OPEN_TIME`: file a closed circle whose save git refused, then reflect on it
   (R506, 2026-09-09; `circle_close.circle_file()`). Nothing is restarted and nothing is re-asked —
   a circle whose filing was refused is COMPLETE on disk, transcript and short_terms and close
   report, and only the git step is missing. So this repeats the git step alone and then runs the
   dreaming and synthesis that close skipped. Refuses a circle that has already been reflected on,
-  through the same `circle_is_processed()` double-dream guard `inter_circle` uses. Default: unset.
+  through the same `circle_is_processed()` double-dream guard `inter_circle` uses. Needs an API key
+  (it calls the model); without one it prints what a key is and exits 2. Default: unset.
   **The program PRINTS this flag at the user, in the refusal that follows a failed save**, and it
   was documented in no man page and no README until 2026-09-09 (audit-register 2026-09-09 #16) —
   found independently by two of that sweep's agents.

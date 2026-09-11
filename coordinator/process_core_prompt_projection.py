@@ -164,7 +164,7 @@ def circle_identity_marks_read(universal_text: str) -> list[str]:
 
 
 def circle_identity_layers_render(universal_text: str, layer_text: "str | None") -> str:
-    """The universal layer with each slot mark replaced by the layer's bytes for that slot —
+    """The universal layer with each layer mark replaced by the layer's bytes for that slot —
     or by nothing, when the layer has no such slot or there is no layer at all. Pure text; the
     length-rule substitution is circle_identity_text_render()'s, applied after."""
     slots = circle_identity_slots_read(layer_text) if layer_text else {}

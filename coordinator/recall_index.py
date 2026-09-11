@@ -9,21 +9,24 @@ of a journal", no date window, part_name implicit and enforced); R402
 settled it ("6-40 is better, build it"). A part that meets resonance
 mid-circle writes, inside an ordinary statement:
 
-    [recall: <scope>* ( <semantic_prompt> | "<exact_string>" ) <breadcrumb>*]
+    [recall: <recall_scope>* ( <semantic_words> | "<exact_string>" ) <recall_breadcrumb>*]
 
-    scope       mine | room | issues     (default mine; claimed only while
-                LEADING the annotation — after the first non-keyword
-                token, these are ordinary prompt words)
-    prompt      bare words = SEMANTIC; "double-quoted" = EXACT, 6-40
-                printable ASCII, no '"' and no ']' inside
-    breadcrumb  n0012 · BP-0047 (bare ids, any length, by shape) ·
-                'single-quoted phrase' (6-40, same character rules)
+    recall_scope       mine | room | issues     (default mine; claimed only while
+                       LEADING the annotation — after the first non-keyword
+                       token, these are ordinary prompt words)
+    semantic_words /   bare words = SEMANTIC; "double-quoted" = EXACT, 6-40
+    exact_string       printable ASCII, no '"' and no ']' inside
+    recall_breadcrumb  n0012 · BP-0047 (bare ids, any length, by shape) ·
+                       'single-quoted phrase' (6-40, same character rules)
 
 THE ALREADY-SENT RULE (the operator, 2026-08-30): *"if a part is already
 being given a prompt segment, don't return it in search."* What recall
 serves is the INVISIBLE record. So `mine` excludes mid_term (Block 3 IS
-it); `issues` excludes the live and lead nodes Block 2 already projects
-(only R_/S_/D_/X_ history is searchable); and there is NO practices scope
+it); `issues` excludes exactly the nodes this circle's Block 2 gives a
+heading, and reaches every other — an open issue the circle did not bring
+in, a lead, the settled/declined/retired history (R549,
+D128: *"not shown but not out of reach"*; circle_open hands over the shown
+set, recall_issues_shown_set()); and there is NO practices scope
 at all — broadcast rows (All parts AND Self) are in every Block 1, a
 part's own narrowcast is in its Block 3, and the only rows left are other
 parts' narrowcast, which E09's routing exists to keep from it. A leading
@@ -115,6 +118,8 @@ CLOSED_SCOPES = {"practices": (
     "rows in Block 1, your own in Block 3; BP- ids still work as "
     "breadcrumbs over mine/room/issues")}
 ISSUE_ID_RE = re.compile(r"^n\d{4}$")
+# A node file's stem: the status prefix (none is live; L_ R_ S_ D_ X_) and the id.
+_NODE_STEM_RE = re.compile(r"^(?:[LRSDX]_)?(n\d{4})$")
 PRACTICE_ID_RE = re.compile(r"^BP-\d{4}$", re.I)
 _EXACT_RE = re.compile(r'"([^"\]]*)"')
 _PHRASE_RE = re.compile(r"'([^'\]]*)'")
@@ -343,16 +348,22 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
                                  "ot": ot,
                                  "speaker": e.get("display", "")})
     elif scope == "issues":
-        # ONLY THE HISTORY Block 2 does not project: R_/S_/D_/X_ prefixed
-        # nodes. A bare nNNNN.toml is LIVE and an L_ is a LEAD — both are
-        # already in every part's Block 2, so returning them would violate
-        # the already-sent rule.
+        # EVERY NODE THIS CIRCLE'S BLOCK 2 DOES NOT SHOW — R549 (D128): an
+        # open issue the circle did not bring in, a lead, and the settled, declined and retired
+        # history. What Block 2 gives a heading stays out: the already-sent rule. The shown set
+        # is circle_open's (recall_issues_shown_set()). UNSET — a probe, or a caller that opened
+        # no circle — the filter is the filename prefix alone, R_/S_/D_/X_: history only.
         try:
             import issue_schema as ISC
-            # the STATUS IS THE FILENAME PREFIX (CLAUDE.md's register
-            # table): this glob IS the already-sent filter — only history.
-            for f in sorted(P.record_dir(root, "issues")
-                            .glob("[RSDX]_n[0-9][0-9][0-9][0-9].toml")):
+            for f in sorted(P.record_dir(root, "issues").glob("*n[0-9][0-9][0-9][0-9].toml")):
+                m = _NODE_STEM_RE.match(f.stem)
+                if not m:
+                    continue
+                if _SHOWN is None:
+                    if f.stem[:2] not in ("R_", "S_", "D_", "X_"):
+                        continue
+                elif m.group(1) in _SHOWN:
+                    continue
                 try:
                     doc = ISC.issue_read(f)
                     body = ISC.issue_render(doc).strip()
@@ -470,6 +481,17 @@ def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
 _PENDING: dict = {}                     # part -> latest private reply
 _ROUND_ASKED: set = set()               # parts whose recall ran this round
 _ARM = "off"                            # set by circle.py from --recall-arm
+# The issue ids this circle's Block 2 shows (issue_prompt_projection.issue_shown_read()),
+# handed over at open; None until then, which keeps the history-only filter.
+_SHOWN: "set[str] | None" = None
+
+
+def recall_issues_shown_set(ids) -> None:
+    """At circle open, after recall_clear(): the ids BLOCK 2 gives a heading this circle, which
+    `issues` then leaves out while reaching every other node (R549, D128).
+    None puts back the history-only filter; recall_clear() does that too."""
+    global _SHOWN
+    _SHOWN = None if ids is None else set(ids)
 
 # THE INDEX ARM'S OWN STATE (B121, R470). Reentrant because the arm holds the
 # lock while asking for the embedder, which takes it too — one lock, so the
@@ -582,12 +604,13 @@ def recall_clear() -> None:
     thread and the retained model are the same hazard one layer over: a stale
     arm still writing the previous circle's caches is given a moment to finish,
     and the embedder is dropped so a new circle reloads rather than holding a
-    model open for the life of the UI process."""
-    global _EMBEDDER, _ARM_THREAD, _ARM_REPORT
+    model open for the life of the UI process. The previous circle's shown
+    issues go too: until this circle's are handed over, `issues` is history."""
+    global _EMBEDDER, _ARM_THREAD, _ARM_REPORT, _SHOWN
     t = _ARM_THREAD
     if t is not None and t.is_alive():
         t.join(5.0)
-    _ARM_THREAD, _ARM_REPORT = None, None
+    _ARM_THREAD, _ARM_REPORT, _SHOWN = None, None, None
     with _INDEX_LOCK:
         _EMBEDDER = None
     _PENDING.clear()

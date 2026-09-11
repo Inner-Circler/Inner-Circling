@@ -153,7 +153,12 @@ def _shown(p: pathlib.Path) -> str:
     """Tree-relative when it is, absolute when it is not. LOGS is rebindable
     (probes point it at a temp dir), and a bare relative_to() raises there —
     which turned a clean probe run into a traceback inside the very error
-    path it was exercising."""
+    path it was exercising.
+
+    THE SAME FOUR LINES AS circle_close._shown(), whose occasion is a sandbox path
+    outside ROOT; the three journal managers' _rel() take no argument and read their
+    own module PATH. Kept separate: a record_paths export would be a new public name
+    (R441) for four lines each caller already reads by itself."""
     try:
         return p.relative_to(ROOT).as_posix()
     except ValueError:

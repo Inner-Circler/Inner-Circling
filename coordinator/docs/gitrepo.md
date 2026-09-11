@@ -19,7 +19,7 @@ This module centralizes every git operation the project performs automatically, 
 
 Everything else routine — repo init, git config (name/email/autocrlf), `.gitignore`/`.gitattributes` upkeep, and un-tracking paths that should never have been tracked — is automated and lives here.
 
-**THE HOOK TEMPLATES ARE NOT HERE ANY MORE, 2026-09-09.** `PRE_COMMIT`, `HOOK_MARK`, `POST_COMMIT`, `POST_MERGE`, `_hook_syntax_check()` and `system_git_hooks_ensure()` moved to **`coordinator/git_hook_script.py`** — 2,676 lines, most of it `/bin/sh` in a Python string, with a different audience: this surface is called by nine modules and the templates by `circle_audit.py --git-setup` alone. See `coordinator/docs/git_hook_script.md`. Anything below that describes the hook's own shape describes that file now.
+**THE HOOK TEMPLATES ARE NOT HERE ANY MORE, 2026-09-09.** `PRE_COMMIT`, `HOOK_MARK`, `POST_COMMIT`, `POST_MERGE`, `_hook_syntax_check()` and `system_git_hooks_ensure()` moved to **`coordinator/git_hook_script.py`** — 1,372 lines, most of it `/bin/sh` in a Python string, with a different audience: this surface is called by nine modules and the templates by `circle_audit.py --git-setup` alone. See `coordinator/docs/git_hook_script.md`. Anything below that describes the hook's own shape describes that file now.
 
 ## MAIN
 This file has no `main()` function in the conventional sense used elsewhere in the project; its `if __name__ == "__main__":` block calls a function literally named `main()`, but that function only implements the `--identity` read-only CLI. All other capability is a library surface with no dispatcher.

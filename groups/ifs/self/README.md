@@ -70,6 +70,15 @@ dreams.toml              Self's own dream corpus and the
                          reads as an empty corpus; the file
                          appears when a derivation first
                          writes it
+redaction_map.toml       the redacted view's reverse map:
+                         each email, web address, phone
+                         number or handle it has hidden,
+                         beside the token shown in its place
+                         (redaction_manager.py). Never
+                         shipped: it appears the first time
+                         the view hides one. It holds the
+                         REAL text -- keep it as private as
+                         your transcripts
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,

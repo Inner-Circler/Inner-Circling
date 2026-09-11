@@ -46,6 +46,7 @@ import seam
 import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
                            # heartbeat must not spin at someone typing
 from circle_close_verify import MAX_MEMBERS
+from REGISTER_CLASS import register_list_footer, register_row_nth_read
 
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
@@ -165,25 +166,19 @@ def part_rows_read() -> list[tuple[str, str]]:
 
 def part_list() -> str:
     """Numbered, positional — /practice-list's contract: the number is a
-    handle into THIS listing and shifts when a part is removed."""
-    out = [f"\n  {len(part_rows_read())} part(s)"]
-    for i, (d, t) in enumerate(part_rows_read(), 1):
+    handle into THIS listing and shifts when a part is removed. It ends naming
+    `/part-list <n>`, which answers with part_view()'s view (R534, B133)."""
+    rows = part_rows_read()
+    out = [f"\n  {len(rows)} part(s)"]
+    for i, (d, t) in enumerate(rows, 1):
         out.append(f"  {i:>3}  {t}  (parts/{d}/)")
+    out.append("\n" + register_list_footer(len(rows), "/part-list"))
     return "\n".join(out)
-
-
-def _nth(n_text: str) -> "tuple[str, str] | None":
-    try:
-        n = int(n_text.strip())
-    except ValueError:
-        return None
-    r = part_rows_read()
-    return r[n - 1] if 1 <= n <= len(r) else None
 
 
 def part_view(n_text: str) -> tuple[bool, str]:
     """parts/<name>/long_term.md, verbatim, by listing number."""
-    hit = _nth(n_text)
+    hit = register_row_nth_read(part_rows_read(), n_text)
     if hit is None:
         return False, f"no part #{n_text.strip() or '?'} — /part-list shows them"
     d, t = hit
@@ -209,7 +204,7 @@ def part_delete(n_text: str) -> None:
     closed; a live round reading a vanished long_term.md is a crash, not an
     absence)."""
     import shutil
-    hit = _nth(n_text)
+    hit = register_row_nth_read(part_rows_read(), n_text)
     if hit is None:
         seam.emit("command", f"  no part #{n_text.strip() or '?'} — "
                              f"/part-list shows them")

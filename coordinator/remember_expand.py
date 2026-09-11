@@ -69,7 +69,8 @@ EXPAND_N = 2             # seeds expanded per part per circle
 # text one occasion may spend, and a future resize should move both.
 EXPAND_CAP = 1200
 
-# THE ARM IS A FLAG, NOT A FILE — circle.py's --recall-arm, default off.
+# THE ARM IS A FLAG, NOT A FILE — circle.py's --recall-arm, default
+# `delivered` since 2026-09-10 (R526); `off` until then.
 # The trial protocol flips it per circle, and a flag per invocation cannot
 # be forgotten in a settings file between the trial and ordinary use; it
 # also rides argv into the record. An unknown value is OFF, the degrade

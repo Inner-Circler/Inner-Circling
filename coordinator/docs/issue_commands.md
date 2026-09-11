@@ -67,7 +67,9 @@ Stdout, from the `__main__` block only: the circle/command-count summary, one `i
         Tokenize a command-line's remainder using ARG_RE, which matches either a `"quoted, with \" escapes"` group or a bare non-space word, unescaping `\"` to `"` inside quoted tokens. This is the shared tokenizer both parse branches use.
     }
 
-### `issue_command_parse(line, circle)`
+### `issue_command_parse(line, circle, *, own_statement=False)`
+`own_statement` is the `[proposed: ...]` bracket's grammar and changes one verb: `issue-evidence-add` then takes `nNNNN "why"` and refuses a statement number, because the statement is the one the bracket rides in (R541); its command carries no `part`/`quote`/`source`, which the proposal row supplies at approval. Typed, the verb takes `nNNNN <stmt#> "why"` and circle.py resolves the number.
+
     if (the tokenized line is empty, or its first token is not "/issue") then {
         return (None, "not an /issue command").
     } else if (fewer than 2 tokens) then {
@@ -132,6 +134,14 @@ This function is pure — it touches no file — and is deliberately strict: it 
     if (cmd is issue-label-update) then {
         {
             record the old label as an alias if not already present (per ruling R007: old names are kept, not discarded), set the new label, and record which circle ruled it (label_ruled).
+        }
+    } else if (cmd is issue-relationship-update) then {
+        {
+            find the first non-retired edge of that type and target and set its status to the value.
+        }
+        if (the value is retired) then { stamp `retired` with today's date and the reason. }
+        else if (the value is attested) then {
+            R530, built for proposal_vetting's promote alone — an approved issue-relationship-add whose relation sits on file as proposed; the typed form still refuses `= attested`. Write the basis and quote a fresh approved add writes (below), re-date the edge, and drop its `ask`. What they replace arrives in the command's `why`, and so in the history line.
         }
     } else {
         {

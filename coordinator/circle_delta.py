@@ -231,10 +231,12 @@ def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
         ok = (p == _RP.record_rel(f"circles/circle_{ot}.md")
               or p == _RP.record_rel(f"circles/commands_{ot}.toml")
               or p == f"work/logs/close_{ot}.json"
+              or p == f"work/logs/open_{ot}.json"         # filed since R537
               or p.startswith(f"work/prompts/{ot}")
               or (p.startswith(_RP.record_rel("parts") + "/")
                   and p.endswith((f"/short_term_{ot}.toml", f"/short_term_{ot}.md")))
-              or p in (_RP.record_rel("circles/working_sets.toml"), _RP.record_rel("self/proposals.toml")))
+              or p in (_RP.record_rel("circles/working_sets.toml"), _RP.record_rel("self/proposals.toml"),
+                       _RP.record_rel("self/coalesce.toml")))
         if not ok:
             out.append(p)
     return out

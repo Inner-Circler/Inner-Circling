@@ -34,7 +34,9 @@ Since R273 only the first kind is ever staged — a proposal body that is not a 
 
 **The first proposer gets the credit.** `sources` lists every speaker whose stance converged on the proposal, kept in first-appearance order rather than alphabetically, and `author` is stamped at staging with the first of them as "<who> in <circle>". A later ruling leaves a non-blank author alone, so the credit survives; everyone else stays on record in `sources`.
 
-**Staging fields are dropped the moment a row settles.** A resolved row carries only its id, kind, text, state and author — the same discipline every propose-class register here follows.
+**Staging fields are dropped the moment a row settles.** A resolved row carries its id, kind, text, state, author and `sources` — the same discipline every propose-class register here follows.
+
+**An evidence offer carries its statement.** A part's `[proposed: /issue-evidence-add nNNNN "why"]` names no statement: it offers the one the bracket rode in (R541). Its row carries two more fields, `part` (the speaker's directory id) and `quote` (the statement's words, verbatim, without the bracket), which approval attaches as the evidence, with the row's circle as its source. Every other row lacks both, so an old row renders exactly as before; both are kept at resolution.
 
 ## MAIN
 
@@ -79,11 +81,12 @@ Every row in file order, and every row still awaiting a ruling. The vetting queu
 
 The register carries the transcript's own name rather than a bare open time, so a row is greppable and provenance backfilled from it cites a real file. Rows staged before that ruling carried the bare open time, which is why vetting re-runs this same normalisation over every row it approves — a healing guard for any bare row arriving from a backup or a hand edit.
 
-### proposal_row_stage(kind, text, sources, circle)
+### proposal_row_stage(kind, text, sources, circle, *, part="", quote="")
     Load the register and allocate the next P- id.
     Keep the sources in the order given.
     Normalise the circle to its prefixed transcript reference.
     Stamp author as "<first source> in <circle ref>".
+    if (part or quote is given) then { add each that is given — an evidence offer's statement. }
     Append the row with state "proposed" and the staging fields, save, and
         return the new id.
 

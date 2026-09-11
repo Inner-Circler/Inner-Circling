@@ -8,7 +8,8 @@ Verifies — and, for lost short_terms, repairs — the per-circle records that
 WHAT EXISTS TODAY
     0  preflight   lock, leftover-transaction, git preconditions, record_verify.py
     1  survey      circles inter_circle.py has not processed (no dream/<OT> tag)
-    2  reconcile   circle_close_verify.py --reconcile per circle + transcript safety net
+    2  reconcile   circle_close_verify.py --reconcile per circle + transcript safety net;
+                   then every open report, read and never refused (circle_open_verify.py's)
     3  backfill    reconstruct a lost short_term from the transcript
     6  validate    record_model invariants: self-check, baseline, or staged candidate
     7  commit      write-ahead os.replace sweep (TRANSACTION_CLASS.py)
@@ -200,7 +201,10 @@ def circle_audit_git_setup(run: Run, name: str | None, email: str | None) -> int
     log("ok", "no remote can take this material off the machine")
     G.system_git_config_ensure(log, name, email)
     G.system_git_attributes_ensure(log)
-    GH.system_git_hooks_ensure(log)
+    # A commit is running — it has said which. Stop here, as R537 asks: the
+    # untrack below would meet the same index lock, and a re-run finishes the rest.
+    if not GH.system_git_hooks_ensure(log):
+        return 1
     G.system_git_ignore_ensure(log)
     G.system_git_ignored_untrack(log)
 
@@ -431,7 +435,7 @@ def circle_audit_preflight_run(run: Run, may_commit: bool, writing: bool = False
     # and runs at circle open as well as here. Still a subprocess rather than an
     # import: phase 0 reports a returncode, and a gate that can take the whole
     # audit down with it on an unexpected raise is not a gate.
-    script = ROOT / "coordinator" / "record_verify.py"
+    script = ROOT / "memory" / "record_verify.py"      # the persistence layer, since 2026-09-09
     if not script.is_file():
         run.fail(f"missing {script.relative_to(ROOT).as_posix()}")
     else:
@@ -542,6 +546,90 @@ def circle_audit_reconcile_run(run: Run, unprocessed: list[str]) -> None:
         silent = [p for p in M.PARTS if p not in counts]
         if silent:
             print(f"      (silent, correctly no short_term: {', '.join(silent)})")
+
+
+def circle_audit_open_report_read(run: Run) -> None:
+    """Read the open report of every circle this group has — work/logs/open_<OT>.json, which
+    circle_open_verify.py writes at the end of each open and the close files with its circle
+    (R537). The close report has its reconcile above; this is the open's.
+
+    REPORT ONLY, like the verifier that writes it (R535): every finding is a WARN, and nothing
+    here changes the audit's exit code. A report that failed a postcondition says what an open
+    left behind; it is not a record this audit can repair.
+
+    THE SCOPE IS DERIVED, NEVER DATED, as the survey's is: the oldest open report this group's
+    circles have. A circle before it opened before the verifier existed and has nothing to read;
+    a circle after it without one is a finding — the report was not written, or not filed.
+    Every circle, and not only the unprocessed: a healthy close is dreamed at once, so the
+    survey's list is nearly always empty."""
+    circle_audit_hr_render("phase 2 — open reports")
+    import circle_open_verify as COV          # the report's writer, and its contract's reader
+    logs = ROOT / "work" / "logs"
+    circles = sorted(m.group(1) for p in _RP.record_dir(ROOT, "circles").glob("circle_*.md")
+                     if (m := CIRCLE_RE.match(p.name)))
+    have = [ot for ot in circles if (logs / f"open_{ot}.json").is_file()]
+    if not have:
+        run.ok(f"no open report yet — all {len(circles)} circle(s) opened before "
+               f"circle_open_verify.py, and there is nothing to read")
+        return
+    epoch = have[0]
+    before = sum(1 for ot in circles if ot < epoch)
+    if before:
+        run.ok(f"{before} circle(s) opened before the first open report ({epoch}) — "
+               f"nothing to read")
+    contract = COV.circle_open_contract_read()
+    if not contract:
+        run.warn(f"{COV.OPEN_CONTRACT.name} is missing or unreadable — each report is read "
+                 f"without its shape check")
+    need = list((contract.get("report") or {}).get("required") or [])
+    need_row = list((contract.get("row") or {}).get("required") or [])
+    group = _RP.group_read()
+    clean = 0
+    for ot in (c for c in circles if c >= epoch):
+        p = logs / f"open_{ot}.json"
+        rel = p.relative_to(ROOT).as_posix()
+        if not p.is_file():
+            run.warn(f"circle_{ot}: no open report at {rel} — the open did not write one, "
+                     f"or the close did not file it")
+            continue
+        try:
+            rep = json.loads(p.read_text(encoding="utf-8"))
+        except (OSError, ValueError) as e:
+            run.warn(f"circle_{ot}: {rel} does not parse — {e}")
+            continue
+        if not isinstance(rep, dict):
+            run.warn(f"circle_{ot}: {rel} is a JSON {type(rep).__name__}, not a report")
+            continue
+        rows = rep.get("postconditions")
+        rows = rows if isinstance(rows, list) else []
+        shape = []
+        missing = [k for k in need if k not in rep]
+        if missing:
+            shape.append("lacks " + ", ".join(missing))
+        if any(not isinstance(r, dict) or any(k not in r for k in need_row) for r in rows):
+            shape.append("has a postcondition row without " + "/".join(need_row))
+        if rep.get("open_time") != ot:
+            shape.append(f"names open time {rep.get('open_time')!r}")
+        if "group" in rep and rep["group"] != group:
+            shape.append(f"was written for group {rep['group']!r}, not {group!r}")
+        if shape:
+            run.warn(f"circle_{ot}: {rel} " + "; ".join(shape))
+            continue
+        failed = [r for r in rows if r.get("result") == "fail"]
+        disagree = rep.get("contract") or []
+        if failed or disagree or rep.get("result") == "fail":
+            bits = [f"{len(failed)} failed postcondition(s)"] if failed else []
+            if disagree:
+                bits.append(f"{len(disagree)} contract disagreement(s)")
+            run.warn(f"circle_{ot}: the open reported " + (" and ".join(bits) or "result fail"))
+            for r in failed:
+                print(f"          {r.get('id')}: {r.get('detail') or '(no detail)'}")
+            for line in disagree:
+                print(f"          contract: {line}")
+            continue
+        clean += 1
+    if clean:
+        run.ok(f"{clean} open report(s) read — every postcondition passed or did not apply")
 
 
 # ------------------------------------------------------------------ phase 6
@@ -1027,6 +1115,7 @@ def main() -> int:
 
         unprocessed = circle_audit_survey_run(run)
         circle_audit_reconcile_run(run, unprocessed)
+        circle_audit_open_report_read(run)
 
         if args.backfill:
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")

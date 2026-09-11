@@ -288,30 +288,23 @@ def circle_observation_list(include_retired: bool = False) -> str:
         out.append(f"  {i:>3}. {r['id']}  {r['date'][:10]}  "
                    f"{r.get('circle', '(day-scoped)')}  "
                    f"{len(r.get('text', '')):,} chars{src}{marker}")
+    # The footer names the numbering this listing used: `<n>` counts the same rows only
+    # when the same --all is given with it.
+    out.append("\n" + SS.register_list_footer(
+        len(es), "/observation-list --all" if include_retired else "/observation-list"))
     return "\n".join(out)
 
 
 def circle_observation_show(n: int, include_retired: bool = True) -> str:
-    """`/observation-list <n>` — one whole record, every field present.
+    """`/observation-list <n>` — one whole record, every field present, through
+    REGISTER_CLASS.register_record_show(): ORDER, then any key ORDER does not name (B133).
     Numbered against the SAME set `circle_observation_list()` would show for the same
     `include_retired` value — pass the matching flag if a caller wants
     `<n>` to line up with a prior `--all` listing."""
     es = circle_observation_read()
     if not include_retired:
         es = [r for r in es if not r.get("retired")]
-    if not 1 <= n <= len(es):
-        return f"  {n} is not in 1..{len(es)} — /observation-list lists them"
-    r = es[n - 1]
-    out = [f"  {n}. of {len(es)}"]
-    for k in ("id", "date", "circle", "chain", "salience", "source",
-              "retired", "purged", "note"):
-        v = r.get(k)
-        if v:
-            out.append(f"     {k:<8} {v}")
-    out.append("")
-    for line in (r.get("text", "") or "(empty)").splitlines() or [""]:
-        out.append(f"     {line}")
-    return "\n".join(out)
+    return SS.register_record_show(es, n, ORDER, body="text", verb="/observation-list")
 
 
 # --------------------------------------------------------------- commands

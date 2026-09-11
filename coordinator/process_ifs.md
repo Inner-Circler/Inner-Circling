@@ -22,6 +22,7 @@ clarity, courage, connectedness — speak from it.
 <command>  ::= "/issue-relationship-add " <id> " " <type> " " <id>
              | "/issue-label-update " <id> " " '"' <name> '"' [ " " '"' <why> '"' ]
              | "/issue-add " <label> [ " " <description> [ " " <absence> ] ]
+             | "/issue-evidence-add " <id> " " '"' <why> '"'
              | "/practice-add " <text>
              | "/better-option-add " <text>
 <!-- slot: proposed_exemplars -->
@@ -37,6 +38,9 @@ clarity, courage, connectedness — speak from it.
     [proposed: /issue-add "hesitant to offer" "the want to give, stopped
     before it is said" "an offer made plain, and let land or not"]
 
+    I held the offer back again just now, before it was said.
+    [proposed: /issue-evidence-add n0035 "it happened here, in the room"]
+
 <!-- slot: proposed_notes -->
 - `/practice-add` is how the CIRCLE behaves, and reaches every part.
 - `/better-option-add` is a move available to Self, and reaches only Self.
@@ -50,6 +54,11 @@ clarity, courage, connectedness — speak from it.
   you can, what it is and what its absence looks like, each in quotes. With
   all three it opens live; with the name alone it waits as a lead until Self
   completes it.
+- `/issue-evidence-add` asks Self to attach THIS statement — your words around
+  the bracket — to an issue as evidence, and says why. It names no other
+  statement and can offer only your own words. If another part said what you
+  want attached, agree with them or say it again yourself, in the statement
+  that carries the bracket.
 - You can read the live `BP-` entries in your own identity block. There is no
   way to reword or retire one; propose a new one and say why.
 

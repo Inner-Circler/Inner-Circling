@@ -1,7 +1,7 @@
 # work/prompts/
 
-**Written by `coordinator/prompt_capture.py` at circle open. Never by
-hand.**
+**Written by `coordinator/prompt_capture.py`, from circle open through
+/close. Never by hand.**
 
 `work/prompts/<OT>/`, one directory per circle, holding (since R277,
 2026-08-21):
@@ -14,14 +14,19 @@ Block4_<part>_objectives.md        per part
 Per_turn_<part>_<time>_<seq>.json  one per API request sent on that
                                    part's behalf — the pre-warm, each
                                    statement and its retry, the /close
-                                   short_term and its retry
-Per_turn_synthesis_*.json          since R412/R413 (2026-08-30/31): the
-                                   /close-time calls that write the
-                                   record too — dreaming (per part), the
-                                   synthesis pass, the mid_term refresh
-                                   (per part), the coalesce pass. These
-                                   have no part, so the KIND fills that
-                                   slot in the filename instead.
+                                   short_term and its retry, and since
+                                   R412 (2026-08-30) the /close-time
+                                   calls made for that part: its
+                                   dreaming, its mid_term refresh, and
+                                   a short_term rebuilt from the
+                                   transcript when its own was lost
+Per_turn_<kind>_<time>_<seq>.json  the /close-time calls that speak for
+                                   the whole circle: `synthesis` and
+                                   `coalesce` since R412/R413
+                                   (2026-08-30/31), and `capsule` — the
+                                   room summary dreaming reads — since
+                                   2026-09-04. These have no part, so
+                                   the KIND fills that slot.
 manifest.json
 ```
 
@@ -41,6 +46,7 @@ reasoned. Treat this directory exactly as you treat `groups/ifs/parts/`.
 
 That last part is yours to switch off: the reasoning summary is captured
 only while the `record_thinking` setting is on, which it is by default.
+It is a developer setting: in a circle opened with `--dev`,
 `/settings-list` shows it and `/settings-update record_thinking no` stops
 it being written. The rest of the capture is not optional — it is the
 record R277 exists to keep.

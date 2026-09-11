@@ -19,6 +19,6 @@ is repo-development infrastructure, not shipped product code, so a
 fresh install's own `work/manifests/` never gets populated by anything
 the product itself does.
 
-The directory still ships because the exceptions entry still names it,
-and an empty delegate is cheaper than a special case. If that entry ever
-goes, this goes with it.
+So in an install the directory stays empty unless you put a JSON file
+here yourself — and anything you do put here is read, and must parse,
+before every circle opens.

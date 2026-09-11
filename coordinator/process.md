@@ -139,8 +139,9 @@ may speak through this voice; parts may surface it.
 2. `coordinator/circle_close_verify.py --short-term-only --open-time <OT> --write-report`
    verifies every speaking part has a well-formed record and emits the durable
    close report `work/logs/close_<OT>.json` — each part's size and sha256.
-3. The circle is committed to git: transcript, short_terms, close report, tagged
-   `circle/<OT>`. Only those paths.
+3. The circle is committed to git: transcript, short_terms, close report, and the
+   open report `work/logs/open_<OT>.json` the open wrote, tagged `circle/<OT>`.
+   Only those paths.
 
 `circle.py` exits non-zero if the record is incomplete: a double truncation, a
 short_term that failed twice, or a non-zero verifier. `/abort` keeps the

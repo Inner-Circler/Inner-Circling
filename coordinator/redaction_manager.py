@@ -274,7 +274,14 @@ def alias_list() -> str:
         forms = ", ".join(e.get("forms", []))
         out.append(f"  {i:>2}. [{e['id']}] {e['kind']:<7} {e['canonical']}"
                   f"  ({forms})")
+    out.append("\n" + SS.register_list_footer(len(rows), "/redact-alias-list"))
     return "\n".join(out)
+
+
+def alias_record_show(n: int) -> str:
+    """`/redact-alias-list <n>`: that alias WHOLE — every field, through
+    REGISTER_CLASS.register_record_show() (B133)."""
+    return SS.register_record_show(alias_read(), n, ALIAS_ORDER, verb="/redact-alias-list")
 
 
 def main() -> int:

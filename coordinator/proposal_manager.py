@@ -65,6 +65,13 @@ RECORD SHAPE:
                  what an approved edge's `basis` cites, if this is a
                  "command" row that writes the graph
     proposed_at  STAGING ONLY: ISO timestamp
+    part         an EVIDENCE OFFER only — `[proposed: /issue-evidence-add nNNNN
+    quote        "why"]`, whose statement is the one the bracket rode in
+                 (R541): the speaker's directory id and
+                 the words, verbatim, read off that statement at the close.
+                 `text` names no statement, so approval takes these two, and the
+                 row's `circle` as the evidence `source`. Absent on every other
+                 row, so an old row renders exactly as it did. Kept at resolution.
 
 Staging fields are dropped the moment a row resolves — a settled row
 carries id/kind/text/state/author AND `sources`, the last of these since
@@ -111,7 +118,7 @@ def _proposals_rebind() -> None:
 import record_paths as _RPf                                                # noqa: E402
 _RPf.group_follow(_proposals_rebind)
 ORDER = ("id", "kind", "text", "state", "author", "sources", "circle",
-         "proposed_at")
+         "proposed_at", "part", "quote")
 # `sources` SURVIVES RESOLUTION — ruled 2026-09-08, VERBATIM: "Structured".
 #
 # It was dropped here with `circle` and `proposed_at`, after _provenance() flattened both into
@@ -187,12 +194,14 @@ def circle_ref(circle: str) -> str:
     return f"circle_{circle}"
 
 
-def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str) -> str:
+def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str, *,
+                       part: str = "", quote: str = "") -> str:
     """Append ONE new P-id row, state='proposed'. The caller (circle.py's
     proposal_coalesce()) decides what a converged group's
     kind/text/sources are; this only writes them — except `circle`,
     normalized to the prefixed transcript ref (circle_ref(), R243).
-    Returns the new id.
+    Returns the new id. `part`/`quote` are an evidence offer's statement
+    (RECORD SHAPE above), written only when given.
 
     FIRST PROPOSER GETS CREDIT, 2026-08-21 (the operator's words): `sources`
     is kept IN THE ORDER GIVEN — proposal_coalesce() passes
@@ -206,10 +215,14 @@ def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str) ->
     srcs = list(sources)
     ref = circle_ref(circle)
     credit = (f"{srcs[0]} in {ref}" if srcs and ref else (srcs[0] if srcs else ""))
-    doc.setdefault("proposal", []).append({
-        "id": pid, "kind": kind, "text": text, "state": "proposed",
-        "author": credit, "sources": srcs,
-        "circle": ref, "proposed_at": _now()})
+    row = {"id": pid, "kind": kind, "text": text, "state": "proposed",
+           "author": credit, "sources": srcs,
+           "circle": ref, "proposed_at": _now()}
+    if part:
+        row["part"] = part
+    if quote:
+        row["quote"] = quote
+    doc.setdefault("proposal", []).append(row)
     _PC.save(doc)
     return pid
 

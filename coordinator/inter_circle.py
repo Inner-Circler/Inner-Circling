@@ -473,24 +473,29 @@ def _open_capture_log(ot: str, live: bool, say) -> bool:
 
 
 def circle_process(ot: str, live: bool, confirmed: list[dict] | None = None,
-                   say=print) -> int:
+                   say=print, warn=None) -> int:
     """Phase 2, whole. Returns 0 on success; non-zero means the circle's
     own record is UNTOUCHED and work/logs/dream_error_<OT>.json says why.
+
+    `warn` carries what must reach the person even where `say` is silenced:
+    a refused mid_term distillate, which is a report and not a failure, so
+    the caller's own fail() never fires for it (R532). Defaults to `say`.
 
     Opens the circle's capture for a hand re-run and closes it after — see
     _open_capture_log(); under a live /close the log is circle.py's, already
     open, and is left exactly as found."""
     opened = _open_capture_log(ot, live, say)
     try:
-        return _process_circle(ot, live, confirmed, say)
+        return _process_circle(ot, live, confirmed, say, warn)
     finally:
         if opened:
             PCAP.prompt_turn_log_open(None)
 
 
 def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
-                    say) -> int:
+                    say, warn=None) -> int:
     """circle_process()'s body — everything but the capture log's lifetime."""
+    warn = warn or say
     confirmed = confirmed or []
     if circle_is_processed(ot):
         # NAME THE MARKER THAT REFUSED — audit-register.md #6, 2026-09-08. There are TWO since
@@ -712,10 +717,12 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             # R186/H3 is the staleness rule.
             say("\nmid_term refresh — stale parts only:")
             with PC.PHASES.span("inter.mid_term_refresh"):
-                mt_fails = MT.part_mid_term_refresh(say=say)
+                mt_fails = MT.part_mid_term_refresh(say=say, warn=warn)
             if mt_fails:
-                say(f"  {mt_fails} SUSPECT derivation(s) NOT written — rerun "
-                    f"mid_term --refresh by hand; everything else committed")
+                warn(f"  {mt_fails} mid_term distillate(s) refused as SUSPECT and "
+                     f"NOT written — each part keeps its previous one; rerun by "
+                     f"hand: python coordinator\\part_mid_term_manager.py --refresh "
+                     f"<part>. Everything else committed.")
 
             import gitrepo as G
             paths = [ROOT / rel for rel in staged]

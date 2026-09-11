@@ -20,8 +20,9 @@ RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodie
     _tree_files, record_tree_compare, record_tree_verify   the two drivers: baseline vs candidate at every
                                                  live /close (transaction.validate), and the
                                                  single-tree self-check (circle_audit --selfcheck)
-    REGISTERS and the _*_cap/_so_order readers    the TOML arm's spec table — caps IMPORTED from
-                                                 each register's own module, never copied
+    REGISTERS and the _*_cap/_*_order readers     the TOML arm's spec table — caps and orders
+                                                 IMPORTED from each register's own module; a
+                                                 literal copy only when that import fails
     register_verify, register_compare        the single-tree and paired register checks
     summarise                                    (FAIL, WARN, OK) counts over findings
 
@@ -343,12 +344,17 @@ def _mem_order() -> tuple[str, ...]:
 def _so_order() -> tuple[str, ...]:
     """circle_observation_log.ORDER, imported rather than duplicated. Late for
     the same reason _ch_cap() is late — that module imports REGISTER_CLASS,
-    which this module's own dependency chain already pulls in."""
+    which this module's own dependency chain already pulls in.
+
+    The fallback below is a copy, read only when that import fails. test_register_gate.py
+    forces the failure and holds the copy equal to ORDER — this one, _mem_order()'s and
+    _cj_order()'s."""
     try:
         import circle_observation_manager as _CO
         return _CO.ORDER
     except Exception:
-        return ("id", "date", "circle", "text", "note")
+        return ("id", "date", "circle", "text", "salience", "chain", "note",
+                "source", "retired", "purged")
 
 
 def _cj_cap() -> int:

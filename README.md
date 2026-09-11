@@ -106,10 +106,14 @@ coordinator sends, to Anthropic:
   -- that part's own distilled identity
   -- **any first-run answers that part renders.** The dialog at your
      first open asks about you; a part sends back only the answers it
-     declares a `render` sentence for, and the shipped Soul declares
+     declares a `render` sentence for. The shipped Soul declares
      four -- the year you were born, your sex at birth, your race, and
-     where you were raised. They are rewritten into that part's own
-     voice ("My human was raised in ...") and travel in every prompt
+     where you were raised -- and the shipped Child six: how many
+     siblings you had, whether you were home schooled, whether you
+     enjoyed school, your favourite things to do, whether you were
+     bullied, and whether you made much music or art. They are
+     rewritten into that part's own voice ("My human was raised in
+     ...", "I grew up with ... sibling(s).") and travel in every prompt
      for as long as they are recorded. Every question is optional and
      blank is a complete answer; `/part-context-list` shows exactly
      what is held, and `/part-context-clear <part>` erases it.
@@ -140,7 +144,10 @@ Two more things worth knowing:
 
 SHIPS
   - coordinator/                  the running system
-  - memory/                       the issue graph's code
+  - memory/                       the issue graph's code, and the
+                                  record's persistence layer: the
+                                  corruption gate, the register gate,
+                                  the transaction class
   - ui/                           the two-pane interface (the windowed
                                   Ticker flavor, ui/ticker/, is NOT in
                                   this bundle)
@@ -172,7 +179,7 @@ a bundle may carry any one or more, and the program resolves whatever it finds
   - groups/ifs/issues/            the issue graph
   - groups/ifs/self/              Self's registers
   - work/prompts/                 captured prompts
-  - work/logs/                    close reports
+  - work/logs/                    open and close reports
   - work/graph/                   the issue graph's PICTURE, redrawn at every
                                   close whose graph moved; the command pane
                                   prints the path
@@ -349,9 +356,10 @@ client, `python-dotenv`, `tomli` / `tomli-w` to read and write the TOML
 the registers are kept in — `tomli` only on Python 3.10, which has no
 `tomllib` of its own — and `fastembed`, which serves a part's
 `[recall: ...]` search of its own past. **A circle makes no network call
-except to the model provider, with one exception you can see coming:** the
-first `[recall: ...]` ever used fetches `fastembed`'s embedding model
-(~65 MB) into a local cache, once; after that it is offline. Nothing else
+except to the model provider, with one exception you can see coming:** your
+first live circle fetches `fastembed`'s embedding model (~65 MB) into a
+local cache, once, in the background while the parts warm up; after that
+it is offline. Nothing else
 is fetched, then or later.
 
 Every command in this file begins `.venv\Scripts\python` for exactly this
@@ -528,10 +536,13 @@ it whenever you want:
 /part-context-update <part>   # re-enter that part's personal answers (at cmd>)
 ```
 
-**Every live run begins with two questions.** 
+**Every live run begins with up to two questions** -- the first only
+once you have a live issue to choose from.
 
-Do you have specific issues you would like to focus on today?
-('?' to review, blank for no, 'all', or a comma separated list) _
+Do you have specific issues to focus on today? ('?' to review) _
+
+'?' lists the live issues, numbered; answer with those line numbers,
+or 'all', or blank for none.
 
 As you circle, you have the option of tracking "issues": things that
 trigger you, cause distress, and indicate places where loving care 
@@ -600,8 +611,9 @@ enter, in the circle pane, an annotation like this:
 To prevent misfires, such as if you were to say "I remember 
 when ..." in the circle, the syntax must be exactly as shown. 
 
-The system will record that and hand it back to you in future
-circles. You can manage such memories -- type `help remember`
+The system will record that, and `/remember-list` at the cmd>
+prompt hands it back whenever you ask -- nothing brings it back
+on its own. You can manage such memories -- type `help remember`
 at the cmd> prompt.
 
 **About proposals**
@@ -615,13 +627,20 @@ part registers it for dedicated attention:
 ```
 
 The command is any of those you can see by typing "help propose"
-in the command pane - the same command works there or here in
-the circle pane when written in this way.  Proposals are "staged";
+in the command pane. You can stage the same command yourself
+there, with `/propose-add <command>`; a part writes it here in the
+circle pane in this way. One cannot be staged that way: a part's
+`/issue-evidence-add` offers the statement its bracket rides in, and
+the command pane has no statement to offer. To attach one yourself,
+type `/issue-evidence-add nNNNN <stmt#> "why"` at cmd> during the
+circle — `/issue-evidence-list` numbers the circle's statements. It
+is recorded as your words, not sent to the parts, and applied at
+close.  Proposals are "staged";
 at the end of the circle you are asked if you approve of any
 proposals. You can approve (the proposal affects the system,
 opening an issue or adding a practice, etc.), deny (the proposal
-is forgotten), or skip (you'll be asked again at the next circle
-close).
+is forgotten), or skip (you'll be asked again when the next circle
+opens).
 
 A part cannot propose a new PART. Adding one is yours alone,
 with `/part-add` at the command pane — but parts are told about
@@ -657,7 +676,7 @@ Measured on the original seven-part installation, and recorded in
 
 ```
 a three-part test round   about $0.30
-a full circle, 15 rounds  about $1.30
+a full circle, 15 rounds  roughly $3-4
 ```
 
 A fresh install starts with two parts, so expect less. The largest lever
@@ -670,14 +689,18 @@ circle would have cost without it.
 `/close` does more than write the transcript:
 
 ```
-1  each part is asked for its summary of the circle, and those are written
-2  the close report is verified, and the whole circle is committed to git
-3  THEN dreaming runs for every part, and one circle-wide synthesis after it
-4  and if the issue graph moved, its picture is redrawn — the command pane
+1  proposals that say the same thing are grouped, and you are asked to rule
+   on every proposal still pending
+2  each part is asked for its summary of the circle, and those are written
+3  the close report is verified, and the whole circle is committed to git,
+   with the report its open wrote
+4  THEN dreaming runs for every part, one circle-wide synthesis after it,
+   and each part whose record moved has its distilled identity rebuilt
+5  and if the issue graph moved, its picture is redrawn — the command pane
    prints the path, under work/graph/
 ```
 
-Step 3 makes model calls of its own **after** the transcript is already
+Step 4 makes model calls of its own **after** the transcript is already
 committed, so a close takes noticeably longer than the writing alone and
 adds to the circle's cost. That is the loop that turns circles into a
 part's memory; without it a part's identity never moves.
@@ -819,7 +842,7 @@ NEVER — the historical record, and what is derived from it
                                 each part's record of a circle (.md before 2026-09-04)
   groups/ifs/parts/*/mid_term.md
                                 the distillate
-  work/logs/*.json              close reports
+  work/logs/*.json              open and close reports
   work/prompts/**               captured prompts
 ```
 
@@ -903,12 +926,17 @@ wrong.
 ## Keeping the record honest
 
 The gates above are not decoration; each exists to watch for any fail. 
-Two check automatically:
+Three check automatically:
 
 ```
 record_verify.py runs at every circle open
     a corrupt file stops the circle before any model call is made, and
     before anything is written
+
+the open verifier runs at the end of every open
+    it writes work/logs/open_<OT>.json — whether the open left behind its
+    transcript, its working-set entry and a whole prompt capture. It only
+    reports: it never stops a circle
 
 the close verifier runs at every /close
     it writes work/logs/close_<OT>.json — a size and a sha256 for each
@@ -921,8 +949,9 @@ wrong:
 ```
 .venv\Scripts\python coordinator\circle_audit.py
     the audit: the same checks, plus a reconcile of each close report
-    against what is on disk for every circle not yet dreamed. It REPORTS a
-    part's lost record of a circle; it does not rebuild one.
+    against what is on disk for every circle not yet dreamed, and a read of
+    every open report, which warns and never fails. It REPORTS a part's
+    lost record of a circle; it does not rebuild one.
 .venv\Scripts\python coordinator\circle_audit.py --backfill --commit
     the repair: rebuilds a lost record from the transcript and writes it.
     Without --commit it only stages the rebuild for you to read.

@@ -121,8 +121,13 @@ def proposal_group_pending_read() -> list[dict]:
                      "sources": list(r.get("sources", [])),
                      "circle": r.get("circle", "")})
     for r in PR.proposal_pending_list():
+        # AN EVIDENCE OFFER'S WORDS ARE PART OF WHAT IT ASKS: its `text` names
+        # only the issue and the why, so two parts' offers of their own
+        # statements would read as one ask without them.
+        text = r.get("text", "") + (f'\nthe words: "{r["quote"]}"'
+                                    if r.get("quote") else "")
         rows.append({"ref": f"propose:{r['id']}", "kind": "propose",
-                     "id": r["id"], "text": r.get("text", ""),
+                     "id": r["id"], "text": text,
                      "sources": list(r.get("sources", [])),
                      "circle": r.get("circle", "")})
     return rows

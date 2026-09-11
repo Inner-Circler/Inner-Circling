@@ -65,6 +65,7 @@ ROOT = HERE.parent
 sys.path.insert(0, str(HERE))
 import part_roster as R                                             # noqa: E402
 from circle_close_verify import MAX_MEMBERS                            # noqa: E402
+from REGISTER_CLASS import register_list_footer, register_record_show, register_row_nth_read  # noqa: E402
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -175,16 +176,8 @@ def group_list() -> str:
     out = [f"\n  {len(rs)} group(s)"]
     for i, (name, roles) in enumerate(rs, 1):
         out.append(f"  {i:>3}  {name}  ({len(roles)}: {', '.join(roles)})")
+    out.append("\n" + register_list_footer(len(rs), "/group-list"))
     return "\n".join(out)
-
-
-def _nth(n_text: str) -> "tuple[str, list[str]] | None":
-    try:
-        n = int(n_text.strip())
-    except ValueError:
-        return None
-    rs = group_rows_read()
-    return rs[n - 1] if 1 <= n <= len(rs) else None
 
 
 def _parts_base(name: str) -> pathlib.Path:
@@ -279,14 +272,19 @@ def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[
 
 
 def group_view(n_text: str) -> tuple[bool, str]:
-    """The named group's full role list, by listing number, flagging any
-    role that no longer resolves to a real part directory."""
-    hit = _nth(n_text)
+    """The group's DESCRIPTOR, whole, by listing number — every key its group.toml carries,
+    through REGISTER_CLASS.register_record_show() (B133) — then its roles checked against the
+    group's own parts/, flagging any that no longer resolves to a real part directory.
+    `/group-list <n>` answers with this view at any dev state (R534); `/group-view <n>` is the
+    second door to it."""
+    docs = group_read()
+    hit = register_row_nth_read(docs, n_text)
     if hit is None:
         return False, f"no group #{n_text.strip() or '?'} — /group-list shows them"
-    name, roles = hit
+    name, roles = hit["name"], list(hit.get("roles", []))
     live_dirs = {d for d, _t in R.part_scan(_parts_base(name))[0]}
-    lines = [f"\n  {name} — {len(roles)} role(s)"]
+    lines = ["", register_record_show(docs, int(n_text.strip()), ORDER, verb="/group-list"),
+             "", f"  {name} — {len(roles)} role(s), checked against groups/{name}/parts/"]
     for m in roles:
         flag = "" if m in live_dirs else "  ! not a real part any more"
         lines.append(f"    {m}{flag}")
@@ -306,7 +304,7 @@ def group_update(n_text: str, roles: list[str],
     The replacement list passes every role rule group_add() applies
     (real directories, no duplicates, the roster ceiling), and IMMEDIATELY:
     /abort does not undo it."""
-    hit = _nth(n_text)
+    hit = register_row_nth_read(group_rows_read(), n_text)
     if hit is None:
         return False, f"no group #{n_text.strip() or '?'} — /group-list shows them"
     name, _old = hit
@@ -326,7 +324,7 @@ def group_delete(n_text: str) -> "tuple[bool, str] | None":
     """Look up the group /group-delete <n> names, for the caller to confirm
     against before removing it. Returns None (with nothing emitted here)
     when the number doesn't resolve — the caller reports that."""
-    hit = _nth(n_text)
+    hit = register_row_nth_read(group_rows_read(), n_text)
     if hit is None:
         return None
     name, _roles = hit

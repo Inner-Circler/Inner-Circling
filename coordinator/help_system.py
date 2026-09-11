@@ -649,7 +649,10 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
     With a command pane the old sentence stands and points at it. Standalone
     with dev off the section is ABSENT — naming the verbs would expose what he
     asked stay unexposed, and naming a pane would name one that is not there.
-    Standalone with dev on, `--dev` is what exposes them, so they are listed.
+    Standalone with dev on — `--dev` at the open or `/dev` at the prompt —
+    they are listed, and the hierarchy's own door, `/help object_classes`,
+    beneath them: *"the entire help structure becomes visible"*
+    (R542).
 
     THE LISTING IS THE COMMAND-PANE SURFACE, MEASURED THE SAME WAY IT IS
     THERE: _visible_head() is the one gate (R414), so a circle-class verb
@@ -664,10 +667,12 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
     heads = [h for h in _command_specs() if _visible_head(h)]
     if not heads:
         return []
-    return ["",
-            "  ALSO ANSWERING AT THIS PROMPT (--dev):",
-            ""] + command_help_rows_render(
-                _verb_pairs(heads, _command_specs()))
+    pairs = _verb_pairs(heads, _command_specs())
+    level1 = [_LEVEL1_ROW] if object_classes() else []
+    pad = command_help_pad(pairs + level1)
+    return (["", "  ALSO ANSWERING AT THIS PROMPT (dev):", ""]
+            + command_help_rows_render(pairs, pad)
+            + ([""] + command_help_rows_render(level1, pad) if level1 else []))
 
 
 # The level-1 production, advertised at the foot of level 0 — the operator,
@@ -772,7 +777,11 @@ def _visible_head(head: str) -> bool:
     # THE DEV TIER IS command_surface's QUESTION NOW, not a second copy of it
     # here — 2026-09-09, when a `-list` verb became allowed-always and
     # listed-only-under-dev and three gates had to agree about it.
-    return CS.command_is_listed(head, CS.dev_mode)
+    # SURFACE_COMMAND — this function IS "the whole gate for the COMMAND PANE's
+    # listings", as its own first line says. The room's listing is
+    # circle_pane_help() below and does not come through here. R527/B134.
+    return CS.command_is_listed(head, CS.dev_mode,
+                                surface=CS.SURFACE_COMMAND)
 
 
 def _class_tree_text(cls: str) -> str:
@@ -811,20 +820,29 @@ def _class_tree_text(cls: str) -> str:
         # operator, 2026-08-25 (R350): the circle pane's
         # [proposed: ...] help points here, so this page must answer with
         # the list, each verb with its arguments (the COMMANDS spec).
-        # PROPOSABLE_COMMANDS, not the raw subset — the deferred verb is
+        # PROPOSABLE_COMMANDS, not the raw subset — a deferred verb is
         # refused at classification, and listing it as proposable would
         # repeat the 6-vs-5 defect this page's pointer replaced.
         # THROUGH command_proposable_read() SINCE B122 (2026-09-07): the current
         # group's descriptor narrows what the classifier admits, and a page that
         # counted the constant would advertise verbs this group's own refusal
         # rejects — the same disagreement one group over.
+        # A VERB WHOSE BRACKET OFFERS ITS OWN STATEMENT is listed in the
+        # bracket's form and marked as the bracket's alone — its typed spec
+        # names a statement number a bracket never carries, and /propose-add
+        # refuses it (R541).
         proposable = sorted(CS.command_proposable_read())
+        own = CS.OWN_STATEMENT_COMMANDS
         blocks.append(("text",
                        ["", "    a /propose-add — or a part's "
                             "[proposed: ...] — may name:"]
                        + ([f"      {specs[h][0] if h in specs else h}"
-                           for h in proposable] or
-                          ["      nothing — this group proposes no command"])))
+                           for h in proposable if h not in own] or
+                          ["      nothing — this group proposes no command"])
+                       + (["    only a [proposed: ...] bracket, offering the "
+                           "statement it rides in:"]
+                          + [f"      {own[h]}" for h in proposable if h in own]
+                          if any(h in own for h in proposable) else [])))
     for child in _children_of(cls, classes):
         kids = [h for h in specs
                 if _class_of_head(h, classes) in _subtree(child, classes)

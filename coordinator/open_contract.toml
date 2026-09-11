@@ -1,0 +1,59 @@
+# open_contract.toml — WHAT AN OPEN LEAVES BEHIND, as postconditions a reader can check.
+#
+# R535, 2026-09-10: the open step's verifier REPORTS and never refuses — the
+# operator's words, *"1 - report only."* So a rule here that is wrong costs one misleading line in
+# a file on this machine, and nothing else: no circle is stopped and no exit code moves.
+#
+# circle_open_verify.circle_open_postcondition_verify() is the one evaluator. Its report names
+# any id listed here that it does not evaluate, and any it evaluates that is not listed here, so
+# this file cannot drift from the code in either direction without the report saying so.
+#
+# THE LIST WAS PROPOSED, NOT RULED. The ruling settled whether the check may refuse; WHICH
+# checks it makes is this file, and a `says` below is the place to change one.
+
+[report]
+required = ["open_time", "checked_at", "live", "group", "transcript", "capture", "parts",
+            "verifier", "result", "failed", "contract", "note", "postconditions"]
+
+[report.values]
+result = ["pass", "fail"]
+
+[row]
+required = ["id", "result", "detail"]
+
+[row.values]
+result = ["pass", "fail", "not_applicable"]
+
+# ---------------------------------------------------------------------------
+# THE POSTCONDITIONS. `live_only` ones are not_applicable for a dry run, by design: a dry run
+# records no working set and captures no prompt.
+# ---------------------------------------------------------------------------
+
+[[postcondition]]
+id        = "transcript_names_its_open_time"
+live_only = false
+says = """The transcript exists where this circle's open time says it should, parses as a
+coordinator transcript, and its header line names that same open time. A circle whose transcript
+is missing, unreadable, or headed with another circle's time was not opened as the record
+says."""
+
+[[postcondition]]
+id        = "working_set_recorded"
+live_only = true
+says = """circles/working_sets.toml holds exactly one entry for this open time — the record of
+what the room was shown. None means a later reader cannot ask what the circle saw; two means an
+open time was minted twice."""
+
+[[postcondition]]
+id        = "capture_is_whole"
+live_only = true
+says = """The prompt capture for this circle exists and prompt_capture's own check finds nothing
+wrong with it: every Block file and every request file re-hashes to its manifest entry, no shared
+block carries one part's marker, and every request's block references resolve. The capture is
+the only record of the program each part actually ran."""
+
+[[postcondition]]
+id        = "capture_covers_every_part"
+live_only = true
+says = """The capture's manifest names exactly the parts this circle opened with — none missing
+and none extra. A part with no Block 3 in the capture ran a program nobody kept."""

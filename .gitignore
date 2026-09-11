@@ -79,7 +79,7 @@ work/logs/delta_[0-9]*.json
 #
 # `work/logs/*` and NOT `work/logs/`, deliberately, exactly as `work/sandbox/*`
 # above: git cannot re-include anything beneath an EXCLUDED DIRECTORY, so the
-# directory form would silently defeat all four negations.
+# directory form would silently defeat every negation below.
 #
 # THE NEGATIONS ARE LOAD-BEARING IN BOTH DIRECTIONS, and this is the one place
 # in the file where that is true of a machine path rather than a human one:
@@ -91,6 +91,14 @@ work/logs/delta_[0-9]*.json
 #                  catches only ImportError. It is also the record
 #                  circle_state.py, circle_delta.py and
 #                  circle_close_verify.py --reconcile all read.
+#   open_*.json    the open report, circle_open_verify.py's, and the same case
+#                  exactly: circle_commit_paths() stages it in a live circle's
+#                  own commit whenever it exists (R537), so
+#                  ignoring it would refuse every live close the same way.
+#                  circle_audit.py reads it. A dry run's report stays under
+#                  work/sandbox/logs/, which the sandbox commit does not file.
+#                  The pre-commit hook's .gitignore case asks git whether both
+#                  reports are still committable.
 #   */ .md .txt    the hand-written build logs, the lab testing transcripts and
 #                  the bnf_conformance baseline — 28 tracked files that
 #                  gitrepo.system_git_ignored_untrack() would `git rm --cached`
@@ -104,6 +112,7 @@ work/logs/delta_[0-9]*.json
 # --git-setup would re-append the line on every run.
 work/logs/*
 !work/logs/close_*.json
+!work/logs/open_*.json
 !work/logs/*/
 !work/logs/*.md
 !work/logs/*.txt

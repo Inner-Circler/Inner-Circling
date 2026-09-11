@@ -47,6 +47,7 @@ import seam                                                    # noqa: E402
 import part_roster as R                                             # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import annotations as MK                                       # noqa: E402  the remember split
+import remember_manager as RM                                  # noqa: E402  where that remember lands
 import LLM_response_disassembler as RD                         # noqa: E402  every read of a reply
 import llm_client as LC                                        # noqa: E402  call, build_client
 import prompt_build as PB                                      # noqa: E402  prompt_messages_render
@@ -275,6 +276,25 @@ def _dest_for(part: str, ot: str, guard) -> pathlib.Path:
     return STM.short_term_path_new(record_dir(base, "parts"), part, ot)
 
 
+def _shown(path: pathlib.Path) -> str:
+    """A path as the close's command lines print it: RELATIVE TO THE TREE, not
+    absolute. The leading drive-and-checkout prefix is identical on every row and
+    every circle, so it is width spent on nothing while pushing the part of the
+    name that differs off the line. Every other register writer in this project
+    already prints relative_to(ROOT).
+
+    AND THE PREFIX IS NOT WRITTEN HERE EITHER, which the gate had to teach me:
+    quoting a real one as an example put a machine path in a file that SHIPS, and
+    packaging/sanitize.py refused the commit at HIGH severity. The rule it enforces
+    does not care that the path is in a comment explaining its own removal.
+    A sandbox path can sit outside ROOT, so the relative form is attempted and the
+    absolute kept when it does not apply."""
+    try:
+        return path.relative_to(ROOT).as_posix()
+    except ValueError:
+        return str(path)
+
+
 def _short_term_call(part: str, sysblocks, transcript, dry: bool):
     """Runs on a WORKER THREAD (B77's own discipline, R420): the Messages
     API call only, own client per worker (R170's rule — costs nothing,
@@ -413,7 +433,8 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
                 # one thing said twice only because both opened with the part's
                 # name and a past-tense verb, which is what the operator saw.
                 # Each names what it wrote instead.
-                seam.emit("command", f"  {part:<12} remember    -> remember.toml")
+                seam.emit("command", f"  {part:<12} remember    -> "
+                                     f"{_shown(RM.remember_locate(part, guard))}")
             # THE RECORD IS TOML SINCE R434 (B96, 2026-09-04) — four named keys,
             # the reply's prose verbatim, through the one writer. THE FORMAT
             # CHECK IS ON THE FILE, NOT THE REPLY: after the write the record is
@@ -438,25 +459,7 @@ def short_term_collect(client, parts, sysblocks, transcript, ot, guard, dry) -> 
                                      f"read back whole: {', '.join(empty)}")
                 continue
             written.append(part)
-            # RELATIVE TO THE TREE, not absolute. `dest` is a full path whose
-            # leading drive-and-checkout prefix is identical on every row and
-            # every circle, so it is width spent on nothing while pushing the
-            # part of the name that differs off the line. Every other register
-            # writer in this project already prints relative_to(ROOT); this one
-            # did not.
-            #
-            # AND THE PREFIX IS NOT WRITTEN HERE EITHER, which the gate had to
-            # teach me: quoting a real one as an example put a machine path in
-            # a file that SHIPS, and packaging/sanitize.py refused the commit
-            # at HIGH severity. The rule it enforces does not care that the
-            # path is in a comment explaining its own removal.
-            # A sandbox path can sit outside ROOT, so the relative form is
-            # attempted and the absolute kept when it does not apply.
-            try:
-                shown = dest.relative_to(ROOT).as_posix()
-            except ValueError:
-                shown = str(dest)
-            seam.emit("command", f"  {part:<12} short_term  -> {shown}")
+            seam.emit("command", f"  {part:<12} short_term  -> {_shown(dest)}")
     if failed:
         seam.fail(f"short_term NOT WRITTEN for: {', '.join(failed)} — these parts spoke "
              f"but have no record; the transcript safety net will backfill them "

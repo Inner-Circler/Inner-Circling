@@ -38,7 +38,8 @@ The register was a Markdown file until R256 converted it. The conversion turned 
 /observation-add <text>              circle_observation_manual_render() + save — Self's own
                                      entry, no circle required
 /observation-list [<n>] [--all]      circle_observation_list()/circle_observation_show() — retired hidden
-                                     by default, --all shows everything
+                                     by default, --all shows everything; <n> is every field the
+                                     record carries (REGISTER_CLASS.register_record_show(), B133)
 /observation-continue <id> <text>    circle_observation_continue_render() + save — a NEW
                                      record chained onto <id>; <id>'s own
                                      record is never touched

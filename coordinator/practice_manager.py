@@ -437,7 +437,19 @@ def practice_list(better_options: bool = False) -> str:
         one = " ".join(e["title"].split())
         out.append(f"  {i:>2}. [{e['id']}] {e['addressee']:<10} "
                    f"{one[:56]}{'...' if len(one) > 56 else ''}")
+    out.append("\n" + SS.register_list_footer(len(ps), _list_verb(better_options)))
     return "\n".join(out)
+
+
+def _list_verb(better_options: bool) -> str:
+    return "/better-option-list" if better_options else "/practice-list"
+
+
+def practice_record_show(n: int, better_options: bool = False) -> str:
+    """`/practice-list <n>` or `/better-option-list <n>`: that row WHOLE, numbered as its own
+    listing numbers it — every field, through REGISTER_CLASS.register_record_show() (B133)."""
+    return SS.register_record_show(_rows(better_options), n, ORDER, body="title",
+                                   verb=_list_verb(better_options))
 
 
 def practice_delete(n: int) -> tuple[bool, str]:

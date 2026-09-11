@@ -249,6 +249,36 @@ def _norm_text(s: str) -> str:
     return " ".join(s.split()).lower()
 
 
+def _is_offer(rec: dict) -> bool:
+    """A `[proposed: /issue-evidence-add nNNNN "why"]` — the one propose whose
+    argument is the statement it rides in (command_surface.OWN_STATEMENT_COMMANDS)."""
+    return (rec.get("cmd_shape", {}).get("parsed", {}).get("verb")
+            == "issue-evidence-add")
+
+
+def _own_quote(transcript: list[dict], i: int, span: tuple[int, int]) -> str:
+    """The words statement `i` offers through the bracket at `span`
+    (R541): the statement with that bracket taken out.
+
+    THE QUOTE MUST STAY VERBATIM, because the issue gate finds it in the
+    transcript file byte for byte. Cutting a bracket out of the middle leaves
+    two pieces that are not one run of the file, so the longer piece is taken —
+    the text before the bracket when the bracket closes the statement, which is
+    where the rulebook teaches it.
+
+    A PART MAY REPEAT ANOTHER'S WORDS (the same ruling: *"It can agree with or
+    repeat"*), and the gate credits a quote to whoever said it FIRST. A piece
+    already spoken earlier in the circle would be filed under the earlier
+    speaker and refused, so the whole statement is offered instead, bracket
+    included — the one run of the file only this part said."""
+    text = transcript[i]["text"]
+    before, after = text[:span[0]].strip(), text[span[1]:].strip()
+    quote = before if len(before) >= len(after) else after
+    if quote and any(quote in e.get("text", "") for e in transcript[:i]):
+        return text.strip()
+    return quote
+
+
 def proposal_collect(transcript: list[dict]) -> list[dict]:
     """Every well-formed `[proposed: ...]` annotation across the whole
     transcript, re-derived fresh on every call, same discipline every
@@ -265,7 +295,12 @@ def proposal_collect(transcript: list[dict]) -> list[dict]:
     CAPPED AT ONE PER PART, 2026-08-19 (R255) — see proposal_capped_keys()
     for why it is the LAST rather than the first, and why Self is exempt.
     A part's superseded earlier proposes are dropped here, before
-    coalescing, so a part cannot occupy two staged rows."""
+    coalescing, so a part cannot occupy two staged rows.
+
+    AN EVIDENCE OFFER CARRIES ITS STATEMENT (R541):
+    `part` (the speaker's directory id — what the gate attributes against),
+    `quote` (_own_quote) and `statement` (the whole text, which a typed
+    /issue-evidence-add of the same statement quotes)."""
     out = []
     kept = proposal_capped_keys(transcript)
     for i, e in enumerate(transcript):
@@ -276,8 +311,11 @@ def proposal_collect(transcript: list[dict]) -> list[dict]:
                 continue
             if e["speaker"] != "self" and (i, rec["span"]) not in kept:
                 continue          # R255 — superseded by this part's later one
-            out.append({"index": i, "display": e["display"],
-                        "text": e["text"], **rec})
+            p = {"index": i, "display": e["display"], "text": e["text"], **rec}
+            if _is_offer(rec):
+                p.update(part=e["speaker"], statement=e["text"],
+                         quote=_own_quote(transcript, i, rec["span"]))
+            out.append(p)
     return out
 
 
@@ -312,6 +350,14 @@ def proposal_coalesce(transcript: list[dict],
     now, so every row this mints is a command and the branch says so
     directly rather than deriving a constant.
 
+    AN EVIDENCE OFFER IS NEVER GROUPED (R541). Its
+    text names an issue and a why, not the words — two parts offering their
+    own statements for one issue with one why would read as one ask by text.
+    Each is its own row, carrying `part` and `quote`, and a statement Self
+    already attached to that issue this circle (`issue_cmds`) is skipped. An
+    offer whose statement is nothing but the bracket comes back with
+    `refused` set, for proposal_stage() to report rather than stage.
+
     Neither branch checks for an equivalent row already pending from an
     EARLIER circle — the same known limitation every coalesce_*_
     proposals() function here has always carried, not solved here
@@ -323,6 +369,7 @@ def proposal_coalesce(transcript: list[dict],
 
     edge_groups: dict[tuple, dict[str, dict]] = {}
     other_groups: dict[str, dict[str, str]] = {}
+    offers: list[dict] = []
 
     for p in proposal_collect(transcript):
         shape = p.get("cmd_shape")
@@ -334,6 +381,19 @@ def proposal_coalesce(transcript: list[dict],
                 continue
             g = edge_groups.setdefault(key, {})
             g[p["display"]] = {"edge": edge, "text": p["text"]}
+            continue
+        if _is_offer(p):
+            node = shape["parsed"]["node"]
+            if any(c.get("verb") == "issue-evidence-add" and c.get("node") == node
+                   and c.get("quote") in (p["quote"], p["statement"])
+                   for c in issue_cmds):
+                continue          # Self attached this statement by hand, this circle
+            row = {"kind": "command", "text": p["text"].strip(),
+                   "sources": [p["display"]], "part": p["part"], "quote": p["quote"]}
+            if not p["quote"]:
+                row["refused"] = ("its statement is only the bracket — there are "
+                                  "no words to attach")
+            offers.append(row)
             continue
         arg = p["text"].strip()
         if not arg:
@@ -360,7 +420,7 @@ def proposal_coalesce(transcript: list[dict],
     for by_speaker in other_groups.values():
         rows.append({"kind": "command", "text": next(iter(by_speaker.values())),
                      "sources": list(by_speaker)})
-    return rows
+    return rows + offers
 
 
 def proposal_stage(ot: str, transcript: list[dict],
@@ -369,15 +429,25 @@ def proposal_stage(ot: str, transcript: list[dict],
     sandbox circle's proposal is a draft, not something to stage into
     the live self/proposals.toml). RULED 2026-08-16 (R202): replaces
     stage_request_proposals() and stage_relation_proposals() at once.
-    Returns the new ids for the caller to report."""
+    Returns the new ids for the caller to report. A `refused` row is
+    reported to the command pane and not staged."""
     if not live:
         return []
     rows = proposal_coalesce(transcript, issue_cmds)
     if not rows:
         return []
     import proposal_manager as PR
-    return [PR.proposal_row_stage(row["kind"], row["text"], row["sources"], ot)
-            for row in rows]
+    staged = []
+    for row in rows:
+        if row.get("refused"):
+            seam.emit("command", f"  {', '.join(row['sources'])}: "
+                                 f"[proposed: {row['text']}] not staged — "
+                                 f"{row['refused']}")
+            continue
+        staged.append(PR.proposal_row_stage(
+            row["kind"], row["text"], row["sources"], ot,
+            part=row.get("part", ""), quote=row.get("quote", "")))
+    return staged
 
 
 def _normalize_edge(edge: tuple[str, str, str]) -> tuple[str, str, str]:

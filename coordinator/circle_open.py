@@ -75,7 +75,8 @@ import token_count as TC
 class CircleOpen:
     """What an opened circle IS — the one labelled package the open step hands back.
 
-    Ruled by the operator 2026-09-09 ("a - one labelled package") over the alternative of thirteen
+    Ruled by the operator 2026-09-09, R535 ("a - one labelled package"), over
+    the alternative of thirteen
     positional values, on the ground that a field added or removed later is then a one-place
     change and no caller can transpose two of them.
 
@@ -110,6 +111,27 @@ def circle_transcript_path_read(live: bool, ot: str) -> pathlib.Path:
     delegates here.
     """
     return (record_dir(ROOT, "circles") if live else SANDBOX_CIRCLES) / f"circle_{ot}.md"
+
+
+def circle_open_verifier_run(ot: str, live: bool, path: pathlib.Path,
+                             capture: "pathlib.Path | None", parts: list, say) -> None:
+    """Write this open's report — circle_open_verify.py, REPORT ONLY (R535).
+
+    Returns nothing the open acts on. Raises nothing into it: the import is inside the guard,
+    so a verifier that will not even load costs a line in dev mode and no more. Never calls
+    fail(), because circle.py turns a fail() into a non-zero exit, and a verifier that moves
+    the exit code has refused by another route. `say` is the caller's bound emit, never a
+    from-import: ui/circling.py rebinds seam.emit onto its own queues."""
+    try:
+        import circle_open_verify as COV
+        report, where = COV.circle_open_verify(ot, live, path, capture, parts)
+        if CS.dev_mode:
+            failed = report.get("failed") or []
+            say("command", f"\n  open report: {where} — {report.get('result')}"
+                           + (f" ({', '.join(failed)})" if failed else ""))
+    except Exception as e:                                   # noqa: BLE001
+        if CS.dev_mode:
+            say("command", f"\n  open report NOT written — {type(e).__name__}: {e}")
 
 
 
@@ -760,6 +782,11 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # statement, not a circle that reached the Self prompt.
     if _opened:
         _opened["armed"] = False
+
+    # THE OPEN REPORT — after the opening round, so its request files are complete and the
+    # capture check covers them; before the return, so nothing downstream waits on it. A bare
+    # statement: REPORT ONLY, and the open acts on nothing it finds.
+    circle_open_verifier_run(ot, args.live, path, pdir, parts, emit)
 
     return CircleOpen(ot=ot, path=path, guard=guard, transcript=transcript,
                       sysblocks=sysblocks, since_self=since_self, state=state,

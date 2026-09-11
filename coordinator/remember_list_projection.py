@@ -18,7 +18,8 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from remember_manager import remember_read, SELF                                              # noqa: E402
+from remember_manager import remember_read, SELF, ORDER                                       # noqa: E402
+from REGISTER_CLASS import register_list_footer, register_record_show                         # noqa: E402
 
 # ---------------------------------------------------------------- RECALL
 # The SELF half of docs/BNF.md's REMEMBER_PROJECTION, designed 2026-08-14
@@ -65,30 +66,21 @@ def remember_list(part: str = SELF) -> str:
         one = " ".join(words[:PREVIEW_WORDS])
         out.append(f"  {i:>3}. {r.get('date', '')[:10]}  {one}"
                    f"{'…' if len(words) > PREVIEW_WORDS else ''}")
-    out.append(f"\n  {len(es)} on file · `recall <n>` for one whole")
+    out.append("\n" + register_list_footer(len(es), "/remember-list"))
     return "\n".join(out)
 
 
 def remember_record_show(n: int, part: str = SELF) -> str:
-    """`recall <n>`: the whole record, every field it carries.
+    """`/remember-list <n>` (also `recall <n>`): the whole record, every field it carries.
 
     EVERY FIELD, not a chosen few. A live record has date/circle/text; a
     DREAMING-authored one also has id and chain; a migrated one has class.
     Naming them here would mean this function needs editing every time the
     register grows a field, and the failure would be silent — a field
     present on disk and invisible to the one command that exists to show
-    it. So it renders what is there."""
+    it. So it renders what is there, through REGISTER_CLASS.register_record_show():
+    the register's ORDER, then every key ORDER does not name (B133)."""
     es = _ordered(part)
     if not es:
         return "  nothing remembered yet"
-    if not 1 <= n <= len(es):
-        return f"  {n} is not in 1..{len(es)} — `recall` lists them"
-    r = es[n - 1]
-    out = [f"  {n}. of {len(es)}"]
-    for k in ("id", "date", "circle", "chain", "class", "salience"):
-        if r.get(k):
-            out.append(f"     {k:<7} {r[k]}")
-    out.append("")
-    for line in (r.get("text", "") or "(empty)").splitlines() or [""]:
-        out.append(f"     {line}")
-    return "\n".join(out)
+    return register_record_show(es, n, ORDER, body="text", verb="/remember-list")

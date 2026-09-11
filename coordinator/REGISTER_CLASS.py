@@ -260,6 +260,91 @@ def register_row_update(doc: dict, table: str, *, locate, fields: dict,
     return True, "", row
 
 
+def register_row_nth_read(rows: list, n_text) -> "object | None":
+    """The row a numbered listing printed as `n_text`, or None — not a number, or outside
+    1..len(rows). The READING twin of register_row_update(..., locate=<int>) (B133): the same
+    positional number, resolved against the rows that listing showed."""
+    s = str(n_text).strip()
+    if not s.isdecimal():
+        return None
+    n = int(s)
+    return rows[n - 1] if 1 <= n <= len(rows) else None
+
+
+def register_list_footer(count: int, verb: str) -> str:
+    """The line a numbered listing ends on: its count, and how to open one row whole (B133). A
+    `<n>` the listing does not name is a feature nobody finds, so every listing that takes one
+    ends here."""
+    return f"  {count} on file · `{verb} <n>` for one whole"
+
+
+def _empty(v) -> bool:
+    return v is None or (isinstance(v, (str, list, tuple, dict)) and not v)
+
+
+def _scalar(v) -> str:
+    return str(v).lower() if isinstance(v, bool) else str(v)
+
+
+def _field_lines(d: dict, keys: list, indent: str) -> list[str]:
+    """`keys` of `d` as labelled lines; a table, or an array of tables, nests one level in."""
+    width = max((len(str(k)) for k in keys), default=0)
+    out: list[str] = []
+    for k in keys:
+        v = d[k]
+        if isinstance(v, dict):
+            out.append(f"{indent}{k}")
+            out += _field_lines(v, [x for x in v if not _empty(v[x])], indent + "   ")
+        elif isinstance(v, (list, tuple)) and any(isinstance(x, dict) for x in v):
+            out.append(f"{indent}{k}")
+            for i, x in enumerate(v, 1):
+                if isinstance(x, dict):
+                    out.append(f"{indent}   {i}.")
+                    out += _field_lines(x, [y for y in x if not _empty(x[y])], indent + "      ")
+                else:
+                    out.append(f"{indent}   {i}. {_scalar(x)}")
+        elif isinstance(v, (list, tuple)):
+            out.append(f"{indent}{k:<{width}}  {', '.join(_scalar(x) for x in v)}")
+        elif isinstance(v, str) and "\n" in v.strip("\n"):
+            out.append(f"{indent}{k}")
+            out += [f"{indent}   {line}" for line in v.strip("\n").splitlines()]
+        else:
+            out.append(f"{indent}{k:<{width}}  {_scalar(v)}")
+    return out
+
+
+def register_record_show(rows: list, n: int, order: tuple = (), *, body: str = "",
+                         verb: str = "") -> str:
+    """ONE ROW OF A NUMBERED LISTING, WHOLE — what a `-list` verb answers when it is given one of
+    its own numbers (B133; docs/BNF.md LIST_RECORD). The operator, 2026-09-09: *"remember-list accepts a
+    line number and displays the full record for the selected line; I want all -list functions
+    to support that same capability."*
+
+        rows   the rows the listing numbered, in its order — `n` indexes these, not the table
+        n      the 1-based number the listing printed
+        order  the register's own ORDER: the keys it names come first, in that order
+        body   the free-text key, where the register has one — last, unlabelled, after a blank
+               line; "" when every key is a labelled field
+        verb   the listing's own verb, named when `n` is out of range
+
+    EVERY FIELD, BY CONSTRUCTION. The walk is `order`, then every key the row carries that
+    `order` does not name, in the row's own order — never a hand-named tuple, so a register that
+    grows a field before its show learns the name still shows the field. Absent and empty values
+    are skipped; `false` and 0 are values, and shown."""
+    if not rows:
+        return "  nothing on file"
+    if not 1 <= n <= len(rows):
+        return f"  {n} is not in 1..{len(rows)}" + (f" — `{verb}` lists them" if verb else "")
+    r = rows[n - 1]
+    keys = [k for k in order if k in r] + [k for k in r if k not in order]
+    out = [f"  {n}. of {len(rows)}"]
+    out += _field_lines(r, [k for k in keys if k != body and not _empty(r[k])], "     ")
+    if body:
+        out.append("")
+        out += [f"     {line}" for line in (str(r.get(body) or "") or "(empty)").splitlines()]
+    return "\n".join(out)
+
+
 def register_write(p: pathlib.Path, doc: dict, table: str,
          order: tuple[str, ...]) -> None:
     # Validate, THEN atomically commit (docs/HELP_DESIGN.md §6, built

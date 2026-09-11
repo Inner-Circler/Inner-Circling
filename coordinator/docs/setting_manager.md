@@ -15,9 +15,13 @@ python coordinator/system_setting_verify.py     the gate: SPEC and the call site
     SET.setting_pending_fold() · SET.setting_corrections_flush(emit) · SET.setting_visible_read(dev)
     SET.setting_tuning_read(provider) · SET.setting_tuning_write(provider, key, raw)
     SET.setting_model_rate_rows_read() · SET.setting_show(key, v) · SET.setting_source_default_read(owner, key)
+    SET.setting_accepts_read(spec) · SET.setting_record_read(spec, dev=...)
+    SET.setting_tuning_record_read(provider, knob, dev=...)
 
-The verbs — `/settings-list`, `/settings-update`, `/settings-clear` (`SETTINGS_VERBS`) — are
-`commands.py`'s; they are command-pane only and deliberately not proposable.
+The verbs — `/settings-list [<n>]`, `/settings-update`, `/settings-clear` (`SETTINGS_VERBS`) — are
+`commands.py`'s; they are command-pane only and deliberately not proposable. `/settings-list <n>`
+shows one setting whole: its default, what it accepts, and why the default is what it is
+(R543, answering D122 (c)).
 
 ## DESCRIPTION
 THE REGISTER OVERRIDES A CONSTANT; IT DOES NOT REPLACE ONE. Every value still has its constant, in
@@ -29,8 +33,12 @@ why a fresh clone, a worktree and a shipped bundle all work with no file at all.
 THE SCHEMA IS CODE; THE VALUES ARE DATA. `SPEC` declares which settings exist — the key, the question
 it asks, its type (`NUMERIC_STRING`, `STRING`, `BOOL`, `FLOAT`), its ceiling, who may see it
 (`audience`: "user" or "dev"), when a change takes effect (`applies`: "immediate" or "next_circle"),
-the constant that owns its default (`owner`, `file::NAME`), a unit, and how it is kept valid (`gate`:
-BOUNDED, ONE_OF or CHECK_AT_USE). `self/settings.toml` holds only what a person chose, in two tables:
+the constant that owns its default (`owner`, `file::NAME`), a unit, how it is kept valid (`gate`:
+BOUNDED, ONE_OF or CHECK_AT_USE), and `why` — one sentence saying why the default is what it is,
+written from the owner's own reasoning paragraph, or saying that paragraph records none. A `why`
+never states the default: the owner's literal is the one copy of the number, and
+`system_setting_verify.py` refuses a sentence that repeats it. `self/settings.toml` holds only what a
+person chose, in two tables:
 `[active]` (in force now) and `[pending]` (waiting for the next circle to open, folded in by
 `setting_pending_fold()` at the checkpoint `circle.py` runs before a circle's prompts are warmed).
 Anything that shapes a prompt block, the model or a budget is `next_circle`. Per-provider tuning
@@ -94,6 +102,20 @@ None.
     else if (NUMERIC_STRING) then { a positive whole number not over data_max; else refuse }
     else if (FLOAT) then { a non-negative number not over data_max; else refuse }
     else { STRING: at most data_max characters; `provider` must be in PROVIDERS_SUPPORTED }
+
+### `setting_accepts_read(spec)`
+    { setting_coerce()'s rule for spec, in words, branch for branch beside it: "yes or no";
+      "a whole number from 1 to <data_max>"; "a number from 0 to <data_max>"; `provider`'s
+      "one of: ..."; a CHECK_AT_USE string's length and its check at the first real call;
+      else "up to <data_max> characters" }
+
+### `setting_record_read(spec, *, dev)` / `setting_tuning_record_read(provider, knob, *, dev)`
+    { what `/settings-list <n>` shows: every slot of the declaration, plus `now` (the value in
+      use, "(unchanged)" when nothing was chosen), `default`, `waiting` when a change is
+      pending, and `accepts`; walked by RECORD_ORDER (a knob by TUNING_RECORD_ORDER) and then
+      the rest. With dev off the DEV_FIELDS — owner, data_type, data_max, audience, gate — are
+      left out: dev adds fields, it never takes one away. A knob carries no `why`; its
+      provider declares none }
 
 ### `setting_model_rate_rows_read()`
     { `[[model]]` rows as llm_client's rate table wants them: {(id, speed): (in, cache_write_1h,

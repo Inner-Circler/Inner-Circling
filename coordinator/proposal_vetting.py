@@ -96,10 +96,60 @@ def _practice_approve(row: dict, PM) -> tuple[bool, str]:
 
 
 def _propose_describe(row: dict) -> tuple[str, list[str]]:
+    """An evidence offer shows the words it would attach, whole — its `text`
+    names only the issue and the why, and Self reads the words before
+    approving (R541)."""
     sources = ", ".join(row.get("sources", [])) or "unknown source"
     header = (f"[{row['id']}] propose ({row.get('kind', '?')}) — "
              f"{sources} · {row.get('circle', '?')}")
-    return header, _wrap58(row.get("text", "")[:300])
+    detail = _wrap58(row.get("text", "")[:300])
+    if row.get("quote"):
+        detail += _wrap58(f'the words: "{row["quote"]}"')
+    return header, detail
+
+
+def _offer_fill(cmd: dict, row: dict) -> str:
+    """An evidence offer's statement onto its command — `part` and `quote`
+    from the row, `source` its circle — or why it cannot be. The row carries
+    them because its `text` names no statement (R541);
+    a row without them stays pending rather than raising inside the precheck."""
+    if cmd.get("verb") != "issue-evidence-add":
+        return ""
+    if not (row.get("part") and row.get("quote") and cmd.get("circle")):
+        return "this offer carries no statement to attach"
+    cmd.update(part=row["part"], quote=row["quote"], source=cmd["circle"])
+    return ""
+
+
+def _proposed_on_file(cmd: dict, graph: dict) -> dict | None:
+    """The edge an issue-relationship-add names, when it sits on its source
+    node as PROPOSED — R530 — else None. The same match issue_precheck()'s
+    duplicate test makes: this node, this type, this target."""
+    if cmd.get("verb") != "issue-relationship-add":
+        return None
+    node = graph.get(cmd.get("node", "")) or {}
+    return next((e for e in node.get("edges", [])
+                 if e.get("type") == cmd.get("type")
+                 and e.get("target") == cmd.get("target")
+                 and e.get("status") == "proposed"), None)
+
+
+def _promote_command(cmd: dict, edge: dict) -> dict:
+    """The approved add, recast as the one move R530 rules: that proposed
+    edge to `attested`, through issue_commands' own writer. It carries the
+    add's comment and line, so the basis and quote are the ones a fresh
+    approved add writes; `why` keeps what the promotion replaces — who was
+    asked, and on what basis — in the node's description_history."""
+    ask = edge.get("ask")
+    asked = (", ".join(ask) if isinstance(ask, list) else str(ask or "")) or "nobody named"
+    since = f" on {edge['dated']}" if edge.get("dated") else ""
+    was = " ".join(str(edge.get("basis", "")).split())
+    return {"verb": "issue-relationship-update", "node": cmd["node"],
+            "type": cmd["type"], "target": cmd["target"], "value": "attested",
+            "comment": cmd.get("comment", ""), "line": cmd.get("line", ""),
+            "circle": cmd["circle"],
+            "why": (f"Promoted from proposed: Self approved the add (R530). It "
+                    f"had been proposed{since}, asked of {asked}; its basis: {was}")}
 
 
 def _propose_approve(row: dict) -> tuple[bool, str]:
@@ -143,13 +193,25 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
         # directory — the isolation test_proposal_manager' fixtures (placeholder
         # circle values, everything mocked) exist to keep.
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
-        why = IC.issue_precheck(cmd, issue_graph_now_read())
+        if why := _offer_fill(cmd, row):
+            return False, f"not applied — {why} (stays pending)"
+        graph = issue_graph_now_read()
+        # R530: a relation already on file as PROPOSED is the one the room
+        # asked about, and approving the add confirms it. Decided HERE, not in
+        # issue_precheck(): that precheck is shared with the typed cmd> path,
+        # where Self typing the same add is an act the ruling did not address.
+        on_file = _proposed_on_file(cmd, graph)
+        if on_file is not None:
+            cmd = _promote_command(cmd, on_file)
+        why = IC.issue_precheck(cmd, graph)
         if why:
             return False, f"not applied — {why} (stays pending)"
         ok, msg = IC.issue_command_apply([cmd])
         if not ok:
             return False, f"not applied — {msg} (stays pending)"
         PR.proposal_approve(row["id"])
+        if on_file is not None:
+            msg = f"on file as proposed — promoted to attested; {msg}"
         return True, msg
     # AN `issue_status` BRANCH STOOD HERE UNTIL 2026-08-21. It ran
     # cmd_issue_property() and approved the row only when the command
@@ -287,8 +349,17 @@ def _propose_validate(row: dict) -> str:
     if shape["shape"] in ("issue-relationship-add", "issue_command"):
         import proposal_manager as PR
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
-        why = IC.issue_precheck(cmd, issue_graph_now_read())
-        return (f"would fail — {why}" if why
+        if why := _offer_fill(cmd, row):
+            return f"would fail — {why}"
+        graph = issue_graph_now_read()
+        on_file = _proposed_on_file(cmd, graph)
+        if on_file is not None:
+            cmd = _promote_command(cmd, on_file)
+        why = IC.issue_precheck(cmd, graph)
+        if why:
+            return f"would fail — {why}"
+        return ("would promote the relation on file as proposed to attested"
+                if on_file is not None
                 else f"would apply cleanly ({cmd['verb']})")
     return f"would apply cleanly ({shape['shape']})"
 

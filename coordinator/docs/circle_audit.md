@@ -28,7 +28,7 @@ install and wrong for any other (audit-register.md #26).
 
 ## DESCRIPTION
 
-This script audits the per-circle records that `/close` and `coordinator/inter_circle.py` produce (its design history, under its old name, is `docs/NIGHTLY_DESIGN.md`). Nine phases are named in the module docstring: 0 preflight, 1 survey, 2 reconcile, 3 backfill, 6 validate, 7 commit, 8 verify, 9 record. Phases 4 (dream) and 5 (synthesise) are deliberately elsewhere — they are `coordinator/inter_circle.py`, run synchronously as `/close`'s second phase; this module is the independent check on that engine's records and stays independent of it. Without `--commit`, this script writes only under `work/circle_audit/` (its lock, snapshots and run log) and `work/nightly/` (the transaction module's staging root, shared with inter_circle.py and not renamed with this file); with `--backfill --commit` specifically, it writes short-term files and nothing else, a scope enforced by three independent layers — the staging directory (nothing reaches the live tree except through a commit), the invariant gate (phase 6 validation must pass first), and the transaction module's atomic swap-and-verify machinery.
+This script audits the per-circle records that `/close` and `coordinator/inter_circle.py` produce (its design history, under its old name, is `docs/NIGHTLY_DESIGN.md`). Nine phases are named in the module docstring: 0 preflight, 1 survey, 2 reconcile, 3 backfill, 6 validate, 7 commit, 8 verify, 9 record. Phase 2 ends by reading every circle's open report — `work/logs/open_<OT>.json`, which `circle_open_verify.py` writes and the close files with its circle — and warns on what it finds without ever failing the run (R537). Phases 4 (dream) and 5 (synthesise) are deliberately elsewhere — they are `coordinator/inter_circle.py`, run synchronously as `/close`'s second phase; this module is the independent check on that engine's records and stays independent of it. Without `--commit`, this script writes only under `work/circle_audit/` (its lock, snapshots and run log) and `work/nightly/` (the transaction module's staging root, shared with inter_circle.py and not renamed with this file); with `--backfill --commit` specifically, it writes short-term files and nothing else, a scope enforced by three independent layers — the staging directory (nothing reaches the live tree except through a commit), the invariant gate (phase 6 validation must pass first), and the transaction module's atomic swap-and-verify machinery.
 
 "Processed" has exactly one definition here, and it is inter_circle.py's: the `dream/<OT>` git tag its phase-2 commit writes. The survey's scope EPOCH is the oldest such tag — circles older than it belong to the retired batch-nightly era and are out of audit scope by ruling (2026-08-19); the old dreaming manifests under `work/manifests/` are dead records this script no longer reads. Previously the only assurance over these records was a model's own self-report inside the retired dreaming skill's instructions ("Confirm all files were written in this run"); this audit exists to be the independent verification of them.
 
@@ -77,7 +77,8 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
                     immediately -- no further phases run in this branch.
                 } else {
                     Run phase 1 (survey unprocessed circles) and phase 2
-                    (reconcile + transcript safety net) unconditionally.
+                    (reconcile + transcript safety net, then every open
+                    report) unconditionally.
 
                     if (`--backfill` was given) then {
                         Build a Transaction. Determine scope: unprocessed
@@ -173,7 +174,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
     Run phase 6 only, against no baseline, with no lock, no git checks, and no reconcile. Default: off.
 
 `--git-setup`
-    Idempotent git bootstrap: init, config, `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree. Default: off.
+    Idempotent git bootstrap: init, config, `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree. It stops with exit 1 while a commit is running — an index lock held, or a hook file open — because a hook rewritten mid-run checks something other than what it began; re-run it when the commit finishes (R537). Default: off.
 
 `--git-name NAME`, `--git-email EMAIL`
     Identity to use with `--git-setup`. No default is set at the argparse level deliberately — the underlying `gitrepo.system_git_identity_resolve()` falls back through `$IFS_GIT_NAME`/`$IFS_GIT_EMAIL` (shell or `.env`), then git's own existing `user.name`/`user.email` config, then unset.
@@ -209,7 +210,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
 
 Python standard library: `argparse`, `atexit`, `datetime`, `json`, `os`, `pathlib`, `re`, `shutil`, `subprocess`, `sys`, plus `from __future__ import annotations`.
 
-Local/sibling modules: `record_model` (as `M`) — the file model: `record_file_verify`, `record_sha`, `record_bytes_read`, `SHORT_TERM_SECTIONS`, `PARTS`, and the `Finding` result type (`level`/`code`/`path`/`message`); `register_gate` (as `RG`, since 2026-09-03) — the gate: `_tree_files`, `record_tree_compare`, `record_tree_verify`, `register_summarise`; `gitrepo` (as `G`) — all git-repository bootstrap and safety operations (`system_git_is_available`, `system_git_run`, `system_git_repo_ensure`, `system_git_remote_refuse`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_is_dirty`, `system_git_paths_commit`, `system_git_identity_resolve`, `ENV_GIT_NAME`, `ENV_GIT_EMAIL`); `TRANSACTION_CLASS` (as `T`) — the staged-write/transaction file/commit machinery: the `Transaction` class (`stage`, `staged`, `changed`, `validate`, `commit`, `verify`, `record_committed`, `run_id`, `staging`) and the module-level `transaction_read`, `transaction_report`, `transaction_finish`, `transaction_rollback`; `part_roster` (as `R`) — `TAGS` and `DIR_BY_TAG` (current-spelling part tag/directory mappings, deliberately not `DIR_BY_TAG_ALL`, since this reader only ever sees circles the audit itself processes, all postdating a 2026-08-07 tag rename); `circle_state` (as `CS`, imported locally inside circle_audit_open_verify() and circle_audit_snapshot()) — `circle_is_in_progress()`, the fails-closed open-circle probe.
+Local/sibling modules: `record_model` (as `M`) — the file model: `record_file_verify`, `record_sha`, `record_bytes_read`, `SHORT_TERM_SECTIONS`, `PARTS`, and the `Finding` result type (`level`/`code`/`path`/`message`); `register_gate` (as `RG`, since 2026-09-03) — the gate: `_tree_files`, `record_tree_compare`, `record_tree_verify`, `register_summarise`; `gitrepo` (as `G`) — all git-repository bootstrap and safety operations (`system_git_is_available`, `system_git_run`, `system_git_repo_ensure`, `system_git_remote_refuse`, `system_git_config_ensure`, `system_git_attributes_ensure`, `system_git_hooks_ensure`, `system_git_ignore_ensure`, `system_git_ignored_untrack`, `system_git_is_dirty`, `system_git_paths_commit`, `system_git_identity_resolve`, `ENV_GIT_NAME`, `ENV_GIT_EMAIL`); `TRANSACTION_CLASS` (as `T`) — the staged-write/transaction file/commit machinery: the `Transaction` class (`stage`, `staged`, `changed`, `validate`, `commit`, `verify`, `record_committed`, `run_id`, `staging`) and the module-level `transaction_read`, `transaction_report`, `transaction_finish`, `transaction_rollback`; `part_roster` (as `R`) — `TAGS` and `DIR_BY_TAG` (current-spelling part tag/directory mappings, deliberately not `DIR_BY_TAG_ALL`, since this reader only ever sees circles the audit itself processes, all postdating a 2026-08-07 tag rename); `circle_state` (as `CS`, imported locally inside circle_audit_open_verify() and circle_audit_snapshot()) — `circle_is_in_progress()`, the fails-closed open-circle probe; `circle_open_verify` (as `COV`, imported locally inside circle_audit_open_report_read()) — `circle_open_contract_read()` and `OPEN_CONTRACT`, the open report's writer and its contract's one reader.
 
 Inside `circle_audit_backfill_run()` only, two further dependencies are imported locally rather than at module load: `prompt_build` (as `C`, for the same identity/prompt assembly a live circle uses — `group_shared_read`, `circle_briefing_build`, `prompt_part_assemble`, `PART_TAGS`; it was `circle` until phase 2 stage 2, and `load_shared`/`shared_block`/`system_blocks` retired into `prompt_part_assemble` 2026-09-02) and `llm_client` (as `LC`, for `stream_client_build` and `stream_call_once` — the transport, which owns the `anthropic` client and the `.env` key resolution since 2026-08-28; this file built its own `Anthropic()` client until then).
 
@@ -239,6 +240,10 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
         -- read wholesale during a snapshot (circle_audit_snapshot()) and during
         invariant checking (record_tree_compare()/record_tree_verify(), called from
         phase 6).
+        `work/logs/open_<OT>.json` -- each circle's open report, read in phase 2
+        by circle_audit_open_report_read() for every circle from the oldest such
+        report on; and `coordinator/open_contract.toml`, the shape each one is
+        read against, through circle_open_verify.circle_open_contract_read().
         `<baseline>/SNAPSHOT.json` -- read by circle_audit_window_describe() when a
         `--baseline` was given, to determine whether inter_circle.py
         processed any circle in the window since the snapshot was taken.
@@ -337,6 +342,10 @@ Idempotent git bootstrap; the docstring states everything it does is routine and
     Run system_git_config_ensure(), system_git_attributes_ensure(), system_git_hooks_ensure(),
     system_git_ignore_ensure(), and system_git_ignored_untrack() in sequence -- each is
     independently idempotent per gitrepo.py's own contracts.
+    if (system_git_hooks_ensure() refused -- a commit is running, and it has said
+        which) then {
+        return 1 there; a re-run finishes the rest.
+    }
 
     Check the working tree's dirty status.
     if (nothing is dirty) then {
@@ -593,6 +602,35 @@ Reconciles each unprocessed circle against `circle_close_verify.py`, then applie
         }
         Print, informationally, which known parts stayed silent this
         circle (correctly having no short_term).
+
+### `circle_audit_open_report_read(run)`
+
+Reads the open report of every circle this group has — `work/logs/open_<OT>.json`, written by `circle_open_verify.py` at the end of each open and filed with its circle by the close (R537). The close report has its reconcile; this is the open's. **Report only**, like the verifier that writes it (R535): every finding is a WARN, and nothing here changes the exit code. It reads every circle, not only the unprocessed ones — a healthy close is dreamed at once, so the survey's list is nearly always empty.
+
+    Print the "phase 2 — open reports" header.
+    List every circles/circle_<OT>.md, and which of them has an open report.
+    if (none has one) then {
+        run.ok: every circle opened before the verifier; nothing to read. Return.
+    }
+    The scope EPOCH is the oldest open report -- derived from the record,
+    never a date written here, as the survey's is.
+    run.ok, counting the circles before it (opened before the verifier).
+    Read coordinator/open_contract.toml; if it is missing, warn that each
+    report is read without its shape check.
+    for each circle from the epoch on:
+        if (it has no open report) then { run.warn -- not written, or not filed. }
+        else if (it does not parse, or is not a JSON object) then { run.warn. }
+        else if (it lacks a field the contract's [report] requires, has a row
+            without the [row] fields, names another open time, or was written
+            for another group) then { run.warn, naming each. }
+        else if (a postcondition failed, the contract disagreed, or the
+            result is "fail") then {
+            run.warn, then print each failed postcondition's id and detail,
+            and each contract disagreement, beneath it.
+        } else {
+            count it clean.
+        }
+    run.ok with the clean count, when there is one.
 
 ### `circle_audit_snapshot(dest)`
 

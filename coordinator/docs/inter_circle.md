@@ -133,7 +133,8 @@ ONE model call per circle, made before the seven parallel dreaming calls: a shor
 ### circle_synthesise(ot, transcript, payloads, ...) — MOVED to circle_synthesis.py, 2026-09-03 (stage 11)
 The one circle-wide call, over the five inputs named above. Returns the material for the circle-level registers; like dreaming, it writes nothing.
 
-### circle_process(ot, live, confirmed, say) (`process_circle()` before the B99 re-homing, 2026-09-03)
+### circle_process(ot, live, confirmed, say, warn=None) (`process_circle()` before the B99 re-homing, 2026-09-03)
+`warn` (default `say`) carries what must reach the person when `say` is silenced — a refused mid_term distillate, which returns 0 and so gets no fail() line from the caller (R532); circle.py's live /close gates `say` on dev and passes a `warn` it never gates.
     if (this circle was already processed) then {
         say so, name the marker, and return 1 — re-running would double-dream it.
     }

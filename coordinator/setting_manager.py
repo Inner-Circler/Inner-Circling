@@ -124,13 +124,21 @@ FALSE_WORDS = ("no", "n", "off", "false", "0")
 class Setting:
     """One declared setting. `owner` is file::NAME, the constant that holds
     the default AND the reasoning — the editor prints it so a person can go
-    read why the number is what it is, and --check asserts it resolves."""
+    read why the number is what it is, and --check asserts it resolves.
+
+    `why` is that reasoning in ONE SENTENCE, the one `/settings-list <n>` prints
+    (R543). Written from the owner's own comment, and
+    where the comment records no reason, the sentence says so rather than
+    supplying one. IT NEVER STATES THE DEFAULT: the owner's literal is the one
+    copy of the number, and system_setting_verify.py refuses a sentence that
+    repeats it — "two places asserting the same number, one of them stale"
+    is this project's own lesson (remember_manager.GATE_CHAR_CEILING)."""
 
     __slots__ = ("key", "ask", "data_type", "data_max", "audience",
-                 "applies", "owner", "unit", "gate")
+                 "applies", "owner", "unit", "gate", "why")
 
     def __init__(self, key, ask, data_type, data_max, audience, applies,
-                 owner, unit="", gate="BOUNDED"):
+                 owner, unit="", gate="BOUNDED", why=""):
         self.key = key
         self.ask = ask
         self.data_type = data_type
@@ -146,6 +154,7 @@ class Setting:
         # range. See settings.check(), which refuses an undeclared or unknown
         # gate rather than assuming.
         self.gate = gate
+        self.why = why
 
 
 def _s(*a, **k) -> Setting:
@@ -170,19 +179,27 @@ SPEC: tuple[Setting, ...] = (
     _s("statements_per_part",
        "How many times may one part speak between your turns",
        "NUMERIC_STRING", 5, "dev", "next_circle",
-       "coordinator/circle_rounds.py::MAX_SINCE_SELF"),
+       "coordinator/circle_rounds.py::MAX_SINCE_SELF",
+       why="The circle's rule since its first design: a part that reaches it waits for Self, "
+           "and Self speaking resets every part's count, so the room keeps returning to Self."),
     _s("statement_max_tokens",
        "The output ceiling for one statement",
        "NUMERIC_STRING", 20000, "dev", "next_circle",
-       "coordinator/circle_rounds.py::MAX_TOKENS", unit="tokens"),
+       "coordinator/circle_rounds.py::MAX_TOKENS", unit="tokens",
+       why="Headroom for the model's thinking, which counts against this ceiling: a statement "
+           "cut off twice is dropped from the circle, and a ceiling left unused costs nothing."),
     _s("short_term_max_tokens",
        "The output ceiling for a part's closing record",
        "NUMERIC_STRING", 20000, "dev", "next_circle",
-       "coordinator/circle_close.py::SHORT_TERM_MAX_TOKENS", unit="tokens"),   # circle.py's until 2026-09-03
+       "coordinator/circle_close.py::SHORT_TERM_MAX_TOKENS", unit="tokens",   # circle.py's until 2026-09-03
+       why="Four sections and a full-length remembered note did not fit in 2,000, and a record "
+           "cut short is retried, so a ceiling too small pays for the record twice."),
     _s("quiet_minutes",
        "Minutes of silence before an unclosed circle reads as finished",
        "NUMERIC_STRING", 1440, "dev", "immediate",
-       "coordinator/circle_state.py::QUIET_MINUTES", unit="minutes"),
+       "coordinator/circle_state.py::QUIET_MINUTES", unit="minutes",
+       why="A part may think for a long time and a Self prompt waits on a person, so a silence "
+           "this long is not a pause, where a shorter one might be."),
     # THE LENGTH RULE'S TWO NUMBERS — ruled 2026-08-28. They reach the parts
     # as prose, in the operator's own sentence, and nothing counts a word:
     # the rule is advisory by design and the ruling says never enforcing it
@@ -191,11 +208,15 @@ SPEC: tuple[Setting, ...] = (
     _s("statement_aim_words",
        "The length a part aims for in one statement",
        "NUMERIC_STRING", 1000, "dev", "next_circle",
-       "coordinator/prompt_build.py::LENGTH_AIM_WORDS", unit="words"),
+       "coordinator/prompt_build.py::LENGTH_AIM_WORDS", unit="words",
+       why="Ruled 2026-08-28 as the aim of the length rule, which reaches the parts as a sentence "
+           "in their rulebook; nothing counts a part's words, and the ruling says that is fine."),
     _s("statement_max_words",
        "The length a part is told never to exceed",
        "NUMERIC_STRING", 2000, "dev", "next_circle",
-       "coordinator/prompt_build.py::LENGTH_MAX_WORDS", unit="words"),
+       "coordinator/prompt_build.py::LENGTH_MAX_WORDS", unit="words",
+       why="Ruled 2026-08-28 as the length rule's ceiling; the retry after a cut statement quotes "
+           "this same number, so the rule the room is told and the retry cannot disagree."),
     # THE BLIND ROUND AND THE PRE-WARM ARE DELIBERATELY ABSENT, AND NOW HAVE NO
     # CONTROL AT ALL. The reason recorded here was that each already had one a
     # person could reach, --no-blind and --no-prewarm; the operator retired both
@@ -209,27 +230,40 @@ SPEC: tuple[Setting, ...] = (
     _s("remember_word_cap",
        "How long a part's own remembered note may be",
        "NUMERIC_STRING", 5000, "dev", "next_circle",
-       "coordinator/remember_manager.py::AUTHORED_WORD_CAP", unit="words"),
+       "coordinator/remember_manager.py::AUTHORED_WORD_CAP", unit="words",
+       why="Ruled 2026-08-19 as the length of a part's own remembered note; a longer one is cut, "
+           "never refused."),
     _s("remember_budget",
        "How much of a part's remembered notes reach it each circle",
        "NUMERIC_STRING", 200000, "dev", "next_circle",
-       "coordinator/remember_manager.py::BUDGET", unit="characters"),
+       "coordinator/remember_manager.py::BUDGET", unit="characters",
+       why="Claude's arithmetic, not a ruling: room for about four full-length remembered notes "
+           "or about forty short ones, so one long note does not push every older one out of "
+           "view."),
     _s("salience_lift",
        "How far a charged memory may jump ahead of a newer one",
        "NUMERIC_STRING", 20, "dev", "next_circle",
-       "coordinator/remember_manager.py::SALIENCE_K", unit="places"),
+       "coordinator/remember_manager.py::SALIENCE_K", unit="places",
+       why="Claude's pick, not a ruling: enough for a charged memory to pass a couple of merely "
+           "newer ones without a short, deeply chained thread jumping the whole window."),
     _s("remember_gate_ceiling",
        "The largest single remembered note the gate will admit",
        "NUMERIC_STRING", 200000, "dev", "next_circle",
-       "coordinator/remember_manager.py::GATE_CHAR_CEILING", unit="characters"),
+       "coordinator/remember_manager.py::GATE_CHAR_CEILING", unit="characters",
+       why="Claude's arithmetic, not a ruling: about twice what a full-length remembered note "
+           "measures, so a real one always passes and a runaway still fails."),
     _s("mid_term_budget",
        "How long each part's distilled identity may be",
        "NUMERIC_STRING", 50000, "dev", "next_circle",
-       "coordinator/part_mid_term_manager.py::BUDGET", unit="characters"),
+       "coordinator/part_mid_term_manager.py::BUDGET", unit="characters",
+       why="Sized from the two distillates first made by hand, which ran 3,094 and 4,113 "
+           "characters."),
     _s("topics_budget",
        "How much of the open topics is carried into the briefing",
        "NUMERIC_STRING", 50000, "dev", "next_circle",
-       "coordinator/topic_manager.py::BUDGET", unit="characters"),
+       "coordinator/topic_manager.py::BUDGET", unit="characters",
+       why="About the three newest topics, as the topic design ratified on 2026-08-15 has it: "
+           "a topic is a thread carried from a past circle, and the newest come first."),
     # ---- what the processing after a circle is allowed to spend
     # EVERY ONE OF THESE WAS SIZED FOR THINKING, not for length (R354, and
     # the 2026-08-21 raise): this model bills its thinking against the same
@@ -240,7 +274,9 @@ SPEC: tuple[Setting, ...] = (
     _s("dream_max_tokens",
        "The ceiling for one part's dreaming pass after a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/part_dreaming.py::DREAM_MAX_TOKENS", unit="tokens"),   # inter_circle's until 2026-09-03
+       "coordinator/part_dreaming.py::DREAM_MAX_TOKENS", unit="tokens",   # inter_circle's until 2026-09-03
+       why="Raised from 4,000 on 2026-08-21 after two parts ran out mid-dream: the model's "
+           "thinking counts against this ceiling, and the visible dream is only part of it."),
     # B91, 2026-09-04: the grounding heuristic's threshold. A SUSPECT note in
     # the close report, never a refusal — raising it makes the note fire more
     # often, lowering it less. 1 is the floor BOUNDED accepts (a positive
@@ -250,21 +286,30 @@ SPEC: tuple[Setting, ...] = (
     _s("dream_grounding_min_overlap",
        "How many content words a part's dreamed memory must share with its own lines",
        "NUMERIC_STRING", 50, "dev", "next_circle",
-       "coordinator/part_dreaming.py::DREAM_GROUNDING_MIN_OVERLAP", unit="words"),
+       "coordinator/part_dreaming.py::DREAM_GROUNDING_MIN_OVERLAP", unit="words",
+       why="Claude's reading, not a ruling: the smallest count a memory paraphrasing one of the "
+           "part's own sentences clears and a memory of another part's moment usually does not; "
+           "it only adds a note to the close report."),
     # R451, D86 a, 2026-09-04: the shared room capsule's own cap and ceiling — one
     # model call per circle, never per part.
     _s("dream_capsule_cap",
        "How many characters the shared room capsule may run to",
        "NUMERIC_STRING", 200000, "dev", "next_circle",
-       "coordinator/part_dreaming.py::CAPSULE_CAP", unit="characters"),
+       "coordinator/part_dreaming.py::CAPSULE_CAP", unit="characters",
+       why="One short paragraph, the same words for every part, as each part's whole view of "
+           "the room beyond its own lines; no measurement is recorded beside this number."),
     _s("dream_capsule_max_tokens",
        "The ceiling for the one shared room-capsule call per circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/part_dreaming.py::CAPSULE_MAX_TOKENS", unit="tokens"),
+       "coordinator/part_dreaming.py::CAPSULE_MAX_TOKENS", unit="tokens",
+       why="No reason is recorded beside this number; the paragraph it pays for is short, but "
+           "the model's thinking counts against the same ceiling."),
     _s("synth_max_tokens",
        "The ceiling for the one circle-wide synthesis after a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/circle_synthesis.py::SYNTH_MAX_TOKENS", unit="tokens"),   # inter_circle's until 2026-09-03
+       "coordinator/circle_synthesis.py::SYNTH_MAX_TOKENS", unit="tokens",   # inter_circle's until 2026-09-03
+       why="Raised from 8,000: one call writes all five sections, the circle's history the "
+           "longest of them, and the model's thinking counts against the same ceiling."),
     # B94, 2026-09-04: CIRCLE_JOURNAL's own sizing, not circle_history's — this register
     # reaches Block 1, paid on every part's prompt every circle, and a folded distillate
     # should run smaller than a raw HISTORY entry by construction. Neither number is
@@ -272,15 +317,21 @@ SPEC: tuple[Setting, ...] = (
     _s("circle_journal_cap",
        "How many characters one CIRCLE_JOURNAL entry may run to, refused over",
        "NUMERIC_STRING", 4000, "dev", "next_circle",
-       "coordinator/circle_journal_manager.py::CAP", unit="characters"),
+       "coordinator/circle_journal_manager.py::CAP", unit="characters",
+       why="Tighter than the circle history's own cap, because every character of it is paid on "
+           "every part's prompt, every circle; reasoned, not measured, until a trial informs it."),
     _s("circle_journal_target",
        "What the fold is asked for, under the cap so an ordinary overshoot survives",
        "NUMERIC_STRING", 3600, "dev", "next_circle",
-       "coordinator/circle_journal_manager.py::TARGET", unit="characters"),
+       "coordinator/circle_journal_manager.py::TARGET", unit="characters",
+       why="Reasoned, not measured: far enough under the cap that a fold which runs a little "
+           "long is still kept."),
     _s("derive_max_tokens",
        "The ceiling for distilling one part's identity",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/part_mid_term_manager.py::DERIVE_MAX_TOKENS", unit="tokens"),
+       "coordinator/part_mid_term_manager.py::DERIVE_MAX_TOKENS", unit="tokens",
+       why="Raised twice on measured closes: real distillates run 11,000 to 15,600 characters, "
+           "and the model's thinking counts against the same ceiling."),
     # ONE CEILING FOR THE SHORT AUXILIARY CALLS — the coalesce grouping pass
     # and the diagnostic one inter_circle makes when a run fails. Each held
     # its own bare 4000, sized by the same reasoning (thinking bills against
@@ -288,7 +339,9 @@ SPEC: tuple[Setting, ...] = (
     _s("auxiliary_max_tokens",
        "The ceiling for the short calls made around a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/llm_client.py::AUX_MAX_TOKENS", unit="tokens"),
+       "coordinator/llm_client.py::AUX_MAX_TOKENS", unit="tokens",
+       why="Their visible output is a few lines, but the model's thinking counts against the "
+           "same ceiling, so even a short call needs headroom."),
     # ---- what the record keeps
     # THE ARCHIVE, NOT THE ROOM. The operator, 2026-08-29: *"keep them if a
     # new boolean setting record_thinking = true"* — ruling on the finding
@@ -309,7 +362,9 @@ SPEC: tuple[Setting, ...] = (
     _s("record_thinking",
        "Whether the saved record keeps what the model thought",
        "BOOL", 1, "dev", "next_circle",
-       "coordinator/llm_client.py::RECORD_THINKING", gate="ONE_OF"),
+       "coordinator/llm_client.py::RECORD_THINKING", gate="ONE_OF",
+       why="Ruled 2026-08-29: keep the model's reasoning in the saved record, never in the room; "
+           "it costs disk, not money, since those tokens are already bought."),
     # THE DELTA REPORT AT CLOSE — the operator, 2026-08-30: "print auto at
     # close if a new setting, circle_stats = true; include the setting in the
     # UI settings tab. Report also as a file, only when circle_stats = true."
@@ -321,7 +376,9 @@ SPEC: tuple[Setting, ...] = (
     _s("circle_stats",
        "Whether a circle's close prints and files its delta report",
        "BOOL", 1, "user", "immediate",
-       "coordinator/circle_delta.py::CIRCLE_STATS", gate="ONE_OF"),
+       "coordinator/circle_delta.py::CIRCLE_STATS", gate="ONE_OF",
+       why="Asked for on 2026-08-30: the delta report printed at every close and filed beside "
+           "it."),
     # THE REDACTED VIEW — the operator, 2026-08-31: "a raw/redacted switch
     # can be on the settings page ... applied: only in the top pane, never
     # in any lower tab." `user`, same reasoning as circle_stats: this is
@@ -340,7 +397,9 @@ SPEC: tuple[Setting, ...] = (
        "Whether the CIRCLE pane shows names/emails/phones as opaque "
        "tokens instead of the real text",
        "BOOL", 1, "user", "immediate",
-       "coordinator/stream_redaction.py::REDACT_VIEW_DEFAULT", gate="ONE_OF"),
+       "coordinator/stream_redaction.py::REDACT_VIEW_DEFAULT", gate="ONE_OF",
+       why="No reason is recorded for leaving it off; turned on, it hides names, emails and phone "
+           "numbers in the circle pane only, and never a part's name."),
     # THE CLOSE'S OWN CLOCK — ruled 2026-08-30: "After circle /close, I want
     # to aim for no more than 5 minutes, and progress must be being reported
     # in the command pane at least every 10 seconds, even if its just a
@@ -350,11 +409,23 @@ SPEC: tuple[Setting, ...] = (
     _s("close_aim_seconds",
        "The wall-clock aim for everything after /close",
        "NUMERIC_STRING", 3600, "dev", "next_circle",
-       "coordinator/circle.py::CLOSE_AIM_SECONDS", unit="seconds"),
+       "coordinator/circle.py::CLOSE_AIM_SECONDS", unit="seconds",
+       why="Ruled 2026-08-30 as the aim for everything after /close; reported, never enforced, "
+           "so a slow close never fails one that otherwise held."),
+    # THE ALARM IS A SECOND NUMBER, NOT THE AIM MOVED — R540. A close
+    # past the aim but within this is reported plainly; past this, loudly.
+    _s("close_alarm_seconds",
+       "How long a close may run before its last line sounds the alarm",
+       "NUMERIC_STRING", 3600, "dev", "next_circle",
+       "coordinator/circle.py::CLOSE_ALARM_SECONDS", unit="seconds",
+       why="A close that runs between the aim and this was ruled not unusual on 2026-09-10, so "
+           "only one that runs past it sounds the alarm."),
     _s("close_heartbeat_seconds",
        "How often the close reports progress while it works",
        "NUMERIC_STRING", 120, "dev", "next_circle",
-       "coordinator/inter_circle.py::CLOSE_HEARTBEAT_SECONDS", unit="seconds"),
+       "coordinator/inter_circle.py::CLOSE_HEARTBEAT_SECONDS", unit="seconds",
+       why="The close's own progress beat, from the 2026-08-30 ruling; the beat is armed at "
+           "circle open now, so only a hand re-run of the processing after a circle reads it."),
     # DEV, LIKE ITS SIBLING ABOVE, AND THAT IS A QUESTION RATHER THAN A
     # CONCLUSION. The rule it serves is about a person watching a blank screen,
     # which argues for `user` — but the dev=false set is exactly three today
@@ -365,7 +436,9 @@ SPEC: tuple[Setting, ...] = (
     _s("progress_seconds",
        "How long a silence may last before the app says it is still working",
        "NUMERIC_STRING", 120, "dev", "next_circle",
-       "coordinator/circle.py::PROGRESS_SECONDS", unit="seconds"),
+       "coordinator/circle.py::PROGRESS_SECONDS", unit="seconds",
+       why="Ruled 2026-09-09: any silence longer than this while the program works gets a "
+           "progress mark, so a person is never left watching a still screen."),
     # ---- what the service charges
     # THESE PRICE A REPORT; THEY DO NOT SPEND ANYTHING. Immediate, because
     # nothing in flight depends on them and a person correcting a price
@@ -387,16 +460,24 @@ SPEC: tuple[Setting, ...] = (
     # passing off as known.
     _s("rate_in", "Fallback price per million input tokens, for a model with "
        "no rates on file", "FLOAT", 1000, "dev", "immediate",
-       "coordinator/llm_client.py::RATE_IN", unit="USD/Mtok"),
+       "coordinator/llm_client.py::RATE_IN", unit="USD/Mtok",
+       why="The published input price of the parts' default model, re-verified 2026-09-01; it "
+           "prices only a model with no rates of its own on file."),
     _s("rate_cache_write_1h", "Fallback price per million tokens written to "
        "the cache", "FLOAT", 1000, "dev", "immediate",
-       "coordinator/llm_client.py::RATE_CACHE_WRITE_1H", unit="USD/Mtok"),
+       "coordinator/llm_client.py::RATE_CACHE_WRITE_1H", unit="USD/Mtok",
+       why="Twice the input price, the ratio every published price list has used; it prices "
+           "only a model with no rates of its own on file."),
     _s("rate_cache_read", "Fallback price per million tokens read from the "
        "cache", "FLOAT", 1000, "dev", "immediate",
-       "coordinator/llm_client.py::RATE_CACHE_READ", unit="USD/Mtok"),
+       "coordinator/llm_client.py::RATE_CACHE_READ", unit="USD/Mtok",
+       why="A tenth of the input price, the ratio every published price list has used; it "
+           "prices only a model with no rates of its own on file."),
     _s("rate_out", "Fallback price per million output tokens, for a model "
        "with no rates on file", "FLOAT", 1000, "dev", "immediate",
-       "coordinator/llm_client.py::RATE_OUT", unit="USD/Mtok"),
+       "coordinator/llm_client.py::RATE_OUT", unit="USD/Mtok",
+       why="The published output price of the parts' default model, re-verified 2026-09-01; it "
+           "prices only a model with no rates of its own on file."),
     # ---- the service the parts run on
     # THE ONE THE ORDINARY USER SEES, the operator, 2026-08-28: "the model, and
     # nothing else at first". `provider` is declared and single-valued in v1
@@ -415,13 +496,17 @@ SPEC: tuple[Setting, ...] = (
     _s("model",
        "Which model the parts speak on",
        "STRING", 60, "user", "next_circle",
-       "coordinator/llm_client.py::MODEL", gate="CHECK_AT_USE"),
+       "coordinator/llm_client.py::MODEL", gate="CHECK_AT_USE",
+       why="The parts run on the Sonnet tier to keep cost down; any model this account can "
+           "reach is accepted, and the first real call checks it."),
     # ONE_OF: unlike the model, the valid set IS knowable here and is closed
     # by ruling (R383) — PROVIDERS_SUPPORTED is it.
     _s("provider",
        "Which service the model runs on",
        "STRING", 40, "dev", "next_circle",
-       "coordinator/llm_client.py::PROVIDER", gate="ONE_OF"),
+       "coordinator/llm_client.py::PROVIDER", gate="ONE_OF",
+       why="The only service this build can talk to; adding a second is a decision about what "
+           "leaves this machine, not only about code."),
 )
 
 BY_KEY: dict[str, Setting] = {s.key: s for s in SPEC}
@@ -603,6 +688,24 @@ def setting_coerce(spec: Setting, raw):
         return False, None, (f"is not a service this build can talk to "
                              f"({', '.join(PROVIDERS_SUPPORTED)})")
     return True, t, ""
+
+
+def setting_accepts_read(spec: Setting) -> str:
+    """What setting_coerce() above will take for `spec`, in words — the line `/settings-list <n>`
+    prints as `accepts` (R543). Kept BESIDE the check it describes, branch
+    for branch, so a rule changed in one is in front of whoever changes the other."""
+    if spec.data_type == "BOOL":
+        return "yes or no"
+    if spec.data_type == "NUMERIC_STRING":
+        return f"a whole number from 1 to {spec.data_max:,}"
+    if spec.data_type == "FLOAT":
+        return f"a number from 0 to {spec.data_max:,}"
+    if spec.key == "provider":
+        return "one of: " + ", ".join(PROVIDERS_SUPPORTED)
+    if spec.gate == "CHECK_AT_USE":
+        return (f"up to {spec.data_max} characters; whether this account can reach it is "
+                f"checked at the first real call")
+    return f"up to {spec.data_max} characters"
 
 
 def setting_visible_read(dev: bool) -> tuple[Setting, ...]:
@@ -898,6 +1001,47 @@ def setting_show(key: str, v) -> str:
     return "yes" if parsed else "no"
 
 
+# ------------------------------------------------------------- one, whole
+# `/settings-list <n>` — R543, answering D122 (c). The listing's row, and
+# what the listing leaves out: the value the program uses when nothing is changed, what the
+# setting accepts, and why the default is what it is. `now`, `default`, `waiting` and `accepts`
+# are worked out here; every other key is a slot of the declaration itself, so a slot added
+# later is shown without this learning its name — REGISTER_CLASS.register_record_show() walks
+# these orders first, then whatever else the record carries.
+RECORD_ORDER = ("key", "ask", "now", "default", "unit", "waiting", "accepts", "applies", "why")
+TUNING_RECORD_ORDER = ("key", "ask", "now", "default", "values", "applies")
+# DEV ADDS FIELDS, IT NEVER TAKES ONE AWAY — R266's rule, one level down, as this module's
+# docstring puts it. These are the mechanism slots: a person running without --dev has no use
+# for them, and their names would announce the surface dev=false keeps back.
+DEV_FIELDS = ("owner", "data_type", "data_max", "audience", "gate")
+
+
+def _unchanged(chosen: bool) -> str:
+    return "" if chosen else "   (unchanged)"
+
+
+def setting_record_read(spec: Setting, *, dev: bool) -> dict:
+    """`spec` whole, as `/settings-list <n>` shows it. The unit is its own line, beside the two
+    values it measures, rather than said three times."""
+    lit, _msg = setting_source_default_read(spec.owner, spec.key)
+    act, pend = setting_active_read(), setting_pending_read()
+    rec = {k: getattr(spec, k) for k in Setting.__slots__ if dev or k not in DEV_FIELDS}
+    rec["now"] = (setting_show(spec.key, act[spec.key] if spec.key in act else lit)
+                  + _unchanged(spec.key in act))
+    rec["default"] = setting_show(spec.key, lit)
+    if spec.key in pend:
+        rec["waiting"] = f"{setting_show(spec.key, pend[spec.key])} — from the next circle"
+    rec["accepts"] = setting_accepts_read(spec)
+    return rec
+
+
+def setting_tuning_record_read(provider, knob, *, dev: bool) -> dict:
+    """One of `provider`'s own knobs whole. No `why`: a knob is that service's declaration, and
+    what it accepts is its business (commands._settings_tuning_row_emit says the same)."""
+    chosen = setting_tuning_read(provider)
+    rec = {k: getattr(knob, k) for k in type(knob).__slots__ if dev or k not in DEV_FIELDS}
+    rec["now"] = str(chosen.get(knob.key, knob.default)) + _unchanged(knob.key in chosen)
+    return rec
 
 
 # The verbs this register owns. Named here, not in command_surface, so the

@@ -92,11 +92,9 @@ TARGET = 7200
 
 _PREAMBLE = (
     "CIRCLE_HISTORY -- one durable entry per circle, written by SYNTHESIS "
-    "at /close's second phase (R165 promoted narrative_arc.md's bullet to "
-    "this record; R186 feeds each run the prior entry; R191/R192 ask for "
-    "7200 and cap at 8000). chain names the predecessor. Accumulate, never "
-    "prune; the "
-    "register gate enforces append-only.")
+    "at /close's second phase (each run is fed the prior entry; it asks for "
+    "7200 characters and caps at 8000). chain names the predecessor. "
+    "Accumulate, never prune; the register gate enforces append-only.")
 
 
 # The shared LEDGER/JOURNAL core (B105, 2026-09-05 — JOURNAL_CLASS.py). LAMBDA, NOT A VALUE:

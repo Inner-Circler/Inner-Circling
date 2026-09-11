@@ -5,6 +5,6 @@ history = []
 [doc]
 preamble = """
 
-CIRCLE_HISTORY -- one durable entry per circle, written by SYNTHESIS at /close's second phase (R165 promoted narrative_arc.md's bullet to this record; R186 feeds each run the prior entry; R191/R192 ask for 7200 and cap at 8000). chain names the predecessor. Accumulate, never prune; the register gate enforces append-only.
+CIRCLE_HISTORY -- one durable entry per circle, written by SYNTHESIS at /close's second phase (each run is fed the prior entry; it asks for 7200 characters and caps at 8000). chain names the predecessor. Accumulate, never prune; the register gate enforces append-only.
 
 SHIPPED EMPTY. `next_id = 1` and an empty table are exactly what coordinator/circle_history_manager.py builds when the file is absent, so a fresh install reads the same document either way. This text is the register's own description and stays true as it fills; it is not a claim about how many circles have been held."""

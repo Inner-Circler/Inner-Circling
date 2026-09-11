@@ -370,6 +370,9 @@ DEFAULT_PARTS = _default_parts_read()
 # its just a spinner." The aim is REPORTED, never enforced: a slow close must
 # not fail a close that otherwise held (the spend report's own rule).
 CLOSE_AIM_SECONDS = SET.setting_value_read("close_aim_seconds", 300)
+# PAST THE AIM IS REPORTED; PAST THIS IS THE ALARM (R540). Between the
+# two is the range the operator called "not unusual".
+CLOSE_ALARM_SECONDS = SET.setting_value_read("close_alarm_seconds", 600)
 # close_heartbeat_seconds is READ BY inter_circle.py NOW, not here — the close
 # shares the one beat armed at open, and a constant nothing reads is a claim
 # that something still does.
@@ -620,17 +623,34 @@ def main() -> int:
                          "deliberately different roster, not a reduced one, "
                          "so the REDUCED LIVE ROSTER warning below does not "
                          "fire for it. Mutually exclusive with --parts.")
-    ap.add_argument("--recall-arm", default="off",
+    ap.add_argument("--recall-arm", default="delivered",
                     choices=["off", "delivered", "withheld"],
                     # docs/MEMORY_DESIGN.md and R460 (2026-09-06, which closed the
                     # recall trial) are named in this comment rather than in help=,
                     # which a recipient reads and who has neither. 2026-09-09.
+                    #
+                    # DEFAULT ON SINCE R526 (2026-09-10): the
+                    # operator, asked whether search should be on for every circle,
+                    # off for every circle, or left disagreeing between the doors —
+                    # "on everywhere". It was `off` here while the Ticker defaulted
+                    # it ON citing R460's own words, so what a part could actually
+                    # do depended on which window opened the circle, while BLOCK 1
+                    # taught the bracket unconditionally to all seven.
+                    # IT COSTS NO MODEL CALL — the search reads a local index
+                    # (recall_index.py, embed_store.py); neither module calls the
+                    # API. What it costs is BLOCK 4 bytes when a seed matches, and
+                    # the index build at open, which R470/B121 already moved onto a
+                    # background thread so it overlaps the pre-warm.
+                    # AND IT CANNOT BREAK AN OPEN: a missing fastembed raises
+                    # IndexUnavailable, which recall_index_arm_start() catches and
+                    # reports, and which a query answers privately with the reason.
                     help="tier A recall (remember_expand.py): expand "
                          "topic-matched seeds into each part's BLOCK 4. "
-                         "Default: off. 'withheld' computes and logs the packs "
-                         "without delivering them — the control arm of the "
-                         "recall trial, now closed; kept for a future trial, "
-                         "no UI sends it.")
+                         "Default: on ('delivered'). 'off' answers a part's "
+                         "search privately without running it; 'withheld' "
+                         "computes and logs the packs without delivering them "
+                         "— the control arm of the recall trial, now closed, "
+                         "kept for a future trial, no UI sends it.")
     # --no-prewarm AND --no-blind ARE RETIRED, 2026-09-09 (the operator:
     # *"remove --no-prewarm, remove --no-blind"*). Both were opt-outs nothing in
     # the tree ever passed: --no-prewarm arrived in the first commit with no
@@ -667,8 +687,9 @@ def main() -> int:
     #     --dev=true    on    --dev true   on   (the space form parses too)
     #     --dev=false   declines to turn it on; it cannot turn a set flag off,
     #                   because the branch below is `if args.dev` with no else
-    # It is the standalone terminal's only door since R286 took /dev off the
-    # circle prompt; the command pane has its own unlisted `dev`.
+    # It turns dev on at the open; `/dev` typed at the Self> prompt toggles
+    # it (R542), as the command pane's own unlisted `dev`
+    # does.
     ap.add_argument("--dev", nargs="?", const=True, default=False, type=_dev_bool,
                     help=argparse.SUPPRESS)
     ap.add_argument("--list-resumable", action="store_true",
@@ -696,12 +717,11 @@ def main() -> int:
                          "a transcript, so they need an actual circle open.")
     args = ap.parse_args()
 
-    # --dev: dev mode ON from the open (R286, 2026-08-21).
-    # The Self> loop no longer recognises /dev — "dev should not be parsed in
-    # circle dialog, nor recognised at self's circle prompt; it is cmd> only
-    # and always hidden" — so the standalone terminal, which has no cmd>,
-    # takes its dev state from this flag. The dual pane's command pane has
-    # its own unlisted `dev`, and --dev-cmd forces dev on for its one call.
+    # --dev: dev mode ON from the open (R286, 2026-08-21). The standalone
+    # terminal has no cmd>, so its dev state comes from this flag or from
+    # `/dev` at the Self> prompt (R542). The dual pane's
+    # command pane has its own unlisted `dev`, and --dev-cmd forces dev on
+    # for its one call.
     #
     # SCOPE WIDENED, 2026-09-01 (the operator, this session): dev_mode used
     # to gate only DEV_SUBSET_COMMANDS and the /help browsing surface (docs/BNF.md).
@@ -1204,14 +1224,20 @@ def main() -> int:
                 circle_round_run(client, parts, sysblocks, transcript, since_self,
                           state, guard, path, args.dry_run, live=args.live)
             continue
-        # NO /dev BRANCH, 2026-08-21 (R286): "dev should not
-        # be parsed in circle dialog, nor recognised at self's circle prompt;
-        # it is cmd> only and always hidden." The branch that sat here
-        # toggled dev mode from the room — and from the dual pane's circle
-        # pane, which let `/dev` through because it is no PANE_OF key. The
-        # toggle is the command pane's own unlisted `dev`; the standalone
-        # terminal opens with --dev. A `/dev` typed here now falls through
-        # to UNKNOWN COMMAND like any other slash word, and is never spoken.
+        # /dev TOGGLES DEV HERE — R542, the operator: *"there
+        # is a command /dev, such that when it is entered, it turns dev=true, and
+        # the entire help structure becomes visible"*, then *"The command /dev
+        # must toggle."* Every help path reads CS.dev_mode live, so the next
+        # /help answers at the new tier. Named by no listing (R199; R527, "ALWAYS
+        # hidden"), and never spoken: this branch continues before anything is
+        # recorded. Only the standalone terminal arrives here — both UIs' circle
+        # panes refuse /dev by name (R286, command_surface.verb_class) and each
+        # command pane keeps its own `dev`. EXACT, as that `dev` is: "/dev on"
+        # must not be a toggle in disguise.
+        if cmd == "/dev":
+            CS.dev_mode = not CS.dev_mode
+            emit("command", "  dev: " + ("on" if CS.dev_mode else "off"))
+            continue
         # THE ALLOWED QUESTION IS command_surface's — 2026-09-09. It was
         # `not in USER_SUBSET_COMMANDS` here, which made a `-list` verb's
         # availability depend on which of two tables it happened to sit in;
@@ -1219,7 +1245,7 @@ def main() -> int:
         if (cmd.startswith("/")
                 and not CS.command_is_allowed(
                     CS.command_head_normalise(cmd.split(" ", 1)[0]),
-                    CS.dev_mode)):
+                    CS.dev_mode, surface=CS.SURFACE_SELF)):
             # R266, 2026-08-20: DEV MODE ADDS, IT NEVER TAKES AWAY. This
             # refused EVERY remaining "/" verb with dev off, which made the
             # user's own issue commands, practices, topics and recall
@@ -1241,11 +1267,11 @@ def main() -> int:
             # the two panes.
             emit("command", junk_help(cmd))
             continue
-        # /issue-evidence-list — named /statements until 2026-08-21 (D59).
-        # Exact, like the verbs beside it: the loop owns it because it
-        # reads the live transcript, which no dispatcher has.
-        if cmd == "/issue-evidence-list":
-            statement_show(transcript)
+        # /issue-evidence-list [<n>] — named /statements until 2026-08-21 (D59).
+        # The bare verb, or the verb and one argument (B133): the loop owns it
+        # because it reads the live transcript, which no dispatcher has.
+        if cmd == "/issue-evidence-list" or cmd.startswith("/issue-evidence-list "):
+            statement_show(transcript, cmd[len("/issue-evidence-list"):])
             continue
         # THE SLASH IS REQUIRED HERE, and this line is why — 2026-08-20.
         # `head` was the RAW first token until normalise_head() arrived with
@@ -1328,10 +1354,17 @@ def main() -> int:
         # An unimplemented command is not inert; it becomes content, and it
         # contaminated the one measurement marks exist to protect. See
         # work/instrument/LOG.md E06.
+        #
+        # "Known:" IS WHAT THIS DEV STATE ADVERTISES — R542:
+        # *"An UNKNOWN COMMAND prints the items visible according to the state
+        # of dev."* The predicate /help lists by (R527), so a typo never names a
+        # verb /help would not; /dev is in no table and never appears.
         if cmd.startswith("/"):
             head = CS.command_head_normalise(cmd.split(" ", 1)[0])
+            known = [h for h in KNOWN_CMDS
+                     if CS.command_is_listed(h, CS.dev_mode, surface=CS.SURFACE_SELF)]
             emit("command", f"  UNKNOWN COMMAND {head} — not sent to the room. "
-                  f"Known: {', '.join(KNOWN_CMDS)}")
+                  f"Known: {', '.join(known)}")
             emit("command", f"  (to say this to the parts, retype it without the "
                   f"leading slash)")
             continue
@@ -1569,6 +1602,10 @@ def main() -> int:
         emit("command", METER.report())
         return circle_failures_report()
     if args.live:
+        # NOT GATED ON dev — the one line a person hears between the last short_term and
+        # the spend report when dev is off, because circle_process()'s narration below is.
+        # Filing comes first, so the line names all three rather than "synthesis" alone.
+        emit("command", "\nfiling, then dreaming and synthesis — 5-10 minutes is not unusual")
         with PC.PHASES.span("close.verifier"):
             circle_close_verifier_run(ot)
         # THE SPAN LABEL KEEPS THE PRE-B99 NAME, DELIBERATELY — audit-register.md #22,
@@ -1595,6 +1632,11 @@ def main() -> int:
         # unconditional signal regardless: the fail() calls below, which
         # fire whether or not that narration was ever shown.
         #
+        # A REFUSED DISTILLATE IS NEITHER NARRATION NOR FAILURE. A mid_term
+        # derivation refused as SUSPECT returns 0 — a report, not a failed
+        # close (R532) — so no fail() says it. Its lines travel `warn`,
+        # which is never gated.
+        #
         # A CIRCLE THAT IS NOT FILED IS NOT REFLECTED ON. R506, 2026-09-09,
         # the operator: "Stop, do not reflect on a circle that is not filed.
         # Do support reflection if the circle is later filed." At
@@ -1615,7 +1657,8 @@ def main() -> int:
                  f"    python coordinator\\circle.py --file-circle {ot}")
         elif ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
                                 say=lambda s: emit("command", s) if CS.dev_mode
-                                              else None):
+                                              else None,
+                                warn=lambda s: emit("command", s)):
             fail("phase 2 (dreaming/synthesis) did not complete — the "
                  "circle itself is filed; see work/logs/"
                  f"dream_error_{ot}.json and re-run by hand")
@@ -1640,7 +1683,8 @@ def main() -> int:
             emit("command", f"  circle_delta skipped "
                             f"({type(e).__name__}: {e})")
     PC.PHASES.stop_heartbeat()
-    PC.PHASES.report_close(lambda s: emit("command", s), CLOSE_AIM_SECONDS)
+    PC.PHASES.report_close(lambda s: emit("command", s), CLOSE_AIM_SECONDS,
+                           CLOSE_ALARM_SECONDS)
     emit("circle", f"\nclosed. transcript: {path}")
     return circle_failures_report()
 

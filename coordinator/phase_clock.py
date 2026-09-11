@@ -116,13 +116,18 @@ class PhaseClock:
         return (None if self._close_t0 is None
                 else time.monotonic() - self._close_t0)
 
-    def report_close(self, say, aim_seconds: float) -> None:
-        """One line: the close's own wall time against the ruled aim."""
+    def report_close(self, say, aim_seconds: float, alarm_seconds: float) -> None:
+        """One line: the close's own wall time against the ruled aim. Past the aim
+        but within `alarm_seconds` it is reported plainly; past that, loudly
+        (R540). An alarm set below the aim leaves no plain band, so
+        every close past the aim is loud."""
         t = self.close_seconds()
         if t is None:
             return
         if t <= aim_seconds:
             say(f"\n  close pipeline: {t:.0f}s (aim <= {aim_seconds:.0f}s — met)")
+        elif t <= alarm_seconds:
+            say(f"\n  close pipeline: {t:.0f}s — past the {aim_seconds:.0f}s aim")
         else:
             say(f"\n  !! close pipeline: {t:.0f}s — OVER the {aim_seconds:.0f}s "
                 f"aim. The phases list in the spend report says where it went.")

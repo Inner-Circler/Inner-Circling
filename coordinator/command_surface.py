@@ -67,10 +67,11 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # named the verb, while docs/BNF.md had ruled the name as one
     # hyphenated `<object>-<property>-<method>` token since 2026-08-15
     # (B16). The line now matches the name it was already given.
-    ("/issue-list",
+    ("/issue-list [<n>]",
      "the live graph, numbered — id and label, one row\n"
-     "each. New with the regrammar: there was no way to\n"
-     "ask this from a command at all", "command"),
+     "each; `<n>` shows one issue whole. New with the\n"
+     "regrammar: there was no way to ask this from a\n"
+     "command at all", "command"),
     ("/issue-status nNNNN [= <value>]",
      "that issue's lifecycle status. THE PROPERTY CONSTRUCT\n"   # R261
      "— a bare property READS it, `= <value>` WRITES\n"
@@ -145,14 +146,16 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "the circle — how Self moves, not how the room\n"
      "behaves. One register holds both.\n"              # R133 merged the two files
      "Written immediately — /abort does not undo it", "command"),
-    ("/practice-list",
+    ("/practice-list [<n>]",
      "the circle's practices, numbered — every row NOT\n"
      "addressed to Self (the rows addressed to Self are\n"
-     "/better-option-list's, since 2026-08-21)", "command"),
-    ("/better-option-list",
+     "/better-option-list's, since 2026-08-21); `<n>` shows\n"
+     "one whole", "command"),
+    ("/better-option-list [<n>]",
      "how Self moves — the rows of the same register\n"
-     "addressed to Self, numbered on their own. Runnable\n"
-     "at any dev state; listed only under --dev", "command"),
+     "addressed to Self, numbered on their own; `<n>`\n"
+     "shows one whole. Runnable at any dev state;\n"
+     "listed only under --dev", "command"),
     ("/practice-delete <n>",
      "remove one, by the number /practice-list showed —\n"
      "that list's numbering, not /better-option-list's",
@@ -238,13 +241,14 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "cannot propose one. Bare opens the dialog. It\n"  # R483
      "joins from the NEXT circle. IMMEDIATE — /abort does\n"
      "not undo it", "command"),
-    ("/part-list",
+    ("/part-list [<n>]",
      "the roster, numbered — Tag and directory, one row\n"
-     "each. The number is positional (it shifts when a part\n"
-     "is removed), the same contract /practice-list keeps", "command"),
+     "each; `<n>` shows that part's long_term.md. The\n"
+     "number is positional (it shifts when a part is\n"
+     "removed), the same contract /practice-list keeps", "command"),
     ("/part-view <n>",
      "that part's long_term.md, verbatim, by /part-list's\n"
-     "number", "command"),
+     "number — what /part-list <n> shows", "command"),
     ("/part-delete <n>",
      "remove a part — REFUSED for the group's reserved roles\n"
      "and while a circle may be open; confirmation is typing\n"
@@ -259,12 +263,14 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "circle.py --group <name> opens on it. layer= names the\n"
      "group's own BLOCK 1 layer file; omitted, the IFS\n"   # B115
      "layer. IMMEDIATE — /abort does not undo it", "command"),
-    ("/group-list",
-     "every group, numbered — name and its roles. The number\n"
-     "is positional, same contract as /part-list", "command"),
+    ("/group-list [<n>]",
+     "every group, numbered — name and its roles; `<n>`\n"
+     "shows that group's descriptor. The number is\n"
+     "positional, same contract as /part-list", "command"),
     ("/group-view <n>",
-     "one group's full role list, by /group-list's number,\n"
-     "flagging any role that is no longer a real part", "command"),
+     "one group's descriptor, whole, by /group-list's number,\n"
+     "then its roles, flagging any that is no longer a real\n"
+     "part — what /group-list <n> shows", "command"),
     ("/group-update <n> <r1>,<r2>,... [layer=<path>]",
      "replace one group's roles in place, by /group-list's\n"
      "number; the name stays (rename = delete + add); layer=\n"
@@ -287,11 +293,12 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "same circle; the row takes today's date as `amended`.\n"
      "No prior wording is kept: git is the journal.\n"  # R465
      "Written immediately — /abort does not undo it", "command"),
-    ("/propose-list",
+    ("/propose-list [<n>]",
      "the staged proposals — pending first (what awaits\n"
      "your ruling at the next checkpoint), then settled —\n"
      "and any practice row still staged the old way.\n"
-     "Numbered. No circle needed. 2026-08-21", "command"),
+     "Numbered; `<n>` shows one whole. No circle needed.\n"
+     "2026-08-21", "command"),
     # THE USER'S OWN STAGING DOOR — R350, the operator
     # 2026-08-25: "fill out the list, for now just propose-add (alias
     # bare 'propose' to this) and its arguments." Same register, same
@@ -323,10 +330,10 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # "issue-evidence", that sounds valid."* <object>-<property>-<method>:
     # the circle's statements ARE the candidate evidence, numbered as
     # /issue-evidence-add cites them. A USER verb by his word. No alias.
-    ("/issue-evidence-list",
+    ("/issue-evidence-list [<n>]",
      "this circle's statements, numbered — what\n"
-     "/issue-evidence-add cites by number. Named /statements\n"
-     "until 2026-08-21", "command"),                   # D59
+     "/issue-evidence-add cites by number; `<n>` shows one\n"
+     "whole. Named /statements until 2026-08-21", "command"),   # D59
     # THE SETTINGS EDITOR — 2026-08-28 (R379). COMMAND
     # pane, deliberately: cmd> only means no Self> surface, so a settings
     # change writes no transcript line and there is nothing for a part to
@@ -340,9 +347,10 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # NEITHER ROW ALLUDES TO ANY FURTHER VIEW — 2026-08-29, the operator:
     # the earlier "dev adds the rest" tail was a leak of a surface he keeps
     # deliberately unannounced.
-    ("/settings-list",
+    ("/settings-list [<n>]",
      "what this installation has changed, and what it would\n"
-     "run on otherwise", "command"),
+     "run on otherwise. <n> shows one whole: its default,\n"
+     "what it accepts, and why the default is what it is", "command"),
     ("/settings-update <name> [<value>]",
      "change one setting — give the new value on the line,\n"
      "or answer the question with the current value offered.\n"
@@ -365,9 +373,9 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "Extra quoted forms are matched alongside the canonical one,\n"
      "longest-first. Part names are refused outright — they are\n"
      "never redacted, in circles or consults", "command"),
-    ("/redact-alias-list",
+    ("/redact-alias-list [<n>]",
      "the alias registry, numbered — id, kind, canonical label\n"
-     "and every form, one row each", "command"),
+     "and every form, one row each; `<n>` shows one whole", "command"),
     ('/redact-alias-update <n> "<canonical>" ["<form>" ...]',
      "edit one alias's canonical/forms in place — same id, same\n"
      "kind. Kind is not editable here: delete and re-add to\n"
@@ -420,9 +428,9 @@ PANE_OF: dict[str, str] = {c.split(" ", 1)[0]: p for c, _, p in COMMANDS
 # /dev IS DELIBERATELY NOT A ROW IN COMMANDS. Everything above this line
 # drives /help and the "Known:" hint on a typo — adding /dev there would
 # document it. It is the command pane's own unlisted toggle
-# (ui/circling.py, `dev`), and the standalone terminal opens with --dev
-# (R286, 2026-08-21) — so /help, KNOWN_CMDS and the
-# unknown-command hint never mention it.
+# (ui/circling.py, `dev`); the standalone terminal takes --dev at the open
+# (R286) or /dev at its Self> prompt (R542) — so /help,
+# KNOWN_CMDS and the unknown-command hint never mention it.
 #
 # The four COMMAND-PANE verbs still usable with dev mode off. Not a
 # design about which verbs are "safe" — /help, /abort, /status and
@@ -519,8 +527,13 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 # `statements` RIDES THE USER TABLE BY NECESSITY: issue-evidence-add
 # addresses a statement BY ITS NUMBER and nothing else discovers that
 # number. A user table holding evidence-add without statements holds a verb
-# nobody can use — and evidence-add is DEV now, but the number is also what
-# a person reads the room BY, so statements stays where the reader is.
+# nobody can use — and the number is also what a person reads the room BY,
+# so statements stays where the reader is.
+#
+# /issue-evidence-add JOINED IT 2026-09-10 — R533, the one /issue-* verb
+# besides the list the user table carries: attaching a statement to an issue
+# is how a circle's own words move the graph, and with the verb DEV-only no
+# ordinary circle could do it at all.
 #
 # /remember, /remember-list (/recall accepted), /better-option-list and
 # /propose-list were minted 2026-08-21 from the same dictation (NEXT.md
@@ -532,7 +545,7 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
     "/remember", "/remember-list", "/propose-list", "/propose-add",
     "/observation-add", "/observation-list", "/observation-continue",
     "/observation-retire", "/observation-purge",          # 2026-09-01
-    "/issue-evidence-list",
+    "/issue-evidence-list", "/issue-evidence-add",        # R533, 2026-09-10
     "/part-context-update",                  # "regardless of (dev)", 2026-08-23
     "/part-context-list", "/part-context-clear",     # the same data, same owner
     "/part-add", "/part-list",               # the user's own growth path (stage 5;
@@ -560,7 +573,7 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
 
 DEV_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-status", "/issue-status-update", "/issue-label-update",
-    "/issue-evidence-add", "/issue-relationship-add",
+    "/issue-relationship-add",
     "/issue-relationship-status", "/issue-relationship-list", "/issue-add",
     "/issue-apply", "/practice-delete", "/topic-list", "/topic-close",
     "/better-option-add", "/prompt-show",
@@ -625,46 +638,80 @@ PROPOSE_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-add",
 )
 
-# ALLOWED ALWAYS, LISTED ONLY UNDER DEV — the operator, 2026-09-09: *"allow
-# -list commands regardless of dev state.  Do not reveal them in help unless
-# dev=true."* A THIRD STATE, which the two tables above cannot express between
-# them: USER is allowed-and-listed, DEV is dev-only-and-dev-listed, and this is
-# allowed-and-unlisted.
+# THE TWO SURFACES THE POLICY DISTINGUISHES — R527/B134, 2026-09-10. Availability
+# and advertisement move together everywhere EXCEPT circle.py, where every verb is
+# always runnable and only the LISTING narrows. So the question "may this verb run"
+# cannot be answered without knowing who is asking, and both predicates below take
+# it as a required keyword: a caller that has not thought about which surface it is
+# cannot get an answer by accident.
+SURFACE_SELF = "self"          # circle.py's own Self> prompt — the ADVANCED door
+SURFACE_COMMAND = "command"    # circling.py's command pane, and the Ticker's
+SURFACES = (SURFACE_SELF, SURFACE_COMMAND)
+
+# ALWAYS AVAILABLE AND ALWAYS ADVERTISED, on every surface, at any dev state —
+# R527, the operator: *"a set of commands always available and advertised in
+# circle.py and in the circling.py circle pane: /help, /close, /round, /pass,
+# /abort."* ANNOTATIONS join them there; they are not commands and so are not in
+# this tuple — help_system carries them as their own subject.
 #
-# IT IS THE SAME DISTINCTION HE DREW EARLIER THE SAME DAY about the room's own
-# help — *"I like that they are present but not exposed, adding --dev option
-# should expose them"* — applied to the command pane's listings. R266's "dev
-# adds, it never takes away" is untouched: nothing becomes harder to RUN, and
-# two verbs that were dev-only become runnable by anyone.
-#
-# DERIVED, NEVER HAND-LISTED. A fifteenth `-list` verb added next year joins
-# this set by existing; a hand list would not have it and nothing would say so.
-# The suffix IS the rule he stated, so the suffix is what the code reads.
-LIST_SUBSET_COMMANDS: tuple[str, ...] = tuple(
-    sorted(h for h, _p in PANE_OF.items() if h.endswith("-list")))
+# FOUR OF THE FIVE ARE IN NEITHER TABLE, which is exactly why this constant has to
+# exist. /close, /round, /pass and /abort were reachable only because circle.py
+# intercepts them at :1122, :1142 and :1215 AHEAD of the availability gate — real
+# behaviour resting on dispatch order, advertised by nothing, so a mainstream user
+# had no way to learn /close exists.
+ALWAYS_COMMANDS: tuple[str, ...] = ("/help", "/close", "/round", "/pass", "/abort")
+
+# LIST_SUBSET_COMMANDS WAS HERE AND IS RETIRED — R527, 2026-09-10. It derived, by
+# the `-list` SUFFIX and regardless of table, a third state the policy has no room
+# for: allowed-and-unlisted. Applied that way it hid TWELVE user-table verbs from
+# the command pane and made TWO dev-table verbs runnable there
+# (/issue-relationship-list, /topic-list) — wrong in both directions from one rule.
+# It was an approximation of the surface distinction above, made before the surface
+# distinction existed; D116 was the symptom that led to stating the policy whole.
 
 
-def command_is_allowed(head: str, dev: bool) -> bool:
-    """May this verb RUN at this dev state? The question every dispatch gate
-    asks, in one place so the three of them cannot drift.
+def command_is_allowed(head: str, dev: bool, *, surface: str) -> bool:
+    """May this verb RUN, on THIS surface, at this dev state? The question every
+    dispatch gate asks, in one place so the three of them cannot drift.
 
     THREE GATES ASKED IT SEPARATELY UNTIL 2026-09-09 and one of them would have
     been missed: circle.py's Self> refusal, help_system's listing, and
-    ui/circling.py's cmd> JUNK rule. The third is the one that turns a
-    dev-table verb typed at the command pane into junk, and a ruling applied to
-    the other two alone would have held at Self> and not at cmd>."""
-    return dev or head in USER_SUBSET_COMMANDS or head in LIST_SUBSET_COMMANDS
+    ui/circling.py's cmd> JUNK rule.
+
+    `surface` IS REQUIRED AND KEYWORD-ONLY — R527/B134. Until 2026-09-10 this was
+    f(head, dev), so both doors got one answer and the ruling's exception could not
+    be expressed at all. A default would have let a new call site inherit whichever
+    surface happened to be convenient, silently; this project has paid for that
+    shape often enough that the parameter is made unskippable instead."""
+    if surface not in SURFACES:
+        raise ValueError(f"surface must be one of {SURFACES}, not {surface!r}")
+    if head in ALWAYS_COMMANDS:
+        return True
+    if surface == SURFACE_SELF:
+        # R527's ONE EXCEPTION, in full: *"in circle.py, /commands are all always
+        # available, but those advertised when dev==false matches what are
+        # advertised in the command pane of circling.py."* circle.py is the
+        # ADVANCED door; dev never gates what it will RUN, only what it SAYS.
+        return True
+    return dev or head in USER_SUBSET_COMMANDS
 
 
-def command_is_listed(head: str, dev: bool) -> bool:
-    """May this verb appear in a LISTING at this dev state?
+def command_is_listed(head: str, dev: bool, *, surface: str) -> bool:
+    """May this verb appear in a LISTING, on this surface, at this dev state?
 
-    A `-list` verb is deliberately absent with dev off even when it is in the
-    user table — that is the whole of the second half of the ruling, and it is
-    why this is a different question from command_is_allowed() rather than the
-    same one twice."""
-    if head in LIST_SUBSET_COMMANDS:
-        return dev
+    THE ANSWER DOES NOT DEPEND ON THE SURFACE, and that is the ruling rather than
+    an oversight: *"those advertised when dev==false matches what are advertised in
+    the command pane."* `surface` is taken anyway, and validated, so that the two
+    predicates are asked the same way at every call site — a gate that takes fewer
+    arguments than its sibling is the one someone calls without thinking.
+
+    AVAILABILITY AND ADVERTISEMENT MOVE TOGETHER on the command pane, so this is
+    deliberately the same expression command_is_allowed() ends with. On the SELF
+    surface they part company, which is the exception above."""
+    if surface not in SURFACES:
+        raise ValueError(f"surface must be one of {SURFACES}, not {surface!r}")
+    if head in ALWAYS_COMMANDS:
+        return True
     return dev or head in DEV_MIN_CMDS or head in USER_SUBSET_COMMANDS
 
 # /part-add IS NOT HERE, AND IS NOT DEFERRED EITHER — R483,
@@ -674,10 +721,10 @@ def command_is_listed(head: str, dev: bool) -> bool:
 # It stays a full command Self types at cmd> — only the PROPOSE door is shut.
 #
 # NOT DEFERRED_PROPOSE_COMMANDS, deliberately: that branch in annotations.py
-# carries one hardcoded `why` about resolving a quote against the live transcript,
-# so a part naming /part-add would be refused for a reason belonging to a different
-# verb. Absent from the table, it takes the ordinary path — _proposable_list()'s
-# "valid: ..." naming what a part MAY ask for, which is the honest refusal.
+# refuses a verb as ruled-in and not buildable from a bracket, which /part-add is
+# not — it was ruled out. Absent from the table, it takes the ordinary path —
+# _proposable_list()'s "valid: ..." naming what a part MAY ask for, which is the
+# honest refusal.
 # proposal_vetting.py's /part-add approval branch is unreachable by construction now;
 # it is kept, not deleted — R323 designed it and only the door was ruled shut.
 
@@ -688,11 +735,12 @@ def command_is_listed(head: str, dev: bool) -> bool:
 # prompt. test_setting_manager.py's exclusion pattern is the one to extend if this
 # needs asserting the same way (2026-09-01).
 
-# RULED INTO THE TABLE, NOT YET BUILDABLE FROM A BRACKET. R267 put
-# /issue-evidence-add in PROPOSE_SUBSET_COMMANDS and annotations.py's classifier
-# refuses it anyway, with a reason — it addresses a statement BY ITS NUMBER
-# and resolves part, quote and source against the LIVE TRANSCRIPT, which the
-# checkpoint a propose is approved at has not got.
+# RULED INTO THE TABLE, NOT BUILDABLE FROM A BRACKET: a verb here stays in
+# PROPOSE_SUBSET_COMMANDS because a ruling put it there, and annotations.py's
+# classifier refuses it anyway, with a reason, rather than letting it look
+# approved and do nothing. EMPTY: /issue-evidence-add left it when a part's
+# bracket learned to offer the statement it rides in
+# (R541); see OWN_STATEMENT_COMMANDS below.
 #
 # IT LIVES BESIDE THE TABLE IT SUBTRACTS FROM, 2026-08-20 (code review). It
 # sat in annotations.py for one afternoon, and help_system — which reads THIS
@@ -705,13 +753,25 @@ def command_is_listed(head: str, dev: bool) -> bool:
 # list that refusal sends a writer to, what process_core.md teaches, and
 # what /help counts — and they agree only if every one reads ONE
 # subtraction, made here.
-DEFERRED_PROPOSE_COMMANDS: tuple[str, ...] = ("/issue-evidence-add",)
+DEFERRED_PROPOSE_COMMANDS: tuple[str, ...] = ()
 
-# What a `[proposed: ...]` may actually name TODAY — the ruled table minus
-# the deferred. /help counts this and a refusal lists it. The table above
-# is what R267 ruled and keeps the deferred verb because the ruling did.
+# What a `[proposed: ...]` may actually name — the ruled table minus the
+# deferred. /help counts this and a refusal lists it.
 PROPOSABLE_COMMANDS: tuple[str, ...] = tuple(
     c for c in PROPOSE_SUBSET_COMMANDS if c not in DEFERRED_PROPOSE_COMMANDS)
+
+# PROPOSABLE VERBS WHOSE BRACKET OFFERS THE STATEMENT IT RIDES IN, each with the
+# bracket's own form. The operator, R541: *"D121 - C. It
+# can agree with or repeat."* A part never sees a statement number, so where the
+# typed verb names one, the bracket names none and offers its own statement; another
+# part's words it agrees with, or says again, in a statement of its own.
+#
+# /propose-add REFUSES THESE: the command pane's staging door has no statement for
+# a bracket to ride in. /help's propose page prints the bracket form, not the
+# typed spec, for the same reason.
+OWN_STATEMENT_COMMANDS: dict[str, str] = {
+    "/issue-evidence-add": '/issue-evidence-add nNNNN "why"',
+}
 
 
 def command_proposable_read() -> tuple[str, ...]:
@@ -777,6 +837,11 @@ def _disjoint() -> None:
         raise AssertionError(
             f"DEFERRED_PROPOSE_COMMANDS subtracts from PROPOSE_SUBSET_COMMANDS "
             f"— {sorted(loose)} is not in it")
+    own = set(OWN_STATEMENT_COMMANDS) - set(PROPOSABLE_COMMANDS)
+    if own:
+        raise AssertionError(
+            f"OWN_STATEMENT_COMMANDS names a bracket form for proposable verbs "
+            f"only — {sorted(own)} is not proposable")
 
 
 _disjoint()
@@ -804,7 +869,9 @@ def command_pane_verb_read(text: str) -> str | None:
     BARE /help IS THE ROOM'S OWN (R287): PANE_OF classes /help as a
     command-pane verb, but bare `/help` passes to the loop, which answers
     with the room set alone; `/help <anything>` is the command pane's.
-    /dev IS cmd>-ONLY (R286) and no PANE_OF key (R199): refused by name.
+    /dev IS NEVER A CIRCLE PANE'S (R286) and no PANE_OF key (R199): refused
+    by name. The standalone Self> prompt is no pane, and takes it
+    (R542).
     /quit IS THE WINDOW'S OWN, cmd>-ONLY SINCE 2026-08-31
     (R414) and no PANE_OF key either — a pane-local verb of
     both flavors' UI layer, so it too is refused by name. A caller should

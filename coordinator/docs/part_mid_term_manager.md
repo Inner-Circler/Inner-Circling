@@ -329,8 +329,10 @@ function had.
 ### part_mid_term_derive(client, part, src=None)
 ```
 {
-    One non-cached model call: SYSTEM (formatted with BUDGET) as the
-    system prompt, the part's full source text as the sole user message.
+    One non-cached model call: SYSTEM (formatted with the part's target —
+    BUDGET, or half its own record when that is less: _target_chars(), R532)
+    as the system prompt, the part's full source text as the sole user
+    message.
     Returns the Reply (LLM_response_disassembler, 2026-09-02; it was a
     (text, usage, stop_reason) tuple) — part_mid_term_write() is a separate step
     so a caller can inspect the body before committing it. `src` as in
@@ -338,7 +340,7 @@ function had.
 }
 ```
 
-### part_mid_term_refresh(only=None, dry_run=False, say=print)
+### part_mid_term_refresh(only=None, dry_run=False, say=print, warn=None)
 ```
 determine target parts (only [only] if given, else every roster part).
 for each target, assemble its sources ONCE and compute part_mid_term_state_read(part, src)
@@ -362,15 +364,21 @@ if (nothing queued) then {
         print "(skipped — no model call)" and continue.
     } else {
         call part_mid_term_derive(); accumulate input/output token totals.
-        if (result is under half of BUDGET characters) then {
+        if (the reply stopped at max_tokens) then {
+            flag it as truncated, whatever its length.
+        }
+        if (result is empty, or under half the part's target — BUDGET, or
+            half its own record when that is less: _target_chars(), R532)
+            then {
             flag it as suspiciously short.
         }
         if (IDENTITY_END appears in the result) then {
             flag it as a raw-corpus leak past the identity boundary.
         }
         if (any flag was raised) then {
-            count it as a failure, print SUSPECT with reasons, and do
-            NOT write it.
+            count it as a failure, send "<part>: mid_term SUSPECT" with the
+            reasons and a NOT-written line through `warn`, and do NOT
+            write it.
         } else {
             part_mid_term_write() it and print the char count and new hash.
         }
@@ -381,10 +389,10 @@ if (nothing queued) then {
     return the failure count.
 }
 ```
-Every line goes through the `say` parameter (default `print`), not a bare `print()` — see HUMAN I/O.
+Every line goes through the `say` parameter (default `print`), not a bare `print()` — see HUMAN I/O — except a refusal's two lines, which go through `warn` (default `say`): circle.py's live /close silences `say` at dev off and passes a `warn` it never gates, because a refused distillate returns 0 and no fail() line would say it (R532).
 
 ### part_mid_term_list()
 Prints a state table (state, source chars, dream count, dreamt count, hash) for every roster part.
 
 ## BUGS
-None found. `part_mid_term_refresh()`'s "under half budget" and "leaked heading" checks are heuristic by design and documented as such (a caller is told to inspect manually rather than force a bad write), which is a deliberate tradeoff rather than a defect.
+None found. `part_mid_term_refresh()`'s "under half its target" and "leaked heading" checks are heuristic by design and documented as such (a caller is told to inspect manually rather than force a bad write), which is a deliberate tradeoff rather than a defect.

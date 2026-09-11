@@ -461,6 +461,15 @@ Its man page, `coordinator/docs/circle_open.md`, is in the development tree
 and NOT in this bundle: a page ships only for a module you can run from a
 command line (ruled 2026-08-27), and this one is a library the driver calls.
 
+**The open step's last act is the open report.** After the opening round,
+`coordinator/circle_open_verify.py` writes `work/logs/open_<OT>.json` — the
+transcript, the working-set entry and the prompt capture, each checked — and
+stops nothing: a failed check is a line in that file, never a refused circle
+or a changed exit code. The close commits it with the circle, beside the close
+report, and `coordinator/circle_audit.py` reads it back — warning, never
+failing. It runs from a command line too, so its page,
+`coordinator/docs/circle_open_verify.md`, is in this bundle.
+
 **Transient failures retry on Self's ladder** — 3 attempts, 5 seconds after
 the first failure and 15 after the second, for 429, any 5xx, and connection
 or timeout errors. Fatal ones (401, 403, 404, 400) do not wait. The SDK's
@@ -634,8 +643,11 @@ it at the user (`#16`).
                     Mutually exclusive with --parts (landed `6fe45f4`,
                     2026-09-02). Default: unset.
 --recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
-                    expand topic-matched seeds into each part's BLOCK 4.
-                    ARM is off | delivered | withheld. Default: off.
+                    expand topic-matched seeds into each part's BLOCK 4,
+                    and let a part run `[recall: ...]` against its own
+                    record. A LOCAL index read; it makes no model call.
+                    ARM is off | delivered | withheld. Default: on
+                    (`delivered`), through every door, since 2026-09-10.
 --seed N            see "Seed" below. Default: unset (a fresh shuffle
                     every round).
 --yes               skip the reduced-live-roster confirmation prompt.

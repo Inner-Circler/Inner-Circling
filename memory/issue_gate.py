@@ -420,9 +420,19 @@ def main() -> int:
                         oks += 1
                         edge_oks += 1
             elif st == "proposed":
-                if not e.get("ask"):
+                ask = e.get("ask")
+                if not ask:
                     fails.append(f"{p.name}: proposed issue-relationship -> {tgt} has no "
                                  f"ask (who confirms it)")
+                elif (not isinstance(ask, list)
+                      or not all(isinstance(a, str) and a.strip() for a in ask)):
+                    # R531: an `ask` is a LIST OF NAMES. A sentence passes the
+                    # presence check above, and issue_prompt_projection joins it
+                    # character by character into every part's BLOCK 2 —
+                    # "asked of: D, o, e, s, ..." — silently, in a real prompt.
+                    # Whether each name is a roster Tag is NOT this rule.
+                    fails.append(f"{p.name}: proposed issue-relationship -> {tgt}: "
+                                 f"ask must be a list of names, got {ask!r:.60}")
             # CLOSURE, for every edge that is not retired.
             #
             # THIS CHECK LIVED INSIDE THE `proposed` BRANCH until 2026-08-05,

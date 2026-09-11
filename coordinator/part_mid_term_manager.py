@@ -593,30 +593,55 @@ def part_mid_term_derive(client, part: str, src: "dict | None" = None):
     # which is a live /close or the hand re-run; `mid_term --refresh` by hand
     # opens none and records nothing.
     return LC.stream_call_once(
-        SYSTEM.format(budget=BUDGET), "\n\n".join(user_parts),
+        SYSTEM.format(budget=_target_chars(len(src["text"]))),
+        "\n\n".join(user_parts),
         DERIVE_MAX_TOKENS, kind="mid_term", client=client,
         record=True, part=part)
 
 
-def part_mid_term_suspect_read(reply) -> list[str]:
+def _target_chars(source_chars: "int | None") -> int:
+    """The distillate's target: BUDGET, or half the part's own record when
+    that is less (R532). The floor is HALF THE TARGET, so the derivation
+    prompt's "treat a result under half that as evidence something was
+    dropped" and part_mid_term_suspect_read() stay one rule.
+
+    THE SCALING IS CLAUDE'S ARITHMETIC; R532 left it so. The floor exists to
+    catch a collapse — the 0-, 0- and 203-char replies of 2026-08-25_1719 —
+    and a thin record has nothing to collapse: a new install's part carries
+    about 3,500 characters in all, which BUDGET // 2 asked to come back as
+    2,500. Here it is asked for 1,750 and refused under 875. A record of
+    10,000 characters or more keeps BUDGET and the 2,500 floor — every part
+    in this tree on 2026-09-10, the thinnest at 21,571. None is "unknown"
+    and keeps BUDGET."""
+    if source_chars is None:
+        return BUDGET
+    return min(BUDGET, source_chars // 2)
+
+
+def part_mid_term_suspect_read(reply, source_chars: "int | None" = None) -> list[str]:
     """Why a derivation must NOT be written; [] when it may be. Factored
     out of part_mid_term_refresh() so the gate itself is testable without a client;
     takes the Reply (LLM_response_disassembler) since 2026-09-02, not a
-    (body, stop_reason) pair.
+    (body, stop_reason) pair. `source_chars` is the part's own record size:
+    the floor is half of _target_chars(source_chars), so a thin record may
+    come back short (R532).
 
     `reply.truncated` is TRUNCATION and refuses regardless of length: the
     model's adaptive thinking spends from the same budget (see
     DERIVE_MAX_TOKENS), so a capped reply is a document cut mid-sentence.
-    B68's probes watched one pass the half-budget floor below and land in a
+    B68's probes watched one pass the length floor below and land in a
     part's prompt — the floor catches starvation; this catches the cut."""
     bad = []
     body = reply.text
     if reply.truncated:
         bad.append(f"stopped at max_tokens ({DERIVE_MAX_TOKENS:,}) — the "
                    f"document is truncated, whatever its length")
-    if len(body) < BUDGET // 2:
-        bad.append(f"{len(body):,} chars, under half the {BUDGET:,} "
-                   f"budget — check for dropped content")
+    target = _target_chars(source_chars)
+    if not body.strip() or len(body) < target // 2:
+        scaled = (f", scaled to a {source_chars:,}-char record"
+                  if target < BUDGET else "")
+        bad.append(f"{len(body):,} chars, under half the {target:,}-char "
+                   f"target{scaled} — check for dropped content")
     import record_model as M          # IDENTITY_END — the long_term.md boundary
     if M.IDENTITY_END in body:
         bad.append(f"'{M.IDENTITY_END}' leaked into the body — the "
@@ -625,13 +650,19 @@ def part_mid_term_suspect_read(reply) -> list[str]:
 
 
 def part_mid_term_refresh(only: str | None = None, dry_run: bool = False,
-           say=print) -> int:
+           say=print, warn=None) -> int:
     """Derive every stale/absent/legacy part, or just `only`. Skips `locked`
     and `fresh` — locked is Self's, fresh has nothing to do.
 
-    Returns the number of FAILURES (a result under half BUDGET, or the raw
-    `## Dream entries` heading leaking into the body) — not the number
-    derived, so a caller can use the return value as an exit code.
+    Returns the number of FAILURES (a result under half its target — see
+    _target_chars() — a truncated one, or the raw `## Dream entries` heading
+    leaking into the body) — not the number derived, so a caller can use the
+    return value as an exit code.
+
+    `warn` carries the REFUSAL — a part's SUSPECT line and the NOT-written
+    line beneath it — and defaults to `say`. circle.py's live /close silences
+    `say` at dev off and passes a `warn` it never gates: a refused distillate
+    is a report, not a failed close, so no fail() line would say it (R532).
 
     `say` defaults to `print`, so a direct/CLI call is unchanged. A caller
     that routes output elsewhere (inter_circle.py's own `say`, which under
@@ -641,6 +672,7 @@ def part_mid_term_refresh(only: str | None = None, dry_run: bool = False,
     buffer even though the driver's own summary line already routed
     correctly. Every live close refreshes mid_term for whichever parts
     moved, so this was not a rare case."""
+    warn = warn or say
     targets = [only] if only else list(_RP.PART_TAGS)
     todo = []
     for p in targets:
@@ -711,11 +743,11 @@ def part_mid_term_refresh(only: str | None = None, dry_run: bool = False,
             counts = RD.message_usage_counts_read(reply.usage) or {}
             t_in += counts.get("input_tokens", 0) or 0
             t_out += counts.get("output_tokens", 0) or 0
-            bad = part_mid_term_suspect_read(reply)
+            bad = part_mid_term_suspect_read(reply, len(src_of[p]["text"]))
             if bad:
                 fails += 1
-                say(f"    {p}: SUSPECT — {'; '.join(bad)}")
-                say("      NOT written — rerun by hand or inspect before forcing.")
+                warn(f"    {p}: mid_term SUSPECT — {'; '.join(bad)}")
+                warn("      NOT written — rerun by hand or inspect before forcing.")
                 continue
             part_mid_term_write(p, reply.text, src=src_of[p])
             say(f"    {p}: wrote {len(reply.text):,} chars, "

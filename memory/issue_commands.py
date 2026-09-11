@@ -17,16 +17,24 @@ way it already resolves `issue_precheck()` against the live graph. R160/B40,
 2026-08-13, docs/HELP_DESIGN.md §4 item 2 — docs/operations.md row 10 named
 this gap 2026-08-04 and it was done by hand 8 times since.
 
+A PART'S BRACKET NAMES NO NUMBER (R541). A part never sees a
+statement number, so `[proposed: /issue-evidence-add nNNNN "why"]` offers the statement
+the bracket rides in; `own_statement=True` parses that form, and propose_lifecycle fills
+`part`/`quote` from the statement itself at the close.
+
 The fourth form (internally `verb == "issue-relationship-update"`) reads
 OBJECT-CLASS shaped, R161, 2026-08-13 — a node id right after `/issue`,
 matching how `/issue-status nNNNN = <value>` already reads for a node —
 but a NODE id right after `/issue` is also exactly what `circle.py`'s
 bare node-status form starts with. `issue_command_parse()` tells the two apart the only
 way it can: the THIRD token. A node op (`status`) is never an edge type,
-so `a[1] ==` a node id `and a[2] in S.EDGE_TYPES` is unambiguous. Scoped
-to `status = retired` only for now — moving an edge TO
+so `a[1] ==` a node id `and a[2] in S.EDGE_TYPES` is unambiguous. The
+TYPED form is scoped to `status = retired` — moving an edge TO
 `attested`/`proposed` needs a quote/an ask the same way
-`issue-relationship-add`/`issue-evidence-add` do, not yet built.
+`issue-relationship-add`/`issue-evidence-add` do, which the line does not
+solicit. The one move to `attested` built is proposal_vetting's (R530):
+approving an add whose relation sits on file as proposed hands
+issue_command_apply() this verb, carrying the add's own comment and line.
 
 THREE RULINGS, 2026-08-04, and each one is load-bearing:
 
@@ -185,7 +193,8 @@ HEADS: dict[str, str] = {
 }
 
 
-def issue_command_parse(line: str, circle: str) -> tuple[dict | None, str]:
+def issue_command_parse(line: str, circle: str, *,
+                        own_statement: bool = False) -> tuple[dict | None, str]:
     """(command, "") or (None, why not). Pure — touches no file.
 
     Refuses on anything it does not fully understand. A command that half
@@ -195,7 +204,12 @@ def issue_command_parse(line: str, circle: str) -> tuple[dict | None, str]:
     THE HEAD DECIDES, since R261. Before that this gated on `a[0] ==
     "/issue"` and branched on whether `a[1]` looked like a node id — which
     is how one verb name came to mean two different commands depending on
-    the shape of its own first argument."""
+    the shape of its own first argument.
+
+    `own_statement` is the BRACKET's grammar (R541): only
+    issue-evidence-add reads it, taking `nNNNN "why"` and refusing a statement number,
+    because the statement is the one the bracket rides in. Every other verb parses the
+    same either way."""
     a = _args(line.strip())
     if not a:
         return None, "not an issue command"
@@ -240,6 +254,24 @@ def issue_command_parse(line: str, circle: str) -> tuple[dict | None, str]:
             return None, f"too many arguments ({len(args) - 4} extra)"
         return {"verb": verb, "node": src, "type": typ, "target": tgt,
                 "comment": args[3] if len(args) > 3 else "",
+                "circle": circle, "line": line.strip()}, ""
+
+    if verb == "issue-evidence-add" and own_statement:
+        form = '[proposed: /issue-evidence-add nNNNN "why"]'
+        if not args:
+            return None, f"usage: {form} — it offers the statement it rides in"
+        if not NODE_RE.match(args[0]):
+            return None, f"{args[0]} is not an issue id (nNNNN)"
+        if len(args) > 1 and args[1].isdecimal():
+            return None, ("a bracket names no statement number — it offers the "
+                          f"statement it rides in: {form}")
+        if len(args) < 2 or not args[1].strip():
+            return None, f"why is required — {form}"
+        if len(args) > 2:
+            return None, f"too many arguments ({len(args) - 2} extra)"
+        # part/quote/source are NOT set here: propose_lifecycle reads them off the
+        # statement this bracket rides in, and the proposal row carries them to vetting.
+        return {"verb": verb, "node": args[0], "why": args[1],
                 "circle": circle, "line": line.strip()}, ""
 
     if verb == "issue-evidence-add":
@@ -401,9 +433,10 @@ def issue_command_apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None
             al.append(old)                    # R007: the old name is kept
         doc["aliases"] = al
     elif cmd["verb"] == "issue-evidence-add":
-        # part/quote/source were resolved by circle.py against the live
-        # transcript at parse time (see module docstring) — this function
-        # never touches a transcript, only the cmd dict it was handed.
+        # part/quote/source were resolved against the transcript before this
+        # call — by circle.py for a typed one, by propose_lifecycle for a part's
+        # offer (see module docstring) — this function never touches a
+        # transcript, only the cmd dict it was handed.
         doc.setdefault("evidence", []).append({
             "part": cmd["part"], "source": cmd["source"],
             "quote": cmd["quote"], "why": cmd["why"]})
@@ -423,6 +456,16 @@ def issue_command_apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None
         e["status"] = cmd["value"]
         if cmd["value"] == "retired":
             e["retired"] = f"{today} — {cmd['why']}"
+        elif cmd["value"] == "attested":
+            # R530 — built for proposal_vetting's promote alone; the typed form
+            # refuses `= attested`, having no quote to cite. The basis and
+            # quote are the ones a fresh approved add writes (the branch
+            # below); what they replace — who was asked, on what basis —
+            # arrives in `why`, and so in the history line.
+            e["basis"] = f"Ruled by Self in the room, {cmd['circle']}."
+            e["quote"] = cmd.get("comment") or cmd.get("line") or ""
+            e["dated"] = today
+            e.pop("ask", None)
     else:
         # The quote is the COMMENT if he gave one, else the whole command
         # line. Either is verbatim in the transcript, because the coordinator

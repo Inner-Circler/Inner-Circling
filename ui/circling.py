@@ -1756,13 +1756,12 @@ class CircleEngine:
             # RULED 2026-08-13: dev_mode is ONE module-global attribute
             # (command_surface.py since phase 2 stage 0, 2026-08-16;
             # circle.py before that), reachable and toggleable whether or
-            # not a circle is running. FLIPPED DIRECTLY IN EVERY PHASE since
-            # 2026-08-21 (R286: "it is cmd> only and always
-            # hidden") — it used to FORWARD "/dev" into circle_in while a
-            # circle ran, for the Self> loop's own /dev handler, and that
-            # handler is gone: forwarded before the loop, "/dev" became the
-            # working set; forwarded from the room, it toggled dev mode from
-            # dialog. One attribute, one writer here, nothing to keep in
+            # not a circle is running. FLIPPED DIRECTLY IN EVERY PHASE, never
+            # forwarded into circle_in (R286: "it is cmd> only and always
+            # hidden"): forwarded before the loop, "/dev" becomes the working
+            # set. The Self> loop's own /dev is the standalone terminal's
+            # (R542) and toggles the same attribute.
+            # One attribute, one writer here, nothing to keep in
             # sync. Unlisted: LOCAL_VERBS does not name it (R199).
             self._CS.dev_mode = not self._CS.dev_mode
             self.out_queue.put(("command", "  dev mode: "
@@ -1874,7 +1873,9 @@ class CircleEngine:
         # in that table — so read directly, this pane would have gone on
         # calling them junk while Self> had started running them.
         if (pane == "command"
-                and not self._CS.command_is_allowed(head, self._CS.dev_mode)):
+                and not self._CS.command_is_allowed(
+                    head, self._CS.dev_mode,
+                    surface=self._CS.SURFACE_COMMAND)):
             self.out_queue.put(("command", self._junk_help(text)))
             return None
         if pane == "command":
@@ -3530,17 +3531,16 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                --live must appear in THIS argv, not only in ARGS —
                see CircleEngine.start()'s own docstring for why.
 
-               --recall-arm delivered
-               is the forwarded ARG worth naming here, because BLOCK 1
-               teaches every part `[recall: ...]` unconditionally and
-               the search only runs when a circle is armed for it:
-                   --circle --live --recall-arm delivered
+               --recall-arm off
+               is the forwarded ARG worth naming here, because it is
+               the one that TURNS SOMETHING OFF:
+                   --circle --live --recall-arm off
                `--recall-arm`: lets a part search its own past record,
                a local index read that costs no model call. Default:
-               off. R460 (2026-09-06) closed the recall trial and made
-               this a plain feature; the Ticker flavor defaults it ON
-               and this door does not, which is a difference nobody has
-               ruled on — see NEXT.md.
+               on. R460 (2026-09-06) closed the recall trial and made
+               this a plain feature; R526
+               (2026-09-10) made it on through every door, so this one
+               and the Ticker now agree.
 
   --no-color   turn color off for this run. Default: off — color is ON
                whenever stdout is a real terminal and the NO_COLOR

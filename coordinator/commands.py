@@ -74,21 +74,47 @@ def statement_resolve(transcript: list[dict], n: int) -> tuple[dict | None, str]
     return e, ""
 
 
-def statement_show(transcript: list[dict]) -> None:
-    """The numbered listing `/issue-evidence-add nNNNN <stmt#>` addresses
-    into — kept mark-free after MARK's 2026-08-14 retirement (docs/BNF.md);
-    issue-evidence-add has no other way to discover a statement's number.
+def statement_show(transcript: list[dict], rest: str = "") -> None:
+    """`/issue-evidence-list [<n>]`. Bare: the numbered listing `/issue-evidence-add nNNNN
+    <stmt#>` addresses into — kept mark-free after MARK's 2026-08-14 retirement (docs/BNF.md);
+    issue-evidence-add has no other way to discover a statement's number. `<n>`: that
+    statement whole (B133).
 
     2026-08-16: `e['text']` can carry embedded newlines (a dry-run part's
     canned multi-section statement, e.g.) — whitespace collapsed before
     truncating so this is genuinely ONE line per entry, never several;
     truncation length matched to the fixed prefix so the whole line stays
-    within the 80 column max (RULED 2026-08-16)."""
+    within the 80 column max (RULED 2026-08-16). The footer is one line too."""
+    import REGISTER_CLASS as SS
+    a = rest.strip()
+    if a:
+        seam.emit("command", statement_record_show(transcript, int(a)) if a.isdecimal()
+                  else "  usage: /issue-evidence-list [<n>]  — bare lists them, "
+                       "<n> shows one whole")
+        return
+    stmts = statement_read(transcript)
     prefix_width = len(f"  {'':3}. {'':<12} ")
     budget = HELP_WIDTH - prefix_width
-    for n, (i, e) in enumerate(statement_read(transcript), 1):
+    for n, (i, e) in enumerate(stmts, 1):
         flat = " ".join(e["text"].split())
         seam.emit("command", f"  {n:3}. {e['display']:<12} {flat[:budget]}")
+    if stmts:
+        seam.emit("command", SS.register_list_footer(len(stmts), "/issue-evidence-list"))
+
+
+def statement_record_show(transcript: list[dict], n: int) -> str:
+    """`/issue-evidence-list <n>`: one statement whole, as the ROOM heard it — who spoke, to
+    whom, and every line of what was said (B133).
+
+    WHAT THE ROOM HEARD, NOT EVERY KEY OF THE ENTRY — the one `-list <n>` that does not walk its
+    row whole, deliberately. A parsed statement can carry `raw`, its bytes as the file holds
+    them, [remember: ...] bracket included, and a remember is private to whoever wrote it
+    (docs/BNF.md, REMEMBER's blast radius). `text` is what `/issue-evidence-add` attaches."""
+    import REGISTER_CLASS as SS
+    rows = [{"speaker": e["display"], "to": e.get("to", ""), "text": e["text"]}
+            for _, e in statement_read(transcript)]
+    return SS.register_record_show(rows, n, ("speaker", "to"), body="text",
+                                   verb="/issue-evidence-list")
 
 
 # THE ANNOTATION GRAMMAR LIVES IN annotations.py, AND THIS IS ITS HISTORY. The
@@ -373,23 +399,41 @@ def command_topic_close(rest: str) -> None:
     seam.emit("command", f"  {msg}")
 
 
-def command_practice_list() -> None:
+def _list_or_record(rest: str, verb: str, listing, record) -> None:
+    """A `-list` verb's one argument (B133). Bare: `listing()`, which returns its text or emits
+    it itself. A number: `record(n)`, that row whole. Anything else: the usage line — never the
+    listing, which would read as the argument having been honoured."""
+    a = rest.strip()
+    if not a:
+        out = listing()
+        if out is not None:
+            seam.emit("command", out)
+    elif a.isdecimal():
+        seam.emit("command", record(int(a)))
+    else:
+        seam.emit("command", f"  usage: {verb} [<n>]  — bare lists them, <n> shows one whole")
+
+
+def command_practice_list(rest: str = "") -> None:
     """The CIRCLE's practices — every row not addressed to Self. Until
     2026-08-21 this printed the whole register; the rows addressed to Self
     are /better-option-list's now (the operator: "add a path for
     /better-option-list and make it always visible"), each list numbered on
     its own. A row addressed to ONE part (narrowcast) is still the circle's,
-    and stays here."""
+    and stays here. `<n>` shows one row whole (B133)."""
     import practice_manager as PM
-    seam.emit("command", PM.practice_list(better_options=False))
+    _list_or_record(rest, "/practice-list", lambda: PM.practice_list(better_options=False),
+                    lambda n: PM.practice_record_show(n, better_options=False))
 
 
-def command_better_option_list() -> None:
+def command_better_option_list(rest: str = "") -> None:
     """/better-option-list — how SELF moves: the rows of the one register
     (R133) addressed to Self, numbered on their own. Minted 2026-08-21; a
-    USER verb, always visible, while /better-option-add is DEV for now."""
+    USER verb, always visible, while /better-option-add is DEV for now.
+    `<n>` shows one row whole (B133)."""
     import practice_manager as PM
-    seam.emit("command", PM.practice_list(better_options=True))
+    _list_or_record(rest, "/better-option-list", lambda: PM.practice_list(better_options=True),
+                    lambda n: PM.practice_record_show(n, better_options=True))
 
 
 def command_propose_add(rest: str, *, record=None, guard=None) -> None:
@@ -399,7 +443,9 @@ def command_propose_add(rest: str, *, record=None, guard=None) -> None:
     2026-08-25). Bare `propose` is an alias (SYNONYMS). The body meets the
     IDENTICAL test the annotation meets — annotations' _propose_command_shape —
     so there is one grammar, not two, the same argument _add_practice_row
-    makes one register over.
+    makes one register over. The one exception is a verb whose bracket offers
+    the statement it rides in (command_surface.OWN_STATEMENT_COMMANDS): this
+    door has no statement, so it refuses those.
 
     A SANDBOX CIRCLE REFUSES IT: proposal_stage() already rules
     that "a sandbox circle's proposal is a draft, not something to stage
@@ -414,6 +460,17 @@ def command_propose_add(rest: str, *, record=None, guard=None) -> None:
         seam.emit("command", "  usage: /propose-add <command>   (also bare "
                              "propose)")
         seam.emit("command", "  " + MK._proposable_list())
+        return
+    import command_surface as CS
+    words = text.lstrip("/").split(None, 1)
+    head = CS.command_head_normalise("/" + words[0]) if words else ""
+    if head in CS.OWN_STATEMENT_COMMANDS:
+        # R541: this verb's bracket offers the statement it
+        # rides in, and the command pane has no statement for it to ride in.
+        typed = next((row[0] for row in CS.COMMANDS if row[0].split()[0] == head), head)
+        seam.emit("command", f"  refused — {head} offers the statement a part's "
+                             f"bracket rides in, and /propose-add has none. "
+                             f"Attach one yourself, in a circle: {typed}")
         return
     shape = MK._propose_command_shape(text)
     if shape is None:
@@ -440,43 +497,51 @@ def command_propose_add(rest: str, *, record=None, guard=None) -> None:
         record()
 
 
-def command_propose_list() -> None:
-    """/propose-list — what is staged: self/proposals.toml's pending rows
-    first (what awaits a ruling at the next checkpoint), then the settled,
-    then any practice row still staged the pre-R273 way (the register
-    vetting still reads). Numbered across the whole listing; no circle
-    needed. 2026-08-21."""
+def _propose_rows() -> list[tuple[str, str, dict, tuple, str]]:
+    """/propose-list's rows in the order it numbers them — (heading, tag, row, ORDER, body):
+    self/proposals.toml's pending rows, then any practice row still staged the pre-R273 way,
+    then the settled. ONE sequence, so the listing and `/propose-list <n>` cannot number
+    differently (B133)."""
     import proposal_manager as PR
     import practice_manager as PM
     rows = PR.proposal_read()
-    pend = [r for r in rows if r.get("state") == "proposed"]
-    settled = [r for r in rows if r.get("state") != "proposed"]
-    legacy = PM.practice_pending_list()
-    if not pend and not settled and not legacy:
-        seam.emit("command", "  no proposals on file")
-        return
-    n = 0
+    out = [("PENDING", f"({r.get('kind', '?')})", r, PR.ORDER, "text")
+           for r in rows if r.get("state") == "proposed"]
+    out += [("PENDING, staged as a practice row", f"({r.get('op', '?')})", r, PM.ORDER, "title")
+            for r in PM.practice_pending_list()]
+    out += [("SETTLED", f"({r.get('state', '?')})", r, PR.ORDER, "text")
+            for r in rows if r.get("state") != "proposed"]
+    return out
 
-    def row(r: dict, tag: str) -> str:
-        nonlocal n
-        n += 1
-        src = ", ".join(r.get("sources", [])) or "?"
-        text = " ".join((r.get("text") or r.get("title") or "").split())
-        prefix = f"  {n:>3}  [{r['id']}] {tag} {src} · {r.get('circle', '?')}  "
-        return prefix + text[:max(10, HELP_WIDTH - len(prefix))]
 
-    if pend:
-        seam.emit("command", f"\n  PENDING ({len(pend)})")
-        for r in pend:
-            seam.emit("command", row(r, f"({r.get('kind', '?')})"))
-    if legacy:
-        seam.emit("command", f"\n  PENDING, staged as a practice row ({len(legacy)})")
-        for r in legacy:
-            seam.emit("command", row(r, f"({r.get('op', '?')})"))
-    if settled:
-        seam.emit("command", f"\n  SETTLED ({len(settled)})")
-        for r in settled:
-            seam.emit("command", row(r, f"({r.get('state', '?')})"))
+def command_propose_list(rest: str = "") -> None:
+    """/propose-list [<n>] — what is staged: self/proposals.toml's pending rows
+    first (what awaits a ruling at the next checkpoint), then any practice row
+    still staged the pre-R273 way (the register vetting still reads), then the
+    settled. Numbered across the whole listing; no circle needed. 2026-08-21.
+    `<n>` shows that row whole, by its own register's ORDER (B133)."""
+    import REGISTER_CLASS as SS
+    seq = _propose_rows()
+
+    def listing() -> None:
+        if not seq:
+            seam.emit("command", "  no proposals on file")
+            return
+        for n, (head, tag, r, _order, _body) in enumerate(seq, 1):
+            if n == 1 or seq[n - 2][0] != head:
+                seam.emit("command", f"\n  {head} ({sum(1 for s in seq if s[0] == head)})")
+            src = ", ".join(r.get("sources", [])) or "?"
+            text = " ".join((r.get("text") or r.get("title") or "").split())
+            prefix = f"  {n:>3}  [{r['id']}] {tag} {src} · {r.get('circle', '?')}  "
+            seam.emit("command", prefix + text[:max(10, HELP_WIDTH - len(prefix))])
+        seam.emit("command", "\n" + SS.register_list_footer(len(seq), "/propose-list"))
+
+    def record(n: int) -> str:
+        order, body = seq[n - 1][3:] if 1 <= n <= len(seq) else ((), "")
+        return SS.register_record_show([s[2] for s in seq], n, order, body=body,
+                                       verb="/propose-list")
+
+    _list_or_record(rest, "/propose-list", listing, record)
 
 
 PRACTICE_UPDATE_USAGE = "/practice-update <n> <text>  — the number /practice-list showed"
@@ -634,9 +699,25 @@ def command_group_add(text: str, record=None) -> tuple[bool, str]:
     return ok, msg
 
 
-def command_group_list() -> None:
+def _view_text(result: "tuple[bool, str]") -> str:
+    ok, text = result
+    return text if ok else f"  {text}"
+
+
+def command_part_list(rest: str = "") -> None:
+    """/part-list [<n>] — `<n>` is that part's long_term.md, /part-view's view, at any dev
+    state (R534, B133)."""
+    import part_add as PA
+    _list_or_record(rest, "/part-list", PA.part_list,
+                    lambda n: _view_text(PA.part_view(str(n))))
+
+
+def command_group_list(rest: str = "") -> None:
+    """/group-list [<n>] — `<n>` is that group's descriptor, /group-view's view, at any dev
+    state (R534, B133)."""
     import group_manager as GA
-    seam.emit("command", GA.group_list())
+    _list_or_record(rest, "/group-list", GA.group_list,
+                    lambda n: _view_text(GA.group_view(str(n))))
 
 
 def command_group_view(n_text: str) -> None:
@@ -780,9 +861,9 @@ def command_redact_alias_delete(arg: str, record=None) -> None:
         record()
 
 
-def command_redact_alias_list() -> None:
+def command_redact_alias_list(rest: str = "") -> None:
     import redaction_manager as RDX
-    seam.emit("command", RDX.alias_list())
+    _list_or_record(rest, "/redact-alias-list", RDX.alias_list, RDX.alias_record_show)
 
 
 def command_issue_apply(rest: list[str]) -> None:
@@ -899,53 +980,96 @@ def _emit_wrapped(indent: str, text: str) -> None:
         seam.emit("command", line)
 
 
-def command_settings_list() -> None:
-    import setting_manager as SET
-    rows = _settings_rows()
-    act, pend = SET.setting_active_read(), SET.setting_pending_read()
-    if not SET.REGISTER.is_file():
-        seam.emit("command", "  nothing has been changed — every setting is "
-                             "what the program decides")
-    seam.emit("command", f"\n  SETTINGS ({len(rows)})")
-    for s in rows:
-        lit, _why = SET.setting_source_default_read(s.owner, s.key)
-        chosen = s.key in act
-        # RENDERED IN THE PERSON'S OWN WORDS — settings.setting_show(), 2026-08-29.
-        # Without it the first BOOL setting reports `True` in a list whose
-        # dialog asks a yes/no question.
-        cur = SET.setting_show(s.key, act[s.key] if chosen else lit)
-        tail = "" if chosen else "   (unchanged)"
-        unit = f" {s.unit}" if s.unit else ""
-        seam.emit("command", f"    {s.key:<24} {cur}{unit}{tail}")
-        _emit_wrapped("        ", s.ask)
-        if s.key in pend:
-            seam.emit("command", f"        waiting: {pend[s.key]}{unit} — "
-                                 f"from the next circle")
-    _settings_tuning_list()
-    seam.emit("command", "\n  /settings-update <name> to change one, "
-                         "/settings-clear <name> to undo it")
-
-
-def _settings_tuning_list() -> None:
-    """The ACTIVE PROVIDER's own knobs — stage 4 (R382). Listed under their
-    own heading because they are that service's, not this program's: they
-    appear and disappear with the provider, and what they accept is its
-    business."""
-    import setting_manager as SET
+def _settings_seq() -> list:
+    """/settings-list's rows in the order it numbers them — (heading, declaration, provider):
+    every setting this person may see, then the active provider's own knobs, whose provider is
+    set. ONE sequence, so the listing and `/settings-list <n>` cannot number differently — the
+    rule /propose-list keeps across its three headings (B133)."""
     import llm_client as LC
     prov = LC.PROVIDER_IMPL
-    knobs = getattr(prov, "TUNING", ())
-    if not knobs:
-        return
-    set_now, defaults = SET.setting_tuning_read(prov), SET.setting_tuning_defaults_read(prov)
-    seam.emit("command", f"\n  {prov.name.upper()} ({len(knobs)})")
-    for k in knobs:
-        chosen = k.key in set_now
-        cur = set_now.get(k.key, defaults.get(k.key))
-        seam.emit("command", f"    {k.key:<24} {cur}"
-                             f"{'' if chosen else '   (unchanged)'}")
-        _emit_wrapped("        ", k.ask)
-        _emit_wrapped("        ", "one of: " + ", ".join(k.values))
+    seq: list = [("SETTINGS", s, None) for s in _settings_rows()]
+    seq += [(prov.name.upper(), k, prov) for k in getattr(prov, "TUNING", ())]
+    return seq
+
+
+def _record_fit(rec: dict, room: int = 64) -> dict:
+    """A record's longer sentences broken into lines, so register_record_show() prints each as a
+    block under its label and the record keeps the 80 columns the listing keeps (the operator,
+    2026-08-29). `room` is what fits beside the widest label."""
+    import textwrap
+    return {k: ("\n".join(textwrap.wrap(v, 72)) if isinstance(v, str) and len(v) > room else v)
+            for k, v in rec.items()}
+
+
+def command_settings_list(rest: str = "") -> None:
+    """/settings-list [<n>] — every setting this person may see, then the active provider's own
+    knobs, numbered across both. `<n>` shows that one whole: the value the program uses when
+    nothing is changed, what it accepts, and — for a setting — why that value
+    (R543, answering D122 (c)). A knob carries no reason; its provider
+    declared none."""
+    import REGISTER_CLASS as SS
+    import command_surface as CS
+    import setting_manager as SET
+    seq = _settings_seq()
+
+    def listing() -> None:
+        act, pend = SET.setting_active_read(), SET.setting_pending_read()
+        if not SET.REGISTER.is_file():
+            seam.emit("command", "  nothing has been changed — every setting is "
+                                 "what the program decides")
+        for n, (head, s, prov) in enumerate(seq, 1):
+            if n == 1 or seq[n - 2][0] != head:
+                seam.emit("command", f"\n  {head} ({sum(1 for x in seq if x[0] == head)})")
+            if prov is None:
+                _settings_row_emit(n, s, act, pend)
+            else:
+                _settings_tuning_row_emit(n, s, prov)
+        seam.emit("command", "\n  /settings-update <name> to change one, "
+                             "/settings-clear <name> to undo it")
+        seam.emit("command", SS.register_list_footer(len(seq), "/settings-list"))
+
+    def record(n: int) -> str:
+        dev = bool(getattr(CS, "dev_mode", False))
+        rows = [_record_fit(SET.setting_record_read(s, dev=dev) if prov is None
+                            else SET.setting_tuning_record_read(prov, s, dev=dev))
+                for _head, s, prov in seq]
+        order = ((SET.RECORD_ORDER if seq[n - 1][2] is None else SET.TUNING_RECORD_ORDER)
+                 if 1 <= n <= len(seq) else ())
+        return SS.register_record_show(rows, n, order, verb="/settings-list")
+
+    _list_or_record(rest, "/settings-list", listing, record)
+
+
+def _settings_row_emit(n: int, s, act: dict, pend: dict) -> None:
+    import setting_manager as SET
+    lit, _why = SET.setting_source_default_read(s.owner, s.key)
+    chosen = s.key in act
+    # RENDERED IN THE PERSON'S OWN WORDS — settings.setting_show(), 2026-08-29.
+    # Without it the first BOOL setting reports `True` in a list whose
+    # dialog asks a yes/no question.
+    cur = SET.setting_show(s.key, act[s.key] if chosen else lit)
+    tail = "" if chosen else "   (unchanged)"
+    unit = f" {s.unit}" if s.unit else ""
+    seam.emit("command", f"  {n:>3}  {s.key:<24} {cur}{unit}{tail}")
+    _emit_wrapped("         ", s.ask)
+    if s.key in pend:
+        seam.emit("command", f"         waiting: {pend[s.key]}{unit} — "
+                             f"from the next circle")
+
+
+def _settings_tuning_row_emit(n: int, k, prov) -> None:
+    """One of the ACTIVE PROVIDER's own knobs — stage 4 (R382). Listed under
+    their own heading because they are that service's, not this program's:
+    they appear and disappear with the provider, and what they accept is its
+    business."""
+    import setting_manager as SET
+    set_now = SET.setting_tuning_read(prov)
+    chosen = k.key in set_now
+    cur = set_now.get(k.key, k.default)
+    seam.emit("command", f"  {n:>3}  {k.key:<24} {cur}"
+                         f"{'' if chosen else '   (unchanged)'}")
+    _emit_wrapped("         ", k.ask)
+    _emit_wrapped("         ", "one of: " + ", ".join(k.values))
 
 
 def command_settings_update(rest_text: str, *, interactive: bool = True) -> None:
@@ -1318,7 +1442,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # READ-ONLY. Nothing reaches the room from any of these three —
         # they are command-pane verbs, so there is no transcript step to
         # make and no live/sandbox split to draw.
-        command_settings_list()
+        command_settings_list(rest_text)
     elif head == "/settings-update":
         command_settings_update(rest_text, interactive=interactive)
     elif head == "/settings-clear":
@@ -1329,7 +1453,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # live/sandbox split.
         command_redact_alias_add(rest_text)
     elif head == "/redact-alias-list":
-        command_redact_alias_list()
+        command_redact_alias_list(rest_text)
     elif head == "/redact-alias-update":
         command_redact_alias_update(rest_text)
     elif head == "/redact-alias-delete":
@@ -1337,7 +1461,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     elif head == "/practice-add":
         command_practice_add(rest_text, record=record)
     elif head == "/practice-list":
-        command_practice_list()
+        command_practice_list(rest_text)
     elif head == "/practice-delete":
         command_practice_delete(rest_text, record=record)
     elif head == "/practice-update":
@@ -1366,9 +1490,9 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     elif head == "/observation-purge":
         command_observation_purge(rest_text)
     elif head == "/better-option-list":
-        command_better_option_list()
+        command_better_option_list(rest_text)
     elif head == "/propose-list":
-        command_propose_list()
+        command_propose_list(rest_text)
     elif head == "/propose-add":
         # WRITES the live proposals register (a pending row, ruled at the
         # next checkpoint) — bare `propose` arrives here too, via SYNONYMS.
@@ -1394,8 +1518,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # arrive prefilled when given; bare opens the dialog cold.
         command_part_add(rest_text, guard=guard, interactive=interactive)
     elif head == "/part-list":
-        import part_add as PA
-        seam.emit("command", PA.part_list())
+        command_part_list(rest_text)
     elif head == "/part-view":
         import part_add as PA
         _ok, text = PA.part_view(rest_text)
@@ -1406,7 +1529,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     elif head == "/group-add":
         command_group_add(rest_text, record=record)
     elif head == "/group-list":
-        command_group_list()
+        command_group_list(rest_text)
     elif head == "/group-view":
         command_group_view(rest_text)
     elif head == "/group-update":
@@ -1427,7 +1550,7 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     elif head == "/issue-apply":
         command_issue_apply(rest_text.split())
     elif head == "/issue-list":
-        command_issue_list()
+        command_issue_list(rest_text)
     elif head in ("/issue-status", "/issue-status-update"):
         # THE PROPERTY CONSTRUCT, R261. A bare property READS; `= <value>`
         # WRITES; and `<object>-<property>-update <id> <value>` is the same
@@ -1459,8 +1582,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     return True
 
 
-def command_issue_list() -> None:
-    """`/issue-list` — the issues, numbered. R261/B59, 2026-08-20.
+def command_issue_list(rest: str = "") -> None:
+    """`/issue-list [<n>]` — the issues, numbered. R261/B59, 2026-08-20.
 
     NEW WITH THE REGRAMMAR, and it is not a rename of anything: there was
     no command that answered "what is in the graph" at all. `/help issue
@@ -1470,17 +1593,27 @@ def command_issue_list() -> None:
     "issue", never "node", in what it prints — R279,
     2026-08-21; and it counts what it lists: EVERY issue on file, with the
     live ones counted beside, where it used to say "live node(s)" over a
-    listing that included the leads, roots and the settled."""
-    docs = [S_.issue_read(f) for f in S_.issue_nodes_read()]
-    rows = [(d["id"], d.get("label") or "(no label)") for d in docs]
-    if not rows:
-        seam.emit("command", "  no issues on file")
-        return
-    n_live = sum(1 for d in docs if d.get("status") == "live")
-    seam.emit("command", f"\n  {len(rows)} issue(s), {n_live} live")
-    for i, (nid, label) in enumerate(sorted(rows), start=1):
-        prefix = f"  {i:>3}  {nid}  "
-        seam.emit("command", prefix + label[:max(10, HELP_WIDTH - len(prefix))])
+    listing that included the leads, roots and the settled.
+
+    `<n>` shows that issue whole — every field its node carries (B133). A convenience beside
+    the id, never instead of it: `nNNNN` never moves, and the number shifts as issues arrive."""
+    import REGISTER_CLASS as SS
+    docs = sorted((S_.issue_read(f) for f in S_.issue_nodes_read()), key=lambda d: d["id"])
+
+    def listing() -> None:
+        if not docs:
+            seam.emit("command", "  no issues on file")
+            return
+        n_live = sum(1 for d in docs if d.get("status") == "live")
+        seam.emit("command", f"\n  {len(docs)} issue(s), {n_live} live")
+        for i, d in enumerate(docs, start=1):
+            prefix = f"  {i:>3}  {d['id']}  "
+            label = d.get("label") or "(no label)"
+            seam.emit("command", prefix + label[:max(10, HELP_WIDTH - len(prefix))])
+        seam.emit("command", "\n" + SS.register_list_footer(len(docs), "/issue-list"))
+
+    _list_or_record(rest, "/issue-list", listing,
+                    lambda n: SS.register_record_show(docs, n, S_.ORDER, verb="/issue-list"))
 
 
 def command_issue_status_all() -> None:

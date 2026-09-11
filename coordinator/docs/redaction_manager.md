@@ -100,8 +100,10 @@ the "an id is never reused or renumbered" rule. Delete and re-add if the kind wa
     if (n is outside 1..count) then { refuse } else { pop the nth row; the counter is
         untouched (the id is never reused); save; (True, "removed [id] ...") }
 
-### `alias_list()`
-    { "  no redaction aliases", or one numbered line per alias: [id] kind canonical (forms) }
+### `alias_list()` / `alias_record_show(n)`
+    { "  no redaction aliases", or one numbered line per alias: [id] kind canonical (forms), then
+      the footer naming the count and `/redact-alias-list <n>` (B133) }
+    { the nth alias WHOLE — every field, by REGISTER_CLASS.register_record_show() }
 
 ## BUGS
 None found. Note for the reader: the alias listing's number is positional, so `alias_update(n)` and

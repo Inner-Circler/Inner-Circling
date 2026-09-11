@@ -59,13 +59,17 @@ shared rulebook, the circle's practices, and the note the last circle left
 for this one; what the issue graph currently owes; that part's own
 long-term identity, distilled; and anything addressed to that part alone. Statements are public and parts may address each other
 directly; no part speaks twice in a row. Each statement aims for a short
-length and is hard-capped at a word count — 150 unless you change the
-`statement_max_words` setting. That one is a developer setting: open the
+length, and each part is told never to go past a word count — 150 unless
+you change the `statement_max_words` setting. The limit reaches the parts
+as an instruction; nothing counts the words or cuts a statement at it.
+That one is a developer setting: open the
 circle with `--dev` to see it or change it. `/settings-list` shows what
-you can reach — three settings on a normal run, and all thirty-three under
-`--dev`. The three are `model`, which model the parts speak on;
-`redact_view`, whether the circle pane shows names, emails and phone
-numbers as opaque tokens rather than the real text; and `circle_stats`,
+you can reach — three settings on a normal run, and all thirty-four under
+`--dev` — numbered, and `/settings-list <n>` shows one whole: its default,
+what it accepts, and why the default is what it is. The three are
+`model`, which model the parts speak on; `redact_view`, whether the
+circle pane shows names, emails and phone numbers as opaque tokens
+rather than the real text; and `circle_stats`,
 whether a close prints and files its delta report. A fresh install has
 none changed, so `groups/ifs/self/settings.toml` does
 not exist until you change one. Domination is
@@ -79,12 +83,13 @@ committed.
 
 Processing is **synchronous**, not scheduled. The moment `/close` finishes
 writing the transcript, the same run immediately: each part reviews what
-happened in this circle and may update its own long-term identity, in
-parallel across every part (dreaming); then one pass looks across the
+happened in this circle and may keep one memory of it, in parallel
+across every part (dreaming); then one pass looks across the
 whole circle for practices that should apply to everyone (synthesis);
 then each part whose sources have moved has its distilled identity rebuilt
-(the refresh), and proposals saying the same thing are grouped (the
-coalesce pass). Each of those makes its own model calls, so `/close` takes
+(the refresh). Earlier in the close, just before you are asked to rule on
+proposals, those saying the same thing are grouped (the coalesce pass).
+Each of those makes its own model calls, so `/close` takes
 noticeably longer than the circle's own turns.
 There is no separate scheduled task and nothing runs overnight — if this
 step fails, `/close` reports it and nothing about it is left

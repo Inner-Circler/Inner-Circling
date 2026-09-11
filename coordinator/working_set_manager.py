@@ -282,6 +282,14 @@ def _working_sets_doc() -> dict:
             "doc": {"preamble": WORKING_SETS_PREAMBLE}, "working_set": []}
 
 
+def working_set_entry_read(ot: str) -> "list[dict]":
+    """Every row this register holds for one open time. A list and not a row, because the open
+    step's verifier asks whether there is EXACTLY one — and two is a finding only the caller can
+    name."""
+    return [dict(r) for r in _working_sets_doc().get("working_set", [])
+            if isinstance(r, dict) and r.get("circle") == ot]
+
+
 def working_set_record(ot: str, chosen: "list[str] | None", topic: str,
                        live: bool) -> None:
     """Append to circles/working_sets.toml. A history, so a later reading of a

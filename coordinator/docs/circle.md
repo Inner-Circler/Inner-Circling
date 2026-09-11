@@ -54,7 +54,7 @@ source of truth for both (R221).
 ## MAIN
 ```
     parse the command line (see COMMAND-LINE ARGUMENTS)
-if (--dev) then { command_surface.dev_mode = True }                    (R286: the terminal's only door)
+if (--dev) then { command_surface.dev_mode = True }                    (R286; /dev at the prompt is the other door)
 if (--list-resumable) then { return circle_resumable_list() }
 if (--dev-cmd given) then {
 if (no verb) then { emit the usage line; return 2 }
@@ -180,11 +180,13 @@ else { emit help_text(argument) }
 if (cmd == "/status") then { emit the tree name and mode, the part count, part_token_table(...), the running cost;
         continue }
 if (cmd in ("/round", "/pass")) then { circle_round_run(...); continue }
-        (no /dev branch — R286)
-if (dev_mode off and cmd starts "/" and its normalised head is not in USER_SUBSET_COMMANDS) then {
+if (cmd == "/dev") then { dev_mode = not dev_mode; emit "dev: on" or "dev: off"; continue }
+        TOGGLES, and exact like the command pane's `dev` (R542)
+if (cmd starts "/" and not command_is_allowed(head, dev_mode, surface="self")) then {
             emit junk_help(cmd); continue                                          JUNK -> help (R285)
-        }
-if (cmd == "/issue-evidence-list") then { show_statements(transcript); continue }
+        }                                                                          (never taken here: R527)
+if (cmd is "/issue-evidence-list", bare or with one argument) then { statement_show(transcript, <argument>)
+        — the listing, or with a number that statement whole (B133); continue }
         head = normalise_head(first word) if cmd starts "/" else ""                (no slash supplied here — speech
                 is speech)
         define _record_practice_cmd(): append {Self, cmd, cmd: True} to the transcript and the file
@@ -199,8 +201,8 @@ if (c is issue-evidence-add) then { resolve the statement number against the tra
             append {Self, cmd, cmd: True} to the transcript and the file (RECORDED, WITHHELD FROM THE ROOM — R079)
             emit "recorded — <description>   (N pending, applied at close)"; continue
         }
-if (cmd starts "/") then { emit "UNKNOWN COMMAND <head> — not sent to the room. Known: ..." and the retype hint;
-        continue }
+if (cmd starts "/") then { emit "UNKNOWN COMMAND <head> — not sent to the room. Known: <what command_is_listed()
+        allows at this dev state>" and the retype hint; continue }                 R542
 if (cmd empty) then { continue }
         raw = cmd; cmd, self_remembered = apply_self_remember(guard, Self, cmd)
 if (self_remembered) then { emit "(remember recorded to self/remember.toml — stripped, private)" }
@@ -234,9 +236,11 @@ if (aborted) then { emit "aborted. transcript kept"; if live and a part spoke th
         Ctrl-C: fail("close INTERRUPTED"); emit "THE TRANSCRIPT IS INTACT", the resume line, METER.report(); return
                 circle_failures_report()
 if (live) then {
+        emit "filing, then dreaming and synthesis — 5-10 minutes is not unusual"        dev on or off
         run_verifier(OT); transcript_store.circle_commit(OT, written)
-        emit "phase 2 — dreaming and synthesis"; if inter_circle.circle_process(OT, live=True, confirmed=confirmed,
-                say=...) then fail("phase 2 ... did not complete")
+        emit "phase 2 — dreaming and synthesis" (dev on only); if inter_circle.circle_process(OT, live=True,
+                confirmed=confirmed, say=<emit, dev on only>, warn=<emit, always — a refused distillate,
+                R532>) then fail("phase 2 ... did not complete")
 } else { emit the sandbox notes; commit_sandbox(OT) }
     emit METER.report(); emit "closed. transcript: <path>" on the CIRCLE channel; return circle_failures_report()
 ```

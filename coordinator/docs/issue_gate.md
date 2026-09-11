@@ -122,6 +122,9 @@ Since the TOML migration (2026-08-03), roughly half of what this file used to ch
             } else if (status is proposed) then {
                 if (it has no "ask" naming who would confirm it) then {
                     record it
+                } else if (the "ask" is not a list of non-empty strings) then {
+                    record it — R531: a sentence would be joined letter by
+                    letter into every part's BLOCK 2
                 }
             }
             if (status is not retired, and this node is live, and the

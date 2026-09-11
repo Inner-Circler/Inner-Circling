@@ -158,8 +158,8 @@ SELF_KEYWORDS = tuple(k for k in ASK_KEYWORDS if k not in PART_ONLY_KEYWORDS)
 # file.
 
 
-# DEFERRED_PROPOSE_COMMANDS — /issue-evidence-add, ruled into the table and
-# refused by the classifier below anyway — MOVED to command_surface.py beside
+# DEFERRED_PROPOSE_COMMANDS — a verb ruled into the table and refused by the
+# classifier below anyway; empty today — MOVED to command_surface.py beside
 # PROPOSE_SUBSET_COMMANDS, 2026-08-20 (code review), with PROPOSABLE_COMMANDS
 # (the table minus it) defined there too. It was declared here for one
 # afternoon, and help_system, which reads command_surface and never this
@@ -225,9 +225,10 @@ def _propose_command_shape(text: str) -> dict | None:
         propose-approval has ALWAYS been allowed to write the graph
         without one.
       issue_command
-        any other issue ruling that parses whole — today
-        issue-label-update. Approval runs the same precheck/apply the edge
-        shape does; nothing about that branch is edge-specific.
+        any other issue ruling that parses whole — issue-label-update, and
+        issue-evidence-add in the bracket's own form. Approval runs the same
+        precheck/apply the edge shape does; nothing about that branch is
+        edge-specific.
       dev_cmd
         /practice-add, /better-option-add, /issue-add — each run through
         its own cmd_* directly at approval (proposal_vetting.py), not through
@@ -246,13 +247,17 @@ def _propose_command_shape(text: str) -> dict | None:
     returns None for it before any shape is built. The branch went with the
     table entry rather than staying as unreachable code.
 
-    /issue-evidence-add IS IN R267's TABLE AND IS REFUSED HERE ANYWAY,
-    with `ok: False` and a reason rather than a silent fall-through to
-    free text. It addresses a statement BY ITS NUMBER, and the part,
-    quote and source are resolved against the LIVE TRANSCRIPT by
-    circle.py after parsing — a propose approved at a checkpoint has no
-    transcript to resolve against. Recognized, refused, and visibly
-    pending is the honest shape of "ruled, not yet buildable"."""
+    /issue-evidence-add IS PARSED IN THE BRACKET'S OWN FORM,
+    `/issue-evidence-add nNNNN "why"` — no statement number
+    (R541). A part never sees one; the statement
+    it offers is the one the bracket rides in, which propose_lifecycle reads
+    at the close and the row carries to approval. The typed form's number
+    is refused here with that reason.
+
+    A DEFERRED VERB (command_surface.DEFERRED_PROPOSE_COMMANDS, empty today)
+    is refused with `ok: False` and a reason rather than a silent
+    fall-through: recognized, refused, and visibly pending is the honest
+    shape of "ruled, not buildable from a bracket"."""
     stripped = text.strip()
     if stripped.startswith("/"):
         stripped = stripped[1:].lstrip()
@@ -273,12 +278,11 @@ def _propose_command_shape(text: str) -> dict | None:
         return None
     if head in DEFERRED_PROPOSE_COMMANDS:
         return {"shape": "issue_command", "ok": False,
-                "why": ("issue-evidence-add resolves its quote against the "
-                        "live transcript, which a checkpoint has not got — "
-                        "rule it at cmd> instead")}
+                "why": (f"{head} is ruled proposable but cannot be offered "
+                        f"from a bracket — type it at cmd> instead")}
     # THE GROUP NARROWS, B122 (2026-09-07). The two checks above are about the
-    # VERB — what the code can execute at all, and the one verb ruled in and not
-    # yet buildable — and they are group-independent facts, so they come first:
+    # VERB — what the code can execute at all, and a verb ruled in and not
+    # buildable — and they are group-independent facts, so they come first:
     # a deferred verb must keep its own reason in every group rather than being
     # reported as "not on the list". This one is about the GROUP, and it takes
     # the ordinary MALFORMED path (None) precisely because that path names what
@@ -287,7 +291,8 @@ def _propose_command_shape(text: str) -> dict | None:
     if head not in CS.command_proposable_read():
         return None
     if head in IC.HEADS:
-        parsed, why = IC.issue_command_parse(head + " " + rest.strip(), "")
+        parsed, why = IC.issue_command_parse(head + " " + rest.strip(), "",
+                                             own_statement=True)
         shape = ("issue-relationship-add" if head == "/issue-relationship-add"
                  else "issue_command")
         if parsed is None:

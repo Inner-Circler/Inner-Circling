@@ -5,6 +5,13 @@ not track empty directories. Everything else here is written by the program as
 you use it, one file per circle, named by the circle's open time (`<OT>`):
 
 ```
+open_<OT>.json          the open verifier's report — whether the open left
+                        behind what it should: a transcript headed with its
+                        own open time, one working-set entry, and a whole
+                        prompt capture covering every part. Written at the
+                        end of every live open; it reports, and never stops
+                        a circle. The close commits it with the circle, and
+                        `circle_audit.py` reads it back.
 closing_<OT>.json       the start-of-close marker, written the moment a live
                         /close begins and never deleted — a close that died
                         part-way leaves this file with no close_<OT>.json

@@ -651,6 +651,14 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     written beside them."""
     paths = [record_dir(ROOT, "circles") / f"circle_{ot}.md",
              ROOT / "work" / "logs" / f"close_{ot}.json"]
+    # THE OPEN REPORT, filed with the circle it describes (R537, 2026-09-10):
+    # what circle_open_verify.py found the open left behind. Staged only when it exists — a
+    # circle opened before the verifier has none — and committable because .gitignore
+    # re-includes open_*.json beside close_*.json. `git add --` refuses the whole list when
+    # one path is ignored, so that negation and this line hold each other up.
+    open_report = ROOT / "work" / "logs" / f"open_{ot}.json"
+    if open_report.is_file():
+        paths.append(open_report)
     # work/prompts/<OT>/ and every work/prompts/<OT>_resume_<k>/
     # a resumed sitting wrote. The resume captures were missed on the first
     # live resume, 2026-08-02.
@@ -688,8 +696,8 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
 
 
 def circle_commit(ot: str, written: list[str]) -> str:
-    """Record this circle in git: the transcript, each short_term it wrote, and
-    the close report. ONLY those paths — never `add -A`, so a file you were
+    """Record this circle in git: the transcript, each short_term it wrote, the
+    close report and the open report. ONLY those paths — never `add -A`, so a file you were
     editing while the circle ran is not swept into a machine commit.
 
     Returns WHICH OF THREE THINGS HAPPENED, because the caller must tell them

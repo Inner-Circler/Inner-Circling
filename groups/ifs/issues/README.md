@@ -7,7 +7,7 @@ An issue is something OWED — a thing the circle has recognised and not
 yet resolved. Nodes carry a label, a description, evidence quoted from
 circles, and edges to other nodes.
 
-**The filename prefix is the STATUS; the id is the identity.**
+**The filename prefix shows the STATUS; the id is the identity.**
 
 ```
 nNNNN.toml    live
@@ -19,7 +19,13 @@ D_nNNNN.toml  declined
 X_nNNNN.toml  retired
 ```
 
-Renaming the file changes the status. The `n####` inside never changes.
+The prefix follows the node's own `status` field, and
+`memory/issue_gate.py` refuses a file whose name and field disagree — so
+renaming a file does not change its status, it breaks the node. Change a
+status with `memory/issue_status.py` (`coordinator/docs/issue_status.md`),
+or with `/issue-status nNNNN = <value>` inside a circle, a developer verb
+in the two-pane interface: either one writes the field, the rename and a
+history line as one act. The `n####` inside never changes.
 
 **No nodes ship, on purpose, and your ids will be your own.**
 Node ids are allocated in your graph, counting up from the first. They

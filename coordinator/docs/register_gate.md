@@ -24,15 +24,18 @@ it had in `record_model.py`; only the file moved.
 its kind, then every TOML register by its `REGISTERS` spec (`register_compare()`: append-only,
 mutable-fields-only, register_dumps() fixed points, caps, id sequence, date order, chain target, state
 vocabulary). `record_tree_verify()` is the same without a baseline (`register_verify()`). The spec
-table's caps are IMPORTED from each register's own module through late readers (`_ch_cap`, `_tp_cap`,
-`_mem_cap`, `_so_order`), never copied — the one-fact-one-home rule `system_unique_home_verify.py` enforces
-elsewhere. It writes nothing, anywhere, ever.
+table's caps and orders are IMPORTED from each register's own module through late readers (`_ch_cap`,
+`_tp_cap`, `_tp_order`, `_mem_cap`, `_mem_order`, `_so_order`, `_cj_cap`, `_cj_order`) — the
+one-fact-one-home rule `system_unique_home_verify.py` enforces elsewhere. All but the two topic readers
+return a literal copy when that import fails; `test_register_gate.py` forces the failure and holds each
+ORDER copy equal to its register's own. It writes nothing, anywhere, ever.
 
 ## DEPENDENCIES
 Standard library: `datetime`, `pathlib`, `re`, `tomllib`/`tomli` (inside `_load_register`). Sibling
 modules: `record_model` (as `M`), `proposal_manager` and `practice_manager` (their `ORDER` tuples, read by
 `REGISTERS`), `REGISTER_CLASS` (inside `_fixed_point`), and the late cap readers'
-`circle_history_manager`, `topic_manager`, `remember_manager`, `circle_observation_manager`.
+`circle_history_manager`, `topic_manager`, `remember_manager`, `circle_observation_manager`,
+`circle_journal_manager`.
 
 ## EXTERNAL FILES
 Read only: every file `_tree_files()` names under parts/ and self/ of the trees it is handed.

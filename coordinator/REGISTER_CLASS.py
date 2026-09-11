@@ -5,8 +5,8 @@ REGISTER_CLASS.py — the one reader and writer for the `self/` hand-edited
 TOML registers. (All under self/ since 2026-08-16 — best_practices.toml
 returned there from coordinator/ by Self's memory/ ruling.)
 
-    self/best_practices.toml                how the CIRCLE behaves, AND how
-                                            THE OPERATOR moves — merged
+    self/best_practices.toml                how the CIRCLE behaves, AND
+                                            "how you move" — merged
                                             2026-08-11 (R133); the operator's
                                             addressee is "Self"
     self/proposals.toml               P-#   a PART's [proposed: <command>] annotation,

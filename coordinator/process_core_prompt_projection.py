@@ -214,6 +214,9 @@ def group_best_practices() -> str:
     out = ["## Best practices", ""]
     out += [f"- {p['id']} — {p['title']}" for p in all_parts]
     if for_self:
+        # The heading names the ADDRESSEE VALUE, not the person: a better option
+        # is "how you move" everywhere the operator reads, but in BLOCK 1 "you"
+        # is the part, so "for you" here would misdirect it (R550).
         out += ["", "### Better options (for Self)", ""]
         out += [f"- {p['id']} — {p['title']}" for p in for_self]
     return "\n".join(out)

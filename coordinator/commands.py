@@ -427,7 +427,7 @@ def command_practice_list(rest: str = "") -> None:
 
 
 def command_better_option_list(rest: str = "") -> None:
-    """/better-option-list — how SELF moves: the rows of the one register
+    """/better-option-list — "how you move": the rows of the one register
     (R133) addressed to Self, numbered on their own. Minted 2026-08-21; a
     USER verb, always visible, while /better-option-add is DEV for now.
     `<n>` shows one row whole (B133)."""
@@ -600,7 +600,7 @@ def _add_practice_row(text: str, addressee: str, usage: str,
 
     ONE REGISTER, TWO ADDRESSEES (R133): both write
     self/best_practices.toml and differ in `addressee` alone — "All parts"
-    is how the CIRCLE behaves, "Self" is how SELF moves. They are two VERBS
+    is how the CIRCLE behaves, "Self" is "how you move". They are two VERBS
     rather than one verb with a flag because the two read entirely
     differently to whoever is addressed, and because a proposal names a
     verb; they are ONE BODY because practice_manager.practice_add()'s own
@@ -629,7 +629,7 @@ def _add_practice_row(text: str, addressee: str, usage: str,
 
 
 def command_better_option_add(text: str, record=None) -> tuple[bool, str]:
-    """A row addressed to Self — how SELF moves, not how the CIRCLE behaves.
+    """A row addressed to Self — "how you move", not how the CIRCLE behaves.
 
     IT EXISTS SO THE ANNOTATION GRAMMAR COULD SHRINK (R270). Until it did,
     the only way to propose one was `[proposed better_option: ...]`, one of
@@ -638,7 +638,7 @@ def command_better_option_add(text: str, record=None) -> tuple[bool, str]:
     grammar collapsed to."""
     import practice_manager as PM
     return _add_practice_row(text, PM.BETTER_OPTION_ADDRESSEE,
-                      "/better-option-add <how Self moves>", record)
+                      "/better-option-add <how you move>", record)
 
 
 def command_practice_add(text: str, record=None) -> tuple[bool, str]:

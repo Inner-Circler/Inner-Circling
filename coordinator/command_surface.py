@@ -141,9 +141,9 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "a best practice, in YOUR words, punctuation and\n"
      "all. Always addressed to the whole circle.\n"
      "Written immediately — /abort does not undo it", "command"),
-    ("/better-option-add <how Self moves>",
+    ("/better-option-add <how you move>",
      "the same register, addressed to Self rather than\n"
-     "the circle — how Self moves, not how the room\n"
+     "the circle — how you move, not how the room\n"
      "behaves. One register holds both.\n"              # R133 merged the two files
      "Written immediately — /abort does not undo it", "command"),
     ("/practice-list [<n>]",
@@ -152,7 +152,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "/better-option-list's, since 2026-08-21); `<n>` shows\n"
      "one whole", "command"),
     ("/better-option-list [<n>]",
-     "how Self moves — the rows of the same register\n"
+     "how you move — the rows of the same register\n"
      "addressed to Self, numbered on their own; `<n>`\n"
      "shows one whole. Runnable at any dev state;\n"
      "listed only under --dev", "command"),

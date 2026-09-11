@@ -1,5 +1,4 @@
 # The Tender Child — Long-Term Memory
-Bootstrap: (set at first circle)
 
 ## Who I am
 

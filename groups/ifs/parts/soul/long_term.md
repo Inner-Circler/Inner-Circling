@@ -1,5 +1,4 @@
 # The Soul — Long-Term Memory
-Bootstrap: (set at first circle)
 
 ## What I am
 

@@ -389,7 +389,7 @@ def _record_scaffold(name: str, roles: list[str]) -> list[str]:
     role's long_term.md THEN its part.toml, part_add.part_add()'s order), then the three stub
     files, each only if absent. Returns what was written, tree-relative, in order."""
     from atomic_write import record_atomic_write
-    from part_add import LONG_TERM_TEMPLATE
+    from part_add import part_long_term_seed_render
     tree = _RP.group_tree(name)
     base = _parts_base(name)
     live = {d for d, _t in R.part_scan(base)[0]} if base.is_dir() else set()
@@ -401,8 +401,7 @@ def _record_scaffold(name: str, roles: list[str]) -> list[str]:
         d.mkdir(parents=True, exist_ok=False)
         tag = _role_tag_derive(role)
         record_atomic_write(d / "long_term.md",
-                            LONG_TERM_TEMPLATE.format(tag=tag,
-                                                      identity=_ROLE_IDENTITY.format(name=name)))
+                            part_long_term_seed_render(tag, _ROLE_IDENTITY.format(name=name)))
         record_atomic_write(d / R.MARKER,
                             "# part.toml — the presence of THIS FILE is what makes this "
                             "directory a part.\n# Created by /group-add (coordinator/"

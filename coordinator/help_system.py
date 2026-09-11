@@ -225,7 +225,7 @@ def _verb_pairs(heads, specs: dict[str, tuple[str, str]]) -> list[tuple[str, str
 # construction is required."* A spec line teaches the SHAPE of an argument and
 # nothing else; whether the quotes are typed, and whether a value may contain
 # a space, is exactly what a reader cannot get from `"label"` versus
-# `<how Self moves>` — and getting it wrong is silent. A quoted value typed
+# `<how you move>` — and getting it wrong is silent. A quoted value typed
 # without its quotes does not fail: it stops at the first space and the
 # remainder becomes the next argument.
 #

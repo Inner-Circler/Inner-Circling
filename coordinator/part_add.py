@@ -46,6 +46,7 @@ from __future__ import annotations
 
 import pathlib
 import re
+from datetime import datetime
 
 import part_roster as R
 import seam
@@ -57,8 +58,11 @@ from REGISTER_CLASS import register_list_footer, register_row_nth_read
 NAME_RE = re.compile(r"^[a-z][a-z0-9_]*$")
 
 # The identity seed's shape — the person's words, marked as the person's.
+# Bootstrap is the day the part was added: the shape every accepted part file
+# carries, and nothing parses it. The header reaches BLOCK 3 whole, so it
+# must never hold a placeholder a part would read as its own.
 LONG_TERM_TEMPLATE = """# The {tag} — Long-Term Memory
-Bootstrap: (set at first circle)
+Bootstrap: {date}
 
 ## How my human describes me
 
@@ -66,6 +70,16 @@ Bootstrap: (set at first circle)
 
 ## required end
 """
+
+
+def part_long_term_seed_render(tag: str, identity: str) -> str:
+    """The long_term.md a new part starts from: LONG_TERM_TEMPLATE with the
+    Tag, the day it was added, and the person's words. The one place the
+    template is filled — part_add() and group_manager's record scaffold both
+    call it, so the header cannot drift between the two doors."""
+    return LONG_TERM_TEMPLATE.format(tag=tag.strip(),
+                                     date=datetime.now().strftime("%Y-%m-%d"),
+                                     identity=identity.strip())
 
 
 def part_name_derive(tag: str) -> str:
@@ -148,9 +162,7 @@ def part_add(name: str, tag: str, identity: str) -> tuple[bool, str]:
     from atomic_write import record_atomic_write
     d = R.PARTS_DIR / name
     d.mkdir(parents=True)
-    record_atomic_write(d / "long_term.md",
-                 LONG_TERM_TEMPLATE.format(tag=tag.strip(),
-                                           identity=identity.strip()))
+    record_atomic_write(d / "long_term.md", part_long_term_seed_render(tag, identity))
     record_atomic_write(d / R.MARKER,
                  "# part.toml — the presence of THIS FILE is what makes this "
                  "directory a part.\n# Created by /part-add (docs/"

@@ -5,7 +5,7 @@ practice = []
 [doc]
 preamble = """
 
-BEST PRACTICES -- how the CIRCLE behaves and, merged in since R133, how the OPERATOR moves. Routing is by the `addressee` field alone (R134); coordinator/practice_manager.py selects the rows (practice_broadcast() for BLOCK 1, practice_narrowcast() for the addressed part's BLOCK 3), and is the one reader and writer of this file.
+BEST PRACTICES -- how the CIRCLE behaves and, merged in since R133, how you move. Routing is by the `addressee` field alone (R134); coordinator/practice_manager.py selects the rows (practice_broadcast() for BLOCK 1, practice_narrowcast() for the addressed part's BLOCK 3), and is the one reader and writer of this file.
 
 **Entries: 0** -- a TALLY, never a cap.
 

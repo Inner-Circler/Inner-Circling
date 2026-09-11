@@ -24,7 +24,7 @@ to hold ONLY circle-facing practices, addressed by a `**<Addressee>** —` text
 prefix that `circle.py` scraped out of a rendered `self/circle_briefing.md`.
 Two things changed that:
 
-    R133   self/better_options.toml — "how SELF moves" — merged in as
+    R133   self/better_options.toml — "how you move" — merged in as
            `addressee = "Self"` records. "Better option" is not a second
            class; it is what a <practice> whose addressee is "Self" is
            CALLED. Broadcast to every part, deliberately, so parts can
@@ -214,7 +214,7 @@ def practice_narrowcast(part_tag: str) -> list[dict]:
 # WHO A ROW IS FOR IS `addressee`, AND IT IS THE ONLY THING SEPARATING
 # THE TWO OBJECTS THIS REGISTER HOLDS — R133 merged
 # self/better_options.toml in here, so a PRACTICE ("All parts", how the
-# CIRCLE behaves) and a BETTER OPTION ("Self", how SELF moves) are rows
+# CIRCLE behaves) and a BETTER OPTION ("Self", "how you move") are rows
 # of one table with one id series. 15 and 19 of the 34 rows today.
 #
 # ADD IS THE ONLY OPERATION THAT HAS TO BE TOLD WHICH. A row already in
@@ -423,7 +423,7 @@ def practice_deny(pid: str) -> tuple[bool, str]:
 
 def _rows(better_options: bool) -> list[dict]:
     """The two listings' partition of the one register (R133): the rows
-    addressed to Self are the BETTER OPTIONS — how the operator moves; every
+    addressed to Self are the BETTER OPTIONS — "how you move"; every
     other row — the circle's, and the ones addressed to one part — is a
     PRACTICE. 2026-08-21: /better-option-list minted, /practice-list
     narrowed to its half."""

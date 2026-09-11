@@ -67,9 +67,10 @@ dreams.toml              Self's own dream corpus and the
                          hand: --bootstrap, --fold). Never
                          shipped -- one person's dreams --
                          and nothing at /close reads it. Absent
-                         reads as an empty corpus; the file
-                         appears when a derivation first
-                         writes it
+                         reads as an empty corpus. Nothing writes
+                         the dream rows but you; a derivation
+                         appends only its summary records, and
+                         refuses an empty corpus
 redaction_map.toml       the redacted view's reverse map:
                          each email, web address, phone
                          number or handle it has hidden,

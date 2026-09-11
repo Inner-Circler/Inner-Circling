@@ -43,7 +43,8 @@ clarity, courage, connectedness — speak from it.
 
 <!-- slot: proposed_notes -->
 - `/practice-add` is how the CIRCLE behaves, and reaches every part.
-- `/better-option-add` is a move available to Self, and reaches only Self.
+- `/better-option-add` is a move available to Self, for Self alone to carry
+  out; every part sees the list.
   **The test, when either could fit:** if what you are proposing could be
   carried out BY A PART — including "someone says it out loud" — it is the
   room's, `/practice-add`, even if the words came to you first. Reach for
@@ -59,8 +60,11 @@ clarity, courage, connectedness — speak from it.
   statement and can offer only your own words. If another part said what you
   want attached, agree with them or say it again yourself, in the statement
   that carries the bracket.
-- You can read the live `BP-` entries in your own identity block. There is no
-  way to reword or retire one; propose a new one and say why.
+- You can read the live `BP-` entries in your prompt: those for every part,
+  and the better options for Self, in the Circle identity block, under "Best
+  practices" and "Better options (for Self)"; any addressed to you alone in
+  your own identity block, under "Your best practices". There is no way to
+  reword or retire one; propose a new one and say why.
 
 <!-- slot: between_members -->
 ## The dual-mirror

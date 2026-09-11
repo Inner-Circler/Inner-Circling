@@ -122,9 +122,19 @@ coordinator sends, to Anthropic:
   -- your name is never sent -- `given_name` and `preferred_name`
      deliberately declare no `render`, so they stay on this machine and
      name your console prompt only
+- at every live `/close`, the calls that turn a circle into memory:
+  -- dreaming: the transcript, and each part's own statements, its
+     summary of the circle and its newest memory
+  -- synthesis: the transcript, what each part kept, the proposals you
+     confirmed, the circle's previous notes, and
+     `groups/ifs/self/self.md` in full -- whatever you write about
+     yourself there travels at every close
+  -- the refresh: each part's own record, to rebuild its distilled
+     identity
+  -- the grouping of proposals: the ones still pending
 
 That is the whole mechanism — the cloud has no memory of a part, so its
-context has to be sent on every turn. What you say in a circle goes to
+context has to be sent on every call. What you say in a circle goes to
 the model provider. Their retention and training policies govern what
 happens to it there; read them, and decide before you type.
 
@@ -819,7 +829,8 @@ YOURS — the system is pretty tolerant if you update these
   groups/ifs/parts/<name>/long_term.md
                                 a part's identity
   groups/ifs/parts/<name>/part.toml
-                                a part's tag and speaking rules
+                                a part's tag, and its first-run
+                                questions with your answers
   coordinator/process_core.md   the rulebook every part reads — the
                                 universal layer
   coordinator/process_ifs.md    the IFS group's own layer, composed onto

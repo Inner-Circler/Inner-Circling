@@ -248,11 +248,15 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/part-view <n>",
      "that part's long_term.md, verbatim, by /part-list's\n"
      "number — what /part-list <n> shows", "command"),
-    ("/part-delete <n>",
-     "remove a part — REFUSED for the group's reserved roles\n"
-     "and while a circle may be open; confirmation is typing\n"
-     "the DIRECTORY name. The record survives in git\n"
-     "(git log --all -- parts/<name>/)", "command"),
+    ("/part-retire <n>",
+     "retire a part: it leaves every circle, prompt and search,\n"
+     "and its record STAYS — the system respects records and\n"
+     "history. Its name stays taken; its old words stay in the\n"
+     "transcripts, marked retired. REFUSED for the group's\n"
+     "reserved roles and while a circle may be open;\n"
+     "confirmation is typing the DIRECTORY name. Reversal is\n"
+     "by hand: rename parts/<name>/retired.toml to part.toml",
+     "command"),                                          # B140; /part-delete until 2026-09-12
     # THE GROUP VERBS — a named, reusable roster (docs/CIRCLE_TYPES_DESIGN.md),
     # 2026-09-02. Same numbered/confirmation shape as the part verbs above.
     ('/group-add "<name>" <r1>,<r2>,... [layer=<path>]',
@@ -272,11 +276,13 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "one group's descriptor, whole, by /group-list's number,\n"
      "then its roles, flagging any that is no longer a real\n"
      "part — what /group-list <n> shows", "command"),
-    ("/group-update <n> <r1>,<r2>,... [layer=<path>]",
+    ("/group-update <n> <r1>,<r2>,...",
      "replace one group's roles in place, by /group-list's\n"
-     "number; the name stays (rename = delete + add); layer=\n"
-     "given replaces the group's layer file, omitted keeps it.\n"
+     "number; the name stays (rename = delete + add).\n"
      "IMMEDIATE — /abort does not undo it", "command"),
+     # layer= is still accepted and NOT ADVERTISED — R562 (2026-09-12): a layer is set at
+     # /group-add or by editing group.toml. Not in this text, not in the usage line, not in
+     # the man page's verb list.
     ("/group-delete <n>",
      "remove a group's descriptor — confirmation is typing the\n"
      "group's NAME. Refused while the folder holds a record;\n"
@@ -485,7 +491,7 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/observation-purge",
                  "/part-context-update", "/part-context-list",
                  "/part-context-clear", "/part-add", "/part-list",
-                 "/part-view", "/part-delete",
+                 "/part-view", "/part-retire",
                  "/group-add", "/group-list", "/group-view", "/group-update",
                  "/group-delete")
 
@@ -570,7 +576,7 @@ DEV_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-relationship-status", "/issue-relationship-list", "/issue-add",
     "/issue-apply", "/practice-delete", "/topic-list", "/topic-close",
     "/better-option-add", "/prompt-show",
-    "/part-view", "/part-delete",            # inspection and removal are tooling
+    "/part-view", "/part-retire",            # inspection and retirement are tooling
                                              # (Claude's reading; say the word to move them)
     "/group-view", "/group-delete",          # same split as the part verbs, 2026-09-02
     "/group-update",                         # beside view/delete, B112 2026-09-06

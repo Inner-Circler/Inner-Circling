@@ -743,6 +743,16 @@ only when a prompt is assembled. **A part
 is never created without Self's explicit agreement**, and that rule is in
 the rulebook every part reads.
 
+`/part-retire` is the other door, and it is not a delete. **The system
+respects records and history:** no command removes a part's record. A
+retired part leaves every circle, prompt and search from then on; its
+folder stays exactly where it is, its name stays its own, and what it
+said in past circles stays in the transcripts, marked retired. The parts
+are asked not to speak of it, and any bracket that names it is refused.
+To bring one back, rename `parts/<name>/retired.toml` to `part.toml` and
+put the name back on `roles` in the group's `group.toml`, both by hand —
+there is no command for that, on purpose.
+
 `docs/overview.md` covers the shape a circle takes and what happens when
 one closes, in plainer terms than this file.
 

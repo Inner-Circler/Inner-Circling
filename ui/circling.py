@@ -1371,7 +1371,7 @@ class CircleEngine:
         # classifies; `speaking_turn` below is a RENDER question ("does
         # circling draw its own prompt for this read"), not a channel one.
         self.speaking_turn = (channel == "circle"
-                              and prompt == f"\n{self._C.CONSOLE_NAME}> ")
+                              and prompt == f"\n{self._C.circle_prompt_read()}")   # R563: one source
         if self.speaking_turn:
             self.loop_reached = True         # see __init__ — never cleared
         # PREFILL BEFORE THE PROMPT, always: anything that waits for the
@@ -2335,8 +2335,12 @@ def _circle_prompt(state: AppState) -> str:
     2026-08-20: a healthy-looking prompt in front of an engine that had
     been gone for minutes."""
     backend = state.backend
-    name = getattr(getattr(backend, "_C", None), "CONSOLE_NAME", None)
-    base = f"{name}> " if name else state.circle.prompt
+    # THE ONE SOURCE, circle.py's own circle_prompt_read() — R563 (2026-09-12): the prompt carries
+    # the BOUND GROUP ("Self (ifs)> "), read at every render because the group can change at an
+    # open. Reading CONSOLE_NAME here and composing a second string is what this docstring's own
+    # history warns against.
+    prompt_read = getattr(getattr(backend, "_C", None), "circle_prompt_read", None)
+    base = prompt_read() if prompt_read else state.circle.prompt
     # "(waiting)" THE INSTANT A LINE IS SUBMITTED — 2026-08-21, the operator: *"Add
     # '(waiting)' to the circling pane prompt as soon as the user has input."*
     # The flags this function reads are the ENGINE THREAD's, and it has not
@@ -2358,11 +2362,11 @@ def _circle_prompt(state: AppState) -> str:
     fin = getattr(backend, "finished", None)
     started = getattr(backend, "_thread", None) is not None
     if backend is not None and started and fin is not None and fin.is_set():
-        return f"{name} (ended)> " if name else "Self (ended)> "
+        return f"{base[:-2]} (ended)> " if base.endswith("> ") else f"{base} (ended)> "
     taken = getattr(backend, "line_taken", None)
     if taken is not None and hasattr(taken, "is_set") and not taken.is_set():
         tag = _waiting_tag(backend)
-        return f"{name}{tag}> " if name else f"Self{tag}> "
+        return f"{base[:-2]}{tag}> " if base.endswith("> ") else f"{base}{tag}> "
     # "(wait)" means "a line typed here is not going to be read now".
     # That is true both when no read is pending AND when the pending one
     # is COMMAND channel (a ratification, a confirmation) — R221. The
@@ -2383,7 +2387,8 @@ def _circle_prompt(state: AppState) -> str:
             getattr(backend, "waiting_for_input", True)
             and getattr(backend, "waiting_for_channel", "circle") == "circle"):
         tag = _waiting_tag(backend)
-        return f"{name}{tag}> " if name else f"Self{tag}> "
+        # the wait-state tag goes INSIDE the "> " of whatever the prompt reads: "Self (ifs) (waiting)> "
+        return f"{base[:-2]}{tag}> " if base.endswith("> ") else f"{base}{tag}> "
     return base
 
 

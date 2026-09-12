@@ -96,6 +96,16 @@ PARTS_DIR = _RP.PARTS_DIR       # the default group's parts/ — record_paths.gr
 # that has none is reported, never silently skipped.
 MARKER = "part.toml"
 
+# THE RETIRED MARKER — B140, R559-R561 (2026-09-12). A directory carrying THIS file and no
+# part.toml is a RETIRED part: known, never attending. The record under it stays where every
+# close report, every transcript and every issue-graph quote expects it — the system respects
+# records and history — and the marker is the same document part.toml was, renamed, with
+# `retired = "<date>"` and `retired_why` appended. Retiring is that rename (/part-retire);
+# reversal is the rename back, by hand. A retired part's Tag and alt_tags stay TAKEN: they
+# resolve in DIR_BY_TAG_ALL so old transcripts parse and quotes stay attributed, and the scan
+# refuses a new part that claims one. Neither marker: still a problem, as before.
+RETIRED_MARKER = "retired.toml"
+
 # Not parts, and not reported as missing one either.
 SKIP_DIRS = frozenset({"__pycache__", ".git", ".venv"})
 
@@ -531,11 +541,20 @@ def part_scan(base: pathlib.Path | None = None
         return roster, alt, tails, [f"{base} does not exist — no parts to read"]
 
     seen: dict[str, str] = {}     # Tag (or alt Tag) -> dir that claimed it
+    # RETIRED FIRST, so a retired Tag is already TAKEN when the attending dirs are read and a
+    # part.toml that claims one is refused as a duplicate (R561) — the scan is alphabetical,
+    # and the order of the two passes must not decide which of two claimants wins.
+    for rdir, rdoc in part_retired_scan(base).items():
+        seen.setdefault(rdoc["tag"], rdir)
+        for a in rdoc["alt_tags"]:
+            seen.setdefault(a, rdir)
     for d in sorted(p for p in base.iterdir() if p.is_dir()):
         if d.name in SKIP_DIRS or d.name.startswith("."):
             continue
         f = d / MARKER
         if not f.is_file():
+            if (d / RETIRED_MARKER).is_file():
+                continue              # a RETIRED part: known, never attending — B140
             problems.append(f"parts/{d.name}/ has no {MARKER} — not a part. "
                             f"Add one naming its Tag, or move the directory "
                             f"out of parts/.")
@@ -609,14 +628,82 @@ def part_scan(base: pathlib.Path | None = None
     return roster, alt, tails, problems
 
 
+def part_retired_scan(base: pathlib.Path | None = None) -> dict[str, dict]:
+    """The RETIRED parts of one parts/ — {dir: {tag, alt_tags, retired, retired_why}} — B140
+    (R559-R561, 2026-09-12). A directory carrying RETIRED_MARKER and NOT the marker. A dir with
+    both is attending (part.toml wins; a half-reversed retire) and is not listed here.
+
+    A SECOND READER, not a fifth return value: part_scan()'s 4-tuple is unpacked at 28 call
+    sites. NEVER RAISES, like part_scan(): a retired.toml that will not load, or names no Tag,
+    is simply not a retired part — it is then a directory with no marker, which part_scan()
+    reports. Alt tags are read the way part_scan() reads them, so a rename in the part's
+    history stays resolvable after it retires."""
+    base = base or PARTS_DIR
+    out: dict[str, dict] = {}
+    if not base.is_dir():
+        return out
+    for d in sorted(p for p in base.iterdir() if p.is_dir()):
+        if d.name in SKIP_DIRS or d.name.startswith("."):
+            continue
+        f = d / RETIRED_MARKER
+        if not f.is_file() or (d / MARKER).is_file():
+            continue
+        try:
+            doc = tomllib.loads(f.read_text(encoding="utf-8"))
+        except Exception:                                   # noqa: BLE001
+            continue
+        tag = doc.get("tag")
+        if not isinstance(tag, str) or not tag.strip():
+            continue
+        alts = doc.get("alt_tags", [])
+        if not isinstance(alts, list):
+            alts = []
+        out[d.name] = {"tag": tag.strip(),
+                       "alt_tags": [a.strip() for a in alts
+                                    if isinstance(a, str) and a.strip()],
+                       "retired": str(doc.get("retired", "")).strip(),
+                       "retired_why": str(doc.get("retired_why", "")).strip()}
+    return out
+
+
+def part_retired_named(text: str, retired: "dict[str, dict] | None" = None
+                       ) -> "tuple[str, str] | None":
+    """(Tag, date) of the first RETIRED part the text names, else None — R559: an annotation
+    (remember, recall, propose) naming a retired part is refused; ordinary prose is not, so
+    this is called on a bracket's body, never on a statement. Whole-word, case-insensitive,
+    over each retired part's Tag and alt_tags."""
+    import re
+    table = RETIRED if retired is None else retired
+    for _d, doc in table.items():
+        for name in [doc["tag"], *doc["alt_tags"]]:
+            if re.search(r"(?<!\w)" + re.escape(name) + r"(?!\w)", text, re.I):
+                return doc["tag"], doc["retired"]
+    return None
+
+
 ROSTER, ALT_TAGS, IDENTITY_TAILS, PROBLEMS = part_scan()
+RETIRED: dict[str, dict] = part_retired_scan()               # dir -> {tag, alt_tags, retired, retired_why}
 
 DIR_NAMES: list[str] = [d for d, _t in ROSTER]               # alphabetical
 ALPHA_DIR_NAMES: list[str] = DIR_NAMES                       # alias, see above
 TAGS: list[str] = [t for _d, t in ROSTER]                    # same order
 TAG_BY_DIR: dict[str, str] = dict(ROSTER)                    # dir -> Tag
 DIR_BY_TAG: dict[str, str] = {t: d for d, t in ROSTER}       # Tag -> dir, current only
-DIR_BY_TAG_ALL: dict[str, str] = {**DIR_BY_TAG, **ALT_TAGS}  # + historical
+
+
+def _retired_tag_dirs(retired: dict[str, dict]) -> dict[str, str]:
+    """Tag and alt_tags -> dir for every retired part: the historical half DIR_BY_TAG_ALL
+    carries so an old transcript's `[Tag]:` lines still resolve after the part retires."""
+    out: dict[str, str] = {}
+    for d, doc in retired.items():
+        out[doc["tag"]] = d
+        for a in doc["alt_tags"]:
+            out[a] = d
+    return out
+
+
+DIR_BY_TAG_ALL: dict[str, str] = {**DIR_BY_TAG, **ALT_TAGS,
+                                  **_retired_tag_dirs(RETIRED)}  # + historical + retired
 
 
 @_RP.group_follow
@@ -629,15 +716,18 @@ def part_roster_rebind() -> None:
     global PARTS_DIR
     PARTS_DIR = _RP.PARTS_DIR
     roster, alt, tails, probs = part_scan(PARTS_DIR)
+    retired = part_retired_scan(PARTS_DIR)
     ROSTER[:] = roster
     ALT_TAGS.clear(); ALT_TAGS.update(alt)
     IDENTITY_TAILS.clear(); IDENTITY_TAILS.update(tails)
     PROBLEMS[:] = probs
+    RETIRED.clear(); RETIRED.update(retired)
     DIR_NAMES[:] = [d for d, _t in roster]
     TAGS[:] = [t for _d, t in roster]
     TAG_BY_DIR.clear(); TAG_BY_DIR.update(dict(roster))
     DIR_BY_TAG.clear(); DIR_BY_TAG.update({t: d for d, t in roster})
-    DIR_BY_TAG_ALL.clear(); DIR_BY_TAG_ALL.update({**DIR_BY_TAG, **alt})
+    DIR_BY_TAG_ALL.clear()
+    DIR_BY_TAG_ALL.update({**DIR_BY_TAG, **alt, **_retired_tag_dirs(retired)})
 
 
 def statement_re(tags):

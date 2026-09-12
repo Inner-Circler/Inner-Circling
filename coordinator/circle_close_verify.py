@@ -506,7 +506,11 @@ def circle_close_postcondition_verify(name: str, report: dict, root: Path,
     renamed_rows: set = set()
     paired_speakers: set = set()
     unmatched = {p: n for p, n in spoke.items() if p not in rows}
-    for part in [p for p in rows if p not in roster]:
+    # A RETIRED PART IS NOT A RENAME CANDIDATE — B140 (2026-09-12): its directory is off today's
+    # roster by design, still on disk, and its Tag still resolves, so pairing it with a new
+    # speaker on a matching count would call a retirement a rename. It takes the ordinary
+    # checks below, which its kept short_term satisfies.
+    for part in [p for p in rows if p not in roster and p not in R.RETIRED]:
         n = rows[part].get("statements")
         mate = next((s for s, m in unmatched.items() if m == n), None)
         if mate is None:

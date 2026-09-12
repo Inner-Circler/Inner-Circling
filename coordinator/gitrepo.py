@@ -706,7 +706,7 @@ def system_git_paths_commit(paths: list[pathlib.Path], message: str, log,
         system_git_unconfigured_report(log)
         return False
     # A PATH THAT IS GONE IS STILL COMMITTED WHEN GIT TRACKS IT — the deletion is the change.
-    # /part-delete removes a folder and then commits it, and this loop kept only paths that
+    # /part-delete (now /part-retire) removed a folder and then committed it, and this loop kept only paths that
     # exist, so that commit found nothing and the deletion sat unstaged (found 2026-09-11,
     # R548). A gone path git never tracked is still skipped.
     rel = []

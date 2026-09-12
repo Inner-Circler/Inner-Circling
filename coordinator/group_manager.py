@@ -25,7 +25,7 @@ initialization sequence, reserved dirs, and user identity will become group spec
     display            what a person reads ("IFS Circle")
     default            true on the one group a bare open runs (at most one)
     roles              the parts/<dir>/ names under the group's own tree — the roster
-    reserved           the roles /part-delete refuses
+    reserved           the roles /part-retire refuses
     initialization     which roles' first-run dialogs come first; the rest in roster order
     layer              the group's BLOCK 1 layer file, a path relative to the tree (B115)
     member/members     what this group calls one of its own, singular and plural — the
@@ -104,7 +104,7 @@ _HEADER = (
     "# group.toml — the presence of THIS FILE is what makes this folder a GROUP (R468,\n"
     "# 2026-09-07; R123's part.toml rule one level up). coordinator/group_manager.py writes\n"
     "# it; record_paths.py reads it. It carries what shipped code must not hardcode about\n"
-    "# ONE group: its roles, the roles /part-delete refuses, which roles' first-run dialogs\n"
+    "# ONE group: its roles, the roles /part-retire refuses, which roles' first-run dialogs\n"
     "# come first, which role's answer names the console, its BLOCK 1 layer, the commands its\n"
     "# parts may propose. The folder's name is the group's name.\n")
 
@@ -169,7 +169,7 @@ def group_descriptor_write(name: str, doc: dict) -> pathlib.Path:
 def group_roles_edit(tree: pathlib.Path, *, add: str = "", drop: str = "") -> "pathlib.Path | None":
     """One role onto, or off, a group's list — the parts commands' half of the descriptor
     (R548, D127: *"D127 - yes, the part must be included next circle."*).
-    /part-add puts `add` on `roles`; /part-delete takes `drop` off `roles` and `initialization`.
+    /part-add puts `add` on `roles`; /part-retire takes `drop` off `roles` and `initialization`.
 
     `tree` is the group's folder, the parent of the parts/ the command acts on, so a probe's temp
     tree is the one edited. ONLY THE CHANGED LISTS ARE REWRITTEN, in place and in the form

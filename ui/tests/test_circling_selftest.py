@@ -823,21 +823,21 @@ def self_test() -> int:
     eng_w.loop_reached = True               # a Self> park implies the loop
     s_w = C.AppState(4, 4, backend=eng_w)
     check("parked at Self>: the plain prompt",
-          C._circle_prompt(s_w) == f"{eng_w._C.CONSOLE_NAME}> ")
+          C._circle_prompt(s_w) == eng_w._C.circle_prompt_read())
     eng_w.submit_circle("a statement")      # engine thread has NOT woken yet
     check("the moment a line is submitted the row says (waiting), even "
           "though the engine's own flags still read 'parked' — line_taken "
           "is cleared on this thread, before the put; NAMED since D62 (a)",
           C._circle_prompt(s_w)
-          == f"{eng_w._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
+          == f"{eng_w._C.circle_prompt_read()[:-2]} (waiting — the parts are replying)> ")
     eng_w.line_taken.set()                  # the read returned...
     eng_w.waiting_for_input = False         # ...and the loop is busy
     check("...and stays (waiting) while the parts reply",
           C._circle_prompt(s_w)
-          == f"{eng_w._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
+          == f"{eng_w._C.circle_prompt_read()[:-2]} (waiting — the parts are replying)> ")
     eng_w.waiting_for_input = True
     check("...until the loop is back at its read",
-          C._circle_prompt(s_w) == f"{eng_w._C.CONSOLE_NAME}> ")
+          C._circle_prompt(s_w) == eng_w._C.circle_prompt_read())
 
     # --- B66: the tick's baseline is what was DRAWN, never a loop copy --
     # The install circle's screen, 2026-08-25: an invalid working-set
@@ -1449,7 +1449,7 @@ def self_test() -> int:
     # bare duplicate prompt row landing right above the real "Self> "
     # input row on every single turn. -----------------------------
     eng4 = C.CircleEngine(queue.Queue())
-    plain_prompt = f"\n{eng4._C.CONSOLE_NAME}> "
+    plain_prompt = f"\n{eng4._C.circle_prompt_read()}"     # circle.py's own Self-turn prompt (R563)
     holder: dict[str, str] = {}
 
     def _blocked_read(prompt: str, channel: str = "circle") -> None:
@@ -1495,8 +1495,8 @@ def self_test() -> int:
     check("circle.py's own Self-turn read_line call still has the exact "
           "shape this suppression assumes — catches drift if that call "
           "site ever changes format",
-          'cmd = read_line(f"\\n{CONSOLE_NAME}> ", channel="circle").strip()'
-          in circle_src)
+          'cmd = read_line(f"\\n{circle_prompt_read()}", channel="circle").strip()'
+          in circle_src)                      # R563: the prompt is circle_prompt_read()'s
 
     # --- RULED 2026-08-13: only one prompt, and it names CONSOLE_NAME —
     # _circle_prompt() must derive from circle.py's own attribute, not a
@@ -1508,11 +1508,11 @@ def self_test() -> int:
           "second hardcoded literal (shown waiting/opening — eng7 was never "
           "started, so waiting_for_input is still False)",
           C._circle_prompt(s7)
-          == f"{eng7._C.CONSOLE_NAME} (waiting — opening the circle)> ")
+          == f"{eng7._C.circle_prompt_read()[:-2]} (waiting — opening the circle)> ")
     eng7.waiting_for_input = True
     check("...and drops the (waiting) suffix once actually parked at "
           "read_line — same name either way",
-          C._circle_prompt(s7) == f"{eng7._C.CONSOLE_NAME}> ")
+          C._circle_prompt(s7) == eng7._C.circle_prompt_read())
 
     # --- waiting_for_input: the replacement signal for the suppressed
     # echo above. True only while the background thread is actually
@@ -1553,12 +1553,12 @@ def self_test() -> int:
           "IFS_USER_NAME is set to; eng5's speaking turn above set "
           "loop_reached, so the busy state names the parts)",
           C._circle_prompt(busy_state)
-          == f"{eng5._C.CONSOLE_NAME} (waiting — the parts are replying)> ")
+          == f"{eng5._C.circle_prompt_read()[:-2]} (waiting — the parts are replying)> ")
 
     eng5.waiting_for_input = True
     check("a real engine genuinely blocked in read_line shows the plain "
           "prompt, same name — safe to type, it will be read now",
-          C._circle_prompt(busy_state) == f"{eng5._C.CONSOLE_NAME}> ")
+          C._circle_prompt(busy_state) == eng5._C.circle_prompt_read())
 
     # --- Regression: body text and cursor column must come from the SAME
     # read of waiting_for_input, not two independent ones. Reported live:

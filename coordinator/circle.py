@@ -275,6 +275,16 @@ HERE = pathlib.Path(__file__).resolve().parent
 SELF_DISPLAY = ID.DISPLAY
 CONSOLE_NAME = ID.user_name_read()
 
+
+def circle_prompt_read() -> str:
+    """The Self> prompt's text, with the BOUND GROUP — R563 (2026-09-12): "add the bound group in
+    /status and prompt line". Every self/ register a cmd> verb writes is the bound group's, so the
+    prompt says which: `Self (ifs)> `. Read at every prompt, not once, because the window and the
+    Ticker run more than one circle in a process and the group can change at an open. ui/circling.py's
+    _circle_prompt() reads THIS, so the two prompts cannot disagree. Console-only, as CONSOLE_NAME
+    is: never written to a transcript, never sent to a model."""
+    return f"{CONSOLE_NAME} ({_RP.group_read()})> "
+
 # MODEL MOVED to llm_client.py, 2026-08-16 (phase 2 stage 1), with
 # CACHE_TTL, the RATE_* table and SHORT_TERM_SECTIONS — the transport
 # owns its model id and rates; the names this file still uses are
@@ -1093,7 +1103,7 @@ def main() -> int:
             # text never leaves the console — the transcript always records
             # SELF_DISPLAY ("Self") regardless of what this prompt shows, so
             # personalising it here carries no PII into a part's prompt.
-            cmd = read_line(f"\n{CONSOLE_NAME}> ", channel="circle").strip()
+            cmd = read_line(f"\n{circle_prompt_read()}", channel="circle").strip()
             # THE WORD "help" ALONE IS /help — the operator, 2026-08-25
             # (R347's session): "Accept the single word
             # '[Hh]elp' alone at the circle pane prompt as a synonym for
@@ -1248,6 +1258,7 @@ def main() -> int:
             # capture's manifest — it is a record of what was assembled,
             # which is a different job from telling Self the size.
             emit("command", f"\n  {ROOT.name}  ({'LIVE' if args.live else 'dry-run'})"
+                  f"\n  group {_RP.group_read()}"
                   f"\n  {len(parts)} parts")
             emit("command", part_token_table(parts, sysblocks, since_self,
                                         client, MODEL, args.dry_run))

@@ -725,14 +725,15 @@ def command_group_view(n_text: str) -> None:
     seam.emit("command", text if ok else f"  {text}")
 
 
-GROUP_UPDATE_USAGE = "/group-update <n> <member1>,<member2>,... [layer=<path>]"
+GROUP_UPDATE_USAGE = "/group-update <n> <member1>,<member2>,..."   # layer= accepted, unadvertised (R562)
 
 
 def command_group_update(text: str, record=None) -> tuple[bool, str]:
-    """/group-update <n> <m1>,<m2>,... [layer=<path>] — replace the members of the group at
+    """/group-update <n> <m1>,<m2>,... — replace the members of the group at
     /group-list's number <n>, in place; the name stays (B112, 2026-09-06).
-    Members are the same bare comma-separated list /group-add takes; layer= given replaces
-    the group's BLOCK 1 layer file, omitted keeps it (B115)."""
+    Members are the same bare comma-separated list /group-add takes. A trailing layer=<path>
+    is still accepted and replaces the group's BLOCK 1 layer file (B115), but no help names it
+    — R562 (2026-09-12): a layer is set at /group-add or by editing group.toml."""
     import group_manager as GA
     parts = text.split(None, 1)
     if len(parts) < 2 or not parts[0].strip().isdigit():
@@ -751,7 +752,7 @@ def command_group_update(text: str, record=None) -> tuple[bool, str]:
 
 def command_group_delete(n_text: str, interactive: bool = True) -> None:
     """/group-delete <n> — confirmation is typing the group's NAME back,
-    the same friction part_add.part_delete() uses for a part: a mistaken
+    the same friction part_add.part_retire() uses for a part: a mistaken
     deletion would silently invalidate a real `circle.py --group <name>`
     invocation someone may already depend on, even though a group carries
     no file-removal risk of its own."""
@@ -1522,9 +1523,9 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         import part_add as PA
         _ok, text = PA.part_view(rest_text)
         seam.emit("command", text if _ok else f"  {text}")
-    elif head == "/part-delete":
+    elif head == "/part-retire":
         import part_add as PA
-        PA.part_delete(rest_text)
+        PA.part_retire(rest_text)
     elif head == "/group-add":
         command_group_add(rest_text, record=record)
     elif head == "/group-list":

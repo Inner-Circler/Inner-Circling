@@ -28,6 +28,7 @@ import re
 import issue_commands as IC        # issue-relationship-add's one grammar (R202)
 import seam
 import command_surface as CS
+import part_roster as R            # RETIRED, part_retired_named — R559's refusal
 # PROPOSABLE_COMMANDS is no longer from-imported here (B122): what this module
 # admits is the CURRENT GROUP's narrowing of it, read at call time through
 # CS.command_proposable_read(). A from-import would be the constant, frozen at
@@ -401,6 +402,13 @@ def annotation_is_quoted(text: str, start: int, end: int) -> bool:
             and end < len(text) and text[end] == "`")
 
 
+def annotation_retired_why(tag: str, date: str) -> str:
+    """The one sentence every refusal of a bracket naming a retired part carries (R559) —
+    remember, recall and propose alike, so a part reads the same rule three times."""
+    return (f"it names {tag}, a part retired {date or 'earlier'} — a retired part is not "
+            f"remembered, recalled or proposed by name; the name in ordinary speech is fine")
+
+
 def annotation_extract(text: str) -> list[dict]:
     """Every `[propose]`/`[remember]` annotation in ONE statement's text,
     structured. Factored out of `proposal_unruled_list()` (RULED 2026-08-10) so
@@ -519,6 +527,16 @@ def annotation_extract(text: str) -> list[dict]:
             rec["text"] = body
             if not body:
                 rec["malformed"] = True
+        # A BRACKET NAMING A RETIRED PART IS MALFORMED — R559 (2026-09-12): a retired part is
+        # not remembered, recalled or proposed BY NAME; its name in ordinary speech is never
+        # refused, which is why this reads the bracket's body and never the statement.
+        # [recall: ...] is refused on its own path (recall_index.recall_apply), which strips
+        # it before this function ever runs.
+        if kind in ("propose", "remember") and not rec.get("malformed"):
+            hit = R.part_retired_named(arg)
+            if hit:
+                rec["malformed"] = True
+                rec["why"] = annotation_retired_why(*hit)
         out.append(rec)
     return out
 
@@ -602,6 +620,8 @@ def remember_apply(guard, part: str, display: str, text: str) -> tuple[str, bool
         if rec["kind"] != "remember":
             continue
         if rec.get("malformed"):
+            if rec.get("why"):                # a retired part named — R559: refused, with the reason
+                seam.emit("command", f"  {display}: REMEMBER dropped — {rec['why']}")
             continue
         if used:
             seam.emit("command",
@@ -681,6 +701,11 @@ def remember_close_apply(guard, part: str, display: str,
         # An empty remember costs nothing and is not counted — the rule
         # remember_apply() already follows for a malformed one.
         return short_term, False
+    hit = R.part_retired_named(memory)
+    if hit:                                  # R559, the close-time bracket too
+        seam.emit("command", f"  {display}: close remember dropped — "
+                             f"{annotation_retired_why(*hit)}")
+        return short_term, False
     if RM.remember_has_written(part, guard):
         seam.emit("command",
                   f"  {display}: remember already used this circle — "
@@ -728,6 +753,8 @@ def remember_self_apply(guard, display: str, text: str) -> tuple[str, bool]:
         if rec["kind"] != "remember":
             continue
         if rec.get("malformed"):
+            if rec.get("why"):                # a retired part named — R559: refused, with the reason
+                seam.emit("command", f"  {display}: REMEMBER dropped — {rec['why']}")
             continue
         if used:
             seam.emit("command",

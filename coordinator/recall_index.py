@@ -96,6 +96,7 @@ sys.path.insert(0, str(HERE))
 sys.path.insert(0, str(HERE.parent / "memory"))         # the issue-graph code
 
 import annotations as MK                                # noqa: E402
+import part_roster as R                                 # noqa: E402  RETIRED — R559
 import embed_store as ES                                # noqa: E402
 import record_paths as P                                       # noqa: E402
 import seam                                             # noqa: E402
@@ -394,11 +395,18 @@ def _kwic(text: str, needle_norm: str) -> str:
 
 
 def _provenance(r: dict) -> str:
+    """The bracketed source line of one excerpt. A ROOM speaker who has since RETIRED carries
+    the mark "(retired <date>)" — R559 — resolved here, at render, from the roster's tables:
+    never written into the record's text, whose sha256 keys the embedding cache."""
     bits = [r.get("scope", "")]
     if r.get("ot"):
         bits.append(str(r["ot"]))
     if r.get("speaker"):
-        bits.append(str(r["speaker"]))
+        spk = str(r["speaker"])
+        rdoc = R.RETIRED.get(R.DIR_BY_TAG_ALL.get(spk, ""))
+        if rdoc:
+            spk += f" (retired {rdoc['retired'] or 'earlier'})"
+        bits.append(spk)
     if r.get("kind"):
         bits.append(str(r["kind"]))
     return " · ".join(b for b in bits if b)
@@ -677,6 +685,11 @@ def recall_apply(part: str, display: str, text: str, *,
             body = matches[-1].group(0)  # latest EXECUTABLE bracket wins
             body = body[body.index(":") + 1:-1]
             q = recall_parse(body)
+            hit = R.part_retired_named(body)
+            if hit:                          # R559: a retired part is not recalled by name
+                q["errors"].append(MK.annotation_retired_why(*hit))
+                seam.emit("command", f"  [{display}'s recall refused — it names "
+                                     f"{hit[0]}, retired {hit[1] or 'earlier'}]")
             if q["errors"]:
                 reply = ("<recall_result>\nyour recall could not run:\n- "
                          + "\n- ".join(q["errors"])

@@ -95,8 +95,30 @@ No stdin. When run as a script: prints the count and designations of the parts i
         (display tags, same order as DIR_NAMES), TAG_BY_DIR (directory
         to current display tag), DIR_BY_TAG (current display tag to
         directory, current spellings only), and DIR_BY_TAG_ALL (the
-        same, plus every historical spelling from ALT_TAGS merged in).
+        same, plus every historical spelling from ALT_TAGS merged in,
+        plus every RETIRED part's Tag and alt_tags).
     }
+
+### `RETIRED`, `part_retired_scan(base=None)`, `part_retired_named(text, retired=None)`
+
+    A RETIRED part is a parts/ directory carrying `retired.toml` and no
+    `part.toml` — B140 (R559-R561, 2026-09-12). The system respects records
+    and history: the part's folder, and everything under it, stays where
+    every close report, transcript and issue-graph quote expects it;
+    only the marker is renamed (by /part-retire; back again by hand, with
+    the name put back on the group's `roles` — R548 made that list deliberate).
+    part_scan() skips such a directory silently — it is not a missing
+    marker — and registers its Tag and alt_tags as TAKEN before the
+    attending directories are read, so a new part.toml claiming one is
+    refused as a duplicate. part_retired_scan() is the second reader:
+    {dir: {tag, alt_tags, retired, retired_why}}, never raising. RETIRED
+    is its module table, rebuilt in place by the group follower. A
+    retired part is in DIR_BY_TAG_ALL and in none of the current tables,
+    so it attends nothing and its past still parses.
+    part_retired_named(text) answers (Tag, date) for the first retired
+    part a bracket's body names — whole-word, case-insensitive, over Tag
+    and alt_tags — or None; annotations.py and recall_index.py refuse on
+    it (R559). Called on a bracket's body, never on prose.
 
 ### `statement_re(tags)`
     {

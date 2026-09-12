@@ -208,7 +208,8 @@ def issue_live_read() -> list[pathlib.Path]:
     globs, not a parse-and-filter of `issue_nodes_read()`: this stays the fast,
     filename-only check every caller already relies on (`circle.py`'s "is
     there anything to ask a working set about", `quote_verify.py`'s citation
-    guard, `/help issue list`) — a root's `R_` prefix is the one exception to
+    guard; `/help issue list` was one until the inspector retired 2026-09-11) —
+    a root's `R_` prefix is the one exception to
     "unprefixed means live", and it is listed explicitly rather than
     inferred."""
     return sorted(list(ISSUES.glob("n[0-9][0-9][0-9][0-9].toml"))

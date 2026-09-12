@@ -10,9 +10,9 @@ this build follows; docs/BNF.md's <circle_identity> production (BLOCK 1)
 is the grammar this implements.
 
 MOVED VERBATIM from prompt_build.py's group_shared_read(), 2026-09-02 — same name,
-same body, same docstring, so its 30+ existing external callers (grep
-confirms callers across coordinator/, work/ablations/, work/tools/) keep
-working unchanged via prompt_build.py's own re-export.
+same body, same docstring. Every caller imports it from THIS module:
+prompt_build.py's re-export of it retired 2026-09-09, and prompt_build.py takes
+its text as the `core` argument.
 
 BLOCK 1'S PRACTICES MOVED HERE TOO, 2026-09-02 (closing the gap this
 docstring itself used to describe): `group_context_block_render()`, below, merges group_shared_read()'s

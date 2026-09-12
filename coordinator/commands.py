@@ -66,7 +66,7 @@ def statement_resolve(transcript: list[dict], n: int) -> tuple[dict | None, str]
     """The SAME 1-based numbering `/issue-evidence-list` prints, resolved to the
     actual transcript entry. `/issue-evidence-add` is the caller — `n` is
     not a stored id, it is a position in the list AS IT WOULD PRINT RIGHT
-    NOW, same discipline as HELP_DESIGN.md's `/help <class> read #`."""
+    NOW, the discipline every `-list <n>` keeps (LIST_RECORD)."""
     stmts = statement_read(transcript)
     if n < 1 or n > len(stmts):
         return None, f"no statement #{n} — /issue-evidence-list shows 1-{len(stmts)}"
@@ -208,8 +208,9 @@ def command_remember_list(rest: str) -> None:
     """/remember-list — the Self half of docs/BNF.md's REMEMBER_PROJECTION,
     built 2026-08-18 (R224) as /recall, designed 2026-08-14. RENAMED
     2026-08-21 when the operator named the register's verbs (/remember writes,
-    /remember-list reads; "\"recall\" is a synonym") — /recall still
-    arrives here, through command_surface.command_head_normalise()'s SYNONYMS.
+    /remember-list reads; "\"recall\" is a synonym"); the synonym was RETIRED
+    2026-09-11 (R557) — "recall" is a part's own search
+    of its record, the [recall: ...] annotation, and nothing else.
 
     READ-ONLY, AND SELF'S OWN REGISTER ONLY. `remember_manager.SELF` is passed
     explicitly and no argument can change it: a part's remember is private
@@ -226,16 +227,14 @@ def command_remember_list(rest: str) -> None:
         seam.emit("command", RLP.remember_list(RM.SELF))
         return
     if not a.isdigit():
-        seam.emit("command", "  usage: /remember-list [<n>]  (also /recall) "
-                             "— bare lists them")
+        seam.emit("command", "  usage: /remember-list [<n>] — bare lists them")
         return
     seam.emit("command", RLP.remember_record_show(int(a), RM.SELF))
 
 
-# The name the verb carried from R224 to 2026-08-21; kept callable so the
-# probes written against it (test_remember_manager) and any reader of the BNF's own
-# RECALL production find the function where they were told it lives.
-cmd_recall = command_remember_list
+# `cmd_recall = command_remember_list` — the name the verb carried from R224 to
+# 2026-08-21, kept callable for the probes — was here until 2026-09-11
+# (R557). Nothing spells it now.
 
 
 class _NoCircleGuard:
@@ -1471,8 +1470,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
     elif head == "/remember-list":
         # READ-ONLY, and Self's OWN register only (R224). Nothing is
         # written and nothing reaches the room, so there is no record
-        # step and no live/sandbox split to make. /recall arrives here
-        # too — normalise_head() maps the old name (2026-08-21).
+        # step and no live/sandbox split to make. (/recall arrived here
+        # too, through the synonym table, until 2026-09-11.)
         command_remember_list(rest_text)
     elif head == "/remember":
         # WRITES Self's own register — the command-pane twin of the

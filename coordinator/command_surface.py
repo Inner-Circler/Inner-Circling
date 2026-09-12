@@ -173,13 +173,12 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "typed at the circle prompt writes. No circle needed;\n"
      "inside a circle the one-per-circle rule applies, as it\n"
      "does to the annotation. 2026-08-21", "command"),
-    ("/remember-list [<n>]   (also /recall)",
+    ("/remember-list [<n>]",
      "YOUR OWN [remember: ...] records — bare lists them\n"
      "numbered, one line each; `<n>` shows one whole.\n"
      "Reads self/remember.toml directly, no circle needed.\n"
      "A part's own register is private to it and is NEVER\n"
-     "reachable from here. Named /recall until 2026-08-21;\n"   # R224, BNF REMEMBER_PROJECTION
-     "/recall is still accepted", "command"),
+     "reachable from here", "command"),                          # R224, BNF REMEMBER_PROJECTION
     # CIRCLE_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
     # CRUD operations and a help entry." circles/circle_observation_log.toml is
     # SYNTHESIS's own note to Self about the CIRCLE (never about Self, never
@@ -473,7 +472,7 @@ DEV_MIN_CMDS = ("/help", "/status")
 # and /issue-status-update — heads dispatch_dev_cmd() had handled for days
 # while test_proposal_manager' sync probe asserted only ⊆ — and it gains the verbs
 # minted the same day. Every entry is a no-circle head; /remember-list is
-# listed under its own name (/recall normalises to it, see normalise_head).
+# listed under its own name (/recall normalised to it until 2026-09-11).
 DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/practice-list", "/better-option-list", "/practice-delete",
                  "/practice-update", "/topic-update",         # B116, R465, 2026-09-07
@@ -511,20 +510,12 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 # /issue-list), /practice-delete, /topic*, /better-option-add. Also: add a
 # path for /better-option-list and make it always visible."* So the user
 # table keeps /issue-list alone of the issue verbs; every other /issue-*
-#
-# THE "ALWAYS VISIBLE" HALF NO LONGER HOLDS, AND THE OPERATOR HAS NOT BEEN
-# ASKED WHETHER HE MEANT IT TO. The 2026-09-09 ruling below
-# (LIST_SUBSET_COMMANDS) hides EVERY `-list` verb from a listing with dev
-# off, by SUFFIX. /better-option-list ends in `-list`, so it is now runnable
-# and unlisted — the exact state this ruling's second sentence ruled against
-# for this one verb. The later ruling's words carry no table qualifier, so
-# the code follows them; the conflict is recorded here and raised, not
-# resolved by the code choosing a side.
 # — present and future — is DEV, and so are /practice-delete, the topic
 # verbs (R281, the same day) and /better-option-add.
 # "For now" is his phrase both times. What dev gates is still, as well,
-# docs/HELP_DESIGN.md §2's hierarchical BROWSING surface (/help <class>,
-# list, read # — R280).
+# docs/HELP_DESIGN.md §2's hierarchical BROWSING surface (/help
+# object_classes — R280; /help <class> ungated since R336, and the
+# inspector's list / read # retired 2026-09-11).
 #
 # `statements` RIDES THE USER TABLE BY NECESSITY: issue-evidence-add
 # addresses a statement BY ITS NUMBER and nothing else discovers that
@@ -537,7 +528,7 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 # is how a circle's own words move the graph, and with the verb DEV-only no
 # ordinary circle could do it at all.
 #
-# /remember, /remember-list (/recall accepted), /better-option-list and
+# /remember, /remember-list, /better-option-list and
 # /propose-list were minted 2026-08-21 from the same dictation (NEXT.md
 # B64): the everyday surface is what the user owns —
 # the issue list, practices and better options, their own notes, and what
@@ -951,9 +942,11 @@ def command_head_normalise(word: str) -> str:
 # pane, the circle pane's guard — resolves them identically. /recall was the
 # verb's name from R224 (2026-08-18) until 2026-08-21, when the operator named
 # the register's verbs /remember and /remember-list ("\"recall\" is a
-# synonym"); the old spelling keeps working and is shown once, on the
-# /remember-list row, never as a row of its own.
-SYNONYMS: dict[str, str] = {"/recall": "/remember-list",
+# synonym"), and the synonym lived here until 2026-09-11, when the operator
+# retired it (R557): "recall" names a PART's own search of
+# its record, the [recall: ...] annotation (R400-R402), and one word may not
+# mean two things. /recall is an unknown command now, like any other.
+SYNONYMS: dict[str, str] = {
                             # bare "propose" (the pane adds the slash) —
                             # the operator, 2026-08-25, with the verb.
                             "/propose": "/propose-add"}

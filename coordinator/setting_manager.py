@@ -167,13 +167,12 @@ def _s(*a, **k) -> Setting:
 # person could reasonably want different. `applies` is next_circle for
 # everything that shapes a prompt block or a request, which is most of them.
 #
-# WHAT IS DELIBERATELY ABSENT. The statement-length guide and the challenge
-# rule are sentences in process_core.md, which IS block 1 — making them
-# settable means generating that document, which this project retired once
-# already (self/circle_briefing.md, 2026-08-11), and the length rule
-# currently disagrees with itself in three places (process_core says 100,
-# circle_rounds.py's retry string says 150, process.md says a stale 100). Deferred
-# on the operator's ruling 2026-08-28: fix the drift first, then decide.
+# WHAT IS DELIBERATELY ABSENT. The challenge rule (process_core.md, "## Challenge
+# rules") is a sentence in block 1 — making it settable means generating that
+# document, which this project retired once already (self/circle_briefing.md,
+# 2026-08-11). The statement-length guide is NOT absent: statement_aim_words and
+# statement_max_words below are its one source since 2026-08-28, read by the
+# rulebook's sentence and by circle_rounds.py's retry alike.
 SPEC: tuple[Setting, ...] = (
     # ---- the circle's own shape
     _s("statements_per_part",

@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v189"
+HOOK_MARK = "# inner-circling pre-commit v191"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -333,6 +333,10 @@ if [ -n "$IC_CODE" ]; then
     # form and the parsed form cannot drift apart -- that divergence is E09's
     # shape.
     run coordinator/tests/test_annotation_exemplars.py
+    # AND THE COMMAND PANE'S DISPATCH SUITE, which reads annotations.py as SOURCE
+    # (ASK_KEYWORDS, by ast) and asserts the keyword list -- property 7's shape
+    # (audit-register 2026-09-11 #12). --fast: the delay tests nothing a gate needs.
+    run ui/tests/test_circling.py --fast
     run coordinator/tests/test_strip_malformed_annotations.py
     run coordinator/tests/test_proposal_manager.py
     run coordinator/tests/test_annotations.py
@@ -564,6 +568,9 @@ esac
 case "$FILES" in *coordinator/circle_close.py*|*coordinator/circle.py*|*coordinator/circle_open.py*|*coordinator/circle_rounds.py*)
     NOTE="  pre-commit: the close step or its driver touched — running a real dry-run close"
     run ui/tests/test_circle_engine.py
+    # The exemplars suite reads circle_close.py as SOURCE (the pure-split consultation
+    # before any write) -- property 7 (audit-register 2026-09-11 #12).
+    run coordinator/tests/test_annotation_exemplars.py
 esac
 
 case "$FILES" in *coordinator/circle.py*|*coordinator/circle_open.py*|*coordinator/tests/test_circle_argv.py*\
@@ -572,14 +579,13 @@ case "$FILES" in *coordinator/circle.py*|*coordinator/circle_open.py*|*coordinat
     run coordinator/tests/test_circle_argv.py
 esac
 
-case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*htmlify.py*|*work/tools/generate_block*.py*)
+case "$FILES" in *coordinator/*|*memory/*|*ui/*|*packaging/*|*.claude/skills/*|*work/graph/*|*work/tools/*)
     NOTE="  pre-commit: code touched — compiling and linting every module"
-    # THE PATTERN IS system_lint_verify.CODE_DIRS PLUS ITS EXTRA_LEGS, AND A
-    # LEG NAMES ITS GLOB, NOT ITS DIRECTORY. `*work/tools/*` would fire on all
-    # 24 .py files there while the SCOPE -- ("work/tools", "*htmlify.py") --
-    # reaches 2, and a lint gate that fails on a file the change never touched
-    # is a gate someone bypasses. Nothing else compiles those files either:
-    # work/ is deliberately outside CODE_DIRS.
+    # THE PATTERN IS system_lint_verify.CODE_DIRS PLUS ITS EXTRA_LEGS. A whole-
+    # directory leg is `*<dir>/*`, and every leg is one today: work/tools was the
+    # last narrowed to a glob, widened 2026-09-11 once the directory linted clean
+    # (audit-register 2026-09-11 #10). Nothing else compiles those files: work/
+    # is deliberately outside CODE_DIRS.
     #
     # .claude/skills/ IS A SCOPE LEG, NOT A CODE_DIR: CODE_DIRS also drives
     # file_line_endings_verify.SCOPE_DIRS, and .claude/ is CRLF by convention.
@@ -930,6 +936,7 @@ case "$FILES" in *coordinator/circle_delta.py*|*coordinator/circling_verify.py*\
 |*coordinator/ruling_sweep.py*|*coordinator/gitrepo.py*\
 |*ui/ticker/lens_index.py*|*ui/ticker/ticking_index.py*\
 |*memory/record_verify.py*|*memory/issue_gate.py*|*coordinator/circle_open_verify.py*\
+|*work/tools/generate_block*.py*\
 |*coordinator/tests/test_entry_points.py*)
     NOTE="  pre-commit: an untested-until-now __main__ entry point touched"
     run coordinator/tests/test_entry_points.py

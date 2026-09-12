@@ -10,9 +10,9 @@ has the assessment this build follows; docs/BNF.md's circle_briefing_build(chose
 production (BLOCK 2) is the grammar this implements.
 
 MOVED VERBATIM from prompt_build.py's circle_briefing_build(), 2026-09-02 — same
-name, same body, same docstring, so its 50+ existing external callers (grep
-confirms callers across coordinator/, memory/, work/ablations/, work/tools/)
-keep working unchanged via prompt_build.py's own re-export.
+name, same body, same docstring. Every caller imports it from THIS module:
+prompt_build.py's re-export of it retired 2026-09-09, and prompt_build.py takes
+the built briefing as an argument.
 
 ISSUE_MODEL and read_ro() MOVED HERE, then MOVED AGAIN, same day. Both were
 exclusive to this function when this module was built (grep confirmed

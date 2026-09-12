@@ -108,7 +108,11 @@ def circle_identity_layer_read() -> pathlib.Path:
 # declares nothing gets the product's word.
 #
 # `{Part}` in the short_term template is NOT this token — it is a placeholder for the speaker's own
-# name — and nothing here touches it.
+# name — and nothing here touches it. Nor is the template's third heading, `## Shifts toward other
+# parts`: it is the RECORD's field name (record_model.SHORT_TERM_SECTIONS, the close prompt, the
+# parser, the key in every group's files), literal in every group by ruling
+# (R551, 2026-09-11) — a member is told what its record is called, not
+# what it is.
 DEFAULT_WORDS = ("role", "roles")
 IFS_WORDS = ("part", "parts")               # what a circle opened without --group gets, as with
 _WORDS: "tuple[str, str] | None" = None     # DEFAULT_LAYER above: the shipped install is the family

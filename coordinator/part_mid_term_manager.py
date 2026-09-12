@@ -147,10 +147,10 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent
 # (read as LC.MODEL / LC.RATE_IN / LC.RATE_OUT at the use; local aliases
 # until 2026-09-03) were LITERAL COPIES of llm_client's, and a price or a model
 # id written twice is one edit away from two answers — the defect record_model's
-# REGISTERS dict already records for circle_history's cap. llm_client is light at
-# import (os, threading, time, seam, paths; `anthropic` is lazy inside its own
-# functions), so this costs no import-time weight and closes no cycle:
-# prompt_build already imports it at module level.
+# REGISTERS dict already records for circle_history's cap. llm_client imports
+# nothing that imports this module (command_surface, seam, setting_manager,
+# providers, the disassembler, record_paths, record_model; `anthropic` is lazy
+# inside its own functions), so this closes no cycle.
 import llm_client as LC                                        # noqa: E402
 import record_paths as _RP                                         # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402

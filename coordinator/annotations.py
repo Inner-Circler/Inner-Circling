@@ -41,7 +41,7 @@ from command_surface import (PROPOSE_SUBSET_COMMANDS,
 # own BLOCK 4 (docs/BNF.md, ruled 2026-08-12).
 #
 # Self's reflexive record is REMEMBER, surfaced on demand by
-# `/remember-list` (`/recall` a kept alias, R224; docs/BNF.md's
+# `/remember-list` (R224; its `/recall` alias retired 2026-09-11; docs/BNF.md's
 # REMEMBER_PROJECTION; built 2026-08-18). A part's
 # own "flag my statement for Self's attention, this circle only"
 # capability has no replacement — nothing in the annotation family gives

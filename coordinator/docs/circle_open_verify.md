@@ -61,6 +61,13 @@ The last three do not apply to a dry run, which records no working set and captu
                                           contract and the code disagree
     failed, contract                      the failing ids; the disagreements, as sentences
     postconditions                        one row per check: id, result, detail
+    limits                                statements_per_part — the cap the turn engine ran this
+                                          circle under, as the open step read it (D123 a,
+                                          2026-09-11); the transcript check holds the circle to
+                                          it. Empty in a report written with none passed; absent
+                                          in one from before the field, and such a circle is held
+                                          to the contract's two. A note already on file is kept
+                                          by a later write — a resume, or a hand --write-report
 
 ## SEE ALSO
 

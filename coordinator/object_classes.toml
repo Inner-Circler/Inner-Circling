@@ -16,9 +16,9 @@
 # still read `issue status nNNNN [= <value>]`. A class's verbs are now
 # DERIVED from COMMANDS by head prefix (help_system._class_of_head —
 # `/issue-relationship-*` is issue-relationship, every other `/issue-*` is
-# issue), and the two productions every class shares, `list` and `read #`,
-# are constants in help_system.py (LEVEL_ROWS). One spelling of a verb,
-# read everywhere it is shown.
+# issue). The two productions every class once shared, the inspector's
+# `list` and `read #`, are retired (2026-09-11, R556).
+# One spelling of a verb, read everywhere it is shown.
 #
 # The class NAMES are ruled: `issue` and `issue-relationship` (R218;
 # re-confirmed 2026-08-21 — "keep ruled names"). The descriptions say

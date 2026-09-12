@@ -1228,6 +1228,27 @@ def self_test() -> int:
         vars(C)["ui_main_loop"] = real_main_loop
         vars(C)["_key_notice_read"] = real_notice
 
+    # THE REAL FUNCTION, RUN ONCE (audit-register 2026-09-11 #11). The stub above tests the
+    # two CALL SITES; this runs the BODY — its sys.path bootstrap, the llm_client import,
+    # the choice of text — with only the provider's own key check rebound, so a tree with a
+    # key and one without give the same answer. Its `except Exception: return ""` is why
+    # this matters: a broken bootstrap would make the notice silently empty, and a person
+    # installing with no key would get a window that says nothing about why nothing works.
+    import llm_client as _LCK
+    real_present = _LCK.stream_key_present_read
+    try:
+        _LCK.stream_key_present_read = lambda: False
+        check("_key_notice_read(True) with no key is the provider's whole missing-key text",
+              real_notice(True) == _LCK.KEY_MISSING_HELP and len(_LCK.KEY_MISSING_HELP) > 100)
+        check("_key_notice_read(False) with no key is the brief — shorter, and not empty",
+              real_notice(False) == _LCK.KEY_MISSING_BRIEF
+              and 0 < len(_LCK.KEY_MISSING_BRIEF) < len(_LCK.KEY_MISSING_HELP))
+        _LCK.stream_key_present_read = lambda: True
+        check("...and with a key present both forms are \"\" — a notice never stops the window",
+              real_notice(True) == "" and real_notice(False) == "")
+    finally:
+        _LCK.stream_key_present_read = real_present
+
     # --- _open_sandbox_circles(): scoped to the engine's OWN root -------
     import record_paths as _rp                       # the live root is a group's (B117)
     fake_live_entry = {"path": pathlib.Path(_rp.record_rel("circles")) / "circle_2026-08-13_0900.md"}

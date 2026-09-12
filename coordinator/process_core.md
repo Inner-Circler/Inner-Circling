@@ -100,7 +100,10 @@ fragment. Inside another bracket, write the word bare — pass, not [pass].
     [pass]
 
 **Purpose:** decline this round. Silence is a real answer and costs you
-nothing. Reply with this alone — not with a sentence explaining why.
+nothing. Reply with this alone — not with a sentence explaining why. A reply
+that would only say you have nothing to add — the room has said it, you are
+here and holding, you do not need yours too — IS this reply: write `[pass]`,
+not the sentence.
 
 ### `[To: <Name>]`
 
@@ -302,7 +305,7 @@ Reply with **exactly** this structure:
 
 ## What I observed in others
 
-## Shifts toward other {members}
+## Shifts toward other parts
 (any change in how you feel about another {member})
 
 ## Current emotional state

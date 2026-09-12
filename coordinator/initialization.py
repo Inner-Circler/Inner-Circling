@@ -50,7 +50,7 @@ what Enter on an untouched prefilled row returns too. To CLEAR an answer type
 nothing is recorded, so empty means skip, as ruled.
 
 NEVER A NAME INTO A PROMPT — R329. This module writes
-answers; what renders is prompt_build.part_identity_tail_render()'s business, and a
+answers; what renders is parts_prompt_projection.part_identity_tail_render()'s business, and a
 question without a `render` string has no path there.
 
 UNIQUE KEYS ARE REFUSED AT ENTRY — the operator, 2026-08-23: *"Duplicates of

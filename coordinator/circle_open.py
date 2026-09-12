@@ -125,7 +125,14 @@ def circle_open_verifier_run(ot: str, live: bool, path: pathlib.Path,
     from-import: ui/circling.py rebinds seam.emit onto its own queues."""
     try:
         import circle_open_verify as COV
-        report, where = COV.circle_open_verify(ot, live, path, capture, parts)
+        # THE LIMIT THIS CIRCLE RAN UNDER goes into the report — R553
+        # (D123 a). circle_rounds.MAX_SINCE_SELF, read off the module at call time: it is the
+        # number the turn engine is actually holding the room to, bound at import, BEFORE the
+        # pending fold above moved the setting file — so for the one circle a change lands on
+        # the two can differ, and the record must carry the one that governed.
+        import circle_rounds as _CR
+        limits = {"statements_per_part": int(_CR.MAX_SINCE_SELF)}
+        report, where = COV.circle_open_verify(ot, live, path, capture, parts, limits=limits)
         if CS.dev_mode:
             failed = report.get("failed") or []
             say("command", f"\n  open report: {where} — {report.get('result')}"
@@ -628,12 +635,11 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # Off unless the trial arm says otherwise; its own module guarantees a
     # failure here cannot cost the open. part_attention_finalize() is BLOCK 4's own
     # Phase 2 (role_attention.py's module docstring) — it delegates to
-    # remember_expand.remember_expand_apply() rather than reimplementing it. Called through
-    # prompt_build.py's own re-export, 2026-09-02, on direct instruction
-    # that only prompt_build.py execute any of the four sole assemblers —
-    # this was the one real call site still importing role_attention.py
-    # itself, since 2026-09-02's own block-3/4 extraction shipped it that
-    # way.
+    # remember_expand.remember_expand_apply() rather than reimplementing it. Imported
+    # from role_attention.py by name since prompt_build.py's re-export facade
+    # retired (2026-09-09); prompt_build.py stays the one EXECUTOR of the four
+    # assemblers, and this is the finalize step that runs after them, not an
+    # assembly.
     part_attention_finalize(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm)
     # PART-INITIATED RECALL (recall_index.py, R402) arms from the same
     # flag, and clears here because CircleEngine runs this main() inside a

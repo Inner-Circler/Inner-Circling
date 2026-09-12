@@ -568,13 +568,15 @@ Enter a few words about what is on your mind:
 
 "Alcoholism sucks"
 
-Then you are at the circle prompt. Type to speak as Self:
+**Your circle has started**
+
+Before you are asked to speak, every part speaks once on that topic,
+each without seeing the others -- the opening round. A part with
+nothing to add answers `[pass]`. Then you are at the circle prompt.
+Type to speak as Self:
 
 "I'd like to talk about drinking. I don't handle it well when people 
 are drinking, even just moderate casual drinking."
-
-
-**Your circle has started**
 
 In a few moments you will hear back (an actual reply):
 

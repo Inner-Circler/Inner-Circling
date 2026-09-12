@@ -40,8 +40,6 @@ except ModuleNotFoundError:                   # 3.7+, the identical parser
     import tomli as tomllib                   # type: ignore
 
 import command_surface as CS       # dev_mode is REBOUND — attribute access
-import issue_commands as IC        # the issue read-outs' renderer
-import issue_schema as S_
 import seam
 from command_surface import COMMANDS
 
@@ -65,8 +63,9 @@ HERE = pathlib.Path(__file__).resolve().parent
 # second spelling of COMMANDS and drifted — they still read `issue status
 # nNNNN [= <value>]` eight days after R261 made the verb `/issue-status`.
 # A class's verbs are derived from COMMANDS by head prefix now
-# (`_class_of_head`), and the two productions every class shares — `list`
-# and `read #` — are constants below, not TOML.
+# (`_class_of_head`). The two productions every class once shared — the
+# inspector's `list` and `read #` — are RETIRED (the operator, 2026-09-11,
+# R556); every register's own `-list <n>` does that job.
 # --------------------------------------------------------------------------
 
 OBJECT_CLASSES_PATH = HERE / "object_classes.toml"
@@ -368,24 +367,13 @@ def _class_verb_rows(name: str) -> list[str]:
                               and not CS.dev_mode))
 
 
-# The two productions EVERY populated class prints at level 2 — levels 3 and
-# 4 of docs/HELP_DESIGN.md §2, R160. Constants here, not rows in the TOML:
-# they are the same for every class, and the TOML's copies were the rows
-# that drifted.
-LEVEL_ROWS: tuple[tuple[str, str], ...] = (
-    ("list", "a numbered list of the live entries — id and human key, "
-             "re-derived fresh on every call, never cached"),
-    ("read #", "the full record at list position # — the position as `list` "
-               "would print it RIGHT NOW, not a stored id — then this listing"),
-)
-
-
 def object_class_help_text(name: str = "") -> str:
     """Level 1 (`name == ""`): every class as `/help <class>  —  <description>`.
-    Level 2 (`name`): the class's description, its `/help <class> list` and
-    `/help <class> read #` rows, then its COMMANDS — each level advertising
-    the next, the operator 2026-08-21. Both hot-reloaded from object_classes.toml;
-    the verbs come from COMMANDS (see `_class_of_head`)."""
+    Level 2 (`name`): the class's description, then its COMMANDS — each level
+    advertising the next, the operator 2026-08-21. Both hot-reloaded from
+    object_classes.toml; the verbs come from COMMANDS (see `_class_of_head`).
+    The `/help <class> list` and `read #` rows this page carried from R160 are
+    retired (2026-09-11, R556)."""
     classes = object_classes()
     if not name:
         if not classes:
@@ -413,104 +401,17 @@ def object_class_help_text(name: str = "") -> str:
         # a single newline is soft, same rule issue_schema.issue_unwrap() uses
         # for node prose. Collapse it back to one line for display.
         out.append(f"      {' '.join(c['description'].split())}")
-    out += command_help_rows_render((f"/help {name} {sub}", desc)
-                     for sub, desc in LEVEL_ROWS)
     out += _class_verb_rows(name)
     return "\n".join(out)
 
 
-# ------------------------------------------------------------- level 3/4
-# `/help <class> list` and `/help <class> read #` — docs/HELP_DESIGN.md
-# §2 levels 3-4, R160, 2026-08-13. One provider per populated class: a
-# LIST function returning ordered (id, human_key) pairs, and a READ
-# function returning one id's full record. `#` in `read #` is always a
-# position in the list AS IT WOULD PRINT RIGHT NOW, re-derived fresh on
-# every call — never a stored id, never cached (HELP_DESIGN.md §2 names
-# this a limitation to accept, not a bug: the register is small enough
-# that a fresh read costs nothing).
-def _issue_entries() -> list[tuple[str, str]]:
-    docs = (S_.issue_read(p) for p in S_.issue_live_read())
-    return [(d["id"], d.get("label", "")) for d in docs]
-
-
-def _issue_read(nid: str) -> str:
-    p = next(q for q in S_.issue_live_read() if S_.issue_id_read(q.stem) == nid)
-    return S_.issue_render(S_.issue_read(p))
-
-
-def _issue_relationship_entries() -> list[tuple[str, str]]:
-    return [(f"{e['src']} {e['type']} {e['target']}", e["type"])
-            for e in IC.issue_edges_read()]
-
-
-def _issue_relationship_read(id_: str) -> str:
-    # (src, type, target) is the closest thing an edge has to an id
-    # (docs/HELP_DESIGN.md §3) — it carries no id of its own. Split on
-    # a single space, twice: neither a node id nor an edge type ever
-    # contains one, so this can't misparse.
-    src, typ, tgt = id_.split(" ", 2)
-    e = next(x for x in IC.issue_edges_read()
-             if x["src"] == src and x["type"] == typ and x["target"] == tgt)
-    L = [f"# {src} {typ} {tgt}", "",
-         f"**Status:** {e['status']}"
-         + (f" ({e['dated']})" if e.get("dated") else "")
-         + (f" — {e['status_note']}" if e.get("status_note") else ""), "",
-         f"**Basis:** {S_.issue_unwrap(e['basis'])}", ""]
-    if e.get("why"):
-        L += [f"**Why:** {S_.issue_unwrap(e['why'])}", ""]
-    for extra in e.get("notes", []):
-        L += [S_.issue_unwrap(extra), ""]
-    if e.get("ask"):
-        L += ["**Ask:** " + ", ".join(e["ask"]), ""]
-    if e.get("quote"):
-        L += ["> " + S_.issue_unwrap(e["quote"]), ""]
-    if e.get("retired"):
-        L += [f"**Retired:** {S_.issue_unwrap(e['retired'])}", ""]
-    return "\n".join(L)
-
-
-OBJECT_CLASS_PROVIDERS: dict[str, tuple] = {
-    "issue": (_issue_entries, _issue_read),
-    "issue-relationship": (_issue_relationship_entries, _issue_relationship_read),
-}
-
-
-def object_class_list_text(name: str) -> str:
-    provider = OBJECT_CLASS_PROVIDERS.get(name)
-    if provider is None:
-        return f"  {name}: list not built yet"
-    entries = provider[0]()
-    if not entries:
-        return f"  {name}: no live entries"
-    out = [f"  {name} — {len(entries)} live"]
-    for i, (id_, key) in enumerate(entries, start=1):
-        # Truncated to the line's own remaining budget, not wrapped — a
-        # numbered list stays one row per entry (80 column max, RULED
-        # 2026-08-16); id_'s own width varies (an issue id is short, an
-        # edge's "<src> <type> <tgt>" is not), so the budget is computed
-        # per row rather than assumed fixed.
-        prefix = f"  {i:>3}  {id_}  "
-        budget = max(10, HELP_WIDTH - len(prefix))
-        out.append(prefix + key[:budget])
-    return "\n".join(out)
-
-
-def object_class_read_text(name: str, pos_raw: str) -> str:
-    provider = OBJECT_CLASS_PROVIDERS.get(name)
-    if provider is None:
-        return f"  {name}: read not built yet"
-    entries_fn, read_fn = provider
-    entries = entries_fn()
-    try:
-        pos = int(pos_raw)
-    except ValueError:
-        return f"  read # must be a number — try /help {name} list first"
-    if not entries:
-        return f"  {name}: no live entries"
-    if pos < 1 or pos > len(entries):
-        return f"  {name} has {len(entries)} live entries — # must be 1-{len(entries)}"
-    id_, _ = entries[pos - 1]
-    return read_fn(id_) + "\n\n" + object_class_help_text(name)
+# THE RECORD INSPECTOR — `/help <class> list` and `/help <class> read #`, levels 3-4 of
+# docs/HELP_DESIGN.md §2 (R160, 2026-08-13; built for issue and issue-relationship) — WAS HERE
+# AND IS RETIRED. The operator, 2026-09-11 (R556): *"Retire the inspector's
+# list and read # forms"*, the day /help prompt was found advertising both on a class that
+# answered "not built yet". Every register's own `-list <n>` (B133, LIST_RECORD) shows a
+# record whole at cmd>, on every class; the hierarchy stops at the class page. Git holds the
+# providers and the two renderers at this path.
 
 
 # THE HAND-WRITTEN GLOSSES — the room's three verbs and /help, and nothing
@@ -650,9 +551,15 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
     with dev off the section is ABSENT — naming the verbs would expose what he
     asked stay unexposed, and naming a pane would name one that is not there.
     Standalone with dev on — `--dev` at the open or `/dev` at the prompt —
-    they are listed, and the hierarchy's own door, `/help object_classes`,
-    beneath them: *"the entire help structure becomes visible"*
-    (R542).
+    the CLASS ROWS are listed, level 0's own shape, with the hierarchy's
+    door, `/help object_classes`, beneath them: *"the entire help structure
+    becomes visible"* (R542). The operator, 2026-09-11 (R554):
+    *"swap the results, with dev==true, of the command '/help' with those of
+    the command '/help all'; enumerate the full list for "all"."* Until then
+    this branch enumerated every verb — the shape R336 had already found does
+    not fit a pane — and `/help all` showed the class rows; the two are the
+    same surface measured two ways, and this put the wide one on the door.
+    command_help_all_render() is the enumeration now.
 
     THE LISTING IS THE COMMAND-PANE SURFACE, MEASURED THE SAME WAY IT IS
     THERE: _visible_head() is the one gate (R414), so a circle-class verb
@@ -664,15 +571,40 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
                 "  belongs to the command pane. Its own /help lists them."]
     if not dev:
         return []
-    heads = [h for h in _command_specs() if _visible_head(h)]
-    if not heads:
+    classes = object_classes()
+    pairs = _class_pairs([h for h in _command_specs() if _visible_head(h)],
+                         classes)
+    if not pairs:
         return []
-    pairs = _verb_pairs(heads, _command_specs())
-    level1 = [_LEVEL1_ROW] if object_classes() else []
+    level1 = [_LEVEL1_ROW] if classes else []
     pad = command_help_pad(pairs + level1)
-    return (["", "  ALSO ANSWERING AT THIS PROMPT (dev):", ""]
+    return (["", "  ALSO ANSWERING AT THIS PROMPT (dev) — type  /help <name>  "
+                 "for any of these,",
+             "  or  /help all  for every verb:", ""]
             + command_help_rows_render(pairs, pad)
             + ([""] + command_help_rows_render(level1, pad) if level1 else []))
+
+
+def command_help_all_render() -> str:
+    """`/help all` at the standalone terminal's Self> prompt — EVERY verb this
+    dev state lists, one row each, sorted, then the level-1 row under dev.
+
+    The operator, 2026-09-11 (R554): *"enumerate the full
+    list for 'all'."* Until then `/help all` rendered level 0 — the class rows
+    — while the room's bare `/help` under dev enumerated the verbs; this is
+    that enumeration, moved to the word that says it. The gate is the same
+    one every listing uses (_visible_head, R414): dev off enumerates the
+    everyday set, dev on everything, and no circle-class verb is a row.
+    Wrapped at the one point text reaches a human, as command_help_render()."""
+    specs = _command_specs()
+    pairs = _verb_pairs([h for h in specs if _visible_head(h)], specs)
+    level1 = [_LEVEL1_ROW] if (CS.dev_mode and object_classes()) else []
+    pad = command_help_pad(pairs + level1)
+    out = ["", "  COMMANDS — every verb, one row each;  /help <name>  for one"]
+    out += command_help_rows_render(pairs, pad)
+    if level1:
+        out += [""] + command_help_rows_render(level1, pad)
+    return _wrap80("\n".join(out) + "\n")
 
 
 # The level-1 production, advertised at the foot of level 0 — the operator,
@@ -683,6 +615,40 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
 # dev off would itself reveal that a gate exists (R199).
 _LEVEL1_ROW = ("/help object_classes",
                "the object classes; /help <class> for each one's verbs")
+
+
+def _class_pairs(visible, classes) -> list[tuple[str, str]]:
+    """ONE ROW PER ROOT CLASS, not one per verb — (class name, first sentence
+    of its description, with the verb count where more than one). Shared by
+    level 0 and by the room's dev tail since 2026-09-11; the rows ARE level
+    0's, the callers differ only in their heading.
+
+    R336, 2026-08-24, after the operator read a real listing in a real pane:
+    "the diagnostic prints properly, followed by a long help that rolls the
+    error out of sight" was the JUNK half of it (R335); this is the other
+    half. Nineteen verbs and fifty-seven lines do not fit a pane, and a
+    reader cannot scan what does not fit.
+
+    R266 IS NARROWED, NOT REVERSED, and this is the line worth reading
+    twice. R266 ruled that dev mode ADDS and never takes away and that the
+    issue verbs are the USER'S — both still hold exactly: every verb a
+    non-dev reader could type before is still reachable, still theirs, one
+    question further in (`/help issue`). What changed is that level 0 names
+    the SUBJECT rather than enumerating the verbs under it."""
+    pairs = []
+    for cname in _root_classes(classes):
+        heads = [h for h in visible
+                 if _class_of_head(h, classes) in _subtree(cname, classes)]
+        if not heads:
+            continue
+        first = " ".join(classes[cname].get("description", "").split())
+        first = first.split(". ")[0].rstrip(".")
+        n = f"   ({len(heads)})" if len(heads) > 1 else ""
+        # ONE LEFT EDGE FOR EVERY PANE, 2026-08-25. A class row carried two
+        # extra spaces in its own spec, so level 0 sat one indent right of
+        # `/help <class>`'s rows and of its own level-1 row below.
+        pairs.append((cname, f"{first}{n}"))
+    return pairs
 
 
 def _help_level0() -> str:
@@ -702,35 +668,8 @@ def _help_level0() -> str:
     since R347 (2026-08-25); dev on adds the level-1 row."""
     specs = _command_specs()
     classes = object_classes()
-    visible = [h for h in specs if _visible_head(h)]
-
-    # ONE ROW PER ROOT CLASS, not one per verb. R336, 2026-08-24, after the
-    # operator read a real listing in a real pane: "the diagnostic prints
-    # properly, followed by a long help that rolls the error out of sight"
-    # was the JUNK half of it (R335); this is the other half. Nineteen
-    # verbs and fifty-seven lines do not fit a pane, and a reader cannot
-    # scan what does not fit.
-    #
-    # R266 IS NARROWED, NOT REVERSED, and this is the line worth reading
-    # twice. R266 ruled that dev mode ADDS and never takes away and that
-    # the issue verbs are the USER'S — both still hold exactly: every verb
-    # a non-dev reader could type before is still reachable, still theirs,
-    # one question further in (`/help issue`). What changed is that level 0
-    # names the SUBJECT rather than enumerating the verbs under it.
     out = ["", "  COMMANDS — type  /help <name>  for any of these"]
-    class_pairs = []
-    for cname in _root_classes(classes):
-        heads = [h for h in visible
-                 if _class_of_head(h, classes) in _subtree(cname, classes)]
-        if not heads:
-            continue
-        first = " ".join(classes[cname].get("description", "").split())
-        first = first.split(". ")[0].rstrip(".")
-        n = f"   ({len(heads)})" if len(heads) > 1 else ""
-        # ONE LEFT EDGE FOR EVERY PANE, 2026-08-25. A class row carried two
-        # extra spaces in its own spec, so level 0 sat one indent right of
-        # `/help <class>`'s rows and of its own level-1 row below.
-        class_pairs.append((cname, f"{first}{n}"))
+    class_pairs = _class_pairs([h for h in specs if _visible_head(h)], classes)
 
     # THE SESSION SECTION AND THE ROOM POINTER ARE GONE — the operator,
     # 2026-08-25 (R347), the same day R341 had already pulled
@@ -795,8 +734,8 @@ def _class_tree_text(cls: str) -> str:
     on their own. Filtered by _visible_head, so a dev verb does not leak
     into a non-dev reader's listing and the gate stays one test.
 
-    `list` and `read #` are advertised only with dev on: they are the
-    RECORD inspector, which R280 gates and this does not change."""
+    The inspector's `list` and `read #` rows, once the page's dev-on tail,
+    are retired (2026-09-11, R556)."""
     classes = object_classes()
     specs = _command_specs()
     mine = [h for h in specs
@@ -860,10 +799,12 @@ def _class_tree_text(cls: str) -> str:
                        [(child, f"{cdesc.split('. ')[0].rstrip('.')} "
                                 f"— /help {child}")]
                        + _verb_pairs(kids, specs)))
-    if CS.dev_mode:
-        blocks.append(("text", [""]))
-        blocks.append(("rows", [(f"/help {cls} {name}", why)
-                                for name, why in LEVEL_ROWS]))
+    # THE INSPECTOR'S `list` / `read #` ROWS WERE THE DEV-ON TAIL HERE until
+    # 2026-09-11 — the operator, of `/help prompt`: it *"gives unusual results,
+    # literally including "/help prompt list" and "/help prompt read #"; "/help
+    # prompt list" replies "prompt: list not built yet"."* Then, the same day:
+    # *"Retire the inspector's list and read # forms"* (R556).
+    # The page ends at its verbs, dev on or off.
 
     # THE SPECS, not the rendered page — see command_argument_legend's own
     # docstring. The rows' left column is what command_help_pad measures below;
@@ -996,9 +937,9 @@ def _wrap80(text: str, width: int = HELP_WIDTH) -> str:
 def command_help_render(arg: str = "") -> str:
     """RULED 2026-08-10: `/help`, `/help object_classes`, `/help <class>`
     — one function, dispatched by argument, everything hot-reloaded fresh
-    on every call. `/help <class> list` and `/help <class> read #` are
-    levels 3-4, R160. `/help annotate` (mark kinds) retired with MARK,
-    2026-08-14.
+    on every call. `/help <class> list` and `/help <class> read #` (levels
+    3-4, R160) are retired, 2026-09-11 (R556).
+    `/help annotate` (mark kinds) retired with MARK, 2026-08-14.
 
     docs/HELP_DESIGN.md §2, wired 2026-08-16 — designed and marked
     "(dev-gated)" for every level but never actually gated until now:
@@ -1018,8 +959,8 @@ def command_help_render(arg: str = "") -> str:
     ONE wrap point, not one per branch: `_help_text_raw()` below carries
     every branch unchanged, and this function's only job is `_wrap80()`
     on its way out — RULED 2026-08-16, "80 column max window", after a
-    node's rendered markdown (level 4, `/help <class> read #`) showed
-    lines past 900 characters. `object_class_help_text()`'s own paragraph
+    node's rendered markdown (the since-retired level 4, `/help <class>
+    read #`) showed lines past 900 characters. `object_class_help_text()`'s own paragraph
     text is collapsed to one line per paragraph by `issue_schema.issue_unwrap()`
     — a separate, correct DISPLAY convention (CLAUDE.md, `issues/` TOML) —
     so wrapping belongs here, at the point text actually reaches a human,
@@ -1041,31 +982,25 @@ def _help_text_raw(arg: str = "") -> str:
     # at the prompt; only this resolver did.
     cls = words[0].lstrip("/") if words else ""
     if cls in object_classes():
-        # THE COMMAND LISTING IS NOT GATED; THE RECORD INSPECTION STILL IS.
-        # R336, 2026-08-24, and this is the seam worth naming. R280 gated
+        # THE COMMAND LISTING IS NOT GATED. R336, 2026-08-24: R280 gated
         # "the entire hierarchy" when the hierarchy WAS the object-class
         # inspector — `list` and `read #` walking real issue records. Level
         # 0 now names classes instead of verbs, so `/help issue` is the only
         # way a non-dev reader reaches verbs that R266 already ruled are
         # THEIRS. Gating it would show them a door and lock it.
         #
-        # So the split is by WHAT IS BEING SHOWN, not by which level:
+        # THE INSPECTOR IS RETIRED — 2026-09-11, R556.
+        # `/help <class> list` and `/help <class> read #` were dispatched
+        # here, dev-only, until then; a class page is now the end of the
+        # hierarchy, and anything after the class name is unrecognized at
+        # every dev state — there is nothing gated behind it to hide (R199).
         #   /help <class>            the class's own COMMANDS — ungated,
         #                            and filtered to what this dev state
         #                            would let you type anyway
-        #   /help <class> list       the live RECORDS — dev only, unchanged
-        #   /help <class> read #     one record, whole — dev only, unchanged
-        #   /help object_classes     the inspector's own index — dev only
+        #   /help object_classes     the class index — dev only
         if len(words) == 1:
             return "\n" + _class_tree_text(cls) + "\n"
-        if not CS.dev_mode:
-            return command_dev_restricted_render()
-        if len(words) >= 2 and words[1] == "list":
-            return "\n" + object_class_list_text(cls) + "\n"
-        if len(words) >= 3 and words[1] == "read":
-            return "\n" + object_class_read_text(cls, words[2]) + "\n"
-        return (f"\n  unrecognized: help {arg!r} — try `/help {cls}`, "
-                f"`/help {cls} list`, or `/help {cls} read #`\n")
+        return f"\n  unrecognized: help {arg!r} — try `/help {cls}`\n"
     # `/help <verb>` — AFTER the class branch, never before it. `propose`
     # is both a class and (through SYNONYMS) a verb head, and the class is
     # the larger answer: /help propose keeps printing the class page, and
@@ -1140,8 +1075,8 @@ def junk_help(line: str) -> str:
 
 def command_dev_restricted_render() -> str:
     """What the dev-gated HELP HIERARCHY prints back while dev is off —
-    `/help object_classes`, `/help <class>`, `list`, `read #`
-    (R280, 2026-08-21).
+    `/help object_classes` (R280, 2026-08-21; `/help <class>` ungated since
+    R336, and the inspector's `list` / `read #` retired 2026-09-11).
 
     RULED 2026-08-16: "dev is meant to require being told, permanently" —
     no output anywhere may name "dev mode" as a concept, since doing so

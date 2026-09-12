@@ -62,6 +62,8 @@ reasoning" failure this project keeps finding.
 from __future__ import annotations
 
 import pathlib
+import re
+import textwrap
 
 try:
     import tomllib
@@ -286,8 +288,67 @@ def _scalar(v) -> str:
     return str(v).lower() if isinstance(v, bool) else str(v)
 
 
+# THE PANE IS 80 COLUMNS (R201, "80 column max window"; help_system.HELP_WIDTH is the same
+# number, one layer up, and this module may not import it). A record shown whole is prose read
+# in that pane, so it is wrapped to it here, at the one point the text reaches a person.
+RECORD_WIDTH = 80
+
+# A line that opens a list item or a quote: the marker is what its continuation lines hang
+# under. Numbered items too — "1. " — since an array of tables is shown that way.
+_ITEM_RE = re.compile(r"^(\s*)([-*>] |\d+\. )")
+
+
+def register_text_reflow(s: str, width: int = RECORD_WIDTH) -> list[str]:
+    """Stored prose -> lines that fit `width`, for a record shown whole.
+
+    The operator, 2026-09-11 (R555): `/issue-list <n>` showed *"some lines
+    wrapped normally, and others continue to the window edge and then are wrapped unreadably
+    onto the next line"*. The stored text is hard-wrapped by whoever wrote it — some blocks at
+    seventy-odd columns, some as one long line — and the show printed each stored line as it
+    was, under its own indent. So the view was the file's accident, not a rendering.
+
+    THE RULE IS THE STORE'S OWN: a single newline is soft, a blank line is a paragraph break
+    (register_unwrap, issue_schema.issue_unwrap). One more thing the unwrap does not know, and a
+    record's history needs: a line that OPENS a list item or a quote (`- `, `* `, `> `, `1. `)
+    starts a new item even with no blank line before it, and its continuation hangs under the
+    marker. Each item is then re-wrapped to `width`, the item's own leading space kept. A block
+    holding a code fence or a table row is left exactly as stored: re-wrapping it would change
+    what it means. Words are never broken."""
+    import textwrap
+    out: list[str] = []
+    blocks = re.split(r"\n\s*\n", s.strip("\n"))
+    for bi, block in enumerate(blocks):
+        if bi:
+            out.append("")
+        lines = block.split("\n")
+        # A FENCE IS A LINE THAT IS ONLY A FENCE. A stored line that opens and closes its
+        # backticks on itself (n0030's history has one, 231 columns of it) is prose wearing
+        # backticks, and is reflowed like any other.
+        if any(re.match(r"^\s*(```\w*\s*|\|.*)$", ln) for ln in lines):
+            out += [ln.rstrip() for ln in lines]
+            continue
+        items: list[tuple[str, str, list[str]]] = []      # (lead, hang, words)
+        for ln in lines:
+            m = _ITEM_RE.match(ln)
+            if m or not items:
+                lead = m.group(1) if m else re.match(r"^\s*", ln).group(0)
+                hang = " " * len(m.group(2)) if m else ""
+                items.append((lead, hang, []))
+            items[-1][2].append(ln.strip())
+        for lead, hang, parts in items:
+            text = " ".join(p for p in parts if p)
+            if not text:
+                continue
+            out += textwrap.wrap(text, width, initial_indent=lead,
+                                 subsequent_indent=lead + hang,
+                                 break_long_words=False, break_on_hyphens=False)
+    return out
+
+
 def _field_lines(d: dict, keys: list, indent: str) -> list[str]:
-    """`keys` of `d` as labelled lines; a table, or an array of tables, nests one level in."""
+    """`keys` of `d` as labelled lines; a table, or an array of tables, nests one level in.
+    Prose is reflowed to RECORD_WIDTH under its indent (register_text_reflow), a labelled
+    scalar too long for one line hanging under its value column."""
     width = max((len(str(k)) for k in keys), default=0)
     out: list[str] = []
     for k in keys:
@@ -304,12 +365,23 @@ def _field_lines(d: dict, keys: list, indent: str) -> list[str]:
                 else:
                     out.append(f"{indent}   {i}. {_scalar(x)}")
         elif isinstance(v, (list, tuple)):
-            out.append(f"{indent}{k:<{width}}  {', '.join(_scalar(x) for x in v)}")
+            label = f"{indent}{k:<{width}}  "
+            out += textwrap.wrap(", ".join(_scalar(x) for x in v), RECORD_WIDTH,
+                                 initial_indent=label, subsequent_indent=" " * len(label),
+                                 break_long_words=False, break_on_hyphens=False) or [label.rstrip()]
         elif isinstance(v, str) and "\n" in v.strip("\n"):
             out.append(f"{indent}{k}")
-            out += [f"{indent}   {line}" for line in v.strip("\n").splitlines()]
+            out += [f"{indent}   {line}".rstrip()
+                    for line in register_text_reflow(v, RECORD_WIDTH - len(indent) - 3)]
         else:
-            out.append(f"{indent}{k:<{width}}  {_scalar(v)}")
+            label = f"{indent}{k:<{width}}  "
+            line = label + _scalar(v)
+            if len(line) <= RECORD_WIDTH or not isinstance(v, str):
+                out.append(line)
+            else:
+                out += textwrap.wrap(" ".join(v.split()), RECORD_WIDTH, initial_indent=label,
+                                     subsequent_indent=" " * len(label),
+                                     break_long_words=False, break_on_hyphens=False)
     return out
 
 
@@ -341,7 +413,9 @@ def register_record_show(rows: list, n: int, order: tuple = (), *, body: str = "
     out += _field_lines(r, [k for k in keys if k != body and not _empty(r[k])], "     ")
     if body:
         out.append("")
-        out += [f"     {line}" for line in (str(r.get(body) or "") or "(empty)").splitlines()]
+        out += [f"     {line}".rstrip()
+                for line in register_text_reflow(str(r.get(body) or "") or "(empty)",
+                                                 RECORD_WIDTH - 5)]
     return "\n".join(out)
 
 

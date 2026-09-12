@@ -35,7 +35,7 @@ nor chose it, and a Self-authored row under that part's own *"What you
 have chosen to remember"* heading (remember_prompt_projection.remember_project()'s BLOCK 4 header)
 would be a false attribution in the one place a part reads as its own
 voice. So the ratification is recorded where the ratifier can retrieve
-it — `/remember-list` (`/recall` a kept alias) — and reaches the part, if at all, the way every other
+it — `/remember-list` — and reaches the part, if at all, the way every other
 Self intention reaches one: through a later circle.
 
 NOT VETTED, and that is the ruling's word. Nothing stages, nothing waits

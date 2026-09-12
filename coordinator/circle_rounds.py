@@ -17,7 +17,8 @@ RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodie
     run_round         -> circle_round_run          run_blind_round  -> circle_blind_round_run
     ask_statement     -> part_statement_ask        addressed_since  -> part_addressed_since
     token_table       -> part_token_table          for_display      -> statement_display
-    MAX_TOKENS, MAX_SINCE_SELF, TRUNCATION_MARKER, BLIND_CLOSE, REVEAL_OPEN   constants, unchanged
+    MAX_TOKENS, MAX_SINCE_SELF, TRUNCATION_MARKER, BLIND_CLOSE   constants, unchanged
+    (REVEAL_OPEN retired with the reveal round, R558, 2026-09-11)
 
 This module is the split's KEYSTONE CONSUMER, deliberately last: it
 calls the transport (llm_client.stream_call), the prompt view
@@ -253,23 +254,14 @@ def part_statement_ask(client, part: str, blocks: list[dict], transcript: list[d
 BLIND_CLOSE = ("[BLIND ROUND ENDS — the {n} statement(s) above were made without "
                "sight of one another. Sequential rounds follow.]")
 
-# THE REVEAL, ruled 2026-08-05. Self: *"collect all the responses blind, then
-# forward them together as an attributed block to all parts for their
-# awareness and potential reply."*
-#
-# The statements already reached every part — they are appended to the
-# transcript and prompt_messages_render rebuilds each part's view from it, so the
-# One part sees the Child's and another's, attributed, from the next round
-# on. What was missing was the MOMENT: the block arrived as ordinary
-# conversation history, split around a part's own turn, and nothing asked
-# anyone to answer it. A part's next turn came only when Self typed
-# something.
-#
-# This names the moment and gives the room one pass at it.
-REVEAL_OPEN = ("[REVEAL — every statement above was made blind. You are seeing "
-               "all of them together now, for the first time. Answer what "
-               "lands, dispute what does not, or [pass]. Nobody is owed a "
-               "reply.]")
+# THE REVEAL ROUND IS RETIRED — R558, 2026-09-11. R095
+# (2026-08-05) handed the blind block back to every part for one more
+# statement each; in the last three circles that ran it (2026-08-21, 09-09,
+# 09-10) that round was mostly the parts telling each other they had all said
+# the same thing — all seven statements on 2026-09-10. The open is one
+# statement per part. The blind statements reach every part with Self's next
+# statement, as every statement does. `[REVEAL` lines in the record from
+# 2026-08-06 to 2026-09-11 are read by circling_verify.py and written by nothing.
 
 
 def circle_blind_round_run(client, parts, sysblocks, transcript, since_self, state,
@@ -394,28 +386,13 @@ def circle_blind_round_run(client, parts, sysblocks, transcript, since_self, sta
     # No seam.emit() at all, on any channel.
     if not spoke:
         seam.emit("command", "  (silence — every part passed)")
-        return spoke
-
-    # THE REVEAL. One sequential pass over the same block, so the room can
-    # answer what it could not see while speaking.
-    #
-    # IT COSTS A STATEMENT. Every part leaves the blind round at 1 of 2, so a
-    # part that replies here reaches the limit and is held until Self speaks.
-    # That is the protocol working rather than a side effect: the room speaks
-    # blind, reacts once, and then it is Self's turn. Making the reveal free
-    # would let a circle run four deep before he was consulted.
-    transcript.append({"speaker": "__coordinator__", "display": "Coordinator",
-                       "text": REVEAL_OPEN})
-    circle_transcript_append(guard, path, REVEAL_OPEN)
-    # RULED 2026-08-13: "do not echo part protocol machinery to Self" —
-    # see the BLIND_CLOSE note above. No seam.emit() here either.
-    # `last` IS CLEARED. The blind statements were simultaneous; the reveal
-    # order is a shuffle, not a sequence. Leaving `last` set would deny the
-    # reveal to whichever part the shuffle happened to put last — the
-    # never-speak-twice-in-a-row rule applied to a turn nobody took after.
+    # `last` IS CLEARED. The blind statements were simultaneous, so no part
+    # spoke last; leaving `last` set would deny the next round to whichever
+    # part the shuffle happened to append last — the never-speak-twice-in-a-row
+    # rule applied to a turn nobody took after. The reveal round that once ran
+    # here is retired (R558, 2026-09-11 — the note after
+    # BLIND_CLOSE); every part leaves the open at one statement of its cap.
     state["last"] = None
-    spoke += circle_round_run(client, parts, sysblocks, transcript, since_self,
-                       state, guard, path, dry, live=live)
     return spoke
 
 

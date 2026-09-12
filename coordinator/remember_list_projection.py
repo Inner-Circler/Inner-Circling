@@ -40,7 +40,7 @@ from REGISTER_CLASS import register_list_footer, register_record_show           
 # PART-PARAMETRIZED BUT SELF-ONLY IN PRACTICE. `part` defaults to SELF and
 # commands.py never passes anything else — deliberately. A remember is
 # private to whoever wrote it (docs/BNF.md: "REMEMBER's blast radius is
-# the writing entity's own future record"), so a `/recall <part>` form
+# the writing entity's own future record"), so a `/remember-list <part>` form
 # would be a privacy hole wearing a convenience's clothes. The parameter
 # exists so the tests can prove the Self path reads self/remember.toml
 # and nothing under parts/.
@@ -71,7 +71,7 @@ def remember_list(part: str = SELF) -> str:
 
 
 def remember_record_show(n: int, part: str = SELF) -> str:
-    """`/remember-list <n>` (also `recall <n>`): the whole record, every field it carries.
+    """`/remember-list <n>`: the whole record, every field it carries.
 
     EVERY FIELD, not a chosen few. A live record has date/circle/text; a
     DREAMING-authored one also has id and chain; a migrated one has class.

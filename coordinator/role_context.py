@@ -31,14 +31,12 @@ distilled" (Block 3's remember_prompt_projection.remember_settled_render) and "n
 role_attention.py receives it as a parameter and never imports mid_term
 itself.
 
-MID_TERM IS IMPORTED LAZILY (inside part_context_block_render(), not at module level), matching
-the exact pattern the code being replaced already used: part_mid_term_manager.py imports
-prompt_build.py at ITS OWN module level (for read_ro/strip_settled, both
-re-exported by prompt_build from here, now via parts_prompt_projection.py), so
-prompt_build -> role_context must never need mid_term at module-load time,
-or the two modules deadlock on import. The lazy side is what keeps the pair
-import-order-safe -- unchanged in shape from before the move, just one hop
-further out.
+MID_TERM IS IMPORTED LAZILY (inside part_context_block_render(), not at module level). The
+import cycle that once required it -- part_mid_term_manager.py importing prompt_build.py at
+its own module level for the read helpers prompt_build re-exported -- closed on 2026-09-09
+with the facade: part_mid_term_manager.py imports parts_prompt_projection.py as a function
+local, and nothing in it imports prompt_build.py or this module. The import is kept lazy as
+it was: the shape is harmless and unchanged, and it no longer guards anything.
 """
 
 from __future__ import annotations

@@ -101,7 +101,8 @@ def prompt_cache_control_read() -> "dict | None":
 
 
 # read_ro/strip_settled/strip_to_identity/identity_tail moved to
-# parts_prompt_projection.py, 2026-09-02 — re-exported above by name.
+# parts_prompt_projection.py, 2026-09-02 (record_ro_read, part_settled_strip,
+# part_identity_strip, part_identity_tail_render) — import them from there.
 
 
 # THE FOUR BLOCKS, NAMED SEMANTICALLY. Ruled 2026-08-06.

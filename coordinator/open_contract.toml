@@ -14,6 +14,13 @@
 [report]
 required = ["open_time", "checked_at", "live", "group", "transcript", "capture", "parts",
             "verifier", "result", "failed", "contract", "note", "postconditions"]
+# `limits` IS OPTIONAL, on purpose — R553 (D123 a, 2026-09-11).
+# It carries `statements_per_part`, the cap the turn engine ran this circle under, and
+# circling_verify.py holds the circle to it. Optional rather than required so the two reports
+# written before the field existed stay valid: circle_audit.py reads `required` against every
+# report on disk, and test_circle_open_verify.py holds a fresh report to required plus at most
+# these.
+optional = ["limits"]
 
 [report.values]
 result = ["pass", "fail"]

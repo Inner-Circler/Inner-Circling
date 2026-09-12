@@ -312,8 +312,8 @@ MARK — `self/marks/<OT>.toml`, `/mark`, the `[mark ...]` annotation, its five
 kinds (`lands`/`stings`/`denied`/`lead`/`platitude`), the `· TEST` convention,
 and PROPOSE MARK (`[propose mark]`, `self/mark_proposals.toml`) — is retired
 outright, code included (docs/BNF.md). Self's reflexive record is REMEMBER
-now, surfaced on demand by `/remember-list` (`/recall` a kept alias, built
-2026-08-18, R224). The
+now, surfaced on demand by `/remember-list` (built 2026-08-18, R224, as
+`/recall`; that alias retired 2026-09-11, R557). The
 old `self/marks/<OT>.toml` records are in git, not lost —
 `git log --all -- self/marks/` finds them. `self/leads.md` is left in place,
 frozen: its writer

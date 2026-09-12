@@ -210,13 +210,39 @@ def circle_open_report_write(report: dict, live: bool,
     return path
 
 
+def circle_open_limits_read(ot: str, live: bool,
+                            root: "pathlib.Path | None" = None) -> dict:
+    """The `limits` an EXISTING report for this circle carries, or {}. The first open's note is
+    the one that stands (R553): a --resume runs the open step again
+    and a hand `--write-report` runs this writer again, and neither may replace the limit the
+    circle actually ran under with the setting as it stands later."""
+    base = pathlib.Path(root) if root is not None else _RP.ROOT
+    logs = base / "work" / "logs" if live else base / "work" / "sandbox" / "logs"
+    try:
+        prior = json.loads((logs / f"open_{ot}.json").read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return {}
+    kept = prior.get("limits") if isinstance(prior, dict) else None
+    return dict(kept) if isinstance(kept, dict) else {}
+
+
 def circle_open_verify(ot: str, live: bool, transcript, capture, parts,
-                       root: "pathlib.Path | None" = None) -> "tuple[dict, str]":
+                       root: "pathlib.Path | None" = None,
+                       limits: "dict | None" = None) -> "tuple[dict, str]":
     """Check one open, write its report, return (report, where it was written). The ONE entry
-    point circle_open() calls. REPORT ONLY — see the module docstring for what that rules out."""
+    point circle_open() calls. REPORT ONLY — see the module docstring for what that rules out.
+
+    `limits` is THE LIMIT THE CIRCLE RAN UNDER — R553 (D123 a,
+    2026-09-11): `{"statements_per_part": n}`, the engine's own MAX_SINCE_SELF as the caller
+    read it at this open, never the setting re-read here (the constant binds at import, the
+    pending fold runs later, and the two can differ for exactly the circle a change lands on).
+    circling_verify.py holds this circle to that number; a report with no note is held to the
+    contract's two, which is every circle before that date. A note already on file wins — see
+    circle_open_limits_read()."""
     rows = circle_open_postcondition_verify(ot, live, transcript, capture, parts)
     disagree = circle_open_contract_agree(rows, circle_open_contract_read())
     failed = [r["id"] for r in rows if r["result"] == "fail"]
+    kept = circle_open_limits_read(ot, live, root)
     report = {
         "open_time": ot,
         "checked_at": datetime.now().strftime("%Y-%m-%d_%H%M%S"),
@@ -231,6 +257,7 @@ def circle_open_verify(ot: str, live: bool, transcript, capture, parts,
         "contract": disagree,
         "note": ("REPORT ONLY — nothing here stops a circle or changes its exit code "
                  "(R535)."),
+        "limits": kept if kept else (dict(limits) if limits else {}),
         "postconditions": rows,
     }
     where = circle_open_report_write(report, live, root)

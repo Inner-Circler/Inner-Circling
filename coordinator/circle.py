@@ -380,7 +380,7 @@ def _roster_refresh() -> None:
 # --------------------------------------------- the turn engine
 # MOVED to rounds.py, 2026-08-16 (phase 2 stage 7, the last
 # extraction): _TO_RE/_SELFNAME_RE + part_statement_ask, the blind round
-# (BLIND_CLOSE/REVEAL_OPEN/circle_blind_round_run), part_token_table,
+# (BLIND_CLOSE/circle_blind_round_run), part_token_table,
 # part_addressed_since and circle_round_run — verbatim, comments included.
 # main() imports circle_round_run/circle_blind_round_run/part_token_table at the top.
 
@@ -1221,12 +1221,15 @@ def main() -> int:
             # forwards it (CircleEngine.submit_command), so this loop only
             # ever sees the room's own — or a standalone terminal's, which
             # has one pane and is a developer path. `/help all` is that
-            # path's way back to the full table; the dual pane's room
+            # path's way to EVERY VERB, one row each; the dual pane's room
             # refuses every `/help <arg>`, so it never arrives from there.
+            # SWAPPED 2026-09-11 (R554): bare /help under
+            # dev shows the class rows, /help all the enumeration — until
+            # then each showed the other's.
             if not arg:
                 emit("circle", HS.circle_pane_help())
             elif arg == "all":
-                emit("command", command_help_render(""))
+                emit("command", HS.command_help_all_render())
             else:
                 emit("command", command_help_render(arg))
             continue

@@ -301,8 +301,9 @@ SPEC: tuple[Setting, ...] = (
        "The ceiling for the one shared room-capsule call per circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
        "coordinator/part_dreaming.py::CAPSULE_MAX_TOKENS", unit="tokens",
-       why="No reason is recorded beside this number; the paragraph it pays for is short, but "
-           "the model's thinking counts against the same ceiling."),
+       why="An unwarranted initial size awaiting data regarding the actual use (ruled, "
+           "R564); the paragraph it pays for is short, but the model's "
+           "thinking counts against the same ceiling."),
     _s("synth_max_tokens",
        "The ceiling for the one circle-wide synthesis after a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",
@@ -397,8 +398,10 @@ SPEC: tuple[Setting, ...] = (
        "tokens instead of the real text",
        "BOOL", 1, "user", "immediate",
        "coordinator/stream_redaction.py::REDACT_VIEW_DEFAULT", gate="ONE_OF",
-       why="No reason is recorded for leaving it off; turned on, it hides names, emails and phone "
-           "numbers in the circle pane only, and never a part's name."),
+       why="Off because it is a privacy mechanism for depersonalizing statements, for example to "
+           "share some circle dialogue with a third party (ruled, R564); turned "
+           "on, it hides names, emails and phone numbers in the circle pane only, and never a "
+           "part's name."),
     # THE CLOSE'S OWN CLOCK — ruled 2026-08-30: "After circle /close, I want
     # to aim for no more than 5 minutes, and progress must be being reported
     # in the command pane at least every 10 seconds, even if its just a

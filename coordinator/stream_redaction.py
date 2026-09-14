@@ -29,6 +29,8 @@ import identity as ID                                            # noqa: E402
 import redaction_manager as RD                                   # noqa: E402
 import setting_manager as SET                                           # noqa: E402
 
+# Off by default: "a privacy mechanism for depersonalizing statements, for example if you were
+# to share some circle dialog with a third party" (ruled R564, 2026-09-12).
 REDACT_VIEW_DEFAULT = SET.setting_value_read("redact_view", False)
 
 

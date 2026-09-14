@@ -145,6 +145,8 @@ RESOLUTION
 # part reads the SAME capsule text; a difference between two parts' dreams
 # can never be traced to a different capsule, because there is only one.
 CAPSULE_CAP = SET.setting_value_read("dream_capsule_cap", 1200)   # chars, the shared paragraph
+# The ceiling: "an unwarranted initial size awaiting data regarding the actual use" (ruled
+# R564, 2026-09-12) — the per-turn capsule captures are that data.
 CAPSULE_MAX_TOKENS = SET.setting_value_read("dream_capsule_max_tokens", 1500)
 
 ROOM_CAPSULE_PROMPT_V1 = """\

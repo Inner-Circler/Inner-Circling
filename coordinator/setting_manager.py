@@ -73,6 +73,17 @@ WHEN A CHANGE TAKES EFFECT. `applies` is "immediate" or "next_circle".
                   boundary: the ruling beside that call site says re-vetting
                   any later "would change BLOCK 1 out from under an
                   in-flight transcript", which is the same hazard.
+                  AND RE-READ INTO THE PROGRAM by setting_constants_refresh(),
+                  called right after the fold (2026-09-14, the operator: "Go
+                  on a."). Every next_circle value is a constant read at
+                  import, and the program imports before it opens, so the
+                  fold alone reached the circle AFTER next — and, in the
+                  Ticker's one permanent process, no circle at all. Two keys
+                  are exempt by name and take effect at the next START:
+                  `model` and `provider` (REFRESH_EXEMPT — the API check runs
+                  before the fold). A copy of a setting-owned constant that
+                  the refresh cannot reach is refused by
+                  system_setting_verify.setting_copy_faults_read().
 
 Anything that changes the bytes of a prompt block, the model, or a budget a
 block is sized against is next_circle. Nothing needs to change mid-circle;
@@ -207,13 +218,13 @@ SPEC: tuple[Setting, ...] = (
     _s("statement_aim_words",
        "The length a part aims for in one statement",
        "NUMERIC_STRING", 1000, "dev", "next_circle",
-       "coordinator/prompt_build.py::LENGTH_AIM_WORDS", unit="words",
+       "coordinator/process_core_prompt_projection.py::LENGTH_AIM_WORDS", unit="words",
        why="Ruled 2026-08-28 as the aim of the length rule, which reaches the parts as a sentence "
            "in their rulebook; nothing counts a part's words, and the ruling says that is fine."),
     _s("statement_max_words",
        "The length a part is told never to exceed",
        "NUMERIC_STRING", 2000, "dev", "next_circle",
-       "coordinator/prompt_build.py::LENGTH_MAX_WORDS", unit="words",
+       "coordinator/process_core_prompt_projection.py::LENGTH_MAX_WORDS", unit="words",
        why="Ruled 2026-08-28 as the length rule's ceiling; the retry after a cut statement quotes "
            "this same number, so the rule the room is told and the retry cannot disagree."),
     # THE BLIND ROUND AND THE PRE-WARM ARE DELIBERATELY ABSENT, AND NOW HAVE NO
@@ -236,9 +247,10 @@ SPEC: tuple[Setting, ...] = (
        "How much of a part's remembered notes reach it each circle",
        "NUMERIC_STRING", 200000, "dev", "next_circle",
        "coordinator/remember_manager.py::BUDGET", unit="characters",
-       why="Claude's arithmetic, not a ruling: room for about four full-length remembered notes "
-           "or about forty short ones, so one long note does not push every older one out of "
-           "view."),
+       why="Ruled kept 2026-09-14 with the word cap, measured at six characters a word: room for "
+           "about four full-length remembered notes or about forty short ones, so one long note "
+           "does not push every older one out of view; if the cap is ever raised, this rises with "
+           "it."),
     _s("salience_lift",
        "How far a charged memory may jump ahead of a newer one",
        "NUMERIC_STRING", 20, "dev", "next_circle",
@@ -900,6 +912,74 @@ def setting_pending_fold() -> list[str]:
     doc[ACTIVE], doc[PENDING] = act, {}
     _dump(doc)
     return sorted(pend)
+
+
+# THE TWO next_circle KEYS THE REFRESH LEAVES ALONE, 2026-09-14. The API check (circle_open's
+# stream_api_preflight) runs against the circle's own model BEFORE the fold — CLAUDE.md's
+# "nothing is written until the API check passes" — so a model or provider folded at this open
+# would run untested by it; and llm_client derives PROVIDER_IMPL, KEY_MISSING_HELP and
+# KEY_MISSING_BRIEF from PROVIDER at import. Both take effect at the next START of the program,
+# and the open's message says so for them by name rather than claiming this circle.
+REFRESH_EXEMPT = ("model", "provider")
+
+
+def setting_constants_refresh() -> list[tuple[str, object, object]]:
+    """Re-read every next_circle setting into the constant that owns it, in every module ALREADY
+    IMPORTED that holds one — the fold's second half, 2026-09-14 (the operator: "Go on a.").
+
+    WHY. Every next_circle value is read once, at import (`NAME = setting_value_read(key,
+    default)`), and the program imports before it opens; so the fold alone left the circle whose
+    open said "now in force" running on the old number, and the Ticker — one permanent process —
+    never saw a change at all. Measured before it was built: a pending 777 folded to [active],
+    setting_value_read() answering 777, AUTHORED_WORD_CAP still 1000, the rulebook rendering 1000.
+
+    HOW. The owner module is found by FILE, never by name: circle.py is `__main__` in the
+    single-pane way in and `circle` under the UI, and importing by name from the single-pane
+    process would make a second module and refresh the wrong one. Every loaded module whose file
+    is the owner's gets the attribute set. An owner not yet imported needs nothing — it will read
+    [active] when it imports. The default passed is the owner's SOURCE literal (what --check
+    reports), not the attribute's current value: after /settings-clear the current value IS the
+    stale override. Every next_circle key is re-read, not only the folded ones, for the same
+    reason — a clear never appears in the fold's list. `immediate` keys are not this function's:
+    they were never read at import as a rule, and a change to one is refused while a circle is
+    open. REFRESH_EXEMPT's two keys are skipped by name, above.
+
+    A COPY THE REFRESH CANNOT REACH IS THE ONE FAILURE SHAPE HERE, and system_setting_verify's
+    setting_copy_faults_read() refuses one: no `from <owner> import NAME`, no second import-time
+    read of a key outside its owner. Returns (key, old, new) for every constant that moved, so the
+    open can say which."""
+    import ast
+    import pathlib
+    import sys
+    by_file: dict[pathlib.Path, list] = {}
+    for mod in list(sys.modules.values()):
+        f = getattr(mod, "__file__", None)
+        if f:
+            try:
+                by_file.setdefault(pathlib.Path(f).resolve(), []).append(mod)
+            except OSError:
+                continue
+    moved: list[tuple[str, object, object]] = []
+    for s in SPEC:
+        if s.applies != "next_circle" or s.key in REFRESH_EXEMPT:
+            continue
+        path, _, name = s.owner.partition("::")
+        lit, _why = setting_source_default_read(s.owner, s.key)
+        if lit is None:
+            continue
+        try:
+            default = ast.literal_eval(lit)
+        except (ValueError, SyntaxError):
+            default = lit                     # a bare string once its quotes came off
+        new = setting_value_read(s.key, default)
+        for mod in by_file.get((ROOT / path).resolve(), []):
+            if not hasattr(mod, name):
+                continue
+            old = getattr(mod, name)
+            if old != new:
+                setattr(mod, name, new)
+                moved.append((s.key, old, new))
+    return moved
 
 
 def _dump(doc: dict) -> None:

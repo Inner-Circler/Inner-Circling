@@ -31,7 +31,6 @@ from transcript_store import circle_transcript_is_withheld   # the recorded-but-
 from llm_client import CACHE_TTL   # prompt_cache_control_read()'s TTL — the transport owns it
 import llm_client as _LC           # PROVIDER_IMPL — prompt_cache_control_read()'s wire form is the
                                    # provider's, stage 2 (R382)
-import setting_manager as SET             # the length rule's two numbers
 
 # THE FOUR BLOCKS' OWN ASSEMBLERS live in their own files, 2026-09-02
 # (docs/CIRCLE_TYPES_DESIGN.md). This file is the one EXECUTOR of the four blocks —
@@ -60,26 +59,12 @@ _sys.path.insert(0, str(_P.ROOT / "memory"))
 
 HERE = pathlib.Path(__file__).resolve().parent
 
-# THE LENGTH RULE, ruled by the operator 2026-08-28, in his own sentence:
-# "aim for 60 words or fewer and never exceed 150; reformulate down to less
-# than 150 in all cases." process_core.md carries that sentence with these two
-# numbers as placeholders, and group_shared_read() puts them in.
-#
-# ONE SOURCE FOR BOTH PLACES THE NUMBER APPEARS, which is the actual fix. The
-# rulebook said "never exceed 100" while circle_rounds.py's truncation retry told a
-# part to "speak in UNDER 150 words", and process.md said a stale 100 beside a
-# stale ceiling of 600 — three documents, three literals, no way for any of
-# them to notice the others. circle_rounds.py imports LENGTH_MAX_WORDS from here now,
-# so the room's rule and the retry's cannot disagree again.
-#
-# NOTHING COUNTS WORDS. The rule is advisory and always has been; no code in
-# the statement path measures one. Measured 2026-08-28 across the 374 part
-# statements in the parseable corpus, all of which ran under the previous
-# "aim 120, never exceed 200": median 98 words — 0.82x the aim — with 2.1%
-# over the cap. An advisory rule demonstrably shapes these parts, which is
-# why the operator's ruling is that never enforcing it is fine.
-LENGTH_AIM_WORDS = SET.setting_value_read("statement_aim_words", 60)
-LENGTH_MAX_WORDS = SET.setting_value_read("statement_max_words", 150)
+# THE LENGTH RULE'S TWO NUMBERS LIVE IN process_core_prompt_projection.py (LENGTH_AIM_WORDS,
+# LENGTH_MAX_WORDS) — the one module that puts them into the rulebook's sentence. They were read
+# HERE too, a second import-time copy of the same two settings that the settings refresh at the
+# fold could not reach; the owner moved with the refresh (2026-09-14), and circle_rounds.py's
+# truncation retry reads PCP.LENGTH_MAX_WORDS at use, so the room's rule and the retry still
+# cannot disagree. The rule's history and the measurement behind it are with the owner.
 
 
 def prompt_cache_control_read() -> "dict | None":

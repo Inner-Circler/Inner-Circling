@@ -42,12 +42,16 @@ import LLM_response_disassembler as RD
 import seam
 import setting_manager as SET
 import token_count as TC
-from llm_client import stream_call, MODEL
+from llm_client import stream_call
+import llm_client as LC            # LC.MODEL, read at use: a setting-owned constant is never
+                                   # from-imported (a copy the settings refresh cannot reach)
 from annotations import (remember_apply, annotation_malformed_strip,
                      annotation_route, REMEMBER_RE)
 import recall_index as RC
 from record_paths import PART_TAGS
-from prompt_build import prompt_messages_render, LENGTH_MAX_WORDS
+from prompt_build import prompt_messages_render
+import process_core_prompt_projection as PCP   # PCP.LENGTH_MAX_WORDS — the length rule's owner
+                                                # since the settings refresh; read at use, same rule
 from transcript_store import statement_line, circle_transcript_append, circle_transcript_is_withheld
 
 # ~100 words is ~135 tokens; the ceiling is deliberately far above the word cap so
@@ -175,7 +179,7 @@ def part_statement_ask(client, part: str, blocks: list[dict], transcript: list[d
         # moment a part is being corrected. Both read LENGTH_MAX_WORDS now.
         msgs = prompt_messages_render(
             part, transcript,
-            f"(the circle comes to you — speak in UNDER {LENGTH_MAX_WORDS} "
+            f"(the circle comes to you — speak in UNDER {PCP.LENGTH_MAX_WORDS} "
             f"words and finish your sentence, or reply [pass])",
             recall=recall,
         )
@@ -449,7 +453,7 @@ def part_token_table(parts: list[str], sysblocks: dict, since_self: dict | None 
     measured = True
     for p in parts:
         blocks = sysblocks.get(p, [])
-        got, ok = TC.block_tokens(client, blocks, model or MODEL, dry)
+        got, ok = TC.block_tokens(client, blocks, model or LC.MODEL, dry)
         measured = measured and ok
         per_part[p] = {}
         for i in range(4):

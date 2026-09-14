@@ -17,7 +17,9 @@ RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodie
 
     SHORT_TERM_PROMPT, SHORT_TERM_MAX_TOKENS   the one request the close makes of each part
                                                that spoke (R255: the four sections, then the
-                                               part's one remember, last)
+                                               part's one remember, last). The prompt is a
+                                               TEMPLATE; short_term_prompt_render() fills the
+                                               register's word cap at the call (2026-09-14)
     _short_term_call, short_term_collect      that request on a worker thread per part
                                                (B89/R420), every write back on this thread
     CLOSING_MARK, circle_close_mark,          the start-of-close marker (2026-08-23) and the
@@ -64,12 +66,19 @@ from record_paths import ROOT, SANDBOX, PART_TAGS, record_dir        # noqa: E40
 # pay for that context twice.
 #
 # THE ORDERING IS LOAD-BEARING, not stylistic. annotations.remember_close_split()
-# is deliberately lenient about "]" so a 1000-word memory containing one
+# is deliberately lenient about "]" so a cap-length memory containing one
 # cannot be silently truncated mid-sentence; the price of that lenience is
 # that everything after the opener is the memory. Saying "last" here, in
 # process_core.md, annotation and standing guidance alike, is what makes that safe — and
 # short_term_collect() still re-checks the four headings after the split
 # and falls back to the strict parse if any went missing.
+#
+# THE WORD CAP IT STATES IS THE REGISTER'S (B139, 2026-09-14): remember_manager.AUTHORED_WORD_CAP,
+# the `remember_word_cap` setting or its default — the same number the rulebook renders and the
+# same number the writer cuts at, so a changed setting is told to the part, not only enforced on it.
+# A PLACEHOLDER HERE, FILLED BY short_term_prompt_render() AT THE CALL (the settings refresh,
+# 2026-09-14): an f-string over the constant was a copy bound at import, which the refresh at the
+# fold could not reach — the request would have said 1000 while the writer cut at 777.
 SHORT_TERM_PROMPT = (
     "The circle is closing. Write your short_term record of THIS circle, in "
     "exactly these four sections, in this order, with these exact headings:\n\n"
@@ -84,11 +93,19 @@ SHORT_TERM_PROMPT = (
     '[remember: "<what you are choosing to carry forward>"]\n\n'
     "It is a private note to your own future self: never shown to Self, to "
     "another part, or to the room, and it is the only thing you write "
-    "tonight that you will read again. Up to 1000 words. Write it in your "
+    "tonight that you will read again. Up to {REMEMBER_WORD_CAP} words. Write it in your "
     "own voice, about what you are keeping rather than what happened. "
     "One per circle — if you already used yours in a round, this one is "
     "dropped. Writing none is a real answer and costs you nothing."
 )
+
+
+def short_term_prompt_render() -> str:
+    """The close request as sent: SHORT_TERM_PROMPT with the register's word cap filled in AT
+    THE CALL — remember_manager.AUTHORED_WORD_CAP as it stands now, which the settings refresh at
+    the fold may have moved since import. `.replace()`, not `.format()`, as the rulebook's own
+    substitution: the text may legally carry a brace."""
+    return SHORT_TERM_PROMPT.replace("{REMEMBER_WORD_CAP}", str(RM.AUTHORED_WORD_CAP))
 
 # THE CLOSE BUDGET, named 2026-08-28 (R379). It was the bare
 # literal `5000` in short_term_collect()'s retry loop, and a value with no name
@@ -322,7 +339,7 @@ def _short_term_call(part: str, sysblocks, transcript, dry: bool):
         # beside SHORT_TERM_PROMPT for why the number is 5000 (R255).
         reply = LC.stream_call(
             worker_client, part, sysblocks[part],
-            PB.prompt_messages_render(part, transcript, SHORT_TERM_PROMPT),
+            PB.prompt_messages_render(part, transcript, short_term_prompt_render()),
             SHORT_TERM_MAX_TOKENS, dry,
             kind="short_term",
         )

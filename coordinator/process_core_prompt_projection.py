@@ -36,13 +36,26 @@ from __future__ import annotations
 import pathlib
 
 import setting_manager as SET              # the length rule's two numbers
+import remember_manager as RM              # the remember rule's two numbers (B139): the register's
+                                           # own AUTHORED_WORD_CAP and BUDGET, read where they are
+                                           # owned rather than as a second copy of their defaults
 
 HERE = pathlib.Path(__file__).resolve().parent
 
-# Mirrors group_context.py's own former LENGTH_AIM_WORDS/LENGTH_MAX_WORDS
-# exactly — same settings keys, same defaults. prompt_build.py/circle_rounds.py
-# each keep their own independent read of the same settings source too;
-# this is a third independent read, not a fourth source of truth.
+# THE LENGTH RULE, ruled by the operator 2026-08-28, in his own sentence: "aim for 60 words or
+# fewer and never exceed 150; reformulate down to less than 150 in all cases." process_core.md
+# carries that sentence with these two numbers as placeholders, and circle_identity_text_render()
+# below puts them in. THE OWNER SINCE 2026-09-14 (the settings refresh at the fold): setting_manager's
+# SPEC names these two constants, and every other reader — circle_rounds.py's truncation retry,
+# which quotes the ceiling — reads PCP.LENGTH_MAX_WORDS at use. prompt_build.py held a second
+# import-time read of the same settings until then; a copy the refresh cannot reach is a number
+# that stays stale while the rulebook moves, so system_setting_verify.py now refuses one.
+#
+# NOTHING COUNTS WORDS. The rule is advisory and always has been; no code in the statement path
+# measures one. Measured 2026-08-28 across the 374 part statements in the parseable corpus, all of
+# which ran under the previous "aim 120, never exceed 200": median 98 words — 0.82x the aim — with
+# 2.1% over the cap. An advisory rule demonstrably shapes these parts, which is why the operator's
+# ruling is that never enforcing it is fine.
 LENGTH_AIM_WORDS = SET.setting_value_read("statement_aim_words", 60)
 LENGTH_MAX_WORDS = SET.setting_value_read("statement_max_words", 150)
 
@@ -182,10 +195,16 @@ def circle_identity_layers_render(universal_text: str, layer_text: "str | None")
 def circle_identity_text_render() -> str:
     """BLOCK 1's rulebook text: the universal layer (process_core.md) with the group's layer
     composed in (R464, B115, 2026-09-07 — for the IFS group, byte-identical to the one-file
-    rulebook it replaced), then the length rule's two numbers substituted. THE ONE PLACE either
-    file is read — thirty-plus callers go through group_context.group_shared_read(), which calls
-    straight into this — so there is nowhere else for the composition or the substitution to be
-    missed.
+    rulebook it replaced), then the length rule's two numbers and the remember rule's two
+    substituted. THE ONE PLACE either file is read — thirty-plus callers go through
+    group_context.group_shared_read(), which calls straight into this — so there is nowhere else
+    for the composition or the substitution to be missed.
+
+    THE REMEMBER NUMBERS ARE THE REGISTER'S OWN (B139, 2026-09-14): {REMEMBER_WORD_CAP} is
+    remember_manager.AUTHORED_WORD_CAP and {REMEMBER_BUDGET} is remember_manager.BUDGET, each
+    already the `remember_word_cap` / `remember_budget` setting or its default — read at render,
+    never copied here, so the rulebook says what the register enforces. The budget renders with a
+    thousands comma ("24,000") because that is how the prose wrote it before it was a placeholder.
 
     `.replace()`, not `.format()`: the document is prose that may legally
     contain a brace, and a rulebook must not fail to load because someone
@@ -196,6 +215,8 @@ def circle_identity_text_render() -> str:
     return (circle_identity_layers_render(universal, layer)
             .replace("{LENGTH_AIM}", str(LENGTH_AIM_WORDS))
             .replace("{LENGTH_MAX}", str(LENGTH_MAX_WORDS))
+            .replace("{REMEMBER_WORD_CAP}", str(RM.AUTHORED_WORD_CAP))
+            .replace("{REMEMBER_BUDGET}", f"{int(RM.BUDGET):,}")
             .replace("{Members}", many.capitalize()).replace("{members}", many)
             .replace("{Member}", one.capitalize()).replace("{member}", one))
 

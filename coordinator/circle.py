@@ -87,8 +87,10 @@ import command_surface as CS       # phase-2 stage 0 (2026-08-16): the
                                    # dev_mode is REBOUND — always
                                    # CS.dev_mode, never a from-import.
 from command_surface import KNOWN_CMDS
-from llm_client import (METER, MODEL, KEY_MISSING_HELP, KEY_MISSING_BRIEF,
+from llm_client import (METER, KEY_MISSING_HELP, KEY_MISSING_BRIEF,
                         stream_client_build, stream_key_present_read)
+import llm_client as LC            # LC.MODEL, read at use: a setting-owned constant is never
+                                   # from-imported (a copy the settings refresh cannot reach)
 # THE OTHER FOUR LEFT WITH THE OPEN STEP, 2026-09-09: stream_key_source_note,
 # stream_failure_explain, RATE_CACHE_WRITE_1H and RATE_CACHE_READ are the API check's and
 # the pre-warm's, and both of those are circle_open.py's now.
@@ -1261,7 +1263,7 @@ def main() -> int:
                   f"\n  group {_RP.group_read()}"
                   f"\n  {len(parts)} parts")
             emit("command", part_token_table(parts, sysblocks, since_self,
-                                        client, MODEL, args.dry_run))
+                                        client, LC.MODEL, args.dry_run))
             emit("command", f"\n  running cost ${METER.cost():.4f} over {METER.calls} calls")
             continue
         if cmd in ("/round", "/pass"):

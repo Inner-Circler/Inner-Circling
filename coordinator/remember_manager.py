@@ -97,7 +97,14 @@ records of 600 chars; ONE full-length authored memory is ~6,600 chars,
 so leaving BUDGET alone would have made a long memory silently evict
 every older one the circle after it wrote it — a projection regression
 caused by a ruling that was about authoring. 24,000 keeps ~4 full-length
-memories, or ~40 short ones, in view. Flagged for Self.
+memories, or ~40 short ones, in view. RULED KEPT, both numbers together,
+2026-09-14 (R567, the operator: "c."): measured over the
+92 memories then on file, a word is 6.0 characters (median 5.97), so the
+cap is ~6,000 characters and the window holds four of them — the ratio
+this paragraph sized it for; no part had come within half of the cap
+(median 100 words, largest 497). A cap raised alone would let one memory
+evict nearly every older one; if it is ever raised, the window rises
+with it.
 
 ACCUMULATE, NEVER PRUNE. Nothing here ever deletes a record. project()
 windows the projected VIEW to the budget, newest first; the register

@@ -743,7 +743,9 @@ only when a prompt is assembled. **A part
 is never created without Self's explicit agreement**, and that rule is in
 the rulebook every part reads.
 
-`/part-retire` is the other door, and it is not a delete. **The system
+`/part-retire` is the other door, and it is not a delete. It is a
+developer verb: open the circle with `--dev` to use it, where
+`/part-add` needs no such thing. **The system
 respects records and history:** no command removes a part's record. A
 retired part leaves every circle, prompt and search from then on; its
 folder stays exactly where it is, its name stays its own, and what it

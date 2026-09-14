@@ -40,7 +40,10 @@ never states the default: the owner's literal is the one copy of the number, and
 `system_setting_verify.py` refuses a sentence that repeats it. `self/settings.toml` holds only what a
 person chose, in two tables:
 `[active]` (in force now) and `[pending]` (waiting for the next circle to open, folded in by
-`setting_pending_fold()` at the checkpoint `circle.py` runs before a circle's prompts are warmed).
+`setting_pending_fold()` at the checkpoint `circle.py` runs before a circle's prompts are warmed,
+then re-read into the program's own constants by `setting_constants_refresh()` — since 2026-09-14,
+so the circle the open names is the circle that runs on the value; `model` and `provider` are
+exempt by name and take effect at the next start, because the API check runs before the fold).
 Anything that shapes a prompt block, the model or a budget is `next_circle`. Per-provider tuning
 lives in `[tuning.<provider>]` (R382), validated against what the provider declares. PARTS NEVER SEE
 ANY OF THIS: the register feeds no prompt block, the verbs are command-pane only, and they are
@@ -145,6 +148,21 @@ None.
 
 ### `setting_pending_fold()`
     { move every [pending] key into [active]; return the keys folded (empty list when none) }
+
+### `setting_constants_refresh()`
+    { for every next_circle setting not in REFRESH_EXEMPT: find its owner module by FILE among
+        the modules already imported (circle.py is `__main__` in one way in and `circle` in the
+        other); read the setting again with the owner's SOURCE literal as the default (after a
+        clear the attribute's current value is the stale override); set the attribute where it
+        differs; return (key, old, new) for each that moved }
+
+The fold's second half (2026-09-14). Called by `circle_open.py` right after the fold, unconditionally
+— a `/settings-clear` never appears in the fold's list. `REFRESH_EXEMPT` is `("model", "provider")`:
+the API check runs against the circle's own model before the fold, and `llm_client` derives
+`PROVIDER_IMPL` from `PROVIDER` at import, so those two take effect at the next start and the open
+says so by name. A copy of a setting-owned constant the refresh cannot reach — a from-import, a
+second import-time read outside the owner — is refused by
+`system_setting_verify.setting_copy_faults_read()`.
 
 ### `_dump(doc)`
     { the file, written whole through atomic_write: a comment header, [active], [pending], then

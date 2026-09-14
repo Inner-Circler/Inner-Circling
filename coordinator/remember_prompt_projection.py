@@ -32,7 +32,10 @@ import sys
 HERE = pathlib.Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-from remember_manager import remember_read, BUDGET, SALIENCE_K, SALIENCE_WEIGHT                      # noqa: E402
+from remember_manager import remember_read                          # noqa: E402
+import remember_manager as RM                                       # noqa: E402  RM.BUDGET, RM.SALIENCE_K,
+# RM.SALIENCE_WEIGHT read at use — a setting-owned constant is never from-imported (a copy the
+# settings refresh at the fold cannot reach; 2026-09-14)
 
 # ----------------------------------------------------------------- projection
 # HEAD_NONE (an explicit "## What you have chosen to remember / *Nothing
@@ -86,7 +89,7 @@ def remember_project(part: str) -> tuple[str, dict]:
     omitted = len(es) - shown
     head = (f"## What you have chosen to remember\n\n"
             f"*{len(es)} on file, {shown} shown here within your "
-            f"{BUDGET}-character budget ({used} used), {omitted} "
+            f"{RM.BUDGET}-character budget ({used} used), {omitted} "
             # NOT "older omitted" (DESIGN_V2, 2026-08-22) — the bounded
             # salience/chain-depth reorder just above can promote an
             # older record ahead of a newer one, so the omitted set can
@@ -141,7 +144,7 @@ def _chain_depths(all_entries: list[dict]) -> dict[str, int]:
 
 
 def _salience_order(es: list[dict], depths: dict[str, int],
-                    k: int = SALIENCE_K) -> list[dict]:
+                    k: int | None = None) -> list[dict]:
     """`es`, already newest-first (pure recency), BOUNDED-reordered by each
     record's salience_weight + chain_depth_bonus: a record may move at
     most `k` positions AHEAD of its own recency rank, never behind it and
@@ -156,10 +159,15 @@ def _salience_order(es: list[dict], depths: dict[str, int],
     promoted record colliding with an unbonused one at its own target
     would sort back behind it by original index and the promotion would
     do nothing. Ties among EQUAL bonus break by original index, so a run
-    against unscored data (every bonus 0) reorders nothing."""
+    against unscored data (every bonus 0) reorders nothing.
+
+    `k` defaults to RM.SALIENCE_K AT THE CALL, not at def time: a default argument is an
+    import-time copy, and the settings refresh at the fold cannot reach one."""
+    if k is None:
+        k = RM.SALIENCE_K
     ranked = []
     for i, r in enumerate(es):
-        bonus = min(SALIENCE_WEIGHT.get(r.get("salience"), 0)
+        bonus = min(RM.SALIENCE_WEIGHT.get(r.get("salience"), 0)
                     + depths.get(r.get("id"), 0), k)
         target = max(0, i - bonus)
         ranked.append((target, -bonus, i, r))
@@ -217,7 +225,7 @@ def _window(es: list[dict]) -> tuple[str, int, int]:
         ot = str(r.get("circle") or "").strip()
         tag = f"R{ot}: " if ot else ""
         block = f"\n- {tag}{r['text']}\n"
-        if used + len(block) > BUDGET:
+        if used + len(block) > RM.BUDGET:
             break
         lines.append(block)
         used += len(block)
@@ -257,7 +265,7 @@ def remember_settled_project(part: str, cutoff: str | None) -> tuple[str, dict]:
     omitted = len(settled) - shown
     head = (f"## What you have chosen to remember\n\n"
             f"*{len(settled)} on file as of your last identity refresh, "
-            f"{shown} shown here within your {BUDGET}-character budget "
+            f"{shown} shown here within your {RM.BUDGET}-character budget "
             # NOT "older omitted" — see remember_project()'s own note on the
             # bounded salience/chain-depth reorder just above.
             f"({used} used), {omitted} omitted from view. Nothing "
@@ -282,7 +290,7 @@ def remember_tail_project(part: str, cutoff: str | None) -> tuple[str, dict]:
     omitted = len(tail) - shown
     head = (f"## Remembered since your last identity refresh\n\n"
             f"*{len(tail)} written this circle so far, {shown} shown here "
-            f"within your {BUDGET}-character budget ({used} used)"
+            f"within your {RM.BUDGET}-character budget ({used} used)"
             # NOT "older omitted" — see remember_project()'s own note.
             + (f", {omitted} omitted from view" if omitted else "")
             + f". Carries into your identity at the next refresh.*\n")

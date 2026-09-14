@@ -57,8 +57,10 @@ import phase_clock as PC
 from seam import fail
 from write_guard import WriteGuard, _within
 import command_surface as CS
-from llm_client import (stream_prewarm, stream_api_preflight, MODEL, stream_key_source_note,
-                        stream_failure_explain, RATE_CACHE_WRITE_1H, RATE_CACHE_READ)
+from llm_client import (stream_prewarm, stream_api_preflight, stream_key_source_note,
+                        stream_failure_explain)
+import llm_client as LC            # LC.MODEL and the rates, read at use: a setting-owned constant
+                                   # is never from-imported (a copy the settings refresh cannot reach)
 from prompt_build import prompt_part_assemble, block_order
 from group_context import group_shared_read
 from group_attention import circle_briefing_build
@@ -376,10 +378,24 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
         try:
             import setting_manager as _SET
             folded = _SET.setting_pending_fold()
+            # THE FOLD'S SECOND HALF, 2026-09-14 (the operator: "Go on a."): the constants the
+            # program read at import are re-read now, so the circle this line names is the
+            # circle that runs on the value. Unconditional — a /settings-clear never appears
+            # in `folded` and must land here too. Two keys stay at the next start, by name.
+            moved = _SET.setting_constants_refresh()
             if folded:
                 emit("command", "\nsettings now in force for this circle:")
+                act = _SET.setting_active_read()
                 for k in folded:
-                    emit("command", f"  {k} = {_SET.setting_active_read().get(k)}")
+                    if k in _SET.REFRESH_EXEMPT:
+                        emit("command", f"  {k} = {act.get(k)} — from the next start: the API "
+                                        f"check already ran on the current one")
+                    else:
+                        emit("command", f"  {k} = {act.get(k)}")
+            for k, old, new in moved:
+                if k not in folded:
+                    emit("command", f"  {k}: {old} -> {new} (changed since the program started; "
+                                    f"in force for this circle)")
         except Exception as e:                                 # noqa: BLE001
             # FAILS OPEN, like the coalesce refresh above it. A settings file
             # that cannot be folded must not stop a circle opening; the
@@ -470,11 +486,11 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # of 38,166. Now: blocks 1+2 once, block 3 per part, block 4 never, and
     # the numbers counted rather than estimated.
     _blocks = [sysblocks[p] for p in parts]
-    _shared, _measured = TC.block_tokens(client, _blocks[0][:2], MODEL,
+    _shared, _measured = TC.block_tokens(client, _blocks[0][:2], LC.MODEL,
                                          args.dry_run) if _blocks else ([], False)
     _own = 0
     for _b in _blocks:
-        _c, _m = TC.block_tokens(client, _b[:3], MODEL, args.dry_run)
+        _c, _m = TC.block_tokens(client, _b[:3], LC.MODEL, args.dry_run)
         _measured = _measured and _m
         _own += _c[2] if len(_c) > 2 else 0
     toks = sum(_shared) + _own
@@ -487,8 +503,8 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
           + f": {'~' if not _measured else ''}{toks:,} tokens — "
           f"{sum(_shared):,} shared, written ONCE, then read by all "
           f"{len(parts)} parts"
-          f"\n  (${toks * RATE_CACHE_WRITE_1H / 1e6:.2f} to warm, "
-          f"${(sum(_shared) * (len(parts) - 1) + toks) * RATE_CACHE_READ / 1e6:.3f} "
+          f"\n  (${toks * LC.RATE_CACHE_WRITE_1H / 1e6:.2f} to warm, "
+          f"${(sum(_shared) * (len(parts) - 1) + toks) * LC.RATE_CACHE_READ / 1e6:.3f} "
           f"per round to read)"
           + ("" if _measured else "\n  ESTIMATED — no model service was asked"))
 

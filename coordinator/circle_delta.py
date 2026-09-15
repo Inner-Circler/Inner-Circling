@@ -236,7 +236,8 @@ def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
               or (p.startswith(_RP.record_rel("parts") + "/")
                   and p.endswith((f"/short_term_{ot}.toml", f"/short_term_{ot}.md")))
               or p in (_RP.record_rel("circles/working_sets.toml"), _RP.record_rel("self/proposals.toml"),
-                       _RP.record_rel("self/coalesce.toml")))
+                       _RP.record_rel("self/coalesce.toml"),
+                       _RP.record_rel("self/remember.toml")))   # in the close commit since 2026-09-14
         if not ok:
             out.append(p)
     return out

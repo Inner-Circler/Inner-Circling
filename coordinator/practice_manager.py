@@ -224,6 +224,19 @@ PRACTICE_ADDRESSEE = "All parts"
 BETTER_OPTION_ADDRESSEE = "Self"
 
 
+def _body_normalise(text: str) -> str:
+    """A title as it is stored: newlines joined, and ONE pair of surrounding
+    double quotes removed (the operator, 2026-09-14: "strip the quotes in
+    code"). `[proposed: /practice-add "when a part..."]` had reached BP-0048
+    with both quote marks in its title — the quotes are the command's
+    punctuation, not the practice's words, and the fold is the PROPOSE
+    class's own (PROPOSE_CLASS.propose_quotes_strip), the same pair the
+    bracket grammar folds off its body. A quote INSIDE the title is kept; a
+    body that was nothing but the pair is empty, which practice_add()
+    refuses as it always has."""
+    return PROPOSE_CLASS.propose_quotes_strip(" ".join(text.split("\n")).strip())
+
+
 def practice_add(text: str, addressee: str = PRACTICE_ADDRESSEE) -> tuple[bool, str]:
     """Append a row, addressed to the whole circle by default.
 
@@ -237,7 +250,7 @@ def practice_add(text: str, addressee: str = PRACTICE_ADDRESSEE) -> tuple[bool, 
     gaining a second function: BETTER_OPTION_ADDRESSEE is the only other
     value, the row shape is identical, and a near-copy of this body would
     be a second place for that shape to drift."""
-    body = " ".join(text.split("\n")).strip()
+    body = _body_normalise(text)
     if not body:
         # NO VERB NAME HERE. This branch mapped `addressee` back to a
         # command spelling for one afternoon, which reversed a decision
@@ -490,7 +503,7 @@ def practice_update(n: int, text: str) -> tuple[bool, str]:
     normalisation and its empty-body refusal. A row still awaiting Self's ruling
     (state "proposed") is refused — rule on it first; a change to a proposal's text is a
     change to what was proposed."""
-    body = " ".join(text.split("\n")).strip()
+    body = _body_normalise(text)
     doc = _doc()
     ps = doc.get("practice", [])
     shown = [p for p in ps if p.get("addressee") != BETTER_OPTION_ADDRESSEE]

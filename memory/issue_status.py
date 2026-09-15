@@ -59,6 +59,11 @@ if hasattr(sys.stdout, "reconfigure"):
 
 from record_paths import ROOT                                  # noqa: E402  (stage 14: was S.ROOT)
 
+# THE CLOSURE REFUSAL'S OWN WORDS, one home: printed below, and matched by
+# commands.command_issue_status_set() together with exit code 1 to know that a dry run refused
+# for closure — and only then stage the dependency plan (R570, 2026-09-15).
+CLOSURE_REFUSED_MARK = "would be left with an end that is not live"
+
 
 def _load_all() -> dict[str, tuple[pathlib.Path, dict]]:
     out = {}
@@ -145,8 +150,7 @@ def main() -> int:
         return 2
 
     if breaks := _closure_breaks(g, moving, a.to):
-        print(f"  REFUSED — {len(breaks)} issue-relationship(s) would be left with an end "
-              f"that is not live:")
+        print(f"  REFUSED — {len(breaks)} issue-relationship(s) {CLOSURE_REFUSED_MARK}:")
         for b in breaks:
             print(f"    {b}")
         print("  Retire the issue-relationship first (its own ruling), then re-run.")

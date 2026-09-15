@@ -183,8 +183,8 @@ def system_line_endings_grandfather_verify() -> tuple[set, list]:
     The register's own rule is that every entry "must have been MEASURED
     — not assumed", but until 2026-08-19 the exemption was path-keyed and
     never re-measured (review, tier 3 #33): a file deleted and recreated
-    with fresh CRLF stayed silently exempt, and the injured_soul->soul
-    rename had already orphaned an entry once. The register now CARRIES
+    with fresh CRLF stayed silently exempt, and the Soul directory's
+    2026-08-08 rename had already orphaned an entry once. The register now CARRIES
     each measurement (its `sha256` field — added because the close report
     hashes only the seven short_terms, so the transcript entry never had
     a recorded measurement anywhere), and an entry exempts its path only

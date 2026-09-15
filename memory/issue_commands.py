@@ -109,6 +109,31 @@ def _args(rest: str) -> list[str]:
              else m.group(2)) for m in ARG_RE.finditer(rest)]
 
 
+def _too_many_why(args: list[str], keep: int, field_at: int, field: str,
+                  line: str, usage: str) -> str:
+    """The refusal for more arguments than a verb takes — and WHICH characters
+    are missing when the surplus is a string argument typed without its quotes.
+
+    The operator, 2026-09-14: a malformed proposal must be *"specific about
+    invalid tokens: ... missing characters (e.g. quotes around string
+    arguments)"*. `"too many arguments (2 extra)"` was true of
+    `/issue-label-update n0035 hesitant to offer` and said nothing about the
+    quotes, which were the whole error. `field_at` is the argument index the
+    string was expected at; the bare words from there on are what should have
+    been one quoted string. Curly quotes are named on their own: ARG_RE reads
+    straight quotes only, so a part's `“why”` arrives as two bare words."""
+    extra = len(args) - keep
+    if "“" in line or "”" in line:
+        return (f"too many arguments ({extra} extra) — curly quotes are not read "
+                f"here; put straight quotes around the {field}: {usage}")
+    if '"' not in line:
+        run = " ".join(args[field_at:])
+        return (f"too many arguments ({extra} extra) — the {field} needs quotes: "
+                f"{run!r} reads as {len(args) - field_at} bare words where one "
+                f"quoted string was expected: {usage}")
+    return f"too many arguments ({extra} extra) — {usage}"
+
+
 def _parse_update_relation(a: list[str], circle: str,
                            line: str) -> tuple[dict | None, str]:
     """R161, respelled by R261 (2026-08-20):
@@ -232,7 +257,9 @@ def issue_command_parse(line: str, circle: str, *,
         if not label.strip():
             return None, "the new label is empty"
         if len(args) > 3:
-            return None, f"too many arguments ({len(args) - 3} extra)"
+            return None, _too_many_why(
+                args, 3, 1, "new name", line,
+                'usage: /issue-label-update nNNNN "new name" ["comment"]')
         return {"verb": verb, "node": node, "label": label,
                 "comment": args[2] if len(args) > 2 else "",
                 "circle": circle, "line": line.strip()}, ""
@@ -251,7 +278,9 @@ def issue_command_parse(line: str, circle: str, *,
         if src == tgt:
             return None, "an issue-relationship cannot point at itself"
         if len(args) > 4:
-            return None, f"too many arguments ({len(args) - 4} extra)"
+            return None, _too_many_why(
+                args, 4, 3, "comment", line,
+                'usage: /issue-relationship-add nNNNN <type> nMMMM ["comment"]')
         return {"verb": verb, "node": src, "type": typ, "target": tgt,
                 "comment": args[3] if len(args) > 3 else "",
                 "circle": circle, "line": line.strip()}, ""
@@ -268,7 +297,7 @@ def issue_command_parse(line: str, circle: str, *,
         if len(args) < 2 or not args[1].strip():
             return None, f"why is required — {form}"
         if len(args) > 2:
-            return None, f"too many arguments ({len(args) - 2} extra)"
+            return None, _too_many_why(args, 2, 1, "why", line, form)
         # part/quote/source are NOT set here: propose_lifecycle reads them off the
         # statement this bracket rides in, and the proposal row carries them to vetting.
         return {"verb": verb, "node": args[0], "why": args[1],
@@ -290,7 +319,9 @@ def issue_command_parse(line: str, circle: str, *,
             return None, ('why is required — usage: /issue-evidence-add '
                           'nNNNN <stmt#> "why"')
         if len(args) > 3:
-            return None, f"too many arguments ({len(args) - 3} extra)"
+            return None, _too_many_why(
+                args, 3, 2, "why", line,
+                'usage: /issue-evidence-add nNNNN <stmt#> "why"')
         # part/quote/source are NOT set here — circle.py resolves them
         # against the live transcript right after this call, and adds
         # them to this same dict before issue_precheck()/issue_command_apply() ever see it.

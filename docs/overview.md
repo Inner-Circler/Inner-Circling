@@ -72,7 +72,7 @@ you change the `statement_max_words` setting. The limit reaches the parts
 as an instruction; nothing counts the words or cuts a statement at it.
 That one is a developer setting: open the
 circle with `--dev` to see it or change it. `/settings-list` shows what
-you can reach — three settings on a normal run, and all thirty-four under
+you can reach — three settings on a normal run, and all thirty-five under
 `--dev` — numbered, and `/settings-list <n>` shows one whole: its default,
 what it accepts, and why the default is what it is. The three are
 `model`, which model the parts speak on; `redact_view`, whether the
@@ -94,6 +94,8 @@ writing the transcript, the same run immediately: each part reviews what
 happened in this circle and may keep one memory of it, in parallel
 across every part (dreaming); then one pass looks across the
 whole circle for practices that should apply to everyone (synthesis);
+then one pass reads the transcript for the commands its words suggest and
+stages each as a proposal for Self's next ruling (the command suggestions);
 then each part whose sources have moved has its distilled identity rebuilt
 (the refresh). Earlier in the close, just before you are asked to rule on
 proposals, those saying the same thing are grouped (the coalesce pass).

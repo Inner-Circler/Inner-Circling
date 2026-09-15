@@ -168,8 +168,20 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
     classifying as a command at all — leaves the row pending with a
     clear reason; it is never silently dropped, and proposal_manager.proposal_approve()
     (the register's own state-flip) is only ever called after whatever
-    the row actually needed to succeed already has."""
+    the row actually needed to succeed already has.
+
+    A "suggestion" row (R570, 2026-09-15) is the coordinator's own staging —
+    a recognised line or a dependency plan's step — and runs through proposal_suggestion.py,
+    which reports ok only when the verb's own writer did. It is never approved as a text row:
+    that would record an act that did not happen, the defect this function's history names."""
     import proposal_manager as PR
+    if row.get("kind") == "suggestion":
+        import proposal_suggestion as PS
+        ok, msg = PS.proposal_suggestion_execute(row)
+        if not ok:
+            return False, msg
+        PR.proposal_approve(row["id"])
+        return True, msg
     if row.get("kind") != "command":
         return PR.proposal_approve(row["id"])
     shape = _propose_command_shape(row.get("text", ""))
@@ -339,6 +351,9 @@ def _propose_validate(row: dict) -> str:
     running that for real from a sandbox circle would mutate the one
     real graph exactly the way COMMANDS' own sandbox path (`commands_
     <ot>.toml`, never auto-applied) is built not to."""
+    if row.get("kind") == "suggestion":
+        import proposal_suggestion as PS
+        return PS.proposal_suggestion_validate(row)
     if row.get("kind") != "command":
         return "text proposal — a pure record, applies cleanly if approved"
     shape = _propose_command_shape(row.get("text", ""))
@@ -362,6 +377,68 @@ def _propose_validate(row: dict) -> str:
                 if on_file is not None
                 else f"would apply cleanly ({cmd['verb']})")
     return f"would apply cleanly ({shape['shape']})"
+
+
+def _dependency_order(rows: list[dict]) -> list[dict]:
+    """Pending proposal rows, each after every pending row it depends on, otherwise in the
+    order given (R570). A hand-edited ring is left in the order found: the
+    visiting set stops the walk, so nothing loops."""
+    import proposal_manager as PR
+    by_id = {r["id"]: r for r in rows}
+    out: list[dict] = []
+    done: set[str] = set()
+    visiting: set[str] = set()
+
+    def visit(r: dict) -> None:
+        if r["id"] in done or r["id"] in visiting:
+            return
+        visiting.add(r["id"])
+        for d in PR.proposal_dependency_ids_read(r):
+            if d in by_id:
+                visit(by_id[d])
+        visiting.discard(r["id"])
+        done.add(r["id"])
+        out.append(r)
+
+    for r in rows:
+        visit(r)
+    return out
+
+
+def _mint_snapshot_read() -> set[str]:
+    """Every issue id and practice id on file. Read before and after an approval, the one new
+    id between them is what that approval minted. Module level, so a probe can swap it."""
+    ids: set[str] = set()
+    try:
+        import issue_schema as S_
+        ids |= {p.stem.split("_")[-1] for p in S_.issue_nodes_read()}
+    except Exception:                                           # noqa: BLE001
+        pass
+    try:
+        import practice_manager as PM
+        ids |= {str(p["id"]) for p in PM.practice_read() if p.get("id")}
+    except Exception:                                           # noqa: BLE001
+        pass
+    return ids
+
+
+def _approved_dependents_fill(pid: str, before: set[str] | None) -> None:
+    """After P-n is approved: record the one id it minted and fill every dependent's
+    placeholder with it — the creation unblocks the dependent. More than one new id, or none,
+    mints nothing: a dependent's token stays unfilled and it is not asked."""
+    import proposal_manager as PR
+    if before is None:
+        return
+    new = sorted(_mint_snapshot_read() - before)
+    if len(new) != 1:
+        if len(new) > 1 and any(pid in PR.proposal_dependency_placeholders_read(r)
+                                for r in PR.proposal_dependents_read(pid)):
+            seam.emit("command", f"        {pid} produced {len(new)} new ids — what waits on "
+                                 f"it keeps its placeholder")
+        return
+    PR.proposal_minted_write(pid, new[0])
+    for dep in PR.proposal_placeholder_substitute(pid, new[0]):
+        seam.emit("command", f"        {dep} now reads {new[0]} where it waited on {pid}")
 
 
 def proposal_vet(where: str, live: bool,
@@ -506,6 +583,7 @@ def proposal_vet(where: str, live: bool,
                 return approved
             if ans in ("a", "accept", "approve"):
                 kind = primary_ref.split(":", 1)[0]
+                minted_before = _mint_snapshot_read() if kind == "propose" else None
                 if kind == "practice":
                     ok, msg = _practice_approve(primary_row, PM)
                 else:
@@ -517,6 +595,8 @@ def proposal_vet(where: str, live: bool,
                     break
                 approved.append({"kind": kind, "id": primary_row["id"],
                                  "line": f"[{g['id']}] {g['gloss']}"})
+                if kind == "propose":
+                    _approved_dependents_fill(primary_row["id"], minted_before)
                 resolved = []
                 for m in others:
                     row = rows_by_ref.get(m)
@@ -528,6 +608,14 @@ def proposal_vet(where: str, live: bool,
                     seam.emit("command", f"        {m}: {msg2}")
                     if ok2:
                         resolved.append(m)
+                    if ok2 and mk == "propose":
+                        # A DUPLICATE, NOT A REFUSAL (R570): what waited on
+                        # this member now waits on the accepted primary — or, when the primary
+                        # is a practice row, simply stops waiting. Never a cascade.
+                        new = primary_row["id"] if kind == "propose" else None
+                        for moved in PR.proposal_dependency_repoint(row["id"], new):
+                            seam.emit("command", f"        {moved} now waits on "
+                                                 f"{new or 'nothing'} instead of {row['id']}")
                 CG.proposal_group_mark(g["id"], f"accepted {primary_ref} {_today()}"
                                  + (f"; denied: {', '.join(resolved)}"
                                     if resolved else ""))
@@ -571,11 +659,35 @@ def proposal_vet(where: str, live: bool,
         # group — it is not asked again on its own unless the group split
         pend = [r for r in pending_fn()
                 if f"{kind_name}:{r['id']}" not in cg_refs]
+        if kind_name == "propose":
+            # DEPENDENCY ORDER — R570, 2026-09-15: a row is asked only after
+            # every pending row it depends on, so the prior's ruling is known when it is.
+            pend = _dependency_order(pend)
         if not pend:
             continue
         seam.emit("command", f"\n  {len(pend)} {kind_name} proposal(s) awaiting "
               f"a ruling ({where}):")
         for row in pend:
+            if kind_name == "propose" and row.get("depends_on"):
+                # THE ROW AS IT STANDS NOW: an earlier ruling in this same pass may have filled
+                # its placeholder or denied it by cascade.
+                row = PR.proposal_dependency_resolve(row)
+                if row.get("state") != "proposed":
+                    continue
+                dstate, dwhy = PR.proposal_dependency_state_read(row)
+                if dstate != "ready":
+                    header, _detail = describe_fn(row)
+                    seam.emit("command", f"\n  {header}")
+                    if dstate == "cascade" and live:
+                        for gone in PR.proposal_cascade_deny(dwhy):
+                            seam.emit("command", f"        {gone} denied — cascade: it "
+                                                 f"depended on {dwhy}, which was not accepted")
+                    elif dstate == "cascade":
+                        seam.emit("command", f"        SANDBOX — would be denied: it depends "
+                                             f"on {dwhy}, which was not accepted")
+                    else:
+                        seam.emit("command", f"        not asked — {dwhy}; stays pending")
+                    continue
             header, detail = describe_fn(row)
             seam.emit("command", f"\n  {header}")
             for line in detail:
@@ -619,18 +731,29 @@ def proposal_vet(where: str, live: bool,
                     seam.emit("command", "        kept — stays pending")
                     break
                 if ans in ("a", "approve"):
+                    minted_before = _mint_snapshot_read() if kind_name == "propose" else None
                     ok, msg = approve_fn(row)
                     seam.emit("command", f"        {msg}")
                     if ok:
                         approved.append({"kind": kind_name, "id": pid,
                                          "line": header})
+                        if kind_name == "propose":
+                            # THE CREATION UNBLOCKS THE DEPENDENT: the id this approval
+                            # minted fills every dependent's placeholder, now.
+                            _approved_dependents_fill(pid, minted_before)
                     break
                 if ans in ("d", "deny"):
                     ok, msg = deny_fn(row)
                     seam.emit("command", f"        {msg}")
+                    if ok and kind_name == "propose":
+                        for gone in PR.proposal_cascade_deny(pid):
+                            seam.emit("command", f"        {gone} denied — cascade: it "
+                                                 f"depended on {pid}")
                     break
                 if ans in ("s", "skip", ""):
                     seam.emit("command", "        skipped — stays pending")
+                    if kind_name == "propose" and PR.proposal_dependents_read(pid):
+                        seam.emit("command", f"        (what depends on {pid} waits with it)")
                     break
                 seam.emit("command", "        " + prompt.strip()
                           + ("" if sup else " (or Enter to skip)"))

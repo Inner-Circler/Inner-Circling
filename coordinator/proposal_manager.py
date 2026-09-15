@@ -118,7 +118,7 @@ def _proposals_rebind() -> None:
 import record_paths as _RPf                                                # noqa: E402
 _RPf.group_follow(_proposals_rebind)
 ORDER = ("id", "kind", "text", "state", "author", "sources", "circle",
-         "proposed_at", "part", "quote")
+         "proposed_at", "part", "quote", "depends_on", "minted")
 # `sources` SURVIVES RESOLUTION — ruled 2026-09-08, VERBATIM: "Structured".
 #
 # It was dropped here with `circle` and `proposed_at`, after _provenance() flattened both into
@@ -194,8 +194,216 @@ def circle_ref(circle: str) -> str:
     return f"circle_{circle}"
 
 
+# ------------------------------------------------------------------ dependencies
+# R570, 2026-09-15 — the operator: *"can staging be ordered such that
+# dependents (such as relations) follow what they depend upon (such as issues), and the
+# creation of the second unblocks the resolution of the dependent? And further, if the prior
+# is rejected at vetting, then any dependents are automatically rejected?"*
+#
+# `depends_on` is a LIST OF STRINGS, the shape `sources` already proves the writer handles:
+# "P-7" waits on P-7; "P-7:nMMMM" also names the placeholder P-7's minted id fills. `minted`
+# is the id an approval produced (an issue's nNNNN, a practice's BP-NNNN), kept on the
+# accepted row so a dependent vetted at a LATER checkpoint still resolves. Both survive
+# resolution: they are provenance, not staging bookkeeping.
+DEPENDS_SEP = ":"
+
+
+def proposal_dependency_ids_read(row: dict) -> list[str]:
+    """The proposal ids `row` depends on."""
+    return [s.split(DEPENDS_SEP, 1)[0] for s in row.get("depends_on", []) if s]
+
+
+def proposal_dependency_placeholders_read(row: dict) -> dict[str, str]:
+    """{proposal id: placeholder token} for the entries that name a token."""
+    out: dict[str, str] = {}
+    for s in row.get("depends_on", []):
+        pid, sep, tok = s.partition(DEPENDS_SEP)
+        if sep and tok:
+            out[pid] = tok
+    return out
+
+
+def proposal_dependency_ring_find(rows: list[dict], new_id: str,
+                                  new_deps: list[str]) -> list[str]:
+    """Would a row `new_id` depending on `new_deps` close a ring among `rows`? The ring as
+    ids (first == last), or []. A walk with a stack and a seen set — it never loops."""
+    deps: dict[str, list[str]] = {r["id"]: proposal_dependency_ids_read(r) for r in rows}
+    deps[new_id] = list(new_deps)
+    seen: set[str] = set()
+
+    def walk(pid: str, stack: list[str]) -> list[str]:
+        if pid in stack:
+            return stack[stack.index(pid):] + [pid]
+        if pid in seen:
+            return []
+        seen.add(pid)
+        for d in deps.get(pid, []):
+            ring = walk(d, stack + [pid])
+            if ring:
+                return ring
+        return []
+
+    return walk(new_id, [])
+
+
+def _token_re(tok: str):
+    import re
+    return re.compile(rf"(?<![\w-]){re.escape(tok)}(?![\w-])")
+
+
+def proposal_by_id_read(pid: str) -> dict | None:
+    return _PC.by_id(pid)
+
+
+def proposal_dependents_read(pid: str) -> list[dict]:
+    """The PENDING rows that depend on `pid`."""
+    return [r for r in proposal_pending_list() if pid in proposal_dependency_ids_read(r)]
+
+
+def proposal_minted_write(pid: str, minted: str) -> bool:
+    """Record the id `pid`'s approval produced on its row."""
+    doc = _doc()
+    row = next((r for r in doc.get("proposal", []) if r["id"] == pid), None)
+    if row is None or not minted:
+        return False
+    row["minted"] = minted
+    _PC.save(doc)
+    return True
+
+
+def proposal_placeholder_substitute(pid: str, minted: str) -> list[str]:
+    """Every PENDING row whose depends_on names `pid` with a token has that token replaced
+    by `minted` in its text, as a whole word. Returns the rows changed."""
+    doc = _doc()
+    changed: list[str] = []
+    for r in doc.get("proposal", []):
+        if r.get("state") != "proposed":
+            continue
+        tok = proposal_dependency_placeholders_read(r).get(pid)
+        if tok and _token_re(tok).search(r.get("text", "")):
+            r["text"] = _token_re(tok).sub(lambda _m: minted, r["text"])
+            changed.append(r["id"])
+    if changed:
+        _PC.save(doc)
+    return changed
+
+
+def proposal_dependency_resolve(row: dict) -> dict:
+    """Fill every token whose prior is already accepted with a minted id — the second
+    checkpoint's half of substitution — and return the row as it now stands."""
+    for pid in proposal_dependency_placeholders_read(row):
+        prior = _PC.by_id(pid)
+        if prior and str(prior.get("state", "")).startswith("accepted") and prior.get("minted"):
+            proposal_placeholder_substitute(pid, prior["minted"])
+    return _PC.by_id(row["id"]) or row
+
+
+def proposal_dependency_state_read(row: dict) -> tuple[str, str]:
+    """("ready", "") — every prior accepted and every token filled;
+    ("waiting", why) — a prior is still pending;
+    ("cascade", prior id) — a prior was denied or superseded, so this row falls with it;
+    ("unresolved", why) — a prior is missing, or accepted without the id a token needs."""
+    for s in row.get("depends_on", []):
+        pid, _sep, tok = s.partition(DEPENDS_SEP)
+        prior = _PC.by_id(pid)
+        if prior is None:
+            return "unresolved", f"it depends on {pid}, which is not on file"
+        state = str(prior.get("state", ""))
+        if state == "proposed":
+            return "waiting", f"it waits on {pid}, which is still pending"
+        if state.startswith("superseded"):
+            # SELF ALREADY RULED IT IN THE ROOM: the act is done, so the dependent may go on —
+            # but a direct ruling minted nothing here to fill a token with.
+            if tok and _token_re(tok).search(row.get("text", "")):
+                return "unresolved", (f"{pid} was ruled directly in the room and produced no "
+                                      f"id here to fill {tok}")
+            continue
+        if not state.startswith("accepted"):
+            return "cascade", pid
+        if tok and _token_re(tok).search(row.get("text", "")):
+            return "unresolved", (f"{pid} was approved but produced no id to fill {tok}"
+                                  if not prior.get("minted")
+                                  else f"{tok} is still unfilled")
+    return "ready", ""
+
+
+def _deny_because(pid: str, why: str) -> bool:
+    doc = _doc()
+    row, _err = _PC.find_pending(doc.get("proposal", []), pid)
+    if row is None:
+        return False
+    if not row.get("author", "").strip():
+        row["author"] = _PC.provenance(row)
+    row["state"] = f"denied by Self {_now()} — {why}"
+    _PC.drop_staging(row)
+    _PC.save(doc)
+    return True
+
+
+def proposal_cascade_deny(pid: str) -> list[str]:
+    """Deny every PENDING row that depends on `pid`, transitively, each tombstoned with the
+    prior that took it down. A visited set: a hand-edited ring cannot loop this."""
+    denied: list[str] = []
+    seen = {pid}
+    queue = [pid]
+    while queue:
+        cur = queue.pop(0)
+        for r in proposal_dependents_read(cur):
+            if r["id"] in seen:
+                continue
+            seen.add(r["id"])
+            if _deny_because(r["id"], f"cascade: {cur} was not accepted"):
+                denied.append(r["id"])
+                queue.append(r["id"])
+    return denied
+
+
+def proposal_dependency_repoint(old: str, new: str | None) -> list[str]:
+    """A prior that left the queue WITHOUT a ruling of substance — denied only because a
+    coalesced group accepted another member. Its pending dependents wait on `new` instead
+    (the accepted primary, token kept), or, `new` None, simply stop waiting on it. A repoint
+    that would close a ring is skipped. Returns the rows changed."""
+    doc = _doc()
+    rows = doc.get("proposal", [])
+    changed: list[str] = []
+    for r in rows:
+        if r.get("state") != "proposed" or old not in proposal_dependency_ids_read(r):
+            continue
+        nd: list[str] = []
+        for s in r.get("depends_on", []):
+            pid, sep, tok = s.partition(DEPENDS_SEP)
+            if pid != old:
+                nd.append(s)
+            elif new:
+                nd.append(new + (sep + tok if tok else ""))
+        others = [x for x in rows if x is not r]
+        if new and proposal_dependency_ring_find(others, r["id"],
+                                                 proposal_dependency_ids_read({"depends_on": nd})):
+            continue
+        if nd:
+            r["depends_on"] = nd
+        else:
+            r.pop("depends_on", None)
+        changed.append(r["id"])
+    if changed:
+        _PC.save(doc)
+    return changed
+
+
+def proposal_row_stage_once(kind: str, text: str, sources: list[str], circle: str, *,
+                            depends_on: list[str] | None = None) -> tuple[str, bool]:
+    """(id, staged) — a PENDING row with the same text is reused rather than staged twice,
+    so running a verb again, or a report naming a line twice, never doubles a ruling."""
+    norm = " ".join(text.split())
+    for r in proposal_pending_list():
+        if " ".join(r.get("text", "").split()) == norm:
+            return r["id"], False
+    return proposal_row_stage(kind, text, sources, circle, depends_on=depends_on), True
+
+
 def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str, *,
-                       part: str = "", quote: str = "") -> str:
+                       part: str = "", quote: str = "",
+                       depends_on: list[str] | None = None) -> str:
     """Append ONE new P-id row, state='proposed'. The caller (circle.py's
     proposal_coalesce()) decides what a converged group's
     kind/text/sources are; this only writes them — except `circle`,
@@ -222,6 +430,20 @@ def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str, *,
         row["part"] = part
     if quote:
         row["quote"] = quote
+    if depends_on:
+        # REFUSED, NOT REPAIRED — a dependency on a row that is not on file, or one that would
+        # close a ring, has no order to be vetted in. Nothing is written: the id allocated
+        # above lives only in this unsaved doc (R570).
+        rows = doc.get("proposal", [])
+        dep_ids = proposal_dependency_ids_read({"depends_on": depends_on})
+        missing = [d for d in dep_ids if d not in {r["id"] for r in rows}]
+        if missing:
+            raise ValueError(f"{pid} would depend on {', '.join(missing)}, which is not on "
+                             f"file — nothing staged")
+        ring = proposal_dependency_ring_find(rows, pid, dep_ids)
+        if ring:
+            raise ValueError(f"{pid} would close a ring ({' -> '.join(ring)}) — nothing staged")
+        row["depends_on"] = list(depends_on)
     doc.setdefault("proposal", []).append(row)
     _PC.save(doc)
     return pid

@@ -119,6 +119,7 @@ from circle_rounds import (circle_round_run,  # phase-2 stage 7:
 # NOT re-exported: the tests patch and call them on their owners —
 # vetting and annotations — per the late-binding contract.)
 from commands import (command_dev_dispatch,                   # phase-2
+                      command_args_quote, QUOTED_ARG_COMMANDS,  # 2026-09-15
                       statement_resolve,                   # stage 6
                       statement_show)                     # (built 5th)
 # The cmd_* implementations are NO LONGER imported here — B61,
@@ -746,7 +747,9 @@ def main() -> int:
                          "something that could leak into a running circle. "
                          "e.g. --dev-cmd practice-list, --dev-cmd "
                          "practice-add \"text\", --dev-cmd issue n0002 "
-                         "status. issue-label-update/issue-relationship-add/"
+                         "status, --dev-cmd part-add \"<describe>\" \"<name>\" "
+                         "(both given: added at once, no dialog). "
+                         "issue-label-update/issue-relationship-add/"
                          "close/abort/etc. are refused here — they attest against "
                          "a transcript, so they need an actual circle open.")
     args = ap.parse_args()
@@ -787,7 +790,15 @@ def main() -> int:
                   "--dev-cmd practice-list")
             return 2
         head = CS.command_head_normalise(args.dev_cmd[0])
-        rest_text = " " + " ".join(args.dev_cmd[1:]) if len(args.dev_cmd) > 1 else ""
+        # THE SHELL ATE THE QUOTES. `--dev-cmd part-add "<describe>" "<name>"` arrives as
+        # two bare elements; joined bare, _issue_add_args() reads the line as ONE describe
+        # and the name is lost (the operator, 2026-09-15: "A --dev-cmd should flow
+        # through"). For the quoted-string verbs each element is one string again; every
+        # other verb keeps the bare join (`--dev-cmd issue n0002 status`).
+        if len(args.dev_cmd) > 1 and head in QUOTED_ARG_COMMANDS:
+            rest_text = " " + command_args_quote(args.dev_cmd[1:])
+        else:
+            rest_text = " " + " ".join(args.dev_cmd[1:]) if len(args.dev_cmd) > 1 else ""
         # "Bypasses dev_mode entirely" (help text above) was written but
         # never enforced — dev_mode defaults False at process start, so
         # e.g. `--dev-cmd help object_classes` hit the same gate a
@@ -1069,7 +1080,7 @@ def main() -> int:
         emit("command", "sandbox mode: writes land under work/sandbox/ only; "
                         "circles/ and parts/ are untouched.")
     # A DRY RUN NEEDS NO KEY AND SAYS WHAT A LIVE ONE WILL — R546. The short
-    # form: the run goes on. Through the command channel, so circling.py --circle shows it too.
+    # form: the run goes on. Through the command channel, so circling.py's command pane shows it too.
     if args.dry_run and not stream_key_present_read():
         emit("command", "\n" + KEY_MISSING_BRIEF)
 
@@ -1237,11 +1248,12 @@ def main() -> int:
             # refuses every `/help <arg>`, so it never arrives from there.
             # SWAPPED 2026-09-11 (R554): bare /help under
             # dev shows the class rows, /help all the enumeration — until
-            # then each showed the other's.
+            # then each showed the other's. `all` is command_help_render()'s
+            # own word since 2026-09-15, so the command pane's no-circle
+            # door and --dev-cmd answer it too; this loop no longer
+            # branches on it.
             if not arg:
                 emit("circle", HS.circle_pane_help())
-            elif arg == "all":
-                emit("command", HS.command_help_all_render())
             else:
                 emit("command", command_help_render(arg))
             continue

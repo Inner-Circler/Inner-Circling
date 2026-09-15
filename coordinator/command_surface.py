@@ -77,7 +77,10 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "— a bare property READS it, `= <value>` WRITES\n"
      "it. A write previews via issue_status.py --dry-run,\n"
      "asks 'yes' to confirm, then applies. NO transcript\n"
-     "quote needed, unlike the three ruling forms below",
+     "quote needed, unlike the three ruling forms below.\n"
+     "A change an open issue-relationship would block\n"   # R570
+     "stages the retirements first, then itself, for\n"
+     "your ruling — deny one and the change is denied",
      "command"),
     ("/issue-status-update nNNNN <value>",
      "the same write, spelled as a verb — an accepted\n"
@@ -237,7 +240,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ('/part-add ["<describe>" "<name>"]',
      "invite a NEW part: describe that aspect of yourself\n"
      "(up to 40 words), then its name. Yours alone — a part\n"
-     "cannot propose one. Bare opens the dialog. It\n"  # R483
+     "cannot propose one. Both strings given: added at\n"  # R483
+     "once, no questions; bare opens the dialog. It\n"      # 2026-09-15
      "joins from the NEXT circle. IMMEDIATE — /abort does\n"
      "not undo it", "command"),
     ("/part-list [<n>]",

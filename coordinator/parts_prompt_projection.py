@@ -159,7 +159,7 @@ def part_identity_tail_render(part: str) -> str:
     R246, verbatim: *"put it in a part.toml field"*. Until then this module held
     the Soul's text as a literal in a `{"soul": ...}` mapping: a part NAME typed
     into shared mechanism, the last of the class B29/R123 spent two rulings
-    removing, and a rename in this exact lineage (`injured_soul` -> `soul`) would
+    removing, and a rename in this exact lineage (the Soul directory's, 2026-08-08) would
     have emptied it silently. Keyed by directory, so it follows any rename.
 
     A part that declares none gets "", which is every part but the Soul here and

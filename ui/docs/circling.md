@@ -6,9 +6,8 @@ circling.py — how you sit down with your parts. The two-pane window where an i
 
 ## SYNOPSIS
 
-    python ui/circling.py --circle --live      a real circle
-    python ui/circling.py --circle             a practice circle, nothing real is written
-    python ui/circling.py                      a demonstration of the window itself
+    python ui/circling.py --live               a real circle
+    python ui/circling.py                      a practice circle, nothing real is written
     python ui/circling.py --help               every option
 
 ## WHAT THIS IS FOR
@@ -35,11 +34,11 @@ The window is split.
 
 They are separate for a reason that matters in practice: parts answer on their own schedule, and a statement can arrive while you are halfway through typing. If the conversation and your controls shared one line, an arriving statement would land on top of what you were saying. Because they are two panes, it cannot. Nothing you type is ever disturbed by something arriving.
 
-Scrolling up freezes what you are reading — new arrivals leave that pane alone until you press `End` to come back to the live edge. You never have to hurry to finish reading.
+Scrolling up freezes what you are reading — new arrivals leave that pane alone until you press `End` to come back to the live edge. You never have to hurry to finish reading. Scrolling is the number pad's job, with NumLock off; the arrow keys work the line you are typing, and `Up` brings back what you last typed in that pane, up to three entries, `Down` the way back.
 
 ## OPENING A CIRCLE
 
-    python ui/circling.py --circle --live
+    python ui/circling.py --live
 
 The program checks its own house first — that the files holding your parts' memories are whole, and that it can reach the service the parts think with. **Nothing is written until both pass.** A circle that cannot start properly leaves no trace at all rather than a half-empty record.
 
@@ -89,13 +88,9 @@ Two things you type in the circle pane are worth naming because they are not com
 
 ## PRACTISING FIRST
 
-    python ui/circling.py --circle
-
-Without `--live`, nothing real happens: no part actually thinks, every one of them answers with a placeholder, and every file that gets written goes to a scratch area rather than to your record. It is there so you can learn the window — the panes, the turns, the commands — without spending anything or moving anything.
-
     python ui/circling.py
 
-With no options at all, you get a demonstration of the window itself. Three imaginary parts post lines on their own timers so you can see how arriving text and your own typing share a screen. Nothing here is connected to your parts or your record. It is the window, and only the window.
+Without `--live`, nothing real happens: no part actually thinks, every one of them answers with a placeholder, and every file that gets written goes to a scratch area rather than to your record. It is there so you can learn the window — the panes, the turns, the commands — without spending anything or moving anything. It needs no key.
 
 ## WHAT IS KEPT
 
@@ -127,30 +122,47 @@ Related pages:
 
 ## OPTIONS
 
-    --circle        run a real circle rather than the window demonstration.
-                    Anything after it is passed through to the circle itself.
-                    Default: off — a bare run is the demonstration.
+A bare run opens a circle. Every option below except `--selftest`, `--no-color` and `--help` is passed through to the circle itself, `coordinator/circle.py`, in any position; `coordinator/docs/circle.md` has each in full.
+
     --live          make it real: the parts actually think, and the record is
                     your own. Default: off — dry-run, nothing real is
-                    written. Either position — before or after --circle
-                    (ruled 2026-08-13, Q3). With no API key set, the window
-                    does not open: the key's explanation prints, exit 2
-                    (R546).
+                    written. With no API key set, the window does not open:
+                    the key's explanation prints, exit 2 (R546).
+    --parts <dir>,<dir>,...
+                    which parts to seat. A reduced roster is for testing —
+                    the parts left out are absent and stay unaware of the
+                    circle. Default: every member of the default group.
+    --group <name>  open on a named group instead of --parts — a different
+                    roster, not a reduced one. Mutually exclusive with
+                    --parts. Default: the default group.
+    --recall-arm off|delivered|withheld
+                    whether a part may search its own past record, a local
+                    index read that costs no model call. `off` answers a
+                    part's search privately without running it; `withheld`
+                    computes and logs the packs without delivering them.
+                    Default: delivered (on).
+    --seed <n>      fix the order parts are polled within a round, so a test
+                    repeats. No effect on what the parts say. Default: unset —
+                    omit for real circles.
+    --yes           skip the confirmation prompt for a reduced live roster.
+                    Default: off — the prompt is asked.
+    --resume <OPEN_TIME>
+                    reopen an unclosed circle where it stopped: no topic
+                    prompt, no opening round. Refused unless the transcript
+                    round-trips byte-for-byte. Default: unset — a new circle.
     --selftest      check the program without needing a terminal. Worth running
                     before trusting a session. A mode, not a toggle. Default: not
                     set — the window opens.
-    --no-color      plain text. Default: off — color is used whenever the
-                    terminal supports it and the NO_COLOR environment variable
-                    is unset.
+    --no-color      plain text. This program's own flag; never passed through.
+                    Default: off — color is used whenever the terminal
+                    supports it and the NO_COLOR environment variable is
+                    unset.
     --dev[=true|false]
                     open with dev mode ON — forwarded to circle.py's own --dev.
                     Turns on the DEV-table verbs, the help hierarchy, and the
                     coalesce / pre-warm / opening-round progress lines.
-                    Default: off. Works in EITHER position — before --circle
-                    (a top-level flag here, like --live) or after it, as one of
-                    the forwarded ARGS. Omitted from this list until 2026-09-09
-                    (audit-register 2026-09-09 `#36`), while the program's own
-                    --help documented it.
+                    Default: off. Hidden from --help here as it is in
+                    circle.py's; the manual is where it is documented.
     --help, -h      the full list.
 
 ## A NOTE ON THE NAME

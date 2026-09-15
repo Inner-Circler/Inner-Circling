@@ -38,6 +38,10 @@ sys.path.insert(0, str(UI.parent / "memory"))            # issue_schema, for _no
 
 import circling as C  # noqa: E402
 
+# The test's own placeholder for a speaking part. Never a real part Tag: this
+# file ships, and a recipient should not meet another person's parts in it.
+PLACEHOLDER_PART = "Alpha"
+
 
 def self_test() -> int:
     failures: list[str] = []
@@ -116,12 +120,15 @@ def self_test() -> int:
     check("command input buffer holds the partial line",
           state.command.input_buf == "issue issue-relationship-")
 
-    # An agent line arrives for the OTHER pane while the above is
-    # mid-typed. This is exactly what AgentSimulator does via the queue;
-    # here it's done directly since self_test has no event loop.
-    state.circle.append("[Alpha]: an independent line, interleaved")
+    # A part's line arrives for the OTHER pane while the above is
+    # mid-typed. This is what ui_main_loop's drain does with a CircleEngine's
+    # circle-channel item; here it's done directly since self_test has no
+    # event loop. PLACEHOLDER_PART is the test's own name, never a real part
+    # Tag: this file ships, and a recipient should not meet another person's
+    # parts in it (audit-register.md #1, 2026-09-08).
+    state.circle.append(f"[{PLACEHOLDER_PART}]: an independent line, interleaved")
     check("circle received the interleaved line",
-          state.circle.lines[-1] == "[Alpha]: an independent line, interleaved")
+          state.circle.lines[-1] == f"[{PLACEHOLDER_PART}]: an independent line, interleaved")
     check("focus did NOT move because the OTHER pane received output",
           state.focus == "command")
     check("the in-progress command buffer survived the interleaved line",
@@ -883,6 +890,13 @@ def self_test() -> int:
     s_b._submit(s_b.circle, "")
     check("...and the topic's as '(blank = open)'",
           s_b.circle.lines[-1] == "[You]: (blank = open)")
+    # THE TWO-PART HINT (2026-09-15): the legend regex stops at the comma, so the
+    # shipped roster's longer prompt still echoes the blank as '(blank = open)'.
+    eng_b.pending_prompt = "CIRCLE topic (blank = open, ? for suggestions):"
+    s_b._submit(s_b.circle, "")
+    check("...and the two-part topic prompt's too — '? for suggestions' is not "
+          "read into the legend",
+          s_b.circle.lines[-1] == "[You]: (blank = open)")
     s_b._submit(s_b.circle, "n0010")
     check("a typed answer echoes as itself",
           s_b.circle.lines[-1] == "[You]: n0010")
@@ -1147,11 +1161,13 @@ def self_test() -> int:
     finally:
         eng10._C.main = orig_main10
 
-    # --- stage 8b, audit-register.md #15: THIS module's own main() — the
-    # --circle argv assembly (line ~5506) — translating raw argv into the
-    # (extra_argv, live) pair CircleEngine.start receives. Stage 8 above
-    # pins start(live=...) directly; nothing connected REAL argv to it,
-    # including the one flag that decides a rehearsal from a real circle.
+    # --- stage 8b, audit-register.md #15: THIS module's own main() — its
+    # argv assembly — translating raw argv into the (extra_argv, live) pair
+    # CircleEngine.start receives. Stage 8 above pins start(live=...)
+    # directly; nothing connected REAL argv to it, including the one flag
+    # that decides a rehearsal from a real circle. The circle is the only
+    # path main() has besides --help and --selftest: every token forwards
+    # except --no-color, and start() is what strips --live/--dry-run.
     # CircleEngine.start and main_loop are both stubbed so this never
     # spawns a thread, never touches circle.py, and opens nothing. --------
     captured_start: list[tuple[list[str], bool]] = []
@@ -1170,43 +1186,56 @@ def self_test() -> int:
     vars(C)["_key_notice_read"] = lambda full: ""
     real_argv = sys.argv
     try:
-        sys.argv = ["circling.py", "--circle", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--parts", "alpha"]
         captured_start.clear()
-        check("bare --circle: live=False, no --live/--dry-run leaks into extra_argv",
+        check("no flags but a circle option: live=False, the option forwarded, "
+              "no --live/--dry-run in extra_argv",
               C.main() == 0 and captured_start
               and captured_start[-1] == (["--parts", "alpha"], False))
 
-        sys.argv = ["circling.py", "--live", "--circle", "--parts", "alpha"]
+        sys.argv = ["circling.py"]
         captured_start.clear()
-        check("--live BEFORE --circle: live=True — the one door R330/Q3 rules",
-              C.main() == 0 and captured_start[-1] == (["--parts", "alpha"], True))
+        check("a bare run is a dry-run circle: live=False, nothing forwarded",
+              C.main() == 0 and captured_start[-1] == ([], False))
 
-        sys.argv = ["circling.py", "--circle", "--live", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--live", "--parts", "alpha"]
         captured_start.clear()
-        check("--live AFTER --circle: still live=True (argv.index(\"--circle\") "
-              "sees it either side) — main() forwards --live in extra_argv "
-              "unfiltered, same as start()'s own docstring says its caller "
-              "may; start() is what strips it (stage 8's own case 3)",
+        check("--live FIRST: live=True — the one door R330/Q3 rules — and "
+              "main() forwards --live in extra_argv unfiltered, same as "
+              "start()'s own docstring says its caller may; start() is what "
+              "strips it (stage 8's own case 3)",
               C.main() == 0
               and captured_start[-1] == (["--live", "--parts", "alpha"], True))
 
-        sys.argv = ["circling.py", "--dev", "--circle", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--parts", "alpha", "--live"]
         captured_start.clear()
-        check("--dev typed BEFORE --circle is still forwarded (2026-09-01 fix "
-              "for the position start() never sees)",
+        check("--live LAST: still live=True — position does not matter",
               C.main() == 0
-              and captured_start[-1] == (["--parts", "alpha", "--dev"], False))
+              and captured_start[-1] == (["--parts", "alpha", "--live"], True))
 
-        sys.argv = ["circling.py", "--circle", "--dev", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--no-color", "--parts", "alpha"]
         captured_start.clear()
-        check("--dev typed AFTER --circle forwards once, not duplicated",
+        check("--no-color is this program's own flag and is NOT forwarded",
+              C.main() == 0
+              and captured_start[-1] == (["--parts", "alpha"], False))
+
+        sys.argv = ["circling.py", "--dev", "--parts", "alpha"]
+        captured_start.clear()
+        check("--dev is forwarded verbatim, once, in the position typed — "
+              "hidden from --help, unchanged in behaviour",
               C.main() == 0
               and captured_start[-1] == (["--dev", "--parts", "alpha"], False))
+
+        sys.argv = ["circling.py", "--parts", "alpha", "--dev=false"]
+        captured_start.clear()
+        check("--dev=false forwards in that form, for circle.py's own parser",
+              C.main() == 0
+              and captured_start[-1] == (["--parts", "alpha", "--dev=false"], False))
 
         # R546: a live circle with no key never opens the window; the
         # whole text goes to the terminal, where the alternate screen cannot take it away.
         vars(C)["_key_notice_read"] = lambda full: "NO-KEY-WHOLE" if full else "NO-KEY-BRIEF"
-        sys.argv = ["circling.py", "--live", "--circle", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--live", "--parts", "alpha"]
         captured_start.clear()
         said, real_stdout = io.StringIO(), sys.stdout
         sys.stdout = said
@@ -1214,12 +1243,12 @@ def self_test() -> int:
             rc = C.main()
         finally:
             sys.stdout = real_stdout
-        check("--live --circle with no key: exit 2, the whole text on the terminal, "
+        check("--live with no key: exit 2, the whole text on the terminal, "
               "and no engine started", rc == 2 and "NO-KEY-WHOLE" in said.getvalue()
               and not captured_start)
-        sys.argv = ["circling.py", "--circle", "--parts", "alpha"]
+        sys.argv = ["circling.py", "--parts", "alpha"]
         captured_start.clear()
-        check("--circle without --live (a dry run) with no key still opens — "
+        check("without --live (a dry run) with no key still opens — "
               "circle.py's own short notice is what the command pane shows",
               C.main() == 0 and captured_start[-1] == (["--parts", "alpha"], False))
     finally:
@@ -1388,11 +1417,73 @@ def self_test() -> int:
     s_flat.circle.append("a line")
     s_flat.circle.append("another")
     s_flat.handle_key("CUR_UP")
-    check("on an UNWRAPPED line the arrows do nothing — they never fall back "
-          "to scrolling, which is what having two clusters is for",
+    check("on an UNWRAPPED line with no history the arrows do nothing — they "
+          "never fall back to scrolling, which is what having two clusters is for",
           s_flat.circle.input_cursor == 2 and not s_flat.circle.is_scrolled())
     check("while the numpad's own token still scrolls that same pane",
           s_flat.handle_key("UP") == "scroll" or s_flat.circle.is_scrolled())
+
+    # THE INPUT HISTORY — the operator, 2026-09-14: *"the up and down arrows
+    # (not the ones on the num pad, which are correct) will cycle upward
+    # through up to 3 prior entries (and downward to empty or one currently
+    # being constructed)."* Per pane, from what that pane submitted.
+    s_h = C.AppState(6, 6)
+    for n in range(1, 6):
+        for ch in f"entry {n}\r":
+            s_h.handle_key(ch)
+    check("only the newest HISTORY_DEPTH entries are kept, oldest first",
+          C.HISTORY_DEPTH == 3
+          and s_h.circle.history == ["entry 3", "entry 4", "entry 5"])
+    for ch in "draft":
+        s_h.handle_key(ch)
+    eff = s_h.handle_key("CUR_UP")
+    check("Up on an unwrapped line brings back the previous entry, cursor at "
+          "its end, redrawing only the input",
+          s_h.circle.input_buf == "entry 5" and eff == "input"
+          and s_h.circle.input_cursor == len("entry 5"))
+    s_h.handle_key("CUR_UP")
+    s_h.handle_key("CUR_UP")
+    check("...and cycles upward through all three", s_h.circle.input_buf == "entry 3")
+    s_h.handle_key("CUR_UP")
+    check("Up at the oldest kept entry stays there — no wrap-around, no scroll",
+          s_h.circle.input_buf == "entry 3" and not s_h.circle.is_scrolled())
+    s_h.handle_key("CUR_DOWN")
+    s_h.handle_key("CUR_DOWN")
+    check("Down walks back toward the newest", s_h.circle.input_buf == "entry 5")
+    s_h.handle_key("CUR_DOWN")
+    check("Down past the newest restores the line that was being constructed",
+          s_h.circle.input_buf == "draft" and s_h.circle.history_pos is None)
+    s_h.handle_key("CUR_DOWN")
+    check("...and a further Down is a no-op", s_h.circle.input_buf == "draft")
+    for ch in "\r":
+        s_h.handle_key(ch)
+    s_h.handle_key("CUR_UP")
+    check("a submitted draft becomes the newest entry", s_h.circle.input_buf == "draft")
+    s_h.handle_key("CUR_DOWN")
+    check("Down past the newest with no draft is empty", s_h.circle.input_buf == "")
+    check("the numpad's own tokens are untouched: UP still scrolls, never recalls",
+          s_h.handle_key("UP") == "scroll" and s_h.circle.input_buf == "")
+    check("the command pane keeps its OWN history, empty until it submits",
+          s_h.command.history == [] and s_h.handle_key("\t") == "focus"
+          and s_h.handle_key("CUR_UP") == "input" and s_h.command.input_buf == "")
+    for ch in "status\r":
+        s_h.handle_key(ch)
+    s_h.handle_key("CUR_UP")
+    check("...and recalls what IT submitted", s_h.command.input_buf == "status")
+    s_w = C.AppState(6, 6)
+    s_w.circle.width = 30
+    for ch in "before\r":
+        s_w.handle_key(ch)
+    s_w.circle.input_buf = ("the room is quieter than it was, and I want to "
+                            "say why before it moves again")
+    s_w.circle.input_cursor = len(s_w.circle.input_buf)
+    s_w.handle_key("CUR_UP")
+    check("inside a WRAPPED line Up moves a row first, not into history",
+          s_w.circle.input_buf.startswith("the room") and s_w.circle.history_pos is None)
+    s_w.circle.input_cursor = 0
+    s_w.handle_key("CUR_UP")
+    check("...and from its first row Up recalls, parking the wrapped draft",
+          s_w.circle.input_buf == "before" and s_w.circle.draft.startswith("the room"))
 
     # PARKED AT A READ = EXIT AT ONCE — the operator, 2026-08-25: *"Exit at
     # once whenever the circle is waiting for input; keep waiting only while
@@ -1425,6 +1516,30 @@ def self_test() -> int:
           not C._parked_on_read(_ParkedEngine(waiting=False)))
     check("a backend with none of these attributes reads NOT parked",
           not C._parked_on_read(_FakeEngine(live=True)))
+    # PHASE-AWARE, 2026-09-15 — the operator, after quitting at cmd> while
+    # the circle was still asking its working-set question: *"the message
+    # is misdirecting."* Every read the open step makes precedes the
+    # transcript mint, so an engine parked before the loop has written
+    # nothing and left nothing open; the message must not say otherwise.
+    fe6 = _ParkedEngine()
+    fe6.loop_reached = False
+    fe6.pending_prompt = "working set (issue ids, none, or all)"
+    out_lines.clear()
+    C.ui_live_engine_wait(fe6, warn_after=30, out=out_lines.append)
+    check("parked BEFORE the loop: says still OPENING, no transcript, nothing "
+          "left open — and names the question it was asking",
+          out_lines and "OPENING" in out_lines[0]
+          and "NO TRANSCRIPT" in out_lines[0]
+          and "Nothing is left open" in out_lines[0]
+          and "working set (issue ids, none, or all)" in out_lines[0]
+          and "intact" not in out_lines[0]
+          and "left OPEN" not in out_lines[0])
+    fe7 = _ParkedEngine()
+    fe7.loop_reached = True
+    check("parked AT the loop: the transcript text, unchanged",
+          C._parked_exit_text(fe7) == C._PARKED_EXIT)
+    check("...and a backend without loop_reached reads as the loop",
+          C._parked_exit_text(_ParkedEngine()) == C._PARKED_EXIT)
 
     # AND THE SECOND TEST, INSIDE THE WAIT: an engine that is working when
     # quit is typed, then comes back asking a question nobody can answer,
@@ -2446,11 +2561,8 @@ def self_test() -> int:
     blob = "".join(out)
     check("render_full ran without raising and drew both headers",
           "CIRCLE" in blob and "COMMANDS" in blob)
-    # C.PARTS[0], NOT A LITERAL — audit-register.md #1, 2026-09-08. This named a real part
-    # Tag in a SHIPPED file, and it was a silent coupling besides: renaming the demo's
-    # placeholders would have failed this check for a reason that looks unrelated to them.
-    check("render_full shows the interleaved agent line",
-          C.PARTS[0] in blob)
+    check("render_full shows the interleaved part line",
+          PLACEHOLDER_PART in blob)
 
     # The header's scroll tag: both counts appear once scrolled.
     out2: list[str] = []
@@ -2462,33 +2574,6 @@ def self_test() -> int:
     quit_effect = state.handle_key("\x03")
     check("Ctrl-C sets running False", quit_effect == "quit"
           and state.running is False)
-
-    # --- AgentSimulator: a real (short, fast) run, checking the ONE
-    # property the numbering exists for — the global sequence has no gaps
-    # and no duplicates, proving the lock actually protects the three
-    # threads' shared counter. -------------------------------------------
-    sim_q: "queue.Queue[str]" = queue.Queue()
-    sim = C.AgentSimulator(sim_q, delay_range=(0.0, 0.02))
-    sim.start()
-    time.sleep(0.4)
-    sim.stop()
-    got: list[str] = []
-    while True:
-        try:
-            got.append(sim_q.get_nowait())
-        except queue.Empty:
-            break
-    check("AgentSimulator produced multiple statements in 0.4s",
-          len(got) >= 5)
-    pattern = re.compile(r"^\[(\w+)\]: \1 statement (\d+)$")
-    matched = [pattern.match(g) for g in got]
-    check("every statement matches '[Name]: Name statement NNN'",
-          all(matched))
-    nums = sorted(int(m.group(2)) for m in matched if m)
-    check("sequence numbers are globally consecutive across all three "
-          "parts' threads, no gaps or duplicates — proving the lock, and "
-          "the exact property that makes a dropped line visible by eye",
-          nums == list(range(1, len(nums) + 1)))
 
     # --- COLOR is a write-time tint, armed only by main() (D64 a) -------
     check("with COLOR off (every suite's state) _tint is byte-inert",
@@ -2526,61 +2611,32 @@ def self_test() -> int:
           "deleted",
           bs_state.command.input_buf == "abc" and bs_state.command.input_cursor == 0)
 
-    # --- the bare demo path (`python ui/circling.py`, no args) must not
-    # crash on a coordinator-only import before any engine pushes COORD_DIR
-    # onto sys.path — audit-register.md #5: ui_main_loop's own
-    # `import stream_redaction as SR` raised ModuleNotFoundError for a full
-    # day (95f8b15, 2026-09-03) because every OTHER suite here imports
-    # `circling` only after this file's own sys.path.insert(COORD_DIR)
-    # above, which masks the exact defect a real, freshly-started process
-    # hits. A subprocess is the only way to see what a real invocation
-    # sees. ------------------------------------------------------------
+    # --- a FRESH PROCESS must import circling.py clean. Every other suite
+    # here imports `circling` only after this file's own
+    # sys.path.insert(COORD_DIR) above, which masks exactly the defect a
+    # real, freshly-started process hits (audit-register.md #5: a
+    # coordinator-only import at module scope raised ModuleNotFoundError
+    # for a full day, 95f8b15, 2026-09-03). A subprocess is the only way
+    # to see what a real invocation sees. `--help` is the door: it exits
+    # on its own, opens no window and starts no engine, so the check is
+    # not timing-dependent. ---------------------------------------------
     try:
-        proc = subprocess.Popen(
-            [sys.executable, str(UI / "circling.py")],
+        proc = subprocess.run(
+            [sys.executable, str(UI / "circling.py"), "--help"],
             stdin=subprocess.DEVNULL, stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT, cwd=str(UI.parent))
-        try:
-            out, _ = proc.communicate(timeout=2)
-            ran_until_killed = False
-        except subprocess.TimeoutExpired:
-            proc.kill()
-            out, _ = proc.communicate()
-            ran_until_killed = True
-        text = out.decode("utf-8", "replace")
-        _bare_ok = (ran_until_killed and "ModuleNotFoundError" not in text
-                    and "Traceback" not in text)
-        check("bare demo path (no args, no --circle) does not crash on a "
-              "coordinator-only import before any engine pushes COORD_DIR, "
-              "and keeps its curses loop alive until killed",
-              _bare_ok)
-        if not _bare_ok:
-            # SAY WHICH HALF FAILED, AND SHOW THE CHILD — audit-register
-            # 2026-09-09 #30. This is the ONLY timing-dependent assertion in
-            # this file, and the pre-commit hook refuses a commit on its
-            # non-zero exit, so a failure here stops work. It exited 1 twice
-            # under load during the sweep and could not be reproduced, and
-            # the reason it could not is that the child's output was
-            # DISCARDED: a bare exit code cannot distinguish "the demo
-            # crashed" from "a loaded box could not start an interpreter in
-            # two seconds", and those want opposite responses.
-            #
-            # Not a fix for the flake — nothing here knows whether the flake
-            # is real. It is the instrumentation that makes the NEXT
-            # occurrence answerable instead of a coin toss, which is what
-            # test-gap recommended in place of a probe it could not write.
-            _why = ("the child EXITED within the 2s window "
-                    f"(returncode {proc.returncode!r}) — on a loaded box a "
-                    "child that fails to START looks exactly like this"
-                    if not ran_until_killed else
-                    "the child stayed alive but printed a traceback")
-            print(f"      bare demo: {_why}")
-            print(f"      child output ({len(text)} chars):")
+            stderr=subprocess.STDOUT, cwd=str(UI.parent), timeout=30)
+        text = proc.stdout.decode("utf-8", "replace")
+        _fresh_ok = (proc.returncode == 0 and "Traceback" not in text
+                     and text.startswith(C.HELP_TEXT.splitlines()[0]))
+        check("a fresh interpreter runs circling.py --help clean: exit 0, the "
+              "usage line first, no traceback", _fresh_ok)
+        if not _fresh_ok:
+            print(f"      child returncode {proc.returncode!r}, output ({len(text)} chars):")
             for _line in (text.splitlines() or ["<nothing on stdout/stderr>"]):
                 print(f"        | {_line}")
-    except OSError as exc:                                     # noqa: BLE001
-        skip("bare demo path subprocess check",
-             f"could not launch a child interpreter ({exc})")
+    except (OSError, subprocess.TimeoutExpired) as exc:        # noqa: BLE001
+        skip("fresh-process --help check",
+             f"could not run a child interpreter ({exc})")
 
     print()
     if failures:

@@ -36,6 +36,24 @@ Since R273 only the first kind is ever staged — a proposal body that is not a 
 
 **Staging fields are dropped the moment a row settles.** A resolved row carries its id, kind, text, state, author and `sources` — the same discipline every propose-class register here follows.
 
+**A row may wait on another row (R570, 2026-09-15).** `depends_on` lists the
+rows it waits on, `"P-n"` or `"P-n:<token>"` — the second form also names the placeholder in
+`text` that P-n's minted id fills. `proposal_row_stage(..., depends_on=)` refuses a prior that is
+not on file and a dependency that would close a ring, writing nothing. `minted` is the id an
+approval produced, kept on the accepted row so a dependent vetted at a later checkpoint still
+resolves. Both survive resolution. The chain's own verbs: `proposal_dependency_ids_read()`,
+`proposal_dependency_placeholders_read()`, `proposal_dependency_ring_find()`,
+`proposal_dependency_state_read()` (ready, waiting, cascade or unresolved; a prior Self ruled
+directly in the room counts as done), `proposal_dependency_resolve()`, `proposal_minted_write()`,
+`proposal_placeholder_substitute()`, `proposal_cascade_deny()` (transitive, visited set),
+`proposal_dependency_repoint()` (a coalesced duplicate's dependents onto the primary), and
+`proposal_row_stage_once()` (a pending row with the same text is reused).
+
+**A third kind, `suggestion`.** A row the coordinator staged itself — a line the close-time
+recogniser found, or a step of a removal's dependency plan. No part asked, so the part classifier
+is not consulted; approval runs it through proposal_suggestion.py and flips the row only when the
+verb's own writer reports the act done.
+
 **An evidence offer carries its statement.** A part's `[proposed: /issue-evidence-add nNNNN "why"]` names no statement: it offers the one the bracket rode in (R541). Its row carries two more fields, `part` (the speaker's directory id) and `quote` (the statement's words, verbatim, without the bracket), which approval attaches as the evidence, with the row's circle as its source. Every other row lacks both, so an old row renders exactly as before; both are kept at resolution.
 
 ## MAIN

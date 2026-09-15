@@ -167,3 +167,25 @@ class ProposeClass:
         self.drop_staging(row)
         self.save(doc)
         return True, f"{pid} denied — kept as a tombstone"
+
+
+# THE QUOTES A BODY MAY BE WRAPPED IN — straight, curly, and the mixed forms a
+# part's keyboard produces. ONE HOME (system_unique_home_verify): the bracket
+# grammar (annotations._strip_quotes) and the practice register
+# (practice_manager._body_normalise) both fold the same pair, and neither may
+# hold the other's copy — annotations is orchestration, practice_manager a
+# register, and this class is what the two already share.
+QUOTE_PAIRS: tuple[tuple[str, str], ...] = (
+    ('"', '"'), ("“", "”"), ("“", "“"), ("”", "”"))
+
+
+def propose_quotes_strip(body: str) -> str:
+    """One pair of surrounding double quotes removed, straight or curly. A body
+    that is nothing BUT the quotes empties to "" — the caller's empty-body rule
+    applies. A quote inside the body, or one that does not wrap the whole of
+    it, is content and stays."""
+    body = body.strip()
+    for lq, rq in QUOTE_PAIRS:
+        if len(body) >= 2 and body.startswith(lq) and body.endswith(rq):
+            return body[1:-1].strip()
+    return body

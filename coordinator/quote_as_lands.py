@@ -115,21 +115,29 @@ QUOTE_RE = re.compile(r'"([^"\n]+)"|“([^”\n]+)”')
 # second field the register would have to grow.
 LANDS_HEAD_RE = re.compile(r"^lands #(\d+) ")
 
-# Curly punctuation the model emits, folded to what a terminal types.
+# Curly punctuation the model emits, folded to what a terminal types — and
+# then EVERY quote character dropped, in that order (a curly quote folds to
+# a straight one first, and the straight one goes). Applied to both sides, so
+# a part's "felt before mechanism" and Self's 'felt before mechanism' compare
+# equal, as do room's and rooms: the operator quoted Learner #50 of circle
+# 2026-09-14_1031 with the inner quotes typed single where the part had typed
+# double, and the span matched nothing.
 _FOLD = {
     "“": '"', "”": '"',          # curly double quotes
     "‘": "'", "’": "'",          # curly single quotes / apostrophe
+    '"': "", "'": "",            # ...and no quote of either kind decides a match
     "–": "-", "—": "-",          # en / em dash
     "…": "...",                       # ellipsis
     " ": " ",                         # non-breaking space
 }
+_DOUBLE_QUOTES = '"“”'
 
 
 def lands_fold(s: str) -> str:
-    """The comparison form: curly punctuation folded to straight, case
-    folded, whitespace collapsed. Applied to BOTH sides of every match —
-    the quoted span and the prior statement — so neither side's typing
-    conventions decide whether a quote is recognized."""
+    """The comparison form: curly punctuation folded to straight, every
+    quote character dropped, case folded, whitespace collapsed. Applied to
+    BOTH sides of every match — the quoted span and the prior statement — so
+    neither side's typing conventions decide whether a quote is recognized."""
     for a, b in _FOLD.items():
         s = s.replace(a, b)
     return " ".join(s.casefold().split())
@@ -139,12 +147,28 @@ def lands_spans_read(text: str) -> list[str]:
     """Every quoted span in `text`, in the order typed, verbatim (NOT
     folded — the record quotes what Self actually typed). Spans shorter
     than MIN_QUOTE_WORDS words are dropped here rather than at match
-    time, so the threshold is applied in exactly one place."""
+    time, so the threshold is applied in exactly one place.
+
+    A QUOTE INSIDE THE QUOTE. QUOTE_RE pairs quotes innermost-first, so a
+    line carrying "Rags before Chisel ... the room's own "felt before
+    mechanism" practice" yields the head and the tail as two spans and the
+    whole as none. Where a line holds four or more double quotes the span
+    from its FIRST quote to its LAST is offered as well (the operator,
+    2026-09-14: a quote mark within the full segment would break the pair
+    around it, he was concerned). Offering is safe: lands_detect() mints only a span found in
+    exactly one prior statement, once per statement, so a candidate that
+    was never a quote costs nothing."""
     out = []
     for m in QUOTE_RE.finditer(text):
         span = (m.group(1) or m.group(2) or "").strip()
-        if len(lands_fold(span).split()) >= MIN_QUOTE_WORDS:
+        if len(lands_fold(span).split()) >= MIN_QUOTE_WORDS and span not in out:
             out.append(span)
+    for line in text.split("\n"):
+        marks = [i for i, ch in enumerate(line) if ch in _DOUBLE_QUOTES]
+        if len(marks) >= 4:
+            whole = line[marks[0] + 1:marks[-1]].strip()
+            if len(lands_fold(whole).split()) >= MIN_QUOTE_WORDS and whole not in out:
+                out.append(whole)
     return out
 
 
@@ -239,9 +263,16 @@ def lands_quote_apply(guard, transcript: list[dict],
                      cls=LANDS_CLASS)
         done.add(h["n"])
         written.append(rec)
+        # THE NOTICE SAYS WHAT LANDED AND WHAT IT SPARES. It read "(lands
+        # recorded to self/remember.toml — Learner #40, unvetted, private)"
+        # and the operator, not having seen it, typed a [remember:] of the
+        # same words a turn later (2026-09-14_1031). Quote the span back and
+        # say that a remember of it is not needed.
+        span = h["span"] if len(h["span"]) <= 72 else h["span"][:69].rstrip() + "..."
         seam.emit("command",
-                  f"  (lands recorded to self/remember.toml — "
-                  f"{h['display']} #{h['n']}, unvetted, private)")
+                  f'  lands recorded — {h["display"]} #{h["n"]}: "{span}" '
+                  f"→ self/remember.toml (unvetted, private; a [remember:] of "
+                  f"the same words is not needed)")
     return written
 
 

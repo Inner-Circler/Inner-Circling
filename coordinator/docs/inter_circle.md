@@ -146,6 +146,11 @@ The one circle-wide call, over the five inputs named above. Returns the material
     Dream every part in parallel, collecting payloads and reporting each as it
         lands.
     Synthesise over the transcript and those payloads.
+    if (live) then { command suggestions, REPORT ONLY — command_suggest.command_suggest_run()
+        over the transcript, inside its own try: the lines Self may type, said and written to
+        work/logs/command_suggest_<OT>.json; each line also staged as a pending proposal with its
+        dependencies (R570); a failure one line
+        (R569, 2026-09-15). }
     Validate, render, stage.
     Gate the staged tree against the current one; any failure stops here with the
         tree untouched and the staging kept.

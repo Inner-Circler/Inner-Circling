@@ -55,6 +55,7 @@ from record_paths import ROOT, PART_TAGS, SANDBOX_CIRCLES, record_dir
 import setting_manager as SET
 import phase_clock as PC
 from seam import fail
+import seam                        # seam.COMMAND_PANE, read at call time (_topic_suggestions)
 from write_guard import WriteGuard, _within
 import command_surface as CS
 from llm_client import (stream_prewarm, stream_api_preflight, stream_key_source_note,
@@ -114,6 +115,33 @@ def circle_transcript_path_read(live: bool, ot: str) -> pathlib.Path:
     delegates here.
     """
     return (record_dir(ROOT, "circles") if live else SANDBOX_CIRCLES) / f"circle_{ot}.md"
+
+
+def _topic_suggestions() -> list[str]:
+    """What a bare `?` at the topic prompt is answered with — the operator, 2026-09-15:
+    *"report the availability of 'help part' and 'help issue' in the command pane (or, in
+    circle.py, with the '/' prefix) in plain language."*
+
+    TWO SPELLINGS, ONE FACT: `seam.COMMAND_PANE` says whether a command pane exists (set by
+    ui/circling.py for the run, read at CALL time through the module, never from-imported).
+    Under the two-pane UI both verbs answer at the lower pane before any circle is open
+    (probed 2026-09-15). Under circle.py alone there is no pane and the Self> loop has not
+    begun — `/help part` typed HERE becomes the topic (probed the same day) — so that
+    spelling says WHEN the door opens rather than pointing at a shut one.
+    """
+    if seam.COMMAND_PANE:
+        how = ["  Type either in the command pane (the lower one) — now, or at any time."]
+        pre = ""
+    else:
+        how = ["  Type either at your own prompt once the circle is open."]
+        pre = "/"
+    return (["\n  Suggestions — two ways to see what a circle can hold:",
+             f"    {pre}help part    who is in the circle, and how to invite a new part",
+             f"    {pre}help issue   the issues you can bring to a circle, and what you "
+             "can do with them"]
+            + how
+            + ["  Then answer the topic question: a few words about what is on your mind, "
+               "or blank for an open circle."])
 
 
 def circle_open_verifier_run(ot: str, live: bool, path: pathlib.Path,
@@ -589,18 +617,30 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
             f"{PART_TAGS[p]} {r_since.get(p, 0)}" for p in parts))
         emit("command", "  no opening round — this circle already had one.")
     else:
-        try:
-            topic = read_line_no_annotation(
-                "\nCIRCLE topic (blank = open): ", "topic",
-                channel="circle")
-        except (EOFError, KeyboardInterrupt):
-            # The working-set prompt above has caught these since it was
-            # written; this one printed a traceback. Nothing has been written
-            # yet, so there is nothing to close and nothing to keep — this is
-            # a cancel, not the Ctrl-C of E11, which is about a circle that
-            # already exists and must not be ended by a keystroke.
-            emit("command", "\n  cancelled — no circle was opened.")
-            return 2
+        # THE HINT IS FOR THE SHIPPED ROSTER — the operator, 2026-09-15: *"if there
+        # are only two parts (Soul and Child), add ... '? for suggestions'"*, then
+        # *"verify this is true while part-count <= 2"*. By COUNT, never by name:
+        # R123 keeps a part's name out of shipped code, and two seated parts is what
+        # a fresh install has. A bare `?` is answered at every roster size — it is
+        # never a topic — only the advertisement varies.
+        topic_prompt = ("\nCIRCLE topic (blank = open, ? for suggestions): "
+                        if len(parts) <= 2 else "\nCIRCLE topic (blank = open): ")
+        while True:
+            try:
+                topic = read_line_no_annotation(topic_prompt, "topic",
+                                                channel="circle")
+            except (EOFError, KeyboardInterrupt):
+                # The working-set prompt above has caught these since it was
+                # written; this one printed a traceback. Nothing has been written
+                # yet, so there is nothing to close and nothing to keep — this is
+                # a cancel, not the Ctrl-C of E11, which is about a circle that
+                # already exists and must not be ended by a keystroke.
+                emit("command", "\n  cancelled — no circle was opened.")
+                return 2
+            if topic.strip() != "?":
+                break
+            for line in _topic_suggestions():
+                emit("circle", line)
         # MINT -> CHECK -> WRITE, with nothing between them that can block.
         # An input() in this sequence would rebuild the window it closes: the
         # check would describe the tree as it was before someone went to make

@@ -288,6 +288,16 @@ SPEC: tuple[Setting, ...] = (
        "coordinator/part_dreaming.py::DREAM_MAX_TOKENS", unit="tokens",   # inter_circle's until 2026-09-03
        why="Raised from 4,000 on 2026-08-21 after two parts ran out mid-dream: the model's "
            "thinking counts against this ceiling, and the visible dream is only part of it."),
+    # R569, 2026-09-15: the report-only recogniser's ceiling.
+    # The first run at AUX_MAX_TOKENS (4,000) stopped at max_tokens before one visible
+    # character: the thinking took the whole ceiling. Same lesson as the row above.
+    _s("suggest_max_tokens",
+       "The ceiling for the command-suggestion report's one call after a circle",
+       "NUMERIC_STRING", 64000, "dev", "next_circle",
+       "coordinator/command_suggest.py::SUGGEST_MAX_TOKENS", unit="tokens",
+       why="Sized above dream_max_tokens: thinking bills against it, a 22-verb catalogue "
+           "over a full transcript and its referents reasons at length, and the visible "
+           "JSON is ~150 tokens an item — 12,000 cut the rehearsal mid-array after twenty."),
     # B91, 2026-09-04: the grounding heuristic's threshold. A SUSPECT note in
     # the close report, never a refusal — raising it makes the note fire more
     # often, lowering it less. 1 is the floor BOUNDED accepts (a positive

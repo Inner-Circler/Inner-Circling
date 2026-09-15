@@ -689,9 +689,15 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     # the short_terms, the verifier and this commit. The OPEN-time refresh
     # writes it too, and that write is carried by THAT circle's own close —
     # the same lifecycle working_sets.toml has had since it was added here.
+    # SELF'S OWN REMEMBER REGISTER JOINED 2026-09-14, the same symptom a third
+    # time: a [remember:] typed at Self> and every quote-as-lands row (R251)
+    # write it at utterance, and nothing committed it — its whole git history
+    # was the B117 move. The two lands rows and the remember of circle
+    # 2026-09-14_1031 sat uncommitted in the working tree until this line.
     paths += [p for p in (record_dir(ROOT, "circles") / "working_sets.toml",
                           record_dir(ROOT, "self") / "proposals.toml",
-                          record_dir(ROOT, "self") / "coalesce.toml") if p.is_file()]
+                          record_dir(ROOT, "self") / "coalesce.toml",
+                          record_dir(ROOT, "self") / "remember.toml") if p.is_file()]
     return paths
 
 

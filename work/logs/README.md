@@ -29,6 +29,11 @@ dream_error_<OT>.json   written only when that run fails. The close names this
                         file and prints the command to re-run the processing;
                         read it first — a failed run wrote nothing, and the
                         re-run is clean.
+command_suggest_<OT>.json
+                        the commands a live close found the circle's words
+                        suggesting — each line as you would type it, who
+                        said it, and in which statement. Each line is also
+                        staged as a proposal for your next ruling.
 circle_audit.log        the audit's own log (`circle_audit.py`), appended to
                         each time you run it.
 ```

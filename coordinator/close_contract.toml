@@ -111,7 +111,7 @@ sandbox_report_marker = "mode"
 
 # A DIRECTORY RENAME IS NOT A DEFECT. A report records the parts/ directory
 # name as it stood at the close, and a directory can be renamed afterwards —
-# `injured_soul` became `soul`, and eight reports written between 2026-07-26
+# the Soul's directory was renamed 2026-08-08, and eight reports written between 2026-07-26
 # and 2026-08-02 carry the older name. Those reports were TRUE WHEN WRITTEN.
 #
 # So a row naming a directory that is not in today's roster is PAIRED with an

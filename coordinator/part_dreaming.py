@@ -97,6 +97,12 @@ Write only about what YOU said or experienced. If no short_term for you appears 
 did not speak this circle; nothing above is yours to claim in your own voice, however
 vivid, and MEMORY should be empty.
 
+Where your memory touches something Self said or remembered, hold it in Self's own words,
+however few. A phrase of your own for Self's material — a name you coined, a figure you
+offered — is yours, and your memory says so ("my phrase for it"); it does not become the
+name of the thing until Self has said it back. Self's material stays Self's, in Self's
+words, and your reading of it stays yours.
+
 Write AT MOST ONE memory to carry forward to your own next circle. This is not a
 summary of the circle — it is a note from you, to your future self, in your own voice,
 about what to hold going into the next one. If a prior memory exists below, either

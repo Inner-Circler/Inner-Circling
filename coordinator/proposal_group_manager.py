@@ -238,6 +238,12 @@ def proposal_group_refresh(say=print, client=None) -> str:
 
 
 # ------------------------------------------------------------- presentation
+def proposal_group_read() -> list[dict]:
+    """Every group on file, live and ruled alike — the one public reader (2026-09-15, for
+    the DEPENDENCY map: a group is provenance a practice or proposal is a member of)."""
+    return list(_load().get(TABLE, []))
+
+
 def proposal_group_live_read() -> tuple[list[dict], set[str]]:
     """(groups, member_refs) — only unruled groups whose stored hash still
     matches the CURRENT pending set; anything stale presents nothing."""

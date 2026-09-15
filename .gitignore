@@ -71,6 +71,7 @@ work/logs/circle_audit*.log
 work/logs/closing_*.json
 work/logs/dream_[0-9]*.json
 work/logs/delta_[0-9]*.json
+work/logs/command_suggest_[0-9]*.json
 
 # EVERYTHING ELSE A RUN DROPS HERE IS A MEMO — the default is now ignore, and
 # the record is re-included by name below. spend_<OT>.json (R380) was the file

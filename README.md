@@ -132,6 +132,11 @@ coordinator sends, to Anthropic:
   -- the refresh: each part's own record, to rebuild its distilled
      identity
   -- the grouping of proposals: the ones still pending
+  -- the command suggestions: the transcript again, with what a command
+     in it might name -- your live issues and their labels, the open
+     relationships and topics, the observations, practices and parts --
+     so the coordinator can find the commands the circle's words suggest
+     (see "About proposals")
 
 That is the whole mechanism — the cloud has no memory of a part, so its
 context has to be sent on every call. What you say in a circle goes to
@@ -504,14 +509,16 @@ Check what will be used, changing nothing:
 Optional free dry run — no network, no key needed
 
 ```
-  .venv\Scripts\python ui\circling.py --circle
+  .venv\Scripts\python ui\circling.py
 ```
 
-**Dry run is the default HERE** — `--circle` passes `--dry-run` to the
+**Dry run is the default HERE** — a bare run passes `--dry-run` to the
 coordinator for you unless you ask for `--live` by name. (`coordinator/circle.py`
 run on its own REFUSES a bare invocation since R360: it wants `--live` or
 `--dry-run` spelled out.) `--live` may sit anywhere on the command line;
-anything else after `--circle` is forwarded to the coordinator unchanged.
+every other option is forwarded to the coordinator unchanged.
+`ui\circling.py --help` lists this program's own options, and
+`coordinator\circle.py --help` the ones it forwards.
 
 ## Run
 
@@ -520,7 +527,7 @@ anything else after `--circle` is forwarded to the coordinator unchanged.
 This is how you start a real live circle:
 
 ```
-  .venv\Scripts\python ui\circling.py --live --circle
+  .venv\Scripts\python ui\circling.py --live
 ```
 
 **The user interface has two panes*
@@ -562,7 +569,12 @@ selecting them here.  The easy answer here is nothing, a bare 'enter'.
 
 And the second question:
 
-CIRCLE topic (blank = open): _
+CIRCLE topic (blank = open, ? for suggestions): _
+
+'?' does not open a circle. It names two things you can type in the
+command pane, now or later -- 'help part' (who is in the circle, and
+how to invite a new part) and 'help issue' (the issues you can bring
+to a circle) -- and then asks for the topic again.
 
 Enter a few words about what is on your mind:
 
@@ -655,8 +667,18 @@ opening an issue or adding a practice, etc.), deny (the proposal
 is forgotten), or skip (you'll be asked again when the next circle
 opens).
 
+The coordinator stages proposals of its own, too. At every live
+close it reads the transcript for commands the circle's words
+suggest — "I wish to add the part" suggests `/part-add` — and
+stages each one as a proposal, with anything it has to wait on, for
+your next ruling. Nothing runs unless you approve it, and a
+suggestion counts as done only when its command really succeeded.
+A proposal that waits on another is denied along with it: deny one,
+and every proposal still waiting on it is denied too.
+
 A part cannot propose a new PART. Adding one is yours alone,
-with `/part-add` at the command pane — but parts are told about
+with `/part-add` at the command pane, or by approving a suggestion
+drawn from your own words — but parts are told about
 any new part or issue, and they will begin to accumulate related
 memories.
 
@@ -711,7 +733,9 @@ circle would have cost without it.
 4  the close report is verified, and the whole circle is committed to git,
    with the report its open wrote
 5  THEN dreaming runs for every part, one circle-wide synthesis after it,
-   and each part whose record moved has its distilled identity rebuilt
+   then the command suggestions are found and staged as proposals for your
+   next ruling, and each part whose record moved has its distilled identity
+   rebuilt
 ```
 
 Step 5 makes model calls of its own **after** the transcript is already
@@ -858,13 +882,18 @@ WITH CARE — machine-written, but hand-editable
                                 what an issue is
   groups/ifs/issues/*.toml      the issue graph
   groups/ifs/self/*.toml        the registers
-  groups/ifs/circles/*.toml     the four one-per-circle registers, which sit
+  groups/ifs/circles/circle_history.toml, circle_journal.toml,
+  circle_observation_log.toml, working_sets.toml
+                                the four one-per-circle registers, which sit
                                 beside the transcripts rather than under self/
     Each has one owning module that reads and writes it. Keep the shape,
     edit between circles, and run the gate named below afterwards.
 
 NEVER — the historical record, and what is derived from it
   groups/ifs/circles/*.md       transcripts
+  groups/ifs/circles/commands_<OT>.toml
+                                the graph rulings one circle made, beside
+                                its transcript (circles/README.md)
   groups/ifs/parts/*/short_term_<OT>.toml
                                 each part's record of a circle (.md before 2026-09-04)
   groups/ifs/parts/*/mid_term.md

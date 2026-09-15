@@ -529,7 +529,7 @@ def part_scan(base: pathlib.Path | None = None
     format stays this one function. It is keyed by DIRECTORY, which is the
     whole point of the ruling: the text used to sit in prompt_build under a
     part NAME typed into shared mechanism, and a rename in that lineage
-    (`injured_soul` -> `soul`) had already orphaned one such key silently.
+    (the Soul directory's 2026-08-08 rename) had already orphaned one such key silently.
     """
     base = base or PARTS_DIR
     roster: list[tuple[str, str]] = []

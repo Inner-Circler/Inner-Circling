@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v191"
+HOOK_MARK = "# inner-circling pre-commit v193"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -447,6 +447,7 @@ esac
 case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_known_gaps.toml*|*work/tools/test_bnf_conformance.py*|*work/graph/prompt_grammar_draw.py*\
 |*coordinator/LLM_response_disassembler.py*|*coordinator/REGISTER_CLASS.py*|*coordinator/annotations.py*\
 |*coordinator/circle.py*|*coordinator/circle_open.py*|*coordinator/circle_rounds.py*|*coordinator/circle_synthesis.py*\
+|*coordinator/command_suggest.py*|*coordinator/dependency_manager.py*\
 |*coordinator/circle_history_manager.py*|*coordinator/circle_journal_manager.py*\
 |*coordinator/circle_observation_manager.py*|*coordinator/circling_verify.py*|*coordinator/command_surface.py*\
 |*coordinator/commands.py*|*coordinator/dream_history_manager.py*|*coordinator/group_manager.py*\
@@ -919,6 +920,7 @@ case "$FILES" in *coordinator/phase_clock.py*|*coordinator/tests/test_phase_cloc
 esac
 
 case "$FILES" in *coordinator/circle_delta.py*|*coordinator/circling_verify.py*\
+|*coordinator/command_suggest.py*|*coordinator/dependency_manager.py*\
 |*coordinator/instrument_manager.py*|*coordinator/part_mid_term_project.py*\
 |*coordinator/parts_prompt_projection.py*|*coordinator/project_stats.py*\
 |*coordinator/prompt_show.py*|*coordinator/quote_as_lands.py*\
@@ -945,6 +947,23 @@ esac
 case "$FILES" in *coordinator/circle_delta.py*|*coordinator/tests/test_circle_delta.py*|*coordinator/docs/circle_delta.md*)
     NOTE="  pre-commit: the per-circle delta report touched"
     run coordinator/tests/test_circle_delta.py
+esac
+
+case "$FILES" in *coordinator/command_suggest.py*|*coordinator/tests/test_command_suggest.py*|*coordinator/docs/command_suggest.md*\
+|*work/review/command_suggest_*)
+    NOTE="  pre-commit: the report-only command recogniser touched"
+    run coordinator/tests/test_command_suggest.py
+esac
+
+case "$FILES" in *coordinator/dependency_manager.py*|*coordinator/tests/test_dependency_manager.py*\
+|*coordinator/docs/dependency_manager.md*|*coordinator/proposal_group_manager.py*\
+|*coordinator/proposal_manager.py*|*coordinator/proposal_vetting.py*|*coordinator/proposal_suggestion.py*\
+|*coordinator/docs/proposal_suggestion.md*|*coordinator/tests/test_proposal_suggestion.py*\
+|*coordinator/command_suggest.py*|*coordinator/commands.py*|*coordinator/part_add.py*\
+|*memory/issue_status.py*)
+    NOTE="  pre-commit: the dependency map, or the chain that stages and vets it, touched"
+    run coordinator/tests/test_dependency_manager.py
+    run coordinator/tests/test_proposal_suggestion.py
 esac
 
 case "$FILES" in *coordinator/redaction_manager.py*|*coordinator/stream_redaction.py*|*coordinator/tests/test_redaction.py*)

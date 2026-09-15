@@ -513,7 +513,9 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
     the only trigger since R483 took the verb out of PROPOSE_SUBSET_COMMANDS,
     so no `[proposed: /part-add ...]` can be staged to approve),
     R323 (the bracket's strings arrive prefilled — Enter keeps, typing
-    edits; kept for the shut door, see proposal_vetting.py), R332 (the validator;
+    edits; kept for the shut door, see proposal_vetting.py — and since
+    2026-09-15 a line carrying BOTH strings is written without a question:
+    the dialog is for a bare line, a partial one, or a refusal), R332 (the validator;
     part_add.part_precheck() then holds the roster
     rules). Returns "completed" or "skipped" — skipped at approval leaves
     the proposal PENDING (vetting reads the outcome).
@@ -530,6 +532,28 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
                              "questions — nothing to ask)")
         return "skipped"
     st = initialization_statements_read()
+    import part_add as PA
+    if write is None:
+        write = PA.part_add
+    # BOTH STRINGS GIVEN FLOW THROUGH — the operator, 2026-09-15, after
+    # `--dev-cmd part-add "<describe>" "<name>"` opened the dialog anyway:
+    # *"A --dev-cmd should flow through."* Each seed is held to its own
+    # question's row (R332's validator, the 200/40 caps), the directory
+    # derives, and the register is asked once, directly — no purpose, no
+    # statements, no question. A refusal, a collision of the derived name,
+    # or a seed the row rejects falls into the dialog below, seeded, which
+    # is the ruled echo-and-loop. R323's Enter-keeps prefill is now only
+    # what a PARTIAL line gets.
+    flow = {q["key"]: (seeds or {}).get(q["key"], "").strip() for q in qs}
+    if all(flow.values()) and all(
+            initialization_validate(q, flow[q["key"]]) is None for q in qs):
+        describe0, tag0 = flow.get("describe", ""), flow.get("part_name", "")
+        name0 = PA.part_name_derive(tag0)
+        if name0 and not (R.PARTS_DIR / name0).exists():
+            ok, msg = write(name0, tag0, describe0)
+            seam.emit("command", f"  {msg}")
+            if ok:
+                return "completed"
     seam.emit("command", "")
     if spec.get("purpose"):
         seam.emit("command", spec["purpose"])
@@ -545,9 +569,6 @@ def part_add_dialog(*, seeds: "dict[str, str] | None" = None,
     if not describe and not tag:
         seam.emit("command", st["skipped"])
         return "skipped"
-    import part_add as PA
-    if write is None:
-        write = PA.part_add
     while True:
         name = PA.part_name_derive(tag) if tag else ""
         # THE MISSING HALF IS ASKED FOR, not refused — the same move the

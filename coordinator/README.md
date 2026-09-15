@@ -738,7 +738,7 @@ R466/R467). `--parts` exists for cheap test rounds.
 
 This section quoted `process_core.md` §The Soul as saying it "does not speak
 directly in circles… may graduate to speech if a circle specifically calls
-for it" and described a `STANDING_OVERRIDE["injured_soul"]` symbol in
+for it" and described a standing-override symbol keyed by the Soul's old directory name in
 `circle.py` as a workaround. Neither is accurate today: no such symbol
 exists anywhere in the tree, and `process_core.md` §The Soul now reads
 **"It is present in every circle and it does speak — rarely, and on its own
@@ -747,7 +747,7 @@ rather than contradicting it.
 
 The record: it has spoken in **21 circles between 2026-06-24 and 2026-08-09** (measured
 directly against circles/*.md, matching every historical spelling — "Soul"
-and "Injured Soul"/"injured_soul", since the two are the same part across a
+and "Injured Soul", since the two are the same part across a
 rename), including this morning's `circle_2026-07-26_1112`, and it keeps its
 own short_term records of having done so (`2026-07-05_1308`: *"Spoke three
 times."*). It is a participant, in `DEFAULT_PARTS`, and excluding it would

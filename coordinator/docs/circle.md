@@ -139,8 +139,16 @@ if (--resume) then {
     emit "RESUMING circle_<OT> — transcript verified byte-for-byte", topic, statement count,
     last speaker, since-Self counters, "no opening round"
 } else {
-    topic = read_line_no_annotation("CIRCLE topic (blank = open): ", "topic", channel="circle")
-        (EOF/Ctrl-C: emit "cancelled — no circle was opened."; return 2)
+    loop {
+        topic = read_line_no_annotation("CIRCLE topic (blank = open): ", "topic", channel="circle")
+            (two or fewer seated parts: "CIRCLE topic (blank = open, ? for suggestions): " — by
+            count, R123)
+            (EOF/Ctrl-C: emit "cancelled — no circle was opened."; return 2)
+        if topic.strip() != "?" then break
+        emit the suggestions on the circle channel: `help part` and `help issue` at the command
+            pane, or `/help part` and `/help issue` at the Self> prompt once the circle is open
+            (seam.COMMAND_PANE picks the spelling); ask again
+    }
     OT = now as YYYY-MM-DD_HHMM; guard = WriteGuard(live, OT); path = circle_path(OT)
 if (path exists) then { emit "already exists — refusing to overwrite it"; return 2 }
     open_transcript(guard, path, OT, topic); working_set_manager.working_set_record(OT, chosen, topic, live)
@@ -359,7 +367,9 @@ pre-warm, every statement and its retry, every short_term and its retry, the tok
 Prompts (channel in brackets): `type 'yes' to proceed:` [command], `type 'yes' to open a NEW
 circle:` [command], `Do you have specific issues you would like to focus on today ('?' to
 review) ? ` [circle — only when the live graph is non-empty], `CIRCLE topic (blank
-= open):` [circle], `\n<CONSOLE_NAME>> ` [circle — the speaking turn], plus whatever the
+= open):` [circle; `CIRCLE topic (blank = open, ? for suggestions):` when two or fewer parts are
+seated, and a bare `?` at either is answered with the `help part` / `help issue` doors and
+asked again], `\n<CONSOLE_NAME>> ` [circle — the speaking turn], plus whatever the
 dispatched verbs ask (`type 'yes' to apply:`, `/issue-add`'s two prompts — command channel) and
 vetting's `[<id>] a)pprove, d)eny, s)kip ?` [command]. Output: the banner, every notice and
 refusal on the COMMAND channel; the opening focus line, the room's help, the graph-ruling

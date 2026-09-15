@@ -15,6 +15,7 @@ python coordinator/proposal_group_manager.py --init      write the empty registe
     import proposal_group_manager as CG
     CG.proposal_group_refresh(say, client) · CG.proposal_group_live_read() · CG.proposal_group_mark(gid, status)
     CG.proposal_group_pending_read() · CG.proposal_group_hash_write(rows) · CG.proposal_group_derive(rows, client)
+    CG.proposal_group_read()     every group, live and ruled — the DEPENDENCY map's reader (2026-09-15)
 
 ## DESCRIPTION
 The vetting queue accumulates rows that are the same ask in different words — across circles,

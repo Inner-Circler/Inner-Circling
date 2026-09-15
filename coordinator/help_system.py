@@ -586,8 +586,8 @@ def _circle_pane_tail(pane: bool, dev: bool) -> list[str]:
 
 
 def command_help_all_render() -> str:
-    """`/help all` at the standalone terminal's Self> prompt — EVERY verb this
-    dev state lists, one row each, sorted, then the level-1 row under dev.
+    """`/help all` — EVERY verb this dev state lists, one row each, sorted,
+    then the level-1 row under dev.
 
     The operator, 2026-09-11 (R554): *"enumerate the full
     list for 'all'."* Until then `/help all` rendered level 0 — the class rows
@@ -595,7 +595,18 @@ def command_help_all_render() -> str:
     that enumeration, moved to the word that says it. The gate is the same
     one every listing uses (_visible_head, R414): dev off enumerates the
     everyday set, dev on everything, and no circle-class verb is a row.
-    Wrapped at the one point text reaches a human, as command_help_render()."""
+    Wrapped at the one point text reaches a human, as command_help_render().
+
+    EVERY DOOR ANSWERS IT, 2026-09-15: `_help_text_raw()` dispatches "all"
+    here, so the command pane with no circle open (`command_dev_dispatch`
+    -> `command_help`), `--dev-cmd help all`, and circle.py's Self> loop all
+    render the same page. Until then only the loop's own branch knew the
+    word, and `help all` typed at cmd> before a circle was open — or while
+    one was still opening — answered "unrecognized: help 'all'"."""
+    return _wrap80(_help_all_raw())
+
+
+def _help_all_raw() -> str:
     specs = _command_specs()
     pairs = _verb_pairs([h for h in specs if _visible_head(h)], specs)
     level1 = [_LEVEL1_ROW] if (CS.dev_mode and object_classes()) else []
@@ -604,7 +615,7 @@ def command_help_all_render() -> str:
     out += command_help_rows_render(pairs, pad)
     if level1:
         out += [""] + command_help_rows_render(level1, pad)
-    return _wrap80("\n".join(out) + "\n")
+    return "\n".join(out) + "\n"
 
 
 # The level-1 production, advertised at the foot of level 0 — the operator,
@@ -971,6 +982,11 @@ def command_help_render(arg: str = "") -> str:
 def _help_text_raw(arg: str = "") -> str:
     if arg == "":
         return _help_level0()
+    if arg == "all":
+        # BEFORE THE DEV GATE, deliberately: the enumeration gates itself
+        # row by row (_visible_head), so with dev off it is the everyday
+        # set, not a refusal — R554's own words for `/help all` there.
+        return _help_all_raw()
     if arg == "object_classes":
         if not CS.dev_mode:
             return command_dev_restricted_render()

@@ -318,6 +318,22 @@ def part_retire(n_text: str) -> None:
         seam.emit("command", "  a circle may be open — close it first: a "
                              "live round reading a retired part is a crash")
         return
+    # WHAT LEANS ON THIS PART — R570, 2026-09-15. Today only PRESERVED and
+    # HANDLED dependents exist (its quotes, the practices addressed to it, the group's roles),
+    # so the retire keeps its own contract and names them first. A plan that must remove
+    # something first stops the retire here, naming it. Read only; a plan that cannot be read
+    # is no plan, and the retire goes on as it always did.
+    try:
+        import dependency_manager as DM
+        dplan = DM.dependency_plan("part", d)
+    except Exception:                                           # noqa: BLE001
+        DM, dplan = None, None
+    if dplan is not None and DM.dependency_plan_is_blocked(dplan):
+        seam.emit("command", DM.dependency_plan_render(dplan))
+        seam.emit("command", f"  {t} is not retired — what must be removed first is named above.")
+        return
+    if dplan is not None and (dplan["preserve"] or dplan["handled"]):
+        seam.emit("command", DM.dependency_plan_render(dplan))
     files = [f for f in sorted((R.PARTS_DIR / d).rglob("*")) if f.is_file()]
     seam.emit("command", f"\n  retiring {t} keeps parts/{d}/ and its {len(files)} file(s) — "
                          f"the system respects records and history. From now on:")

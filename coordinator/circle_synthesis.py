@@ -87,6 +87,14 @@ Emit only what is ACTIONABLE: something that changes what a future circle does, 
 to, or holds as settled. Observation with no consequence is not actionable. Say nothing
 rather than pad.
 
+SELF'S MATERIAL IS CITED IN SELF'S OWN WORDS. Where you record something Self said or
+remembered, quote Self's words, however few, and give the circle they were said in. A
+part's phrase for Self's material — a name it coined, a figure it offered, a reading it
+made — stays that part's: write it as "<Part>'s phrase for it" beside Self's words, never
+as the name of the thing. The room may only adopt a part's phrase after Self has said it
+back; until then the record refers to Self's material by Self's words. The same rule
+holds for one part's material named by another part.
+
 OUTPUT FORMAT, exactly. Nine section headers, each alone on its own line, at column 0,
 spelled exactly as shown, in this order. EVERY header must be printed even when that
 section is empty — print the header and nothing under it.

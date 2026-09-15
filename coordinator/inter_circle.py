@@ -597,6 +597,20 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         for s in syn.get("suspect", []):
             say(f"  SUSPECT — {s}")
 
+        # COMMAND SUGGESTIONS — REPORT ONLY (R569, 2026-09-15:
+        # "lets go with B, I want to see what it finds"). One call over the transcript
+        # naming the verbs its prose suggests; nothing staged, nothing captured, and a
+        # failure is one line — command_suggest_run() never raises. Runs only where the
+        # record is real (live): a dry run has no model.
+        if live:
+            say("\ncommand suggestions — report only:")
+            with PC.PHASES.span("inter.command_suggest"):
+                import command_suggest as CSG
+                # AND STAGED — R570, 2026-09-15: each recognised line also
+                # becomes a pending proposal with its dependencies, for the next checkpoint.
+                # Only here, the live close; a hand run or a rehearsal never stages.
+                CSG.command_suggest_run(ot, transcript, say=say, stage=True)
+
         say("\nstaging + gate:")
         tx = T.Transaction(ROOT, f"dream_{ot}")
         # DESIGN_V2 LONG_TERM_CANDIDATE (2026-08-22): a qualifying chain

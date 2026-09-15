@@ -26,6 +26,7 @@ from __future__ import annotations
 import re
 
 import issue_commands as IC        # issue-relationship-add's one grammar (R202)
+import PROPOSE_CLASS               # propose_quotes_strip — the quote fold's one home
 import seam
 import command_surface as CS
 import part_roster as R            # RETIRED, part_retired_named — R559's refusal
@@ -187,6 +188,103 @@ def _proposable_list() -> str:
     return "valid: " + ", ".join(sorted(proposable))
 
 
+# THE FORM EACH PROPOSABLE VERB TAKES, as the rulebook teaches it (process_ifs.md's
+# `<command>` production; process_core_prompt_projection composes it into BLOCK 1).
+# Named in a refusal so the writer sees the shape beside the token that broke it.
+# test_proposable_surfaces.py holds this to PROPOSABLE_COMMANDS: a verb with no form
+# here would be refused with nothing to copy.
+_PROPOSE_FORMS: dict[str, str] = {
+    "/issue-relationship-add": '/issue-relationship-add nNNNN <type> nMMMM ["comment"]',
+    "/issue-label-update": '/issue-label-update nNNNN "new name" ["why"]',
+    "/issue-add": '/issue-add "label" ["description" ["absence"]]',
+    "/issue-evidence-add": '/issue-evidence-add nNNNN "why"',
+    "/practice-add": "/practice-add <text>",
+    "/better-option-add": "/better-option-add <text>",
+}
+# Punctuation a writer runs straight on from the verb — `/practice-add:` — and
+# the quotes a writer puts around the verb alone.
+_HEAD_TRAIL_RE = re.compile(r"^(.*?)([:;,.!?\)\]]+)$")
+_HEAD_QUOTES = "\"'“”‘’"
+
+
+def _propose_form(verb: str) -> str:
+    return _PROPOSE_FORMS.get(verb, verb)
+
+
+def _propose_head_diagnose(body: str, arg: str) -> str:
+    """WHY a `[proposed: ...]` body names no proposable command — the TOKEN
+    that is wrong, and the form to write instead, not only the fact.
+
+    The operator, 2026-09-14, on a notice that read `/practice-add: "..."` and
+    answered "not a command that may be proposed" with the list: *"be specific
+    about invalid tokens: unexpected characters (e.g. ":" following
+    /practice-add), missing characters (e.g. quotes around string arguments),
+    etc."* The verb was there; one character after it was the whole error, and
+    the notice sent the writer to the list of verbs instead of to that character.
+
+    In order, the first that fits:
+      a bracket inside the body     ASK_RE cannot nest, so the proposal closed
+                                    at `[pass]`'s own `]` — the root the
+                                    operator asked for on 2026-08-30
+      punctuation run onto the verb `/practice-add:` — a space ends the verb
+      quotes around the verb alone  `"/practice-add" when...` — quote the
+                                    whole command or none of it
+      a verb this group may not     on PROPOSE_SUBSET_COMMANDS, not in this
+      propose                       group's own list (B122)
+      a command that is not         `/practice-delete 3` — a real cmd> verb
+      proposable                    outside the subset (R267)
+      the command not first         `please /practice-add ...` — the body
+                                    must begin with it
+      a near miss                   `/practise-add` — the closest verb, named
+      prose                         nothing command-shaped at all
+
+    Every reading but the first two ends with what IS valid, R231's lesson:
+    a refusal that does not say what is allowed sends the writer hunting for
+    a typo in the argument. The first two name the verb, which is the list
+    entry that matters."""
+    import difflib
+    nested = "[" in body or arg.count('"') % 2 == 1
+    lead = (("a bracket inside the annotation ended it early — `[pass]` inside "
+             "`[proposed: ...]` closes the proposal at its own `]`; write the "
+             "word bare. ") if nested else "")
+    stripped = body.strip()
+    if stripped.startswith("/"):
+        stripped = stripped[1:].lstrip()
+    words = stripped.split()
+    head_word = words[0] if words else ""
+    proposable = CS.command_proposable_read()
+    core = head_word.strip(_HEAD_QUOTES)
+    quoted_verb = core != head_word
+    m = _HEAD_TRAIL_RE.match(core)
+    bare, trail = (m.group(1), m.group(2)) if m else (core, "")
+    verb = CS.command_head_normalise(bare) if bare else ""
+    if verb in proposable:
+        if trail:
+            return (lead + f"unexpected {trail!r} after {verb} — a space, not "
+                    f"punctuation, ends the verb: {_propose_form(verb)}")
+        if quoted_verb:
+            return (lead + f"unexpected quotes around the verb alone — quote the "
+                    f"whole command or none of it: [proposed: \"{_propose_form(verb)}\"]")
+    if verb in PROPOSE_SUBSET_COMMANDS and verb not in proposable:
+        return lead + f"{verb} may not be proposed in this group. " + _proposable_list()
+    if verb in CS.PANE_OF:
+        return (lead + f"{verb} is a command, but not one that may be proposed. "
+                + _proposable_list())
+    for w in words[1:]:
+        later = CS.command_head_normalise(w.strip(_HEAD_QUOTES).rstrip(":;,.!?"))
+        if later in proposable:
+            return (lead + f"the command must come first — the body opens with "
+                    f"{head_word!r} and {later} follows it: [proposed: "
+                    f"{_propose_form(later)}]")
+    shown = ("/" + core) if core and not core.startswith("/") else core
+    close = difflib.get_close_matches(verb or shown, proposable, n=1, cutoff=0.6)
+    if close:
+        return (lead + f"no command {shown!r} — did you mean {close[0]}? "
+                f"{_propose_form(close[0])}")
+    return (lead + f"{head_word!r} is not a command that may be proposed — the body "
+            f"must begin with one. " + _proposable_list())
+
+
 def _propose_command_shape(text: str) -> dict | None:
     """Is a `[proposed: <command>]`'s body shaped like a real command —
     "syntax identical (shared) with valid inputs at the cmd> prompt"
@@ -345,18 +443,13 @@ def _propose_command_shape(text: str) -> dict | None:
 #
 # Curly quotes fold with straight ones for the reason quote_as_lands.py
 # folds them: parts type curly, Self types straight.
-_QUOTE_PAIRS = (('"', '"'), ("\u201c", "\u201d"),
-                ("\u201c", "\u201c"), ("\u201d", "\u201d"))
-
-
 def _strip_quotes(body: str) -> str:
     """One pair of surrounding double quotes removed, straight or curly.
     A body that is nothing BUT the quotes empties to "" and is malformed
-    by the same rule an empty bracket already was."""
-    for lq, rq in _QUOTE_PAIRS:
-        if len(body) >= 2 and body.startswith(lq) and body.endswith(rq):
-            return body[1:-1].strip()
-    return body
+    by the same rule an empty bracket already was. The pairs and the fold
+    are PROPOSE_CLASS.propose_quotes_strip \u2014 one home, shared with the
+    practice register, which folds the same pair off a title."""
+    return PROPOSE_CLASS.propose_quotes_strip(body)
 
 
 def _unwrap(arg: str) -> str:
@@ -489,23 +582,12 @@ def annotation_extract(text: str) -> list[dict]:
                 shape = _propose_command_shape(body)
                 if shape is None:
                     rec["malformed"] = True
-                    # THE ROOT OF THE DIAGNOSIS (the operator, 2026-08-30,
-                    # from his journal: "note the root of the diagnosis is
-                    # missing"). The Child wrote `[proposed: "/practice-add
-                    # ... never [pass], which ..."]` and ASK_RE, which
-                    # cannot nest, closed the proposal at [pass]'s own `]`
-                    # — leaving a body that opens a quote it never closes,
-                    # so the head token is `"/practice-add` and "not a
-                    # command" was true but useless. Name the cause when
-                    # the body shows it.
-                    nested = "[" in body or arg.count('"') % 2 == 1
-                    rec["why"] = ((
-                        "a bracket inside the annotation ended it early — "
-                        "`[pass]` inside `[proposed: ...]` closes the "
-                        "proposal at its own `]`; write the word bare. "
-                        if nested else "")
-                        + "not a command that may be proposed. "
-                        + _proposable_list())
+                    # THE TOKEN, NOT ONLY THE FACT — _propose_head_diagnose
+                    # names the character or word that broke the head (the
+                    # operator, 2026-09-14), and still the root when a nested
+                    # bracket closed the proposal early (his 2026-08-30 note:
+                    # "the root of the diagnosis is missing").
+                    rec["why"] = _propose_head_diagnose(body, arg)
                 elif shape["ok"]:
                     rec["cmd_shape"] = shape
                     rec["text"] = body

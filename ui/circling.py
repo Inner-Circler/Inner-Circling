@@ -2,10 +2,10 @@
 """
 circling.py — THE WAY A PERSON OPENS A CIRCLE: the two-pane circle/command UI.
 
-    python ui/circling.py             interactive: run the split-screen TUI
+    python ui/circling.py             interactive: a circle in the split-screen TUI,
+                                      the real CircleEngine running circle.py
+                                      (--dry-run by default; --live for a real one)
     python ui/circling.py --selftest  headless: exercise the engine, no TTY needed
-    python ui/circling.py --circle    interactive, wired to the real CircleEngine
-                                      /circle.py (--dry-run by default; see --help)
     python ui/circling.py --help      full usage, including the second self-test
                                       at ui/tests/test_circle_engine.py
 
@@ -37,29 +37,16 @@ retired — `docs/dual_pane_integration.md` (2026-08-10) wires the real
 `circle.py` into this same harness over one process and two in-process
 seams instead, since a pipe is unneeded once both panes live here.
 
-WHAT THIS IS NOT. Not `circle.py`. Not connected to any part, any LLM, any
-real transcript. The top pane's "agents" are three daemon threads on a
-random timer, each posting "<Name> statement N" from one shared,
-lock-protected counter across all three — enough to be genuinely
-asynchronous and unpredictable, not enough to be circle.py, and numbered
-so a line lost or duplicated while scrolled away from the live edge is
-visible by eye as a gap or a repeat in the sequence, not something you'd
-have to take on faith. The bottom pane's input is a stub: pressing Enter
-there logs the text and says so; it calls nothing in `coordinator/`.
-
-THE BARE DEMO IS A DEVELOPMENT AFFORDANCE, AND IT IS ASSERTED ONLY AGAINST
-CRASHING. Since R314 the way a person opens a circle is `--circle`, so
-everything above describes a path the product does not use: the
-AgentSimulator branch, its queue, the bare-line demux and the simulator's
-shutdown are executed by no probe that checks what they DRAW.
-`ui/tests/test_ui_main_loop.py` always supplies a fake engine, and
-`test_circling_selftest.py`'s last check runs this demo as a subprocess and
-asserts only that it does not exit or print a Traceback within two seconds —
-which covers import-time breakage and nothing about the demo's behaviour.
-Stated here rather than probed: a probe over a random-timer simulator would
-assert the timer, and what could ship undetected is the demo drawing wrongly
-or dropping simulator lines, which costs a developer a confusing screen and
-costs a circle nothing (audit-register 2026-09-09 #63).
+WHAT THIS IS. Every run that is not `--selftest` or `--help` is a circle:
+`main()` starts a `CircleEngine`, which runs `coordinator/circle.py`'s own
+`main()` on a background thread of this process, and `ui_main_loop()`
+drains the engine's queue into the two panes. The top pane's lines are the
+parts' statements and the bottom pane's input is the command surface,
+`CircleEngine.submit_command`. Without `--live` it is a dry run: every part
+passes, nothing is written outside `work/sandbox/`. `AppState` still accepts
+no backend at all — that is the self-test's headless path, where the
+command pane logs a submitted line as a stub — but no door in `main()`
+reaches it.
 
 WHY OUTPUT CAN'T LITERALLY "PAUSE ON CLICK". A native text selection —
 either because the app never enabled terminal mouse-reporting, or because
@@ -83,8 +70,9 @@ are never tangled together:
                        unit-testable without a TTY — see
                        ui/tests/test_circling_selftest.py (self_test() until
                        2026-09-03; the flag still runs it).
-    AgentSimulator     the only thread-based piece. Pushes lines onto a
-                       queue; never touches the screen itself.
+    CircleEngine       the only thread-based piece. Runs circle.py's main()
+                       on a daemon thread and pushes (channel, text) pairs
+                       onto a queue; never touches the screen itself.
     render_*           takes an AppState and a `write` callable. Testable
                        by passing a list-collecting `write` instead of
                        `sys.stdout.write`.
@@ -108,15 +96,20 @@ pane's input line — and, whether or not there was anything to submit,
 brings that pane back to the live edge (same effect as End). An EMPTY
 Enter is a deliberate second way to do just the catch-up half of that: it
 posts nothing, but still reflows a scrolled/frozen pane back to following,
-for whoever just wants to be caught up without reaching for End. Up/Down/
-PageUp/PageDown scroll the FOCUSED pane's own scrollback — each pane keeps
-its own independent scroll position, and scrolling away from the live edge
-freezes that pane's body against new arrivals, which is what to use before
-a mouse click-drag-select+copy. Home jumps to the oldest line kept; End
-jumps back to the live edge and resumes auto-follow. Left/Right move the
-cursor within the focused pane's in-progress input line (not scrollback —
-Home/End/PageUp/PageDown act on scrollback even mid-edit, matching the
-rest of this cluster). Ctrl-C quits. Nothing else is bound.
+for whoever just wants to be caught up without reaching for End. The
+NUMPAD's Up/Down/PageUp/PageDown (NumLock off) scroll the FOCUSED pane's own
+scrollback — each pane keeps its own independent scroll position, and
+scrolling away from the live edge freezes that pane's body against new
+arrivals, which is what to use before a mouse click-drag-select+copy; its
+Home jumps to the oldest line kept and its End back to the live edge,
+resuming auto-follow. The DEDICATED arrow cluster works the input line:
+Left/Right move the cursor within it, Home/End go to its start and end,
+and Up/Down move by a visual row of a wrapped line — and, on its first and
+last row, walk the pane's input history: Up brings back the previous entry
+(up to HISTORY_DEPTH of them), Down the next, and past the newest, the line
+that was being typed. PageUp/PageDown page from either cluster. Only Windows
+tells the two clusters apart; on POSIX every arrow scrolls. Ctrl-C quits.
+Nothing else is bound.
 
 RESIZING THE CONTAINING WINDOW cannot be prevented from inside this
 process. `GetConsoleWindow()`-based tricks (disable the resize grip via
@@ -139,7 +132,6 @@ from __future__ import annotations
 import os
 import pathlib
 import queue
-import random
 import re
 import shutil
 import sys
@@ -147,7 +139,7 @@ import threading
 import time
 
 # coordinator/ isn't on sys.path by default -- only needed for CircleEngine
-# (real circle.py integration), never for the demo/self-test path, so this
+# (real circle.py integration), never for the self-test path, so this
 # is cheap to always compute but nothing imports coordinator/circle.py
 # eagerly; CircleEngine.start() does that lazily.
 COORD_DIR = pathlib.Path(__file__).resolve().parent.parent / "coordinator"
@@ -218,11 +210,9 @@ def ui_line_wrap(line: str, width: int | None) -> list[str]:
 def _command_surface():
     """coordinator/command_surface, or None where it is not importable.
 
-    The demo path builds an AppState with no backend at all, and this file's
-    own docstring says that path is "not circle.py, not connected to any
-    part". It still has to answer "is this a command-pane verb", so the
-    table is imported directly rather than reached through a backend that
-    may not exist."""
+    The self-test builds an AppState with no backend at all. It still has to
+    answer "is this a command-pane verb", so the table is imported directly
+    rather than reached through a backend that may not exist."""
     try:
         sys.path.insert(0, str(COORD_DIR))
         import command_surface
@@ -288,6 +278,16 @@ class Pane:
         self.redact_view = False
         self.input_buf = ""
         self.input_cursor = 0          # index into input_buf; 0..len(input_buf)
+        # THE INPUT HISTORY — the operator, 2026-09-14: *"the up and down arrows
+        # (not the ones on the num pad, which are correct) will cycle upward
+        # through up to 3 prior entries (and downward to empty or one currently
+        # being constructed)."* `history` holds the last HISTORY_DEPTH lines
+        # submitted from this pane, oldest first; `history_pos` is the index
+        # being shown, or None while the draft is what is in `input_buf`;
+        # `draft` is that draft, parked while a prior entry is shown.
+        self.history: list[str] = []
+        self.history_pos: int | None = None
+        self.draft = ""
         self.scroll_top: int | None = None
         # What the BODY last showed — the visible rows AND how many rows the
         # input took from them (2026-08-21: the input wraps, and a wrap that
@@ -319,8 +319,8 @@ class Pane:
         # very next write (often the input-line redraw right below) paints
         # over exactly where it landed. Found live: the working-set prompt
         # never appeared, and a typed line was silently consumed as its
-        # answer. Splitting here (not only where the demo path or
-        # CircleEngine path calls this) makes every caller's contract
+        # answer. Splitting here (not only where the CircleEngine path
+        # calls this) makes every caller's contract
         # match reality: one row in, one row out.
         for one in (line.split("\n") if "\n" in line else [line]):
             self.logical.append(one)
@@ -408,6 +408,44 @@ class Pane:
 
     def jump_bottom(self) -> None:
         self.scroll_top = None
+
+    def history_push(self, text: str) -> None:
+        """Record a submitted line, keeping the newest HISTORY_DEPTH, and
+        return to the draft: what was submitted is not what is being typed."""
+        self.history.append(text)
+        del self.history[:-HISTORY_DEPTH]
+        self.history_pos = None
+        self.draft = ""
+
+    def history_back(self) -> bool:
+        """Show the previous entry — the draft parked on the way out. False
+        at the oldest entry, or with nothing to show: a no-op, never a scroll."""
+        if not self.history:
+            return False
+        if self.history_pos is None:
+            self.draft = self.input_buf
+            self.history_pos = len(self.history) - 1
+        elif self.history_pos > 0:
+            self.history_pos -= 1
+        else:
+            return False
+        self.input_buf = self.history[self.history_pos]
+        self.input_cursor = len(self.input_buf)
+        return True
+
+    def history_forward(self) -> bool:
+        """Show the next entry, and past the newest, the draft again — empty
+        if there was none. False while the draft is already showing."""
+        if self.history_pos is None:
+            return False
+        if self.history_pos < len(self.history) - 1:
+            self.history_pos += 1
+            self.input_buf = self.history[self.history_pos]
+        else:
+            self.history_pos = None
+            self.input_buf, self.draft = self.draft, ""
+        self.input_cursor = len(self.input_buf)
+        return True
 
     def last_alert_row(self) -> int | None:
         """The row index of the most recent `!!` line, or None if this pane
@@ -515,6 +553,11 @@ EDIT_KEYS: dict[str, int] = {"LEFT": -1, "RIGHT": 1}
 # terminal distinguishes the numpad — most send `ESC [ A` for both — so that
 # branch keeps every arrow on SCROLL_KEYS and these are simply never emitted.
 CURSOR_ROW_KEYS: dict[str, int] = {"CUR_UP": -1, "CUR_DOWN": 1}
+# ...and where there is no row to move to, the same two keys walk the pane's
+# INPUT HISTORY: Up on the first row brings back the previous entry, Down on
+# the last row the next one, and past the newest, the line being typed. This
+# many prior entries are kept per pane (the operator, 2026-09-14: "up to 3").
+HISTORY_DEPTH = 3
 # ...and the two that go to an END of the whole input rather than of a row: a
 # wrapped line is one thing being typed, and "back to the start" means the
 # start of what you wrote, not of the row it happens to sit on.
@@ -549,10 +592,10 @@ class AppState:
                                         # tells `main_loop` a full redraw
                                         # is due at all.
         # docs/dual_pane_integration.md §1/§5 step 3. None (the default)
-        # preserves today's self-tested stub behavior in `_submit` below,
-        # byte-for-byte -- test_circling_selftest.py asserts the exact stub strings,
-        # so this must stay opt-in, never a silent behavior change to the
-        # demo path. A `CircleEngine` is the one real implementation today.
+        # is the self-test's stub behavior in `_submit` below,
+        # byte-for-byte -- test_circling_selftest.py asserts the exact stub strings.
+        # A `CircleEngine` is the one real implementation, and the only one
+        # main() ever attaches.
         self.backend = backend
         # The row `on_alert` wants pinned, waiting for the caller's
         # focus-driven resize to happen first — see `apply_alert_anchor`.
@@ -592,7 +635,16 @@ class AppState:
                                             pane.input_cursor + EDIT_KEYS[ch]))
             return "input"
         if ch in CURSOR_ROW_KEYS:
-            self.move_cursor_row(pane, CURSOR_ROW_KEYS[ch])
+            # A ROW FIRST, THEN HISTORY. Inside a wrapped input the arrows move
+            # by a visual row; on its first row Up recalls the previous entry
+            # and on its last row Down the next — the shape every shell with a
+            # multi-line editor has, so a wrapped recalled line is still
+            # walkable before the key means history again.
+            if not self.move_cursor_row(pane, CURSOR_ROW_KEYS[ch]):
+                if CURSOR_ROW_KEYS[ch] < 0:
+                    pane.history_back()
+                else:
+                    pane.history_forward()
             return "input"
         if ch in CURSOR_ENDS:
             pane.input_cursor = (0 if CURSOR_ENDS[ch] == "start"
@@ -605,6 +657,8 @@ class AppState:
             text = pane.input_buf
             pane.input_buf = ""
             pane.input_cursor = 0
+            if text.strip():
+                pane.history_push(text)
             if text.strip() or self._answering(pane):
                 resize_signal = self._submit(pane, text)
                 return resize_signal or "submit"
@@ -662,7 +716,7 @@ class AppState:
         so gating on the channel alone would turn every catch-up Enter
         into an empty statement plus a stray "[You]: " echo, killing the
         documented behaviour just below. FALSE with no backend at all —
-        the demo and self-test path, which must keep behaving exactly as
+        the self-test path, which must keep behaving exactly as
         it did before any of this existed."""
         b = self.backend
         if b is None or not getattr(b, "waiting_for_input", False):
@@ -722,9 +776,10 @@ class AppState:
             return "focus"
         return None
 
-    def move_cursor_row(self, pane: Pane, delta: int) -> None:
+    def move_cursor_row(self, pane: Pane, delta: int) -> bool:
         """One VISUAL ROW up or down inside a wrapped input, keeping the
         column — what the dedicated Up/Down arrows do since 2026-08-25.
+        True if the cursor moved.
 
         NO NEW GEOMETRY. `_input_rows()` already returns each row's
         half-open range into `prompt + buf`, and it is the same function
@@ -733,11 +788,12 @@ class AppState:
         is why a column landing inside it clamps to the start of the buffer
         rather than to a negative index.
 
-        A NO-OP AT BOTH ENDS AND ON AN UNWRAPPED LINE — a text box does
-        nothing when you press Up on its first row. It deliberately does
-        NOT fall back to scrolling: that would put a key's meaning back
-        inside the state of the line, which is the thing having two key
-        clusters removes. The numpad scrolls, always.
+        FALSE AT BOTH ENDS AND ON AN UNWRAPPED LINE — a text box does
+        nothing when you press Up on its first row; here the caller walks
+        the pane's input history instead. It deliberately does NOT fall
+        back to scrolling: that would put a key's meaning back inside the
+        state of the line, which is the thing having two key clusters
+        removes. The numpad scrolls, always.
 
         The append cell — the position after the last character — belongs
         to the LAST row only; an earlier row's last addressable column is
@@ -746,7 +802,7 @@ class AppState:
                   else _command_prompt(self))
         ranges = _input_rows(prompt, pane.input_buf, pane.width)
         if len(ranges) < 2:
-            return
+            return False
         pos = len(prompt) + pane.input_cursor
         cur = len(ranges) - 1
         for i, (_s, e) in enumerate(ranges):
@@ -755,17 +811,18 @@ class AppState:
                 break
         target = cur + delta
         if not 0 <= target < len(ranges):
-            return
+            return False
         col = pos - ranges[cur][0]
         s, e = ranges[target]
         last = e if target == len(ranges) - 1 else max(s, e - 1)
         pane.input_cursor = max(0, min(len(pane.input_buf),
                                        min(s + col, last) - len(prompt)))
+        return True
 
     def _ended(self) -> bool:
         """Has the engine thread finished — a close, an abort, or a crash?
 
-        False for the demo path and for any backend that never started, so
+        False with no backend and for any backend that never started, so
         every caller reads "still running" where there is nothing running
         at all, which is what those paths have always assumed."""
         b = self.backend
@@ -1063,81 +1120,14 @@ class AppState:
 
 
 # --------------------------------------------------------------------------
-# AgentSimulator: the one thread-based piece. Talks to a queue, never the
-# screen — so it cannot race with rendering by construction.
-# --------------------------------------------------------------------------
-
-# GENERIC BY DESIGN — audit-register.md #1, 2026-09-08. These three name the DEMO
-# simulator's threads and nothing else; they never touched the roster, the record, or a
-# real circle. They were three real part Tags, and this module SHIPS
-# (packaging/required.toml), so every bundle carried them — three of the 84 MEDIUM findings
-# packaging/sanitize.py raises and its own docstring explains: "a part name ... these
-# identify a living relationship, not a mechanism." A demo needs placeholders, not somebody's
-# inner life, and a recipient reading their own bundle should not meet another person's parts.
-PARTS: tuple[str, ...] = ("Alpha", "Beta", "Gamma")
-
-
-class AgentSimulator:
-    """Three daemon threads, one per name in `PARTS`, each posting on its
-    own independent random timer (2-5s) — genuinely concurrent and
-    unpredictable relative to whatever the user is doing in either pane;
-    that unpredictability is the point, a fixed schedule would not test
-    anything.
-
-    EVERY STATEMENT IS NUMBERED FROM ONE SHARED, LOCK-PROTECTED COUNTER
-    ACROSS ALL THREADS — "Alpha statement 7", "Beta statement 8",
-    "Alpha statement 9" — a single global sequence, not one per part. That
-    is what turns "did scrolling away from the live edge ever lose one?"
-    into something checkable by eye: the numbers must run consecutively
-    with no gaps, regardless of which part said which one. A per-part
-    counter would let a dropped line hide inside a still-plausible-looking
-    sequence for the other two parts. The lock matters: three threads
-    calling `_next_seq()` at once is exactly the race that would silently
-    hand out a duplicate or skip a number if the increment weren't
-    protected — verified in test_circling_selftest.py by actually running the
-    simulator and checking the collected numbers are exactly consecutive."""
-
-    def __init__(self, out_queue: "queue.Queue[str]",
-                 delay_range: tuple[float, float] = (2.0, 5.0)):
-        self.q = out_queue
-        self.delay_range = delay_range
-        self.stop_flag = threading.Event()
-        self._threads: list[threading.Thread] = []
-        self._seq = 0
-        self._seq_lock = threading.Lock()
-
-    def _next_seq(self) -> int:
-        with self._seq_lock:
-            self._seq += 1
-            return self._seq
-
-    def start(self) -> None:
-        for name in PARTS:
-            t = threading.Thread(target=self._run, args=(name,), daemon=True)
-            t.start()
-            self._threads.append(t)
-
-    def _run(self, name: str) -> None:
-        while not self.stop_flag.is_set():
-            if self.stop_flag.wait(random.uniform(*self.delay_range)):
-                break
-            n = self._next_seq()
-            self.q.put(f"[{name}]: {name} statement {n}")
-
-    def stop(self) -> None:
-        self.stop_flag.set()
-
-
-# --------------------------------------------------------------------------
 # CircleEngine: the real adapter, docs/dual_pane_integration.md §1/§5 step
 # 3. Runs coordinator/circle.py's actual main() in a background thread of
 # THIS process, rebinding its emit()/read_line() seams (added to circle.py
 # in step 2; extracted to coordinator/seam.py 2026-08-16, phase 1 — the
 # rebinding surface is seam.emit/seam.read_line now, which circle.py's
 # own thin wrappers late-bind through) so output lands on a queue instead
-# of real stdout, and input blocks on a queue instead of real stdin. Same queue-and-thread shape as
-# AgentSimulator on purpose -- ui_main_loop() drains either one the same way,
-# just demultiplexed by channel here since CircleEngine's items carry one.
+# of real stdout, and input blocks on a queue instead of real stdin. ui_main_loop()
+# drains that queue and demultiplexes by the channel each item carries.
 # --------------------------------------------------------------------------
 
 
@@ -1173,20 +1163,17 @@ class CircleEngine:
     by design, so there is exactly one place that classification can
     drift from the rubric, and it is auditable by reading `circle.py`.
 
-    NOT wired into `ui_main_loop()`'s default path — opt-in via `--circle`
-    on `circling.py`'s own CLI (main(), below). Replacing
-    `AgentSimulator` as the unconditional default would silently change
-    what `python ui/circling.py` does for anyone running the existing,
-    already-self-tested demo; that is a bigger, separate decision than
-    this step, so both remain available and the demo stays the default.
+    THE ONLY THING `ui_main_loop()` DRAINS: `circling.py`'s own CLI
+    (main(), below) starts one of these for every run that is not
+    `--help` or `--selftest`, and hands it to the loop.
 
     SAFETY, RULED 2026-08-13 (Q3): `--dry-run` (no network, no API key,
-    every part passes) is still the DEFAULT — `start()`'s new `live`
+    every part passes) is the DEFAULT — `start()`'s `live`
     parameter is the one sanctioned way to ask for a real circle, never
     smuggled through `extra_argv` (`--live`/`--dry-run` are stripped
-    from it unconditionally, same as before). Every existing caller that
-    doesn't pass `live=True` — every test in this repo, the `--circle`
-    demo without `--live` — keeps today's forced-sandbox behavior
+    from it unconditionally). Every caller that
+    doesn't pass `live=True` — every test in this repo, a bare
+    `python ui/circling.py` without `--live` — keeps the forced-sandbox behavior
     byte-for-byte. `self.live` records which mode a running/finished
     engine was actually started in, so `ui_main_loop()` can tell whether
     the extra exit-safety below applies.
@@ -2070,7 +2057,7 @@ class CircleEngine:
         # terminal). The graceful path — unblocking a thread parked in
         # `_read_line` with a real answer — is submit_command()'s
         # 'abort' verb, not this method. This exists so callers have a
-        # symmetrical stop() like AgentSimulator's, and so an
+        # symmetrical stop() to start(), and so an
         # ALREADY-finished thread can be observed as done.
         pass
 
@@ -2311,10 +2298,8 @@ def _circle_prompt(state: AppState) -> str:
     render-only prompt carries nothing new across that boundary.
 
     Falls back to `state.circle.prompt` ("Self> ") only when no real
-    backend is attached — the demo/self-test path, which this file's own
-    docstring says explicitly is "not circle.py... not connected to any
-    part, any LLM, any real transcript" and so has no real CONSOLE_NAME to
-    read at all.
+    backend is attached — the self-test path, which is not connected to
+    circle.py and so has no real CONSOLE_NAME to read at all.
 
     The "(waiting)" suffix — unless a real `CircleEngine` is attached and
     NOT currently blocked in `read_line()`, see
@@ -2412,8 +2397,8 @@ def _command_prompt(state: AppState) -> str:
     'yes' to apply:", "type 'yes' to open a NEW circle:", "revision text
     (candidates above)>".
 
-    Falls back to `state.command.prompt` with no backend (the demo and
-    self-test path) and whenever no command-channel read is pending."""
+    Falls back to `state.command.prompt` with no backend (the self-test
+    path) and whenever no command-channel read is pending."""
     backend = state.backend
     pending = getattr(backend, "pending_prompt", "") if backend else ""
     if pending and getattr(backend, "waiting_for_input", False) \
@@ -2980,6 +2965,34 @@ _PARKED_EXIT = (
     "next open reports it,\n"
     "  and circle_state.py calls it open until it has been quiet 45 minutes.")
 
+_PARKED_OPENING_EXIT = (
+    "\n  the circle was still OPENING and WAITING FOR YOU TO TYPE — nothing "
+    "was in flight, so this\n"
+    "  exits at once.{asking}\n"
+    "  NO TRANSCRIPT EXISTS: one is written only after the working set and "
+    "the topic are answered.\n"
+    "  Nothing is left open — the next open starts fresh.")
+
+
+def _parked_exit_text(engine) -> str:
+    """The parked-exit message FOR THE PHASE the engine was parked in —
+    2026-09-15, the operator: *"the message is misdirecting."* He quit at
+    cmd> while the circle was still asking its working-set question and
+    was told the transcript was intact and the circle left open. Neither
+    was true: every read the open step makes (the in-progress confirmation,
+    the working set, the topic) comes BEFORE the transcript is minted, and
+    nothing reads again between the mint and the Self> loop. So a parked
+    engine that has not reached the loop has written nothing and left
+    nothing open, and the message says so, naming the question it was
+    asking. `loop_reached` is the discriminator; a backend without the
+    attribute (the self-test's fakes) reads as the loop — the old text,
+    unchanged."""
+    if getattr(engine, "loop_reached", True):
+        return _PARKED_EXIT
+    prompt = (getattr(engine, "pending_prompt", "") or "").strip()
+    asking = f" It was asking: {prompt}" if prompt else ""
+    return _PARKED_OPENING_EXIT.format(asking=asking)
+
 
 def _parked_on_read(engine) -> bool:
     """Is the engine BLOCKED IN A READ with nothing queued for it?
@@ -2996,7 +3009,7 @@ def _parked_on_read(engine) -> bool:
     means the engine is parked.
 
     getattr throughout: a backend that is not a CircleEngine (the
-    self-test's fakes, the demo path) carries none of these attributes
+    self-test's fakes) carries none of these attributes
     and must read NOT parked — the conservative answer, and exactly the
     behaviour every caller was written against before this existed."""
     if not getattr(engine, "waiting_for_input", False):
@@ -3049,7 +3062,7 @@ def ui_live_engine_wait(engine: "CircleEngine", warn_after: float = 60,
     if not (engine.live and not engine.finished.is_set()):
         return
     if _parked_on_read(engine):
-        out(_PARKED_EXIT)
+        out(_parked_exit_text(engine))
         return
     out(f"\n  a LIVE circle is still running — waiting for it to finish "
         f"before exiting (up to {warn_after:g}s)...")
@@ -3061,7 +3074,7 @@ def ui_live_engine_wait(engine: "CircleEngine", warn_after: float = 60,
     waited = 0.0
     while not engine.finished.is_set():
         if _parked_on_read(engine):
-            out(_PARKED_EXIT)
+            out(_parked_exit_text(engine))
             return
         try:
             if engine.finished.wait(timeout=poll):
@@ -3078,13 +3091,15 @@ def ui_live_engine_wait(engine: "CircleEngine", warn_after: float = 60,
     out("  circle finished — exiting cleanly.")
 
 
-def ui_main_loop(engine: "CircleEngine | None" = None,
+def ui_main_loop(engine: "CircleEngine",
               extra_argv: list[str] | None = None) -> int:
-    """`extra_argv` is only meaningful with a real `engine` attached — the
-    exact argv `CircleEngine.start()` was given (e.g. `--parts a,b,c`),
-    kept around so a 'resume:<OT>' command-pane verb can start a REPLACEMENT
-    engine with the same parts/options plus `--resume <OT>`, without the
-    caller having to retype the whole invocation."""
+    """`engine` is a CircleEngine already started (docs/dual_pane_integration.md
+    §1/§5 step 3) whose `out_queue` carries `(channel, text)` pairs; this loop
+    drains it and paints. `extra_argv` is the exact argv `CircleEngine.start()`
+    was given (e.g. `--parts a,b,c`), kept around so a 'resume:<OT>'
+    command-pane verb can start a REPLACEMENT engine with the same
+    parts/options plus `--resume <OT>`, without the caller having to retype
+    the whole invocation."""
     cols, rows = shutil.get_terminal_size(fallback=(80, 24))
     # "circle" is AppState's own opening focus — asserted immediately
     # below rather than assumed, since the split and the focus have to
@@ -3096,37 +3111,19 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
     # AppState.__init__, which the self-test and test_circling.py's stub
     # engine both exercise headless with zero coordinator imports. Only
     # the CIRCLE pane is seeded; state.command's redact_view stays False
-    # for the life of the window. COORD_DIR is pushed here (as
-    # _command_surface() and CircleEngine.__init__ each already do
-    # independently) because the bare demo path (`engine is None`) reaches
-    # this line before either of those runs — audit-register.md #5,
-    # broken since 95f8b15 2026-09-03.
+    # for the life of the window. COORD_DIR is pushed here as well as in
+    # _command_surface() and CircleEngine.__init__, so this import does not
+    # depend on which of those ran first — a fake engine in a suite pushes
+    # nothing.
     sys.path.insert(0, str(COORD_DIR))
     import stream_redaction as SR
     state.circle.set_redact(SR.REDACT_VIEW_DEFAULT)
     extra_argv = list(extra_argv or [])
 
-    # `engine is None` (the default) is byte-for-byte the demo path this
-    # function has always run — AgentSimulator, its own queue, the
-    # welcome banner below. `engine` given means a real CircleEngine
-    # already started (docs/dual_pane_integration.md §1/§5 step 3) whose
-    # `out_queue` carries `(channel, text)` pairs instead of bare lines.
-    sim = None
     # on_finished() is a ONE-SHOT: the flag, not the Event, is what says
     # whether the banner has been printed, since the Event stays set.
     ended_announced = False
-    if engine is not None:
-        q = engine.out_queue
-    else:
-        state.circle.append(
-            "*** harness open. Parts speak on their own timers. Type here and "
-            "press Enter to post. Tab moves to COMMANDS. ***")
-        # The demo needs no key; say what a live circle will (R546).
-        for ln in _key_notice_read(full=False).splitlines():
-            state.command.append(ln)
-        q: "queue.Queue[str]" = queue.Queue()
-        sim = AgentSimulator(q)
-        sim.start()
+    q = engine.out_queue
 
     enable_vt_mode()
     write = sys.stdout.write
@@ -3197,62 +3194,55 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
                         item = q.get_nowait()
                     except queue.Empty:
                         break
-                    if engine is not None:
-                        # CircleEngine items are (channel, text) —
-                        # circle.py's own emit() argument is the single
-                        # source of truth for which pane; see
-                        # CircleEngine's own docstring.
-                        channel, line = item
-                        if channel == "prefill":
-                            # NOT CONTENT — never appended to a pane. The
-                            # coordinator is asking a question again with
-                            # part of the previous answer already typed
-                            # (finding 2): the invalid ids removed, the
-                            # cursor at the end, so a bare Enter submits
-                            # the valid remainder.
-                            state.circle.input_buf = line
-                            state.circle.input_cursor = len(line)
-                            drained = True
-                            continue
-                        if channel == "state":
-                            # NOT CONTENT EITHER (2026-08-21): the
-                            # coordinator saying where its close is. The
-                            # engine already holds the token; this is the
-                            # screen's turn — "closing" hands the window
-                            # over, in order with the lines around it.
-                            if state.on_state(line) == "focus":
-                                refocus = True
-                            drained = True
-                            continue
-                        if channel == "redact_view":
-                            # NOT CONTENT EITHER (2026-08-31): the
-                            # redact_view setting's own live-toggle signal
-                            # (cmd_settings_update/_clear, via
-                            # coordinator/seam.py). Applies ONLY to the
-                            # CIRCLE pane, by name — never state.command,
-                            # which is the whole of "never in any lower
-                            # tab" at this level. Position matters: this
-                            # must be handled before the `target = ...`
-                            # line below, or an unhandled item here would
-                            # fall into state.command by default and
-                            # print the literal word "on"/"off" there.
-                            state.circle.set_redact(line == "on")
-                            drained = True
-                            continue
-                        target = state.circle if channel == "circle" else state.command
-                        touched_command = touched_command or target is state.command
-                    else:
-                        line = item
-                        target = state.circle
+                    # CircleEngine items are (channel, text) —
+                    # circle.py's own emit() argument is the single
+                    # source of truth for which pane; see
+                    # CircleEngine's own docstring.
+                    channel, line = item
+                    if channel == "prefill":
+                        # NOT CONTENT — never appended to a pane. The
+                        # coordinator is asking a question again with
+                        # part of the previous answer already typed
+                        # (finding 2): the invalid ids removed, the
+                        # cursor at the end, so a bare Enter submits
+                        # the valid remainder.
+                        state.circle.input_buf = line
+                        state.circle.input_cursor = len(line)
+                        drained = True
+                        continue
+                    if channel == "state":
+                        # NOT CONTENT EITHER (2026-08-21): the
+                        # coordinator saying where its close is. The
+                        # engine already holds the token; this is the
+                        # screen's turn — "closing" hands the window
+                        # over, in order with the lines around it.
+                        if state.on_state(line) == "focus":
+                            refocus = True
+                        drained = True
+                        continue
+                    if channel == "redact_view":
+                        # NOT CONTENT EITHER (2026-08-31): the
+                        # redact_view setting's own live-toggle signal
+                        # (cmd_settings_update/_clear, via
+                        # coordinator/seam.py). Applies ONLY to the
+                        # CIRCLE pane, by name — never state.command,
+                        # which is the whole of "never in any lower
+                        # tab" at this level. Position matters: this
+                        # must be handled before the `target = ...`
+                        # line below, or an unhandled item here would
+                        # fall into state.command by default and
+                        # print the literal word "on"/"off" there.
+                        state.circle.set_redact(line == "on")
+                        drained = True
+                        continue
+                    target = state.circle if channel == "circle" else state.command
+                    touched_command = touched_command or target is state.command
                     target.append(line)
                     drained = True
                     # AN ERROR MUST NOT SCROLL PAST (2026-08-25). Checked
                     # here, AFTER the append, because the anchor is a row
-                    # index into what was just appended. Only the engine
-                    # path: the demo has no `!!` lines and no command
-                    # channel to raise them on.
-                    if (engine is not None and channel == "command"
-                            and state.on_alert(line) == "focus"):
+                    # index into what was just appended.
+                    if channel == "command" and state.on_alert(line) == "focus":
                         refocus = True
                 if refocus:
                     # Both pane heights follow focus: the same full redraw a
@@ -3263,13 +3253,12 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
                 elif drained:
                     # A NEW LINE IN CIRCLE MUST NEVER MOVE FOCUS, TOUCH THE
                     # COMMAND PANE, OR TOUCH CIRCLE'S OWN BODY IF CIRCLE IS
-                    # FROZEN OR SCROLLED AWAY FROM THE LIVE EDGE. Only
-                    # circle's own header+body are redrawn in the demo
-                    # path (never command's, since nothing there ever
-                    # writes to it) — `render_pane_body`'s own guard is
-                    # what actually decides whether a given pane's body
-                    # paints, so calling it on an unchanged pane is a
-                    # cheap no-op, not a correctness risk.
+                    # FROZEN OR SCROLLED AWAY FROM THE LIVE EDGE. Circle's
+                    # own header+body are redrawn, and command's only when
+                    # this drain touched it — `render_pane_body`'s own
+                    # guard is what actually decides whether a given
+                    # pane's body paints, so calling it on an unchanged
+                    # pane is a cheap no-op, not a correctness risk.
                     circle_prompt = _circle_prompt(state)
                     command_prompt = _command_prompt(state)
                     ui_pane_render(state, "circle", cols, write, circle_prompt=circle_prompt)
@@ -3286,7 +3275,7 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
                 # the page rather than landing in front of the close's own
                 # final lines. Nothing can add to that queue afterwards: the
                 # thread that fed it is gone.
-                if (engine is not None and not ended_announced
+                if (not ended_announced
                         and engine.finished.is_set() and q.empty()):
                     ended_announced = True
                     if state.on_finished() == "focus":
@@ -3473,11 +3462,8 @@ def ui_main_loop(engine: "CircleEngine | None" = None,
     finally:
         write(ALT_SCREEN_OFF)          # leave raw/alt-screen mode FIRST —
         flush()                        # everything below prints plainly
-        if sim is not None:
-            sim.stop()
-        elif engine is not None:
-            ui_live_engine_wait(engine)
-            engine.stop()
+        ui_live_engine_wait(engine)
+        engine.stop()
         print("*** harness closed ***")
     return 0
 
@@ -3509,12 +3495,66 @@ def self_test() -> int:
     return mod.self_test()
 
 
-HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARGS...]]
+HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | [OPTIONS...]]
 
-  (no flags)   interactive TUI demo. Three simulated parts post random
-               lines on their own timers; COMMANDS is a stub that logs
-               and executes nothing. Not circle.py, no real transcript
-               — see this file's own module docstring.
+  (no flags)   open a circle in the two-pane window: the real CircleEngine
+               running coordinator/circle.py in this process. A DRY RUN
+               unless --live is given: no network, no API key, every part
+               returns a canned statement, and every write lands under
+               work/sandbox/ only.
+
+  --live       make it real: the parts think through the model, and the
+               record written is your own — groups/<group>/circles/ and
+               each part's short_term_<OT>.toml — with the close verifier
+               run at /close. Default: off (a dry run). With --live and
+               no API key set, the window does not open: what a key is,
+               how to get one, where it goes and how to keep it safe are
+               printed here instead, and it exits 2. Without --live, the
+               same in five lines, in the command pane, and the dry run
+               goes on.
+
+  --parts <dir>,<dir>,...
+               comma-separated part directories to seat. A reduced roster
+               is for TESTING — omitted parts are absent from the circle
+               and stay unaware of it. Default: every member of the
+               default group.
+
+  --group <name>
+               open on a NAMED group (groups/<name>/group.toml) instead of
+               --parts — a deliberately different roster, not a reduced
+               one. Mutually exclusive with --parts. Default: the default
+               group.
+
+  --recall-arm off|delivered|withheld
+               whether a part may search its own past record — a local
+               index read that costs no model call. 'off' answers a
+               part's search privately without running it; 'withheld'
+               computes and logs the packs without delivering them.
+               Default: delivered (on).
+
+  --seed <n>   seed for the shuffle that sets the order parts are polled
+               within a round. Fixing it makes a test repeatable; it has
+               no effect on what the parts say. Default: unset — omit for
+               real circles.
+
+  --yes        skip the confirmation prompt for a reduced live roster.
+               Default: off — the prompt is asked.
+
+  --resume <OPEN_TIME>
+               reopen an unclosed circle, e.g. --resume 2026-08-02_1259.
+               The transcript must round-trip byte-for-byte or the
+               resume is refused. No topic prompt and no opening round:
+               the circle continues where it stopped. Default: unset —
+               a new circle opens.
+
+  --no-color   turn color off for this run. Default: off — color is ON
+               whenever stdout is a real terminal and the NO_COLOR
+               environment variable is unset (green prompts, red !!
+               errors, cyan chrome). This program's own flag; never
+               forwarded.
+
+  Any other option is forwarded to coordinator/circle.py unchanged;
+  `python coordinator/circle.py --help` lists the rest.
 
   --selftest   headless self-test, no TTY needed. Exercises AppState,
                Pane and CircleEngine directly (unit-level; no real
@@ -3527,47 +3567,6 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | --circle [ARG
                CircleEngine session end to end and checks the CIRCLE/
                COMMAND channel each emit() call landed on:
                    python ui/tests/test_circle_engine.py
-
-  --circle [ARGS...]
-               wire the real CircleEngine/circle.py in. --dry-run is
-               forced unless ARGS (or this argv) includes --live: no
-               network, no API key, every part returns a canned
-               statement, and every write lands under
-               work/sandbox/ only. Everything AFTER --circle is
-               forwarded to circle.py itself, e.g.:
-                   --circle --parts <dir>,<dir> --seed 1
-               --live must appear in THIS argv, not only in ARGS —
-               see CircleEngine.start()'s own docstring for why.
-               With --live and no API key set, the window does not open:
-               what a key is, how to get one, where it goes and how to
-               keep it safe are printed here instead, and it exits 2.
-               Without --live, the same in five lines, in the command
-               pane, and the dry run goes on.
-
-               --recall-arm off
-               is the forwarded ARG worth naming here, because it is
-               the one that TURNS SOMETHING OFF:
-                   --circle --live --recall-arm off
-               `--recall-arm`: lets a part search its own past record,
-               a local index read that costs no model call. Default:
-               on. R460 (2026-09-06) closed the recall trial and made
-               this a plain feature; R526
-               (2026-09-10) made it on through every door, so this one
-               and the Ticker now agree.
-
-  --no-color   turn color off for this run. Default: off — color is ON
-               whenever stdout is a real terminal and the NO_COLOR
-               environment variable is unset (R342, D64 a:
-               green prompts, red !! errors, cyan chrome).
-
-  --dev[=true|false]
-               open with dev mode ON — forwarded to circle.py's own
-               --dev (R286; scope widened 2026-09-01 to also cover the
-               coalesce/pre-warm/opening-round progress lines, not only
-               the DEV-table verbs and the help hierarchy). Default:
-               off. Works in EITHER position — before --circle (as a
-               top-level flag here, like --live) or after it (as one of
-               the forwarded ARGS).
 
   --help, -h   print this and exit.
 """
@@ -3605,49 +3604,35 @@ def main() -> int:
     # NO_COLOR (the ecosystem convention) and --no-color turn it back off.
     COLOR = (sys.stdout.isatty() and "--no-color" not in argv
              and not os.environ.get("NO_COLOR"))
-    if "--circle" in argv:
-        # Opt-in real integration (docs/dual_pane_integration.md §1/§5
-        # step 3) — everything after --circle is forwarded to circle.py
-        # itself (e.g. --parts a,b,c). The demo path (AgentSimulator)
-        # stays the unconditional default; this is the only way to reach
-        # the real adapter.
-        #
-        # --live, RULED 2026-08-13 (Q3): must appear in THIS argv
-        # (before or after --circle, either position), not after it —
-        # everything after --circle is what CircleEngine.start() forwards
-        # to circle.py as extra_argv, and --live/--dry-run are stripped
-        # from THAT unconditionally (see start()'s own docstring) so
-        # there is exactly one door. --dry-run stays the default; you
-        # have to ask for --live by name.
-        i = argv.index("--circle")
-        # --no-color is THIS program's flag, never circle.py's — stripped
-        # from the forward exactly as --live/--dry-run are in start().
-        extra_argv = [a for a in argv[i + 1:] if a != "--no-color"]
-        live = "--live" in argv
-        # --dev, added 2026-09-01: unlike --live/--dry-run, nothing filters
-        # --dev out of extra_argv, so `--circle ... --dev` already forwards
-        # to circle.py on its own. This covers the OTHER position — --dev
-        # typed BEFORE --circle, which start() never sees — so --dev works
-        # symmetrically with --live rather than being silently dropped
-        # there. Forwards whatever form was typed (--dev, --dev=true,
-        # --dev=false) verbatim; circle.py's own --dev parses all three.
-        dev_arg = next((a for a in argv
-                        if a == "--dev" or a.startswith("--dev=")), None)
-        if dev_arg and dev_arg not in extra_argv:
-            extra_argv.append(dev_arg)
-        # A LIVE CIRCLE WITH NO KEY NEVER OPENS THE WINDOW — R546. circle.py
-        # would stop at its client and print the whole text into the command pane, inside an
-        # alternate screen that takes it away on exit; so the terminal gets it, and exit 2.
-        # A dry run needs no key: circle.py's own short notice reaches the command pane.
-        if live:
-            notice = _key_notice_read(full=True)
-            if notice:
-                print("\n" + notice + "\n")
-                return 2
-        engine = CircleEngine(queue.Queue())
-        engine.start(extra_argv=extra_argv, live=live)
-        return ui_main_loop(engine=engine, extra_argv=extra_argv)
-    return ui_main_loop()
+    # THE REAL CIRCLE IS THE ONLY PATH — the CircleEngine running
+    # coordinator/circle.py in this process (docs/dual_pane_integration.md
+    # §1/§5 step 3). Every token in argv is forwarded to circle.py as
+    # extra_argv except --no-color, which is THIS program's flag and never
+    # circle.py's.
+    #
+    # --live, RULED 2026-08-13 (Q3): `live` below is the one door to a real
+    # circle. CircleEngine.start() strips --live/--dry-run from extra_argv
+    # unconditionally (see its own docstring), so the flag typed here
+    # decides and nothing smuggled through the forward can. --dry-run is
+    # the default; you have to ask for --live by name.
+    #
+    # --dev forwards VERBATIM in whatever form was typed (--dev, --dev=true,
+    # --dev=false), once, like every other circle.py option; circle.py's own
+    # --dev parses all three. It is hidden from --help here as it is there.
+    extra_argv = [a for a in argv if a != "--no-color"]
+    live = "--live" in argv
+    # A LIVE CIRCLE WITH NO KEY NEVER OPENS THE WINDOW — R546. circle.py
+    # would stop at its client and print the whole text into the command pane, inside an
+    # alternate screen that takes it away on exit; so the terminal gets it, and exit 2.
+    # A dry run needs no key: circle.py's own short notice reaches the command pane.
+    if live:
+        notice = _key_notice_read(full=True)
+        if notice:
+            print("\n" + notice + "\n")
+            return 2
+    engine = CircleEngine(queue.Queue())
+    engine.start(extra_argv=extra_argv, live=live)
+    return ui_main_loop(engine=engine, extra_argv=extra_argv)
 
 
 if __name__ == "__main__":

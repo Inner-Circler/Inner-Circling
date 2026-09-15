@@ -18,9 +18,10 @@ topics.toml              synthesis's unvetted BLOCK 2
                          topics
 remember.toml            Self's own reflexive record
 proposals.toml           the PROPOSE-class register --
-                         what parts proposed and Self
-                         ruled on (added 2026-08-23,
-                         R315)
+                         what parts proposed, what a
+                         live close suggested, and how
+                         Self ruled on each (added
+                         2026-08-23, R315)
 coalesce.toml            the proposal coalesce register --
                          groups of pending proposals that
                          are one ask in different words

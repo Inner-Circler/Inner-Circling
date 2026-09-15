@@ -339,6 +339,19 @@ def command_observation_continue(rest: str) -> None:
     seam.emit("command", f"  added {rec['id']}, continuing {target}")
 
 
+def _dependency_note(kind: str, ident: str) -> None:
+    """Name what a removal PRESERVES before it happens — R570, 2026-09-15.
+    Read only, and quiet when nothing leans on the record; a plan that cannot be read says
+    nothing, and the verb goes on as it always did."""
+    try:
+        import dependency_manager as DM
+        p = DM.dependency_plan(kind, ident)
+    except Exception:                                           # noqa: BLE001
+        return
+    if p["preserve"] or p["handled"] or p["remove"] or p["rings"]:
+        seam.emit("command", DM.dependency_plan_render(p))
+
+
 def command_observation_retire(rest: str) -> None:
     """/observation-retire <id> — soft delete: hides from the default
     listing, stays in the file and in git history."""
@@ -347,6 +360,7 @@ def command_observation_retire(rest: str) -> None:
     if not target:
         seam.emit("command", "  usage: /observation-retire <id>")
         return
+    _dependency_note("observation", target)
     try:
         CO.circle_observation_retire_now(target)
     except ValueError as e:
@@ -368,6 +382,7 @@ def command_observation_purge(rest: str) -> None:
         seam.emit("command", "  usage: /observation-purge <id> <id>  "
                              "— type the SAME id twice, to confirm")
         return
+    _dependency_note("observation", a[0])      # the chain onto it keeps its shell
     try:
         CO.circle_observation_purge_now(a[0])
     except ValueError as e:
@@ -587,6 +602,9 @@ def command_practice_delete(arg: str, record=None) -> None:
         seam.emit("command", "  usage: /practice-delete <n>  — the number "
                              "/practice-list showed (not /better-option-list's)")
         return
+    shown = [p for p in PM.practice_read() if p.get("addressee") != PM.BETTER_OPTION_ADDRESSEE]
+    if 1 <= int(a) <= len(shown) and shown[int(a) - 1].get("id"):
+        _dependency_note("practice", shown[int(a) - 1]["id"])      # R570
     ok, msg = PM.practice_delete(int(a))
     seam.emit("command", f"  {msg}")
     if ok and record is not None:
@@ -890,7 +908,28 @@ def command_issue_status_show(node_id: str) -> None:
     seam.emit("command", f"  no such issue: {node_id}")
 
 
-def command_issue_status_set(node_id: str, val: str, trailing: list[str]) -> bool:
+def _issue_status_plan_stage(node_id: str, val: str) -> None:
+    """The closure refusal's plan, staged — R570, 2026-09-15: each open
+    issue-relationship's retirement as a suggestion, then this status change depending on all
+    of them, so denying any one denies the change. Says what it staged; a failure says so."""
+    try:
+        import dependency_manager as DM
+        p = DM.dependency_plan("issue", node_id)
+        if not DM.dependency_plan_is_blocked(p):
+            return
+        seam.emit("command", DM.dependency_plan_render(p))
+        steps, final = DM.dependency_plan_stage(p, f"/issue-status {node_id} = {val}")
+    except Exception as e:                                      # noqa: BLE001
+        seam.emit("command", f"  the plan was not staged ({type(e).__name__}: {e}) — retire the "
+                             f"issue-relationships named above first, then set it again")
+        return
+    seam.emit("command", f"  staged for your ruling at the next checkpoint: {', '.join(steps)} "
+                         f"first, then {final}. Denying any of them denies {final}. "
+                         f"/propose-list shows them.")
+
+
+def command_issue_status_set(node_id: str, val: str, trailing: list[str], *,
+                             plan: bool = True) -> bool:
     """True only when the REAL apply ran and exited 0 — the bool the
     vetting loop's issue_status approval rests on since 2026-08-19
     (review tier 2 #13): before it, every exit from here looked the same
@@ -913,6 +952,14 @@ def command_issue_status_set(node_id: str, val: str, trailing: list[str]) -> boo
     if out:
         seam.emit("command", out)
     if rc != 0:
+        # A CLOSURE REFUSAL STAGES THE PLAN — R570, 2026-09-15. Exit 1 in a
+        # dry run is issue_status.py's closure refusal and nothing else, and its own words are
+        # matched too, so a probe's mocked refusal (no output) stages nothing. `plan` False is
+        # a staged suggestion's own approval, which must never stage itself again.
+        if plan and rc == 1:
+            import issue_status as IS
+            if IS.CLOSURE_REFUSED_MARK in (out or ""):
+                _issue_status_plan_stage(node_id, val)
         return False                    # refused — no effect, nothing to confirm
 
     if not yes:
@@ -1667,6 +1714,20 @@ def command_issue_relationship_list() -> None:
 
 
 _ISSUE_ADD_ARG_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|\u201c([^\u201d]*)\u201d')
+
+# THE VERBS WHOSE LINE IS QUOTED STRINGS \u2014 the two _issue_add_args() readers a
+# person can reach. A shell consumes the quotes it was given, so `--dev-cmd`
+# arrives as bare words; command_args_quote() puts the boundaries back for
+# exactly these verbs and no other (`--dev-cmd issue n0002 status` stays bare).
+QUOTED_ARG_COMMANDS = frozenset({"/issue-add", "/part-add"})
+
+
+def command_args_quote(argv: list[str]) -> str:
+    """One argv element per quoted string, `"` inside escaped as `\\"` \u2014 the
+    line _issue_add_args() reads. The operator, 2026-09-15, after
+    `--dev-cmd part-add "<describe>" "<name>"` reached the dialog with the
+    name folded into the describe: *"A --dev-cmd should flow through."*"""
+    return " ".join('"' + a.replace('"', '\\"') + '"' for a in argv)
 
 
 def _issue_add_args(rest: str) -> tuple[str, str, str]:

@@ -156,7 +156,13 @@ import record_paths as _RP                                         # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 
-PROMPT = "v9"   # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
+PROMPT = "v10"  # v10, 2026-09-14: SYSTEM keeps Self's material in Self's own
+                # words and marks a phrase this part coined for it as the part's
+                # (the operator, on "the father's-cup material": "it is my
+                # father's plants, not his cup!" — Mourner's figure had replaced
+                # his sentence in two distillates). The bump re-derives all
+                # seven at the next close, as every bump does.
+                # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
                 # EVERY TIME. v8 told the model to "revise it incrementally"
                 # and never said the reply REPLACES the file, so a model with
                 # little to change answered with little — and the caller's
@@ -283,6 +289,13 @@ evening it happened in is not.
 PREFER THE PART'S OWN WORDS. Many of these lines are already its own
 formulations and should survive verbatim. Do not coin a new phrase for
 something the part has already named.
+
+SELF'S MATERIAL STAYS IN SELF'S OWN WORDS. Where the distillate touches
+something Self said or remembered, carry Self's words, however few, and the
+circle they came from. A phrase this part coined for Self's material — a
+name, a figure, a reading — is this part's, and the distillate says so ("your
+phrase for it"); it is never written as the name of the thing. Self's words
+stay Self's; the part's reading of them stays the part's.
 
 DO NOT GIVE IT ANYTHING IT DOES NOT HAVE. No test it never articulated, no
 stance it never took. If a source holds nothing actionable, say so rather than

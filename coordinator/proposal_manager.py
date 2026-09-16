@@ -391,14 +391,25 @@ def proposal_dependency_repoint(old: str, new: str | None) -> list[str]:
 
 
 def proposal_row_stage_once(kind: str, text: str, sources: list[str], circle: str, *,
+                            quote: str = "",
                             depends_on: list[str] | None = None) -> tuple[str, bool]:
     """(id, staged) — a PENDING row with the same text is reused rather than staged twice,
-    so running a verb again, or a report naming a line twice, never doubles a ruling."""
+    so running a verb again, or a report naming a line twice, never doubles a ruling.
+
+    `quote` IS THE WORDS THAT PROMPTED THE LINE, and it is passed through because a
+    suggestion's `text` is the COMMAND LINE ALONE: for a verb whose form is pure
+    verb-plus-target (/part-context-update <part>, /part-retire, /practice-delete) that
+    left Self ruling on a line that said nothing about why it was there. The operator, 2026-09-15,
+    answer (a). DISPLAY ONLY — _propose_describe() already renders a row's quote, and
+    `part` is deliberately NOT passed with it: the two TOGETHER are what _offer_fill()
+    completes an issue-evidence-add from, and auto-filling one from a recogniser's reading
+    is a different act nobody has ruled."""
     norm = " ".join(text.split())
     for r in proposal_pending_list():
         if " ".join(r.get("text", "").split()) == norm:
             return r["id"], False
-    return proposal_row_stage(kind, text, sources, circle, depends_on=depends_on), True
+    return proposal_row_stage(kind, text, sources, circle, quote=quote,
+                              depends_on=depends_on), True
 
 
 def proposal_row_stage(kind: str, text: str, sources: list[str], circle: str, *,

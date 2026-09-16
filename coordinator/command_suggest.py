@@ -577,6 +577,7 @@ def command_suggest_stage(result: dict, ot: str, referents: dict,
             continue
         try:
             pid, new = PR.proposal_row_stage_once(kind, line, [s.get("speaker") or "Self"], ot,
+                                                  quote=s.get("quote") or "",
                                                   depends_on=depends or None)
         except ValueError as e:
             s["not_staged"] = str(e)

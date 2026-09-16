@@ -27,6 +27,7 @@ every coordinator-side check. Same trap, same rule as `circle.dev_mode`
 
 from __future__ import annotations
 
+import sys
 import time
 
 # WHEN SOMETHING WAS LAST PRINTED, and whether a progress line is open on the
@@ -65,6 +66,49 @@ COMMAND_PANE = False
 # site can never catch these two definitions themselves.
 _real_print = print
 _real_input = input
+
+# LINE EDITING AT EVERY input() PROMPT — POSIX ONLY, AND IT IS THE IMPORT THAT
+# DOES IT. CPython's input() edits the line through PyOS_Readline, and the
+# `readline` module is what installs that hook; unloaded, the tty is left
+# canonical with echo on, so a left arrow arrives as its own three bytes, the
+# terminal echoes them as `^[[D`, and they are typed into the answer. Reported
+# from a macOS install 2026-09-15 at circle.py's own prompts. Windows never
+# showed it and cannot: its console edits the line itself and ships no readline
+# module, which is why the import is guarded rather than required. The two-pane
+# UI is untouched — it rebinds read_line and reads keys in cbreak mode, where
+# this hook is never consulted.
+# AND WINDOWS IS EXCLUDED BY PLATFORM, NOT BY THE ImportError. `readline` does
+# resolve there: pyreadline3 arrives in this venv as a transitive dependency
+# (3.5.6, measured 2026-09-15) and shims the name. Importing that shim would
+# REPLACE the console's own editing with its implementation on the machine every
+# circle is actually run from — a change nobody asked for, to fix a prompt that
+# was never broken there. So the platform decides, and the ImportError only
+# covers a POSIX build compiled without the module.
+if sys.platform == "win32":
+    readline = None
+else:
+    try:
+        import readline
+    except Exception:                  # NOT ImportError alone — a shim can RAISE
+        readline = None                # on import (pyreadline3 answers a non-win32
+        # platform with RuntimeError, seen here by faking sys.platform). Nothing in
+        # this program depends on the module, so no failure to load it may reach the
+        # run: the prompt simply goes back to the unedited line this block fixes.
+
+
+def system_line_editing_read() -> bool:
+    """Does an input() prompt edit its own line — arrows, Home/End, history?
+
+    True on Windows (the console does it, with or without the module above)
+    and on a POSIX run that loaded `readline`. False is the state that puts
+    `^[[D` in the answer.
+
+    NO PRODUCTION CALLER, AND THAT IS NOT AN OVERSIGHT: it is the only READ of
+    `readline` in the tree, so it is what keeps the import from reading as unused
+    to pyflakes — which has no `# noqa` and would fail the static gate — and it
+    is the one line that answers "is this install's prompt editable?" without
+    asking someone to press a key. A dead-code sweep should leave it."""
+    return readline is not None or sys.platform == "win32"
 
 
 def emit(channel: str, text: str = "", **kwargs) -> None:

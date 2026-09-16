@@ -228,9 +228,18 @@ is not broken.
                          Terminal, or any modern terminal on macOS or
                          Linux. NOT a shell requirement — see below.
 
-**Windows is the tested platform.** Every example below uses Windows
-paths; on macOS and Linux the interpreter is `.venv/bin/python` and the
-rest of each line is the same.
+**Windows is the tested platform**, and macOS is exercised. Every example below
+is written so that ONE token changes between them — the interpreter:
+
+```
+Windows        .venv/Scripts/python  <script> ...
+macOS / Linux  .venv/bin/python      <script> ...
+```
+
+Everything after that token is identical, forward slashes included: they are a
+valid path separator on Windows as well, so nothing else has to be retyped.
+Where a step genuinely differs by more than that — creating the environment,
+and which editors are safe — both forms are given at that step.
 
 **No particular shell is required.** Nothing here invokes PowerShell,
 `cmd`, `bash` or any shell for its own work — the commands are plain
@@ -357,7 +366,7 @@ undoes the install completely.
 On Windows:
 ```
 python -m venv .venv      # be patient; silently takes 30 secs
-.venv\Scripts\python -m pip install -r requirements.txt
+.venv/Scripts/python -m pip install -r requirements.txt
 ```
 
 On macOS / Linux:
@@ -377,9 +386,168 @@ local cache, once, in the background while the parts warm up; after that
 it is offline. Nothing else
 is fetched, then or later.
 
-Every command in this file begins `.venv\Scripts\python` for exactly this
-reason: it names the interpreter that has those packages. Plain `python`
-is a different interpreter and will not find them.
+Every command in this file begins with the interpreter INSIDE `.venv`, for
+exactly this reason: it names the one that has those packages. Plain `python`
+or `python3` is a different interpreter and will not find them.
+
+**That prefix is the ONE thing that differs between platforms.** Everything
+after it is identical — forward slashes included, which are correct on Windows
+too:
+
+```
+Windows        .venv/Scripts/python  <script> ...
+macOS / Linux  .venv/bin/python      <script> ...
+```
+
+### If a package is missing right after the install succeeded
+
+**You are almost certainly running a different interpreter than the one you
+installed into.** That is the likeliest cause by a wide margin — ahead of
+anything to do with the package itself — because the moment you switch from
+`python -m pip install` to running a script is exactly where the two can
+diverge without saying so.
+
+The give-away is which package it names, and the name is NOT the one you would
+guess. The coordinator reaches the TOML packages before the Anthropic client, so
+an interpreter with none of them installed complains about TOML and never
+mentions Anthropic at all:
+
+```
+Python 3.11 and newer   tomli_w
+Python 3.10             tomli — 3.10 has no tomllib of its own, so `tomli`
+                        is imported one line ahead of `tomli_w`
+```
+
+It reads the same whether one package is missing or all of them are, which is
+why the interpreter, not the package, is the thing to check.
+
+Two commands settle it. Run them with the SAME spelling you used when it
+failed:
+
+```
+<that python> -c "import anthropic, dotenv, tomli_w; print('ok')"
+<that python> -c "import sys; print(sys.executable)"
+```
+
+(On Python 3.10 add `, tomli` to the first one — that version needs it and
+newer ones do not.)
+
+If the second prints a path that is not inside this folder's `.venv`, that is
+the whole answer: use the venv's own interpreter, spelled as above. If it IS
+the venv's and the first still fails, install again through it:
+
+```
+.venv/Scripts/python -m pip install -r requirements.txt     Windows
+.venv/bin/python -m pip install -r requirements.txt         macOS / Linux
+```
+
+One more thing worth knowing before it reads as a fault: `pip install tomli-w`
+and `import tomli_w` are the same package. Hyphens are not allowed in Python
+names, so the install name and the import name differ by that one character —
+as they do for `python-dotenv`, which imports as `dotenv`.
+
+### 4 · Updating to a newer version, later
+
+**Read this before you download an update over the top of what you have.** The
+code and your record live in ONE directory, and the copy you download carries an
+EMPTY STARTER RECORD at exactly the paths yours occupies — `groups/ifs/parts/`,
+`groups/ifs/self/`, `groups/ifs/circles/`. Unpacking it over your folder
+replaces your record with blanks. Nothing warns you.
+
+So update into a NEW directory and carry the record across. Your old folder stays
+untouched and complete until you are satisfied, which is what makes this safe.
+
+First, with no circle open — and if one might be, ask:
+
+```
+.venv/Scripts/python coordinator/circle_state.py     Windows
+.venv/bin/python coordinator/circle_state.py         macOS / Linux
+      exit 0 = nothing open, safe to proceed
+```
+
+Then, from the folder that CONTAINS your install:
+
+macOS / Linux:
+```
+git clone https://github.com/Inner-Circler/Inner-Circling.git Inner-Circling-new
+cd Inner-Circling-new
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements.txt
+cp -a ../Inner-Circling/groups/. groups/
+cp -a ../Inner-Circling/work/. work/
+cp ../Inner-Circling/.env .
+```
+
+Windows:
+```
+git clone https://github.com/Inner-Circler/Inner-Circling.git Inner-Circling-new
+cd Inner-Circling-new
+python -m venv .venv
+.venv/Scripts/python -m pip install -r requirements.txt
+robocopy ..\Inner-Circling\groups groups /E
+robocopy ..\Inner-Circling\work work /E
+copy ..\Inner-Circling\.env .env
+```
+
+(`robocopy` reports success with a non-zero number. That is normal and not an
+error; anything below 8 means it copied.)
+
+**Copy OVER, never delete first.** Your own files win where both exist, and a
+register the new version adds that your record has never had is left in place
+rather than removed.
+
+Three things carry everything a circle wrote:
+
+```
+groups/     the record itself — parts, self, issues, circles
+work/       the close and open reports, and work/logs/dream_<OT>.json, which
+            is how the program knows a circle was already processed
+.env        your key
+```
+
+`.venv` is deliberately NOT copied: it is built fresh above, which is what picks
+up any dependency the new version added.
+
+**One more thing, and it is easy to lose: any SHIPPED file you edited yourself.**
+`coordinator/process_core.md` is the one this README actually asks you to
+change — the crisis lines it names are United States services, and non-US
+readers are told to replace them. That file arrives fresh in the new directory,
+so your edit is not there. Check before you switch over, and carry anything you
+find:
+
+macOS / Linux:
+```
+diff ../Inner-Circling/coordinator/process_core.md coordinator/process_core.md
+```
+Windows:
+```
+fc ..\Inner-Circling\coordinator\process_core.md coordinator\process_core.md
+```
+
+Any difference is either your own edit or a real change in the new version. Read
+it and decide. If you changed `coordinator/process_ifs.md` or anything else that
+arrived with the bundle, compare it the same way — the rule is that the three
+directories above carry your RECORD, and a shipped file you edited is not part
+of it.
+
+Then prove it before you trust it:
+
+macOS / Linux:
+```
+.venv/bin/python memory/record_verify.py                    expect INTEGRITY PASS
+.venv/bin/python coordinator/circle_audit.py --selfcheck    expect 0 FAIL
+.venv/bin/python ui/circling.py --selftest                  expect all PASS
+```
+Windows:
+```
+.venv/Scripts/python memory/record_verify.py                expect INTEGRITY PASS
+.venv/Scripts/python coordinator/circle_audit.py --selfcheck  expect 0 FAIL
+.venv/Scripts/python ui/circling.py --selftest              expect all PASS
+```
+
+Only once those pass is the new directory yours. Rename the old one out of the
+way rather than deleting it, and keep it until a live circle has closed cleanly
+in the new one.
 
 ## Configure
 
@@ -416,6 +584,11 @@ you pass on.
 *On Windows, some editors silently append `.txt`. If a run says the key
 is missing, turn on file extensions in Explorer and check the file is
 `.env` and not `.env.txt`.*
+
+*On macOS, Finder hides any name beginning with a dot and will argue about
+creating one. The reliable way is from the terminal, in this directory:
+`touch .env` and then open it in your editor. `ls -a` shows it afterwards;
+Cmd-Shift-. toggles hidden files in Finder.*
 
 **The two lines above behave differently, deliberately.** For
 `ANTHROPIC_API_KEY`, a shell variable of the same name **wins over the
@@ -480,7 +653,8 @@ Then bootstrap the repository — idempotent, adds only what is missing,
 never rewrites history, and never adds a destination to upload to:
 
 ```
-.venv\Scripts\python coordinator\circle_audit.py --git-setup
+.venv/Scripts/python coordinator/circle_audit.py --git-setup     Windows
+.venv/bin/python coordinator/circle_audit.py --git-setup         macOS / Linux
 ```
 
 It installs the pre-commit battery, and says so: the gates that ship —
@@ -492,24 +666,37 @@ commit. The gates below are the same checks, run by hand.
 
 Check what will be used, changing nothing:
 
+Windows:
 ```
-.venv\Scripts\python coordinator\identity.py
-.venv\Scripts\python coordinator\gitrepo.py --identity
+.venv/Scripts/python coordinator/identity.py
+.venv/Scripts/python coordinator/gitrepo.py --identity
+```
+macOS / Linux:
+```
+.venv/bin/python coordinator/identity.py
+.venv/bin/python coordinator/gitrepo.py --identity
 ```
 
 ## Verify
 
 **Use these commands to confirm your install is healthy.** 
 
+Windows:
 ```
-  .venv\Scripts\python ui\circling.py --help
-  .venv\Scripts\python ui\circling.py --selftest  # expect all PASS 
+  .venv/Scripts/python ui/circling.py --help
+  .venv/Scripts/python ui/circling.py --selftest  # expect all PASS
+```
+macOS / Linux:
+```
+  .venv/bin/python ui/circling.py --help
+  .venv/bin/python ui/circling.py --selftest      # expect all PASS
 ```
 
 Optional free dry run — no network, no key needed
 
 ```
-  .venv\Scripts\python ui\circling.py
+  .venv/Scripts/python ui/circling.py      Windows
+  .venv/bin/python ui/circling.py          macOS / Linux
 ```
 
 **Dry run is the default HERE** — a bare run passes `--dry-run` to the
@@ -517,8 +704,8 @@ coordinator for you unless you ask for `--live` by name. (`coordinator/circle.py
 run on its own REFUSES a bare invocation since R360: it wants `--live` or
 `--dry-run` spelled out.) `--live` may sit anywhere on the command line;
 every other option is forwarded to the coordinator unchanged.
-`ui\circling.py --help` lists this program's own options, and
-`coordinator\circle.py --help` the ones it forwards.
+`ui/circling.py --help` lists this program's own options, and
+`coordinator/circle.py --help` the ones it forwards.
 
 ## Run
 
@@ -527,7 +714,8 @@ every other option is forwarded to the coordinator unchanged.
 This is how you start a real live circle:
 
 ```
-  .venv\Scripts\python ui\circling.py --live
+  .venv/Scripts/python ui/circling.py --live      Windows
+  .venv/bin/python ui/circling.py --live          macOS / Linux
 ```
 
 **The user interface has two panes*
@@ -843,7 +1031,7 @@ survivable and what makes a mid-circle read a silent partial. Ask the
 tree, not the file:
 
 ```
-.venv\Scripts\python coordinator\circle_state.py
+.venv/Scripts/python coordinator/circle_state.py
     exit 0  safe to read
     exit 1  a circle may be open
 ```
@@ -921,9 +1109,9 @@ a mid_term is a cache, and more
     THOSE, not over the file itself. So a hand-edit is either silently
     overwritten the next time a source moves, or silently kept while
     nothing supports it. Edit the source instead:
-      .venv\Scripts\python coordinator\part_mid_term_manager.py --refresh <part>
+      .venv/Scripts/python coordinator/part_mid_term_manager.py --refresh <part>
     and if you truly want to hold one by hand:
-      .venv\Scripts\python coordinator\part_mid_term_manager.py --lock <part>
+      .venv/Scripts/python coordinator/part_mid_term_manager.py --lock <part>
 ```
 
 Three rules that apply to every hand-edit, including the sanctioned ones:
@@ -931,46 +1119,58 @@ Three rules that apply to every hand-edit, including the sanctioned ones:
 ```
 NEVER while a circle is open
     the coordinator is writing. Ask first:
-      .venv\Scripts\python coordinator\circle_state.py
+      .venv/Scripts/python coordinator/circle_state.py
 
 Use a plain-text editor, formatting OFF
     a markdown-aware editor may "normalise" a file on save — escaping [
     and _, merging emphasis across lines. That has silently corrupted a
     part's history in this project before, while still looking correct to
     a reader. Windows Notepad's formatting mode is one of these; turn it
-    off under View -> Formatting.
+    off under View -> Formatting. On macOS, TextEdit defaults to RICH
+    TEXT and will not save these files correctly at all — either switch
+    it with Format -> Make Plain Text before saving, or use a code
+    editor. Word processors are never safe here on any platform.
 
 Keep the line endings as you found them
     LF. A carriage return introduced by an editor changes every hash the
-    file appears in. Repair one with
-    `.venv\Scripts\python coordinator\file_line_endings_verify.py --fix
-    <path>`; the pre-commit hook runs that same gate over whatever you
-    are committing, first and unconditionally.
+    file appears in. macOS and Linux editors write LF already; on Windows
+    it is a real risk, and a "line endings" or "CRLF/LF" setting in your
+    editor is worth finding once.
+    Repair one with
+    `.venv/Scripts/python coordinator/file_line_endings_verify.py --fix <path>`
+    on Windows, `.venv/bin/python` in place of that prefix on macOS and
+    Linux. That gate DOES ship, and the pre-commit hook runs it over
+    whatever you are committing, first and before any other check —
+    unlike the project's own probe suites, which are not in this bundle
+    and are skipped one by one rather than refusing your commit.
 
 Then run the gate below for whatever you touched.
 ```
 
+**On macOS / Linux, every `.venv/Scripts/python` in this block is
+`.venv/bin/python`.** Nothing else on any of these lines changes.
+
 ```
 anything at all
-  .venv\Scripts\python memory\record_verify.py
+  .venv/Scripts/python memory/record_verify.py
       watch for   INTEGRITY PASS
       a failure prints INTEGRITY FAIL and, per file, the defect and the
       remedy, then exits non-zero. There is no --force.
 
 groups/ifs/parts/, groups/ifs/self/ or groups/ifs/circles/*.toml
-  .venv\Scripts\python coordinator\circle_audit.py --selfcheck
+  .venv/Scripts/python coordinator/circle_audit.py --selfcheck
       watch for   0 FAIL · 0 WARN · N OK
       a WARN is not a pass. Read it.
 
 groups/ifs/issues/
-  .venv\Scripts\python memory\issue_gate.py
+  .venv/Scripts/python memory/issue_gate.py
       watch for   GATE PASS — every invariant satisfied
       and the "quote(s) verified verbatim" count. It should not fall.
 
 a part's identity sources
-  .venv\Scripts\python coordinator\part_mid_term_manager.py
+  .venv/Scripts/python coordinator/part_mid_term_manager.py
       watch for   that part's row turning stale, then
-        .venv\Scripts\python coordinator\part_mid_term_manager.py --refresh <part>
+        .venv/Scripts/python coordinator/part_mid_term_manager.py --refresh <part>
       This one exits 0 either way. Read the word, not the exit code.
 ```
 
@@ -1003,12 +1203,12 @@ One is worth running after you edit anything by hand, or when a close went
 wrong:
 
 ```
-.venv\Scripts\python coordinator\circle_audit.py
+.venv/Scripts/python coordinator/circle_audit.py
     the audit: the same checks, plus a reconcile of each close report
     against what is on disk for every circle not yet dreamed, and a read of
     every open report, which warns and never fails. It REPORTS a part's
     lost record of a circle; it does not rebuild one.
-.venv\Scripts\python coordinator\circle_audit.py --backfill --commit
+.venv/Scripts/python coordinator/circle_audit.py --backfill --commit
     the repair: rebuilds a lost record from the transcript and writes it.
     Without --commit it only stages the rebuild for you to read.
 ```

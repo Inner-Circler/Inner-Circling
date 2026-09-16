@@ -95,14 +95,55 @@ def _practice_approve(row: dict, PM) -> tuple[bool, str]:
 # every issue-relationship-add approval, leaving the row pending forever.
 
 
+# The ceiling on a verb's gloss at vetting, for the description whose first sentence is
+# itself long. A cap, not a target — most land well under it.
+GLOSS_MAX = 220
+
+
+def _suggestion_gloss(line: str) -> str:
+    """What the verb DOES, in the person's own words — or "" for a head with no row.
+
+    THE SAME /help DESCRIPTION command_suggest.py's own catalogue is built from, read
+    through that module's reader rather than restated, so this cannot drift from the
+    text the recogniser was given. The import is function-local for the reason every
+    other one in this file is: vetting is reached from the open step, and that module
+    reaches the command surface and the class table."""
+    import command_suggest as CSG
+    head = (line.split() or [""])[0]
+    row = next((r for r in CSG.command_suggest_catalogue_read()
+                if r["head"] == head), None)
+    if not row:
+        return ""
+    # THE FIRST SENTENCE, NOT THE WHOLE PAGE. A /help description runs to the mechanics —
+    # what Enter does, which list numbers it reads, the date it was built — and several
+    # pending rows each carrying six wrapped lines is a screen Self has to hunt through
+    # at the moment it is deciding. SPLIT ON ". ", NEVER ".": `part.toml declares.` has no
+    # space after its first period, and splitting on the bare period cuts that verb's own
+    # description in half.
+    desc = row["description"]
+    head_sentence, sep, _rest = desc.partition(". ")
+    desc = head_sentence + "." if sep else desc
+    return f"{head} — {desc[:GLOSS_MAX]}"
+
+
 def _propose_describe(row: dict) -> tuple[str, list[str]]:
     """An evidence offer shows the words it would attach, whole — its `text`
     names only the issue and the why, and Self reads the words before
-    approving (R541)."""
+    approving (R541).
+
+    A SUGGESTION SHOWS WHAT ITS VERB DOES, AND THE WORDS THAT PROMPTED IT.
+    The operator, 2026-09-15, answer (a), after a staged /part-context-update read as a bare
+    line. A suggestion's `text` is the command line ALONE (R570), which carries its own
+    content for /issue-add "<describe>" and says nothing at all for a verb whose form is
+    pure verb-plus-target. Both halves come from material already on file — the verb's
+    own description, and the quote the recogniser now passes through — so neither adds a
+    column to the register."""
     sources = ", ".join(row.get("sources", [])) or "unknown source"
     header = (f"[{row['id']}] propose ({row.get('kind', '?')}) — "
              f"{sources} · {row.get('circle', '?')}")
     detail = _wrap58(row.get("text", "")[:300])
+    if row.get("kind") == "suggestion" and (gloss := _suggestion_gloss(row.get("text", ""))):
+        detail += _wrap58(gloss)
     if row.get("quote"):
         detail += _wrap58(f'the words: "{row["quote"]}"')
     return header, detail

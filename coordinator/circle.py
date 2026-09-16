@@ -44,7 +44,11 @@ INTEROP
     2026-07-28. circle_audit.py phase 2 runs --reconcile — when a human runs it.
 
 RUN
-    pip install anthropic python-dotenv
+    pip install -r requirements.txt      NOT a package list. tomli_w is the FIRST
+                                         third-party import this file reaches
+                                         (issue_commands -> issue_schema), ahead of
+                                         anthropic and dotenv, so any install short of
+                                         the file fails here rather than at the API call.
     set ANTHROPIC_API_KEY=...            (or put it in the project .env)
     python coordinator/circle.py --live
     python coordinator/circle.py --dry-run

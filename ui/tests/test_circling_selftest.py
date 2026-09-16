@@ -2298,8 +2298,11 @@ def self_test() -> int:
     # and are pure, so they are covered now on every platform.
     #
     # THE EXEMPTION, NAMED RATHER THAN LEFT IMPLICIT, which is the whole point of
-    # the split: what remains uncovered here is _read_escape's select/stdin loop
-    # and poll_key's isatty/select wiring, plus raw_mode's termios/tty calls.
+    # the split: what remains uncovered here is _chars_read's select+os.read on a
+    # real descriptor and poll_key's isatty wiring, plus raw_mode's termios/tty
+    # calls. The ASSEMBLY those feed is covered below as of 2026-09-15 — it moved
+    # out for that reason, after the POSIX-only version of it stranded two thirds
+    # of every arrow key on macOS with every probe here green.
     # Those need a real POSIX terminal and cannot be reached from this machine by
     # any fake, because the names do not exist in this process. enable_vt_mode's
     # Windows ctypes body is uncovered for the mirror-image reason: legacy conhost
@@ -2320,6 +2323,65 @@ def self_test() -> int:
           C.ui_posix_escape_read("\x1b[") is None)
     check("an unmapped sequence yields nothing rather than raising",
           C.ui_posix_escape_read("\x1b[Z") is None)
+
+    # --- the assembler and its queue, 2026-09-15 -------------------------------
+    # THE macOS ARROW BUG, pinned. Every arrow did nothing there while backspace
+    # and tab were fine, because the reader asked select() about the DESCRIPTOR
+    # and then read from sys.stdin, a BUFFERED TEXT STREAM: the first read took
+    # the ESC and swallowed "[" and "D" into Python's own buffer, where select
+    # cannot see them, so the sequence was abandoned as a bare ESC and the two
+    # characters sat stranded. A single-byte key never touched the second layer,
+    # which is why only the arrows looked broken.
+    #
+    # Both halves are pure now and take their reader as an argument, so the shape
+    # that caused it — THE WHOLE SEQUENCE IN ONE READ — is exercised right here,
+    # on a platform that cannot run the branch it lives in.
+    def _reader(*reads):
+        """A char reader that yields these batches in order, then nothing."""
+        batches = [list(r) for r in reads]
+        return lambda _timeout: batches.pop(0) if batches else []
+
+    pend: list = []
+    one = _reader("\x1b[D")                       # all three at once — the bug
+    first = C.ui_pending_char_read(pend, one, 0)
+    check("a burst hands back its first character and QUEUES the rest",
+          first == "\x1b" and pend == ["[", "D"])
+    check("...and the queue is what the assembler reads, so the arrow survives "
+          "arriving in a single read",
+          C.ui_escape_assemble(
+              lambda t: C.ui_pending_char_read(pend, one, t)) == "LEFT")
+    check("the queue is drained by that, leaving nothing stranded", pend == [])
+
+    pend2: list = []
+    drip = _reader("\x1b", "[", "D")              # one character per read
+    C.ui_pending_char_read(pend2, drip, 0)
+    check("a sequence dripped one character per read still assembles",
+          C.ui_escape_assemble(
+              lambda t: C.ui_pending_char_read(pend2, drip, t)) == "LEFT")
+
+    pend3: list = []
+    tail = _reader("\x1b[Dx")                     # an arrow with a keystroke behind it
+    C.ui_pending_char_read(pend3, tail, 0)
+    C.ui_escape_assemble(lambda t: C.ui_pending_char_read(pend3, tail, t))
+    check("a character typed behind an arrow is still waiting, not lost",
+          pend3 == ["x"])
+
+    def _next(*reads):
+        """A next_char(timeout) over those batches, with a queue of its own — the
+        two signatures differ and mixing them is its own small trap: _reader is a
+        chars_read (a LIST per call), next_char is one character or None."""
+        p: list = []
+        r = _reader(*reads)
+        return lambda t: C.ui_pending_char_read(p, r, t)
+
+    check("a bare ESC with nothing behind it assembles to nothing",
+          C.ui_escape_assemble(_next()) is None)
+    check("an unmapped sequence assembles to nothing rather than raising",
+          C.ui_escape_assemble(_next("[Z")) is None)
+    check("the SS3 form assembles too — a terminal left in application mode",
+          C.ui_escape_assemble(_next("OD")) == "LEFT")
+    check("an empty read is None, never an exception",
+          C.ui_pending_char_read([], _reader(), 0) is None)
 
     # --- poll_key's OWN wiring, not just the pairing math (audit-register.md #39,
     # 2026-09-08). The comment above said this was "untestable here", and that was true only

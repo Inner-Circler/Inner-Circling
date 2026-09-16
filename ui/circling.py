@@ -129,6 +129,7 @@ same path, since which pane is focused is itself an input to
 
 from __future__ import annotations
 
+import codecs
 import os
 import pathlib
 import queue
@@ -2652,6 +2653,59 @@ def ui_posix_escape_read(seq: str) -> "str | None":
     return POSIX_ESC.get(seq)
 
 
+# THE ASSEMBLER AND ITS QUEUE ARE OUT HERE TOO, for the same reason the table is:
+# they are the half that was WRONG, and a POSIX-only body is a body no probe on
+# this machine can reach. Both are pure — they take the reader as an argument —
+# so the suite exercises them with a fake one on every platform, and the branch
+# below supplies the real one.
+def ui_pending_char_read(pending: list, chars_read, timeout: float) -> "str | None":
+    """One character: the next one already queued, or the head of a fresh read with
+    its tail queued behind it. None means nothing was available.
+
+    WHY A QUEUE AT ALL — this is the 2026-09-15 macOS bug, where every arrow key did
+    nothing while backspace and tab were fine. The POSIX reader asked `select()`
+    about the FILE DESCRIPTOR and then read from `sys.stdin`, a BUFFERED TEXT
+    STREAM. Two different layers: `sys.stdin.read(1)` pulls a whole chunk off the
+    descriptor and hands back one character, keeping the rest in Python's own
+    buffer, where `select` cannot see it.
+
+    An arrow is three bytes and arrives at once, so the first read took "\\x1b" and
+    quietly swallowed "[" and "D". `select` then reported the descriptor empty, the
+    sequence was abandoned as a bare ESC, and the two characters sat stranded until
+    the next keystroke pushed something onto the descriptor — surfacing later, out
+    of order, from nowhere. A single-byte key never touched the second layer, which
+    is exactly why backspace and tab looked healthy.
+
+    So NOTHING may ask the descriptor a question the queue can already answer."""
+    if pending:
+        return pending.pop(0)
+    chars = chars_read(timeout)
+    if not chars:
+        return None
+    pending.extend(chars[1:])
+    return chars[0]
+
+
+def ui_escape_assemble(next_char, timeout: float = 0.01) -> "str | None":
+    """Called after a bare ESC was read: the rest of a real escape sequence follows
+    within milliseconds. Returns its token, or None for a stray bare ESC (rare, and
+    unbound even if it happens) and for a sequence this table does not carry.
+
+    FOUR characters, because the longest form here is `\\x1b[5~`. A sequence is
+    looked up after EVERY character, so a three-character form returns without
+    waiting on a fourth that is not coming."""
+    seq = "\x1b"
+    for _ in range(4):
+        ch = next_char(timeout)
+        if ch is None:
+            break
+        seq += ch
+        tok = ui_posix_escape_read(seq)
+        if tok is not None:
+            return tok
+    return ui_posix_escape_read(seq)
+
+
 if IS_WINDOWS:
     import msvcrt
 
@@ -2794,31 +2848,59 @@ else:
     # key that does nothing is now much less likely than it was.
     # THE TABLE MOVED OUT, 2026-09-09 — it and its lookup are module-level now
     # (POSIX_ESC / ui_posix_escape_read, above IS_WINDOWS), so they are asserted
-    # on Windows too. What is left in here is the half that genuinely needs a
-    # POSIX terminal: select on stdin, and reading a byte at a time.
+    # on Windows too. THE ASSEMBLER AND ITS QUEUE FOLLOWED, 2026-09-15
+    # (ui_escape_assemble / ui_pending_char_read), because they were the half that
+    # was wrong and a POSIX-only body is one no probe on a Windows machine can
+    # reach. What is left in here is the half that genuinely needs a POSIX
+    # terminal: select on the DESCRIPTOR, and os.read from it.
+
+    # ONE DECODER FOR THE LIFE OF THE PROCESS, and one queue beside it. A typed
+    # character outside ASCII is several bytes, and os.read can split them across
+    # two reads; an incremental decoder holds the partial one and yields it whole
+    # when the rest arrives. Rebuilding the decoder per read would drop it.
+    _DECODER = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    _PENDING: list[str] = []
+
+    def _chars_read(timeout: float) -> list[str]:
+        """Every character available within `timeout`, as a list, or [].
+
+        os.read ON THE RAW DESCRIPTOR, never sys.stdin — the whole point. Asking
+        select about the descriptor and then reading from the buffered text stream
+        is what stranded two thirds of every arrow key; here the same layer answers
+        both questions. Reading 1024 rather than 1 also means a paste arrives in
+        one syscall instead of hundreds.
+
+        [] for a timeout, for EOF, and for a read that landed mid-character — in
+        that last case the bytes are held by the decoder, not lost, and the rest
+        of the character arrives on a later call."""
+        fd = sys.stdin.fileno()
+        r, _, _ = select.select([fd], [], [], timeout)
+        if not r:
+            return []
+        try:
+            data = os.read(fd, 1024)
+        except OSError:                       # the tty went away under us
+            return []
+        return list(_DECODER.decode(data)) if data else []
+
+    def _next_char(timeout: float) -> str | None:
+        return ui_pending_char_read(_PENDING, _chars_read, timeout)
 
     def _read_escape() -> str | None:
-        """Called after a bare ESC was read. The rest of a real escape
-        sequence follows within milliseconds — a stray bare ESC (rare, and
-        unbound even if it happens) will just time out and return None."""
-        seq = "\x1b"
-        for _ in range(4):
-            r, _, _ = select.select([sys.stdin], [], [], 0.01)
-            if not r:
-                break
-            seq += sys.stdin.read(1)
-            tok = ui_posix_escape_read(seq)
-            if tok is not None:
-                return tok
-        return ui_posix_escape_read(seq)
+        return ui_escape_assemble(_next_char)
 
     def poll_key() -> str | None:
-        if not sys.stdin.isatty():
-            return None
-        r, _, _ = select.select([sys.stdin], [], [], 0)
-        if not r:
-            return None
-        ch = sys.stdin.read(1)
+        # THE QUEUE IS ASKED BEFORE THE isatty GUARD CANNOT BE — a character
+        # already decoded is already ours, and dropping it because the check sits
+        # in front would lose exactly the ones this queue exists to keep.
+        if _PENDING:
+            ch = _PENDING.pop(0)
+        else:
+            if not sys.stdin.isatty():
+                return None
+            ch = _next_char(0)
+            if ch is None:
+                return None
         if ch == "\x1b":
             return _read_escape()
         return ch

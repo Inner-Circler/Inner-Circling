@@ -90,6 +90,10 @@ if hasattr(sys.stdout, "reconfigure"):
 
 
 CIRCLE_RE = re.compile(r"^circle_(\d{4}-\d{2}-\d{2}_\d{4})\.md$")
+# The FILE form of the same marker the dream/<OT> tag carries, written last by a
+# successful inter_circle run. The date is required immediately after `dream_`, which
+# is what keeps its twin `dream_error_<OT>.json` — the FAILURE record — out.
+DREAM_MARKER_RE = re.compile(r"^dream_(\d{4}-\d{2}-\d{2}_\d{4})\.json$")
 # B29: derived from part_roster.py. Deliberately part_roster.TAGS (current
 # spellings only), NOT the _ALL set — this reader only ever sees circles
 # this audit is processing, which postdate the 2026-08-07 Soul tag
@@ -285,7 +289,32 @@ def circle_audit_dream_tags_read() -> tuple[list[str], str | None]:
     On a git failure this returns ([], the error) rather than a bare empty
     list: an empty answer read as "nothing processed" would report every
     circle unprocessed because git hiccuped — the same lesson
-    inter_circle.circle_is_processed() carries, pointed the other way."""
+    inter_circle.circle_is_processed() carries, pointed the other way.
+
+    AND A TREE WITH NO `.git` IS NOT A FAILURE. R333 (2026-08-24) made git
+    OPTIONAL, and circle_is_processed() was scoped THE SAME DAY for exactly this
+    shape: `git tag -l` exits 128 outside a repository, so a freshly installed
+    bundle — which has no history at all — met that guard as a hard error. This
+    function kept the unscoped reading, so on such a tree phase 1 failed the whole
+    audit over a marker that cannot exist, while the record beside it was sound.
+    Reported from a macOS install 2026-09-15.
+
+    The precedence is circle_is_processed()'s own, both halves of it:
+
+        no `.git` in the tree   -> no tag CAN exist, so the FILE markers
+                                   (work/logs/dream_<OT>.json) are the whole
+                                   record and are read instead.
+        `.git`, git cannot      -> RAISE, exactly as before. Something is wrong
+        answer                     where a tag could exist, and guessing
+                                   double-dreams.
+
+    The `.git` test is a FILESYSTEM one, so it answers the same on a machine with
+    no git binary installed. It is inter_circle.circle_git_history_read()'s test,
+    spelled again rather than imported: that module pulls in the whole transport to
+    answer a one-line question an audit must be able to ask cheaply."""
+    if not (ROOT / ".git").exists():
+        return sorted(m.group(1) for p in (ROOT / "work" / "logs").glob("dream_*.json")
+                      if (m := DREAM_MARKER_RE.match(p.name))), None
     rc, out = circle_audit_git_run("tag", "-l", "dream/*")
     if rc != 0:
         return [], f"git tag -l dream/* -> {rc}: {out}"
@@ -469,7 +498,7 @@ def circle_audit_survey_run(run: Run) -> list[str]:
     circles = sorted(m.group(1) for p in _RP.record_dir(ROOT, "circles").glob("circle_*.md")
                      if (m := CIRCLE_RE.match(p.name)))
     if not tags:
-        run.warn(f"no dream/<OT> tags exist — inter_circle.py has processed "
+        run.warn(f"no dream marker exists — inter_circle.py has processed "
                  f"nothing yet; all {len(circles)} circles on disk predate it "
                  f"and are out of audit scope")
         return []

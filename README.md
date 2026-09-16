@@ -296,17 +296,27 @@ step on them.
 
 So you take a copy of the directory and keep it. Either way works:
 
-- with git         
+- with git
 ```
-  git clone https://github.com/Inner-Circler/Inner-Circling.git
-  cd Inner-Circling
+git clone https://github.com/Inner-Circler/Inner-Circling.git
+cd Inner-Circling
+git remote remove origin
 ```
 
-- without git      
-```
-  on the repository page, Code -> Download ZIP,
-  then unzip it somewhere you will keep
-```
+- without git — on the repository page, **Code -> Download ZIP**, then unzip it
+  somewhere you will keep.
+
+**THAT THIRD LINE IS NOT TIDYING, AND SKIPPING IT BREAKS THE GIT HALF OF THIS
+PROGRAM.** A clone leaves behind a pointer back to GitHub called `origin`, and
+this system refuses to work in a directory that has one: `coordinator/gitrepo.py`
+classifies every destination before it will commit anything, and an `https://`
+one is a network protocol, which it will not have. That refusal is doing exactly
+what the Privacy section promises — it is the mechanism that makes "nothing is
+published" enforced rather than intended — but until you remove the pointer it
+also refuses YOUR OWN commits. `circle_audit.py --git-setup` stops with an error,
+and each circle's close reports that it wrote your files and skipped the history
+step. Removing `origin` deletes nothing and disconnects nothing you need; the
+files are already on your disk.
 
 **Downloading from GitHub is not the same as putting anything on
 GitHub.** It is how you get the files, once. Nothing in this system ever
@@ -365,7 +375,7 @@ undoes the install completely.
 
 On Windows:
 ```
-python -m venv .venv      # be patient; silently takes 30 secs
+python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 ```
 
@@ -375,11 +385,15 @@ python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 ```
 
-Five packages arrive, all named in `requirements.txt`: the Anthropic
-client, `python-dotenv`, `tomli` / `tomli-w` to read and write the TOML
-the registers are kept in — `tomli` only on Python 3.10, which has no
-`tomllib` of its own — and `fastembed`, which serves a part's
-`[recall: ...]` search of its own past. **A circle makes no network call
+The first line prints nothing for around thirty seconds. That is normal; it is
+building the environment.
+
+Four packages arrive, all named in `requirements.txt`: the Anthropic
+client, `python-dotenv`, `tomli-w` to write the TOML the registers are kept
+in, and `fastembed`, which serves a part's
+`[recall: ...]` search of its own past. On Python 3.10 a fifth arrives with
+them, `tomli`, because that version has no `tomllib` of its own to read TOML
+with; on 3.11 and newer it is correctly skipped. **A circle makes no network call
 except to the model provider, with one exception you can see coming:** your
 first live circle fetches `fastembed`'s embedding model (~65 MB) into a
 local cache, once, in the background while the parts warm up; after that
@@ -436,9 +450,13 @@ If the second prints a path that is not inside this folder's `.venv`, that is
 the whole answer: use the venv's own interpreter, spelled as above. If it IS
 the venv's and the first still fails, install again through it:
 
+Windows:
 ```
-.venv/Scripts/python -m pip install -r requirements.txt     Windows
-.venv/bin/python -m pip install -r requirements.txt         macOS / Linux
+.venv/Scripts/python -m pip install -r requirements.txt
+```
+macOS / Linux:
+```
+.venv/bin/python -m pip install -r requirements.txt
 ```
 
 One more thing worth knowing before it reads as a fault: `pip install tomli-w`
@@ -459,11 +477,16 @@ untouched and complete until you are satisfied, which is what makes this safe.
 
 First, with no circle open — and if one might be, ask:
 
+Windows:
 ```
-.venv/Scripts/python coordinator/circle_state.py     Windows
-.venv/bin/python coordinator/circle_state.py         macOS / Linux
-      exit 0 = nothing open, safe to proceed
+.venv/Scripts/python coordinator/circle_state.py
 ```
+macOS / Linux:
+```
+.venv/bin/python coordinator/circle_state.py
+```
+
+Exit code 0 means nothing is open and it is safe to proceed.
 
 Then, from the folder that CONTAINS your install:
 
@@ -471,6 +494,7 @@ macOS / Linux:
 ```
 git clone https://github.com/Inner-Circler/Inner-Circling.git Inner-Circling-new
 cd Inner-Circling-new
+rm -rf .git
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
 cp -a ../Inner-Circling/groups/. groups/
@@ -482,12 +506,57 @@ Windows:
 ```
 git clone https://github.com/Inner-Circler/Inner-Circling.git Inner-Circling-new
 cd Inner-Circling-new
+Remove-Item -Recurse -Force .git
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
 robocopy ..\Inner-Circling\groups groups /E
 robocopy ..\Inner-Circling\work work /E
 copy ..\Inner-Circling\.env .env
 ```
+
+(The Windows block is PowerShell, which is what Windows Terminal opens by
+default. In the older `cmd` prompt the third line is `rmdir /s /q .git`; every
+other line is the same in both.)
+
+**Without git?** If you took the ZIP route at step 1, unzip the new version into
+`Inner-Circling-new` beside your install instead of cloning, skip the `.git` line,
+and carry on from the `venv` line. Everything after is identical.
+
+**AND IF YOU KEPT A HISTORY, CARRY IT.** That is what the `.git` line above is
+for. The clone arrives carrying the PROJECT's history and a pointer back to
+GitHub — neither of which is yours — so it is removed, and your own history comes
+across with your record:
+
+macOS / Linux:
+```
+cp -a ../Inner-Circling/.git .
+```
+Windows:
+```
+robocopy ..\Inner-Circling\.git .git /E
+```
+
+Your own commits, and the undo they buy, survive the update. The new version's
+files then show up as uncommitted changes, which is correct — commit them when
+you are satisfied. Skip this pair only if you never set git up at all.
+
+**THEN RE-RUN THE BOOTSTRAP, and do not skip it.** Your `.git` carries your
+history AND the pre-commit checks that were installed with the OLD version. Those
+checks run the new version's programs, so a check whose command changed between
+releases fails on every commit — including the one each circle's close makes for
+you, which is how it is noticed: circles stop being committed.
+
+Windows:
+```
+.venv/Scripts/python coordinator/circle_audit.py --git-setup
+```
+macOS / Linux:
+```
+.venv/bin/python coordinator/circle_audit.py --git-setup
+```
+
+It is the same idempotent command as at first install, it adds only what is
+missing, and it replaces an out-of-date check with the current one.
 
 (`robocopy` reports success with a non-zero number. That is normal and not an
 error; anything below 8 means it copied.)
@@ -515,14 +584,13 @@ readers are told to replace them. That file arrives fresh in the new directory,
 so your edit is not there. Check before you switch over, and carry anything you
 find:
 
-macOS / Linux:
 ```
-diff ../Inner-Circling/coordinator/process_core.md coordinator/process_core.md
+git diff --no-index ../Inner-Circling/coordinator/process_core.md coordinator/process_core.md
 ```
-Windows:
-```
-fc ..\Inner-Circling\coordinator\process_core.md coordinator\process_core.md
-```
+
+That one line is the same on every platform and in every shell — `git` is doing
+the comparing, not the shell, and `--no-index` means the files do not have to be
+in a repository. No output means they are identical.
 
 Any difference is either your own edit or a real change in the new version. Read
 it and decide. If you changed `coordinator/process_ifs.md` or anything else that
@@ -534,16 +602,22 @@ Then prove it before you trust it:
 
 macOS / Linux:
 ```
-.venv/bin/python memory/record_verify.py                    expect INTEGRITY PASS
-.venv/bin/python coordinator/circle_audit.py --selfcheck    expect 0 FAIL
-.venv/bin/python ui/circling.py --selftest                  expect all PASS
+.venv/bin/python memory/record_verify.py
+.venv/bin/python coordinator/circle_audit.py --selftest
+.venv/bin/python ui/circling.py --selftest
 ```
 Windows:
 ```
-.venv/Scripts/python memory/record_verify.py                expect INTEGRITY PASS
-.venv/Scripts/python coordinator/circle_audit.py --selfcheck  expect 0 FAIL
-.venv/Scripts/python ui/circling.py --selftest              expect all PASS
+.venv/Scripts/python memory/record_verify.py
+.venv/Scripts/python coordinator/circle_audit.py --selftest
+.venv/Scripts/python ui/circling.py --selftest
 ```
+
+What each should say, in that order: `INTEGRITY PASS`, then `0 FAIL`, then
+`SELF-TEST: PASS`. The self-test may also report a few checks SKIPPED — for
+missing data, and off Windows for one platform-only check. The Verify section
+above says which is which. **A skip is not a failure and is never counted as a
+pass.**
 
 Only once those pass is the new directory yours. Rename the old one out of the
 way rather than deleting it, and keep it until a live circle has closed cleanly
@@ -652,9 +726,16 @@ git config user.email "you@example.com"
 Then bootstrap the repository — idempotent, adds only what is missing,
 never rewrites history, and never adds a destination to upload to:
 
+*If this stops with a refusal naming a remote, you cloned and kept `origin`.
+`git remote remove origin` and run it again — Install §1 says why.*
+
+Windows:
 ```
-.venv/Scripts/python coordinator/circle_audit.py --git-setup     Windows
-.venv/bin/python coordinator/circle_audit.py --git-setup         macOS / Linux
+.venv/Scripts/python coordinator/circle_audit.py --git-setup
+```
+macOS / Linux:
+```
+.venv/bin/python coordinator/circle_audit.py --git-setup
 ```
 
 It installs the pre-commit battery, and says so: the gates that ship —
@@ -683,20 +764,39 @@ macOS / Linux:
 
 Windows:
 ```
-  .venv/Scripts/python ui/circling.py --help
-  .venv/Scripts/python ui/circling.py --selftest  # expect all PASS
+.venv/Scripts/python ui/circling.py --help
+.venv/Scripts/python ui/circling.py --selftest
 ```
 macOS / Linux:
 ```
-  .venv/bin/python ui/circling.py --help
-  .venv/bin/python ui/circling.py --selftest      # expect all PASS
+.venv/bin/python ui/circling.py --help
+.venv/bin/python ui/circling.py --selftest
 ```
+
+The self-test ends with `SELF-TEST: PASS`. It may also list a few checks SKIPPED,
+and on a fresh install it will. Two reasons, both expected:
+
+```
+missing data   a couple of checks read an issue node or a ruled practice back,
+               and you have neither yet. They start running once you do.
+this platform  one check exercises a Windows-only console call. Off Windows
+               that code does not exist in the process, so it is skipped for
+               good, not until something is populated.
+```
+
+**A skip is not a failure and is never counted as a pass** — it names what it
+wanted, so a check that stops running later, in a record that DOES have the data,
+shows up as a skip nobody expected rather than as a green line.
 
 Optional free dry run — no network, no key needed
 
+Windows:
 ```
-  .venv/Scripts/python ui/circling.py      Windows
-  .venv/bin/python ui/circling.py          macOS / Linux
+.venv/Scripts/python ui/circling.py
+```
+macOS / Linux:
+```
+.venv/bin/python ui/circling.py
 ```
 
 **Dry run is the default HERE** — a bare run passes `--dry-run` to the
@@ -713,9 +813,13 @@ every other option is forwarded to the coordinator unchanged.
   
 This is how you start a real live circle:
 
+Windows:
 ```
-  .venv/Scripts/python ui/circling.py --live      Windows
-  .venv/bin/python ui/circling.py --live          macOS / Linux
+.venv/Scripts/python ui/circling.py --live
+```
+macOS / Linux:
+```
+.venv/bin/python ui/circling.py --live
 ```
 
 **The user interface has two panes*
@@ -739,8 +843,12 @@ your next live open. Once answered it stops asking; this command re-runs
 it whenever you want:
 
 ```
-/part-context-update <part>   # re-enter that part's personal answers (at cmd>)
+/part-context-update <part>
 ```
+
+Typed at the `cmd>` prompt; it re-asks that part's own personal questions. The
+command pane has no comment character, so nothing may follow the command on that
+line.
 
 **Every live run begins with up to two questions** -- the first only
 once you have a live issue to choose from.
@@ -1014,6 +1122,10 @@ the man page before the module; it is where a module's *why* lives.
 
 ## Technical things that can bite
 
+*Commands from here on are written with the Windows interpreter. On macOS and
+Linux, `.venv/Scripts/python` is `.venv/bin/python` and the rest of every line is
+unchanged — the same single substitution as everywhere above.*
+
 **`.gitattributes` sets `* -text` and must survive.** Line-ending
 conversion would break every sha256 and byte-identical check here.
 
@@ -1147,8 +1259,7 @@ Keep the line endings as you found them
 Then run the gate below for whatever you touched.
 ```
 
-**On macOS / Linux, every `.venv/Scripts/python` in this block is
-`.venv/bin/python`.** Nothing else on any of these lines changes.
+*(macOS and Linux: `.venv/bin/python`, as above.)*
 
 ```
 anything at all
@@ -1158,7 +1269,7 @@ anything at all
       remedy, then exits non-zero. There is no --force.
 
 groups/ifs/parts/, groups/ifs/self/ or groups/ifs/circles/*.toml
-  .venv/Scripts/python coordinator/circle_audit.py --selfcheck
+  .venv/Scripts/python coordinator/circle_audit.py --selftest
       watch for   0 FAIL · 0 WARN · N OK
       a WARN is not a pass. Read it.
 

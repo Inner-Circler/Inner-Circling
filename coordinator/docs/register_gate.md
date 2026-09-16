@@ -8,7 +8,7 @@ register_gate.py — the REGISTER gate: the one gate every write to the record p
 ## SYNOPSIS
     import register_gate as RG
     RG.record_tree_compare(baseline_dir, candidate_dir[, today=..., ...])   the paired gate, at every live /close
-    RG.record_tree_verify(root)                                            the single-tree half, --selfcheck
+    RG.record_tree_verify(root)                                            the single-tree half, --selftest
     RG.register_summarise(findings) -> (fails, warns, oks)
 
 No `main()`. `transaction.Transaction.validate()` and `circle_audit.py` are its two drivers.
@@ -47,4 +47,4 @@ None.
 The rulings and reasoning are in the function docstrings and the section comment above `REGISTERS`
 (R188, R191, R255), which moved with the bodies. Probes: `coordinator/tests/test_register_gate.py`,
 `test_circle_observation_manager.py`, `test_TRANSACTION_CLASS.py`, `test_circle_audit_lock.py`;
-`circle_audit.py --selfcheck` runs the single-tree half against the live tree.
+`circle_audit.py --selftest` runs the single-tree half against the live tree.

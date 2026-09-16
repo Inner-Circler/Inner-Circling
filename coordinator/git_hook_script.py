@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v193"
+HOOK_MARK = "# inner-circling pre-commit v194"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -182,7 +182,7 @@ case "$FILES" in *groups/*)
         gname="${{gdir#groups/}}"; gname="${{gname%/}}"
         [ "$gname" = "ifs" ] && continue
         [ -d "$gdir/parts" ] || continue
-        run coordinator/circle_audit.py --selfcheck --group "$gname"
+        run coordinator/circle_audit.py --selftest --group "$gname"
         [ -d "$gdir/issues" ] && run memory/issue_gate.py "$gdir/issues"
     done
 esac
@@ -292,7 +292,7 @@ if [ -n "$IC_RECORD" ]; then
     # counted exemplars must fire the suite that counts them. process_band.md is
     # deliberately NOT added: circle_identity_text_render() composes the DEFAULT
     # layer, so this suite reads the IFS one and never the band's.
-    run coordinator/circle_audit.py --selfcheck
+    run coordinator/circle_audit.py --selftest
     run coordinator/practice_verify.py
     run coordinator/logbook_ruling_verify.py
     run memory/issue_prompt_projection.py
@@ -887,7 +887,7 @@ case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_p
     # the roster is ABSENT from the circle rather than faulty -- downstream,
     # indistinguishable from a part present and silent.
     #
-    # circle_audit.py --selfcheck rides the parts/ case above and LOOKS like
+    # circle_audit.py --selftest rides the parts/ case above and LOOKS like
     # this gate. It is register_gate.record_tree_verify: register schemas, line
     # endings, long_term.md dream entries. It never calls
     # part_roster.part_verify().

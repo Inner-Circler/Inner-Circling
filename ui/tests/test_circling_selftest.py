@@ -47,9 +47,16 @@ def self_test() -> int:
     failures: list[str] = []
     total = [0]
 
-    def check(label: str, cond: bool) -> None:
+    def check(label: str, cond: bool, detail: str = "") -> None:
+        # `detail` prints ON FAILURE ONLY, and exists because a FAIL here is
+        # often read on a machine nobody can reproduce on — a fresh install, a
+        # platform this tree has never run. A label alone says which claim
+        # broke; the detail says what was actually seen, which is the half a
+        # report from elsewhere cannot supply. Same convention as the
+        # coordinator suites'.
         total[0] += 1
-        print(f"  {'PASS' if cond else 'FAIL'}  {label}")
+        print(f"  {'PASS' if cond else 'FAIL'}  {label}"
+              + (f"\n          {detail}" if detail and not cond else ""))
         if not cond:
             failures.append(label)
 
@@ -974,15 +981,23 @@ def self_test() -> int:
           eng8.out_queue.get_nowait()[1].startswith(
               "  not a command: bogus-verb-nobody-registered"))
 
+    # TWO CLAIMS, SPLIT 2026-09-16: that the verb is AVAILABLE with no circle
+    # running, and that it lists THIS INSTALLATION's practices. Only the second
+    # needs data, and rolling them together meant a fresh install — the tree
+    # where "does the command pane work at all?" matters most — skipped both and
+    # tested neither.
+    eng8.submit_command("practice-list")
+    channel, text = eng8.out_queue.get_nowait()
+    check("an always-available verb (practice-list) works with no "
+          "circle running, calling circle.py's own function directly",
+          channel == "command" and "not understood" not in text.lower(),
+          f"reply was ({channel!r}, {text!r})")
     if _has_practice():
-        eng8.submit_command("practice-list")
-        channel, text = eng8.out_queue.get_nowait()
-        check("an always-available verb (practice-list) works with no "
-              "circle running, calling circle.py's own function directly",
-              channel == "command" and "[BP-" in text)
+        check("...and the reply carries this installation's own ruled "
+              "practices", "[BP-" in text, f"reply was {text!r}")
     else:
-        skip("an always-available verb (practice-list) works with no "
-             "circle running, calling circle.py's own function directly",
+        skip("...and the reply carries this installation's own ruled "
+             "practices",
              "self/best_practices.toml holds no entries — the assertion "
              "looks for a BP- id, and a fresh install has ruled none in")
 
@@ -1015,12 +1030,17 @@ def self_test() -> int:
     # The split they were checking is unchanged and still matters: a NODE's
     # status runs here and now, a RULING batches at close and needs a
     # circle. Only the spelling moved.
+    #
+    # THE SUBMIT IS UNCONDITIONAL NOW, and only the assertion about its CONTENT
+    # is guarded — the same reply is what the underscore check below compares
+    # against, and that check needs no data at all.
+    eng8.submit_command("issue-status n0002")
+    _hyphen = eng8.out_queue.get_nowait()
     if _has_issue("n0002"):
-        eng8.submit_command("issue-status n0002")
-        channel, text = eng8.out_queue.get_nowait()
         check("'issue-status nNNNN' (bare property, no circle needed) READS a "
               "real issue's status — the construct's read half",
-              channel == "command" and text.strip().startswith("n0002:"))
+              _hyphen[0] == "command" and _hyphen[1].strip().startswith("n0002:"),
+              f"reply was {_hyphen!r}")
     else:
         skip("'issue-status nNNNN' (bare property, no circle needed) READS a "
              "real issue's status — the construct's read half",
@@ -1037,15 +1057,18 @@ def self_test() -> int:
     # understood". An underscore is a typo, not a second grammar — and the
     # normaliser is shared with circle.py so it cannot be fixed in one
     # dispatcher and left broken in the others.
-    if _has_issue("n0002"):
-        eng8.submit_command("issue_status n0002")
-        channel, text = eng8.out_queue.get_nowait()
-        check("an UNDERSCORE resolves to the hyphen the table holds",
-              channel == "command" and text.strip().startswith("n0002:"))
-    else:
-        skip("an UNDERSCORE resolves to the hyphen the table holds",
-             "issues/ holds no n0002 — the normaliser is what is under "
-             "test, but the assertion reads a real node's status back")
+    # THE NORMALISER NEEDS NO DATA, and this check used to behave as though it
+    # did: it read a real node's status back, so a fresh install skipped the one
+    # assertion that is purely about spelling. Submit BOTH spellings at the same
+    # id and require the SAME answer — whatever that answer is, a status or a
+    # complaint that the node is unknown, only a RESOLVED underscore can produce
+    # it, because an unresolved one is "not understood". Strictly stronger than
+    # the old form, and true in an empty tree. 2026-09-16.
+    eng8.submit_command("issue_status n0002")
+    _under = eng8.out_queue.get_nowait()
+    check("an UNDERSCORE resolves to the hyphen the table holds",
+          _under == _hyphen and "not understood" not in _hyphen[1].lower(),
+          f"hyphen -> {_hyphen!r}; underscore -> {_under!r}")
     eng8._CS.dev_mode = _dev_before8          # restore the shared attribute
 
     # --- leading slash is OPTIONAL in the command pane, never required
@@ -1256,6 +1279,18 @@ def self_test() -> int:
         C.CircleEngine.start = real_start
         vars(C)["ui_main_loop"] = real_main_loop
         vars(C)["_key_notice_read"] = real_notice
+        # AND THE TINT, which is not a stub and is easy to miss in a restore
+        # block full of them. main() is REAL here — only its collaborators are
+        # faked — so every call above ran `COLOR = sys.stdout.isatty() and ...`
+        # for real. THAT LEAKED, AND IT COST A DAY (2026-09-16): on a machine
+        # where the suite's own stdout IS a terminal, COLOR came out of this
+        # block TRUE, and the _tint check 1,400 lines below then failed naming
+        # _tint — a sentence about the wrong file. It never fired in this tree
+        # because output here is piped, so isatty() is False and the leak wrote
+        # the value the suite wanted anyway. A defect whose visibility depends
+        # on whether anyone is watching is the kind this project pays for
+        # twice, so the restore is explicit rather than incidental.
+        C.COLOR = False
 
     # THE REAL FUNCTION, RUN ONCE (audit-register 2026-09-11 #11). The stub above tests the
     # two CALL SITES; this runs the BODY — its sys.path bootstrap, the llm_client import,
@@ -2638,16 +2673,114 @@ def self_test() -> int:
           and state.running is False)
 
     # --- COLOR is a write-time tint, armed only by main() (D64 a) -------
-    check("with COLOR off (every suite's state) _tint is byte-inert",
-          C._tint(C.C_ERR, "  !! boom") == "  !! boom")
-    C.COLOR = True
+    # THIS CHECK SETS THE STATE IT NAMES, since 2026-09-16. It used to read
+    # "with COLOR off (every suite's state)" and then assert without setting
+    # anything — so it tested the claim AND an assumption about ambient state
+    # at once, and when it failed on a macOS install neither this tree nor any
+    # reading of main() could account for it: --selftest returns before COLOR
+    # is armed, so the module default of False should still be standing. An
+    # assumption that cannot be derived is one to establish instead of argue
+    # about, and the claim under test is unchanged either way.
+    # THE TWO CLAIMS ARE SEPARATE NOW, and that is the repair. The first is an
+    # OBSERVATION about ambient state — nothing in main() should have armed the
+    # tint by the time --selftest runs — and the second is the BEHAVIOUR. Rolled
+    # together, a false observation was reported as a broken _tint, which is a
+    # sentence about the wrong file.
+    _color_was = C.COLOR
     try:
-        check("with COLOR on it wraps and resets, nothing else",
-              C._tint(C.C_ERR, "  !! boom") == f"{C.C_ERR}  !! boom{C.C_OFF}")
-        check("...and an empty string stays empty — no stray escape codes "
-              "on blank rows", C._tint(C.C_CHROME, "") == "")
-    finally:
+        check("COLOR is off when the suite reaches here — the stage-8 block "
+              "above restored the tint its real main() calls armed",
+              _color_was is False,
+              f"COLOR was {_color_was!r} on entry, so something armed it and "
+              f"did not put it back. _tint is not at fault. The known source "
+              f"is the stage-8 C.main() checks, whose restore is explicit.")
         C.COLOR = False
+        _off = C._tint(C.C_ERR, "  !! boom")
+        check("with COLOR off _tint is byte-inert", _off == "  !! boom",
+              f"_tint returned {_off!r} with COLOR={C.COLOR!r}; "
+              f"C_ERR={C.C_ERR!r} C_OFF={C.C_OFF!r}")
+        C.COLOR = True
+        check("with COLOR on it wraps and resets, nothing else",
+              C._tint(C.C_ERR, "  !! boom") == f"{C.C_ERR}  !! boom{C.C_OFF}",
+              f"_tint returned {C._tint(C.C_ERR, '  !! boom')!r}")
+        check("...and an empty string stays empty — no stray escape codes "
+              "on blank rows", C._tint(C.C_CHROME, "") == "",
+              f"_tint returned {C._tint(C.C_CHROME, '')!r} for an empty string")
+    finally:
+        # FALSE, not whatever it was on entry: every rendering check after this
+        # compares plain bytes, so leaving a stray True here would turn one
+        # anomaly into a cascade of failures that all name the wrong thing.
+        C.COLOR = False
+
+    # --- THE CIRCLE PANE IS PRIMARY, and every automatic handover gives it
+    # back. The operator, 2026-09-16: *"Always focus on it unless the user tabs
+    # to cmd> or the process requires input in cmd>, and when a cmd> input
+    # (series) is complete, focus on the last pane the user had selected via
+    # tab."* Three mechanisms, and the interesting part is where they meet. ---
+    fs = C.AppState(circle_height=8, command_height=4)
+    check("focus opens on the circle pane, and that is also the remembered one",
+          fs.focus == "circle" and fs.user_focus == "circle")
+
+    check("a pending command-channel question takes focus",
+          fs.command_read_follow(True) == "focus" and fs.focus == "command")
+    check("...and asking again while it is still pending changes nothing — the "
+          "call is per-tick and only a CHANGE redraws",
+          fs.command_read_follow(True) is None)
+
+    for _ in range(C.AppState.READ_HANDBACK_TICKS - 1):
+        fs.command_read_follow(False)
+    check("a GAP inside the series does not hand focus back — vetting asks once "
+          "per row, and bouncing on each gap is the defect this prevents",
+          fs.focus == "command")
+    check("once the series has genuinely stopped, focus returns",
+          fs.command_read_follow(False) == "focus" and fs.focus == "circle")
+
+    # The same run again, but the person tabbed to cmd> first: the hand-back is
+    # to THEIR pane, which is the whole of "the last pane the user had selected".
+    fs2 = C.AppState(circle_height=8, command_height=4)
+    fs2.handle_key("\t")
+    check("Tab records the person's own choice", fs2.user_focus == "command")
+    fs2.handle_key("\t")
+    fs2.handle_key("\t")
+    check("...and the LAST Tab is the one that counts",
+          fs2.user_focus == "command" and fs2.focus == "command")
+    fs2.command_read_follow(True)
+    for _ in range(C.AppState.READ_HANDBACK_TICKS + 1):
+        fs2.command_read_follow(False)
+    check("a series that ends hands back to the TABBED pane, not to circle",
+          fs2.focus == "command")
+
+    # An error is not a question and never completes — ruled 2026-09-16, (a),
+    # keeping the 2026-08-25 handover intact underneath the new rule.
+    fs3 = C.AppState(circle_height=8, command_height=4)
+    fs3.command.append("  !! its DREAMING did not run")
+    check("an error takes focus, as it has since 2026-08-25",
+          fs3.on_alert("  !! its DREAMING did not run") == "focus"
+          and fs3.focus == "command")
+    fs3.command_read_follow(True)
+    for _ in range(C.AppState.READ_HANDBACK_TICKS + 1):
+        fs3.command_read_follow(False)
+    check("a question ending UNDER an error does not hand focus away from it",
+          fs3.focus == "command")
+    fs3.handle_key("\t")               # ONE Tab: cmd> -> circle
+    check("...and a Tab is what releases the error's hold — the person saying "
+          "they have read it",
+          fs3.focus == "circle" and fs3._alert_holds is False)
+    fs3.command_read_follow(True)
+    for _ in range(C.AppState.READ_HANDBACK_TICKS + 1):
+        fs3.command_read_follow(False)
+    check("...after which a question hands back normally again",
+          fs3.focus == "circle")
+
+    # The initialization handover is the archetype of "the process requires
+    # input in cmd>", and used to hand back to a hardcoded "circle".
+    fs4 = C.AppState(circle_height=8, command_height=4)
+    fs4.handle_key("\t")                       # the person chose cmd>
+    fs4.on_state("initializing")
+    check("the first-run dialogs take the command pane", fs4.focus == "command")
+    fs4.on_state("initialized")
+    check("...and hand back to the person's pane, not to a hardcoded circle",
+          fs4.focus == "command")
 
     # --- backspace at column 0 must be a no-op, never a delete of the LAST
     # character with the cursor going to -1 — audit-register.md #39:

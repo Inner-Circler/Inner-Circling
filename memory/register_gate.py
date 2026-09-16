@@ -11,7 +11,7 @@ file moved. What lives here:
 RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodies untouched:
 
     compare_trees        -> record_tree_compare     the RECORD's tree, baseline vs candidate
-    selfcheck_tree       -> record_tree_verify      the same, single tree
+    selftest_tree       -> record_tree_verify      the same, single tree
     compare_register     -> register_compare        one TOML register, paired
     check_register_file  -> register_verify         one TOML register, single
     summarise, REGISTERS and every _private name    unchanged (summarise carries no class word:
@@ -19,7 +19,7 @@ RENAMED AT THE MOVE (R436, R442 — 2026-09-03), the class word first, the bodie
 
     _tree_files, record_tree_compare, record_tree_verify   the two drivers: baseline vs candidate at every
                                                  live /close (transaction.validate), and the
-                                                 single-tree self-check (circle_audit --selfcheck)
+                                                 single-tree self-check (circle_audit --selftest)
     REGISTERS and the _*_cap/_*_order readers     the TOML arm's spec table — caps and orders
                                                  IMPORTED from each register's own module; a
                                                  literal copy only when that import fails
@@ -261,7 +261,7 @@ def record_tree_verify(root: pathlib.Path) -> list[M.Finding]:
 #     was hand-edited without a re-save, and that is a FINDING, never a
 #     silent fallback to value comparison. The tail is then judged:
 #     count, cap, id sequence, date order, chain target, state vocabulary.
-#   SINGLE-TREE (selfcheck — no baseline, no intent)
+#   SINGLE-TREE (selftest — no baseline, no intent)
 #     parse, id uniqueness and prefix, ids below next_id, date order,
 #     state vocabulary, caps. FIELD-CONDITIONAL: a check activates only
 #     where the field exists (today's remember.toml has no id/chain;

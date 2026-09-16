@@ -7,7 +7,7 @@ circle_audit.py — the circle-record audit (renamed from nightly.py 2026-08-19)
 ## SYNOPSIS
 
     python coordinator/circle_audit.py
-    python coordinator/circle_audit.py --selfcheck
+    python coordinator/circle_audit.py --selftest
     python coordinator/circle_audit.py --snapshot [DIR]
     python coordinator/circle_audit.py --baseline DIR|last [--prune-baselines]
     python coordinator/circle_audit.py --git-setup [--git-name NAME] [--git-email EMAIL]
@@ -17,7 +17,7 @@ circle_audit.py — the circle-record audit (renamed from nightly.py 2026-08-19)
     python coordinator/circle_audit.py --transaction-status
     python coordinator/circle_audit.py --transaction-finish
     python coordinator/circle_audit.py --transaction-rollback
-    python coordinator/circle_audit.py --group band --selfcheck
+    python coordinator/circle_audit.py --group band --selftest
     (any of the above, plus --log to mirror output to a log file)
 
 `--group <name>`: audit `groups/<name>/`'s record instead of the default group's tree (B117
@@ -55,7 +55,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
         given.)
     } else if (`--git-setup` was given) then {
         dispatch immediately to circle_audit_git_setup() and return its result.
-    } else if (`--selfcheck` was given) then {
+    } else if (`--selftest` was given) then {
         run phase 6 with no baseline (a pure self-check of the live tree)
         and return 1 if any failures were recorded, else 0 -- this path
         skips locking, git checks, and reconcile entirely, as its help
@@ -170,7 +170,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
 `--validate`
     Run phases 0, 1, 2, 6 — the default sequence — and nothing else. Given alongside a flag that selects another path (`--snapshot`, `--backfill`, `--stage-synthetic`, `--commit`) it REFUSES, naming the clash, and returns 1 rather than letting the other flag win silently. Honoured 2026-08-27; it was accepted and never read until then, so `--validate --backfill` ran the backfill without a word. (See BUGS.)
 
-`--selfcheck`
+`--selftest`
     Run phase 6 only, against no baseline, with no lock, no git checks, and no reconcile. Default: off.
 
 `--git-setup`
@@ -254,7 +254,7 @@ External programs: `git`, invoked throughout via `subprocess.run` (directly in t
 
     Written
         `work/circle_audit/.lock` -- written by circle_audit_lock_take() at the start
-        of every non-selfcheck run, removed by circle_audit_lock_release() when the run
+        of every non-selftest run, removed by circle_audit_lock_release() when the run
         ends (successfully or via the `finally` block).
         `<snapshot dest>/**` and `<snapshot dest>/SNAPSHOT.json` -- the
         full copied memory-file tree plus a manifest of the snapshot
@@ -871,6 +871,6 @@ at `/close`).
 
   Worse than decoration, and this is the part the original entry missed: `--validate --backfill` ran the BACKFILL. The flag did not merely do nothing — it LOST, silently, to whichever other flag was present.
 
-- WITHDRAWN 2026-08-27 — the `NameError: unprocessed` reported here. **It cannot occur, and the mechanism it was reasoned from does not exist.** The block is `try:` / `finally: circle_audit_lock_release()` with *no* `except` clause, so an exception raised anywhere inside the `try` runs `finally` and then propagates out of `main()`; the failure-summary line sits *after* the whole construct and is never reached on that path. The claim also placed the `--transaction-*`/`--git-setup`/`--selfcheck` early returns inside the `try` — all three are above it. On every path that does reach the summary line, `unprocessed = circle_audit_survey_run(run)` has run: the only branch between the `try` and that assignment is `--snapshot`, which returns 0.
+- WITHDRAWN 2026-08-27 — the `NameError: unprocessed` reported here. **It cannot occur, and the mechanism it was reasoned from does not exist.** The block is `try:` / `finally: circle_audit_lock_release()` with *no* `except` clause, so an exception raised anywhere inside the `try` runs `finally` and then propagates out of `main()`; the failure-summary line sits *after* the whole construct and is never reached on that path. The claim also placed the `--transaction-*`/`--git-setup`/`--selftest` early returns inside the `try` — all three are above it. On every path that does reach the summary line, `unprocessed = circle_audit_survey_run(run)` has run: the only branch between the `try` and that assignment is `--snapshot`, which returns 0.
 
 - WITHDRAWN 2026-08-27 — "the distinction ... is not made anywhere in the message". The premise is right: `circle_audit_preflight_run()` does call `circle_audit_git_verify()` before phase 7, so a matched path can only be a prior run's leftover. The conclusion is wrong — `circle_audit_git_verify()` says exactly that. Its `expected and not other` branch prints *"working tree dirty in N path(s), all of them audit output — the expected state after an uncommitted backfill. Review, then commit."* Naming the leftover as a prior uncommitted backfill IS the distinction the entry reported missing.

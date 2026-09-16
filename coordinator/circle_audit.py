@@ -1010,7 +1010,7 @@ def main() -> int:
                     help="run phases 0, 1, 2, 6 (the default) and NOTHING else "
                          "— refuses if combined with a flag that selects "
                          "another path")
-    ap.add_argument("--selfcheck", action="store_true",
+    ap.add_argument("--selftest", action="store_true",
                     help="phase 6 only, no lock, no git, no reconcile")
     ap.add_argument("--git-setup", action="store_true",
                     help="idempotent git bootstrap: init, config, .gitattributes, "
@@ -1089,7 +1089,7 @@ def main() -> int:
     if args.git_setup:
         return circle_audit_git_setup(run, args.git_name, args.git_email)
 
-    if args.selfcheck:
+    if args.selftest:
         circle_audit_validate_run(run, None)
         return 1 if run.failures else 0
 

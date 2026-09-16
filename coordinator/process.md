@@ -332,5 +332,5 @@ escaping `[` and `_`, merging emphasis across lines. On 2026-07-26 that made 14
 of 22 dream entries in `parts/mourner/long_term.md` unparseable while the file
 still read correctly to a human, and it was committed before anyone noticed.
 
-Run `python coordinator\circle_audit.py --selfcheck` after any manual edit. Every
+Run `python coordinator\circle_audit.py --selftest` after any manual edit. Every
 `### ` line that fails to parse is now a hard failure.

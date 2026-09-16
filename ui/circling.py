@@ -82,6 +82,17 @@ are never tangled together:
                        the part the self-test cannot exercise and the part
                        that actually needs a person at a keyboard to judge.
 
+THE CIRCLE PANE IS PRIMARY, and focus returns to it. The operator, 2026-09-16:
+*"Always focus on it unless the user tabs to cmd> or the process requires input
+in cmd>, and when a cmd> input (series) is complete, focus on the last pane the
+user had selected via tab."* So a Tab records YOUR choice (`user_focus`), the
+coordinator may BORROW the command pane whenever it is blocked on a question
+there, and the borrow ends by handing your pane back — with the size, since the
+split follows focus. A run of questions hands back once, at the end, not between
+each pair. The one handover that does not hand back is an ERROR: `!!` lines take
+the command pane and hold it until you Tab away (2026-08-25, re-ruled
+2026-09-16), because an error is not a question and never completes.
+
 CONTROLS. Tab switches focus between panes AND reshapes the split: the
 focused pane gets 4/5ths of the available rows, the unfocused one 1/5th,
 whichever way round focus currently sits. That IS the focus indicator —
@@ -577,6 +588,15 @@ class AppState:
     terminal resize gets, not a header touch-up as it did before),
     "quit", or None (an unhandled/control character, ignored)."""
 
+    # HOW LONG A COMMAND-CHANNEL SERIES MAY PAUSE before its focus is handed
+    # back — in main_loop ticks, TICK = 0.05s, so 8 is 0.4 seconds. Long enough
+    # that the gap between two vetting questions (one register write and a few
+    # emitted lines) never reads as the end of the series; short enough that a
+    # person who just answered the last one is not left looking at the wrong
+    # pane. A count rather than an edge, because nothing signals "the
+    # coordinator is finished with the command pane" — see command_read_follow.
+    READ_HANDBACK_TICKS = 8
+
     def __init__(self, circle_height: int, command_height: int, backend=None):
         self.circle = Pane("CIRCLE", "Self> ", circle_height)
         self.command = Pane("COMMAND", "cmd> ", command_height)
@@ -601,6 +621,29 @@ class AppState:
         # The row `on_alert` wants pinned, waiting for the caller's
         # focus-driven resize to happen first — see `apply_alert_anchor`.
         self._alert_anchor: int | None = None
+        # THE PANE THE PERSON THEMSELF CHOSE, and the one every automatic
+        # handover hands back to. The operator, 2026-09-16: *"The circle pane
+        # is primary. Always focus on it unless the user tabs to cmd> or the
+        # process requires input in cmd>, and when a cmd> input (series) is
+        # complete, focus on the last pane the user had selected via tab."*
+        #
+        # WRITTEN BY Tab AND BY NOTHING ELSE. That is what makes it mean what
+        # it says: the coordinator borrowing the command pane for a question
+        # must not be able to change where the question hands back to. Before
+        # any Tab it is "circle", which is the primary pane and the opening
+        # focus both.
+        self.user_focus = "circle"
+        # AN ERROR HOLDS THE COMMAND PANE UNTIL A Tab, which is the operator's
+        # 2026-08-25 request kept intact under the rule above (ruled again
+        # 2026-09-16, answer (a): *"on error handover, stay in cmd>"*). An
+        # error is not a question, so nothing about it ever "completes" — and
+        # without this flag the next command-channel question to end would
+        # hand focus away from an error the person had not read yet.
+        self._alert_holds = False
+        # Consecutive ticks with no command-channel question pending. The
+        # hand-back waits for READ_HANDBACK_TICKS of them, so a gap BETWEEN two
+        # questions of one series does not read as the series ending.
+        self._read_idle = 0
 
     def focused_pane(self) -> Pane:
         return self.circle if self.focus == "circle" else self.command
@@ -610,8 +653,17 @@ class AppState:
         whoever knows the terminal's row count — `main_loop`, via
         `_pane_heights(rows, state.focus)` — so this stays pure state, as
         every other transition in this class is, and remains callable from
-        a headless self-test with no geometry in hand."""
+        a headless self-test with no geometry in hand.
+
+        AND IT RECORDS THE CHOICE. `user_focus` is what every automatic
+        handover hands back to, and this is its only writer — a Tab is the
+        only way a person says which pane is theirs. It also releases an
+        error's hold on the command pane: the hold exists so an unread error
+        is not scrolled away from, and a Tab is the person saying they are
+        done with it."""
         self.focus = "command" if self.focus == "circle" else "circle"
+        self.user_focus = self.focus
+        self._alert_holds = False
 
     def resize(self, circle_height: int, command_height: int) -> None:
         """Route a detected terminal resize to both panes. Each pane's
@@ -772,10 +824,58 @@ class AppState:
             self.command.jump_bottom()
             return "focus"
         if token == "initialized":
-            self.focus = "circle"
-            self.circle.jump_bottom()
+            # BACK TO THE PERSON'S OWN PANE, not to "circle" — which is the
+            # same thing until they have tabbed, and the point of the rule
+            # afterwards (2026-09-16). The dialogs that just ran are the
+            # archetype of "the process requires input in cmd>".
+            self.focus = self.user_focus
+            self.focused_pane().jump_bottom()
             return "focus"
         return None
+
+    def command_read_follow(self, pending: bool) -> str | None:
+        """Focus follows a COMMAND-channel question, and hands back when the
+        run of them ends. Called once per tick with whether the coordinator is
+        blocked on a command-channel read right now.
+
+        Returns "focus" when both pane heights must be redrawn — the same
+        contract `on_state` and `on_alert` have — else None.
+
+        THE SERIES, NOT THE QUESTION. Vetting asks once per pending row, so
+        `pending` drops between rows; handing focus back in each of those gaps
+        would bounce the window through a whole vetting round. `_read_idle`
+        counts consecutive ticks with nothing pending and only hands back once
+        the run has genuinely stopped, which is why this takes a tick count
+        rather than an edge.
+
+        WHAT IT WILL NOT DO:
+
+        take focus it already has
+            an idempotent call per tick is the whole design; only a CHANGE
+            returns "focus".
+        hand back from an error
+            `_alert_holds` is the 2026-08-25 handover, ruled to stay
+            (2026-09-16, answer (a)). An error is not a question and never
+            completes, so a question ending underneath one must not move the
+            window off it.
+        lose a half-typed statement
+            each pane keeps its own `input_buf`, so a borrowed focus and its
+            return leave a part-written Self line exactly where it was."""
+        if pending:
+            self._read_idle = 0
+            if self.focus != "command":
+                self.focus = "command"
+                self.command.jump_bottom()
+                return "focus"
+            return None
+        self._read_idle = getattr(self, "_read_idle", 0) + 1
+        if (self._read_idle < self.READ_HANDBACK_TICKS
+                or self._alert_holds
+                or self.focus == self.user_focus):
+            return None
+        self.focus = self.user_focus
+        self.focused_pane().jump_bottom()
+        return "focus"
 
     def move_cursor_row(self, pane: Pane, delta: int) -> bool:
         """One VISUAL ROW up or down inside a wrapped input, keeping the
@@ -920,6 +1020,7 @@ class AppState:
             self.command.pin_top(row)
             return None
         self.focus = "command"
+        self._alert_holds = True       # until a Tab — ruled 2026-09-16, (a)
         self._alert_anchor = row
         return "focus"
 
@@ -3326,6 +3427,20 @@ def ui_main_loop(engine: "CircleEngine",
                     # index into what was just appended.
                     if channel == "command" and state.on_alert(line) == "focus":
                         refocus = True
+                # FOCUS FOLLOWS A COMMAND-CHANNEL QUESTION, and hands back when
+                # the run of them ends (2026-09-16). Asked once per tick, AFTER
+                # the drain — the engine sets `waiting_for_channel` before
+                # `waiting_for_input` precisely so a reader between the two
+                # sees a circle-channel read rather than a command one, and the
+                # drain is where this tick's lines have already landed, so the
+                # question is on screen before the pane holding it takes focus.
+                b = state.backend
+                if (b is not None
+                        and state.command_read_follow(
+                            bool(getattr(b, "waiting_for_input", False))
+                            and getattr(b, "waiting_for_channel", "circle")
+                            == "command") == "focus"):
+                    refocus = True
                 if refocus:
                     # Both pane heights follow focus: the same full redraw a
                     # Tab gets, and it repaints whatever this drain appended.

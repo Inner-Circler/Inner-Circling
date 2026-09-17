@@ -49,13 +49,14 @@ None. The script takes no arguments; it is invoked bare either as a shell comman
 
 ## DEPENDENCIES
 
-Python standard library only: `pathlib`, `sys`, `time`, plus `from __future__ import annotations`. No sibling/local project modules, no third-party packages, and no external programs are invoked.
+Standard library: `pathlib`, `sys`, `time`, plus `from __future__ import annotations`. One sibling module, `record_paths` (the bound group's circles directory, `CIRCLES_DIR`, and ROOT). No third-party packages, and no external programs are invoked.
 
 ## EXTERNAL FILES
 
     Read
         Every file matching `circle_*.md` directly under two directories:
-        the live circles directory (`<project root>/circles/`) and the
+        the live circles directory (`record_paths.CIRCLES_DIR` — the bound group's
+        `groups/<name>/circles/`, `groups/ifs/circles/` by default) and the
         sandbox circles directory (`work/sandbox/circles/`) — read
         only for their filesystem metadata (modification time via
         `stat()`), never their contents. Each candidate file's
@@ -92,7 +93,8 @@ No input is read from stdin; the script's only external input is the filesystem 
         that isn't real.
 
         Resolve this file's own directory (HERE) and its parent (ROOT).
-        Define LIVE as ROOT/circles, SANDBOX as HERE/sandbox/circles, and
+        Define LIVE as record_paths.CIRCLES_DIR (the bound group's circles/, rebound by
+        group_set()), SANDBOX as ROOT/work/sandbox/circles (R176), and
         LOGS as ROOT/work/logs -- the three filesystem locations the rest
         of the module reads. Define QUIET_SECONDS as 45 minutes (45 * 60),
         the threshold past which an unclosed transcript is judged

@@ -1055,12 +1055,6 @@ def main() -> int:
     ap.add_argument("--transaction-rollback", action="store_true",
                     help="undo an interrupted swap from the rollback copies")
     # The --journal-* spellings (until B100, 2026-09-04; R446, R448) are
-    # accepted HIDDEN for one release: each prints a one-line note and does
-    # exactly what its --transaction-* twin does. Separate arguments, not
-    # extra option strings, so main() can tell which spelling fired.
-    for legacy in ("status", "finish", "rollback"):
-        ap.add_argument(f"--journal-{legacy}", dest=f"journal_{legacy}_legacy",
-                        action="store_true", help=argparse.SUPPRESS)
     ap.add_argument("--log", action="store_true",
                     help="mirror all output to "
                          "work/logs/circle_audit_<timestamp>.log")
@@ -1079,11 +1073,7 @@ def main() -> int:
     print(f"project: {ROOT}")
 
     for action in ("status", "finish", "rollback"):
-        if getattr(args, f"journal_{action}_legacy"):
-            # R448 is the rename's ruling; not printed, since this line ships.
-            print(f"  note  --journal-{action} is --transaction-{action} since 2026-09-04; "
-                  f"the old spelling is accepted for one release")
-        if getattr(args, f"transaction_{action}") or getattr(args, f"journal_{action}_legacy"):
+        if getattr(args, f"transaction_{action}"):
             return circle_audit_transaction_command_read(run, action)
 
     if args.git_setup:

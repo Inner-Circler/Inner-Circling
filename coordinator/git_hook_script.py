@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v195"
+HOOK_MARK = "# inner-circling pre-commit v196"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -683,18 +683,25 @@ case "$FILES" in *coordinator/seam.py*|*coordinator/tests/test_seam.py*|*coordin
     run coordinator/tests/test_seam.py
 esac
 
-case "$FILES" in *work/graph/coordinator_draw.py*|*work/graph/test_coordinator_draw.py*)
-    NOTE="  pre-commit: the module diagram's derivations touched"
+# The module diagram DISCOVERS its modules by scanning coordinator/, memory/ and ui/, and
+# validate() refuses a module its hand-typed REGION_OF does not place or a record file its
+# FILES table does not claim — so a new module in any of the three, or a module naming a new
+# record file, moves the drawing without touching the drawer. Those directories fire the
+# suite; it runs in seconds. Its drawings are untracked, so nothing is redrawn here.
+case "$FILES" in *work/graph/coordinator_draw.py*|*work/graph/test_coordinator_draw.py*\
+|*coordinator/*.py*|*memory/*.py*|*ui/*.py*)
+    NOTE="  pre-commit: the module diagram's derivations, or a module it must place, touched"
     run work/graph/test_coordinator_draw.py
 esac
 
 # The subsystem picture derives its centre from coordinator_draw AND the two
 # sibling drawers' function columns, so a change to any of the three can move
-# it — trigger and invocation land together (v19's rule).
+# it — trigger and invocation land together (v19's rule). And it refuses with
+# coordinator_draw, so the same three directories fire it.
 case "$FILES" in *work/graph/llm_orchestration_draw.py*|*work/graph/test_llm_orchestration_draw.py*\
 |*work/graph/coordinator_draw.py*|*work/graph/prompt_grammar_draw.py*\
-|*work/graph/llm_response_data_flow_draw.py*)
-    NOTE="  pre-commit: the subsystem picture's derivations touched"
+|*work/graph/llm_response_data_flow_draw.py*|*coordinator/*.py*|*memory/*.py*|*ui/*.py*)
+    NOTE="  pre-commit: the subsystem picture's derivations, or a module it must place, touched"
     run work/graph/test_llm_orchestration_draw.py
 esac
 

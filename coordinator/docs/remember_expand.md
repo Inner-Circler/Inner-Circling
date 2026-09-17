@@ -45,7 +45,8 @@ caught, reported on the command channel, and the circle opens without packs.
 `coordinator/tests/test_remember_expand.py` drives every row of that degrade table.
 
 **The arm is a flag, not a file.** `circle.py --recall-arm off|delivered|withheld` decides whether packs
-are computed, and whether a computed pack is delivered. Default: off. `delivered` computes and delivers;
+are computed, and whether a computed pack is delivered. Default: delivered (on), since R526, 2026-09-10;
+off from R400 until then. `delivered` computes and delivers;
 `withheld` computes and logs without delivering; `off` computes nothing. Anything unrecognized coerces to
 off, the degrade direction. A flag per invocation cannot be forgotten in a settings file between a trial
 and ordinary use, and it rides argv into the record. R460 (2026-09-06) closed the recall trial: recall is

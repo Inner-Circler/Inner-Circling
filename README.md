@@ -1196,15 +1196,19 @@ WITH CARE — machine-written, but hand-editable
                                 what an issue is
   groups/ifs/issues/*.toml      the issue graph
   groups/ifs/self/*.toml        the registers
-  groups/ifs/circles/circle_history.toml, circle_journal.toml,
-  circle_observation_log.toml, working_sets.toml
-                                the four one-per-circle registers, which sit
-                                beside the transcripts rather than under self/
     Each has one owning module that reads and writes it. Keep the shape,
     edit between circles, and run the gate named below afterwards.
 
 NEVER — the historical record, and what is derived from it
   groups/ifs/circles/*.md       transcripts
+  groups/ifs/circles/circle_history.toml, circle_journal.toml,
+  circle_observation_log.toml, working_sets.toml
+                                the four one-per-circle registers, beside the
+                                transcripts: one row per circle, written by the
+                                coordinator at open or close, frozen once written
+                                (circles/README.md). The observation log alone
+                                has verbs of its own — /observation-add, -continue,
+                                -retire, -purge — and those are the way to touch it
   groups/ifs/circles/commands_<OT>.toml
                                 the graph rulings one circle made, beside
                                 its transcript (circles/README.md)
@@ -1216,9 +1220,14 @@ NEVER — the historical record, and what is derived from it
   work/prompts/**               captured prompts
 ```
 
-Why those three are *never*, specifically:
+Why those are *never*, specifically:
 
 ```
+a one-per-circle register row is that circle's own
+    written once, about one circle, by the coordinator; the next circle's
+    row continues it (its `chain`), and the audit's gate holds each register
+    to one row per run. An edited row is a circle that did not happen.
+
 a transcript is what was said
     every evidence quote in the issue graph is verified byte-for-byte
     against it, and the close report holds a sha256 of each part's record

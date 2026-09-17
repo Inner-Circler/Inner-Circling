@@ -58,7 +58,7 @@ and projects are not issues.
 Nodes are shared across parts; evidence is per-part. Edges use a small closed
 vocabulary borrowed from established practice rather than invented:
 `narrower-than` and `related-to` from SKOS, `polarized-with` and `protects` from
-IFS itself, `consequence-of` from grounded theory's conditions→consequences chain.
+IFS itself, `leads-to` from grounded theory's conditions→consequences chain.
 Where a real relation will not fit any of the five, it is recorded verbatim as
 **unrepresentable** rather than bent into the nearest available type. That file is
 a primary output: an empty one means the vocabulary is sufficient.
@@ -145,7 +145,8 @@ The system can manufacture agreement, and it does.
 Across the 36 transcripts it cited when this was written (39 on 2026-09-11), the graph
 contained **zero `polarized-with` edges** — not one
 recorded instance of two parts pursuing the same goal by opposed strategies. The
-word "challenge" appears zero times, despite being a named rule. In one circle of
+word "challenge" appears in 13 of 58 transcripts, 12 times in a part's own statement,
+against a rule that names it as the expected move (measured 2026-09-16). In one circle of
 55 part statements, **2 were addressed to another part**; the rest went to me or to
 the room.
 

@@ -159,7 +159,8 @@ testimony.
 Questions alone will not overcome a mechanism that rewards agreement.
 
 1. **The challenge rules already exist in `process_core.md` and have never been
-   used.** Zero occurrences of "challenge" in 34 transcripts. The rules are
+   used.** The word "challenge" appears in a handful of the 34 transcripts, and the
+   rule's own move — one challenge, one acknowledgement — in none. The rules are
    written as *constraints on* challenging — one response, then Self
    acknowledges, 4+ exchanges forces a pause. A part reading them learns that
    challenging is regulated, not that it is wanted. Consider stating the

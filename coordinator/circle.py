@@ -257,8 +257,9 @@ def read_line_no_annotation(prompt: str, where: str,
 
 # THE WORKING SET QUESTION — WORKING_SET_PROMPT and working_set_ask(), with the R330/R344
 # history above them — MOVED to working_set_manager.py, 2026-09-03 (cohesion re-homing
-# stage 10). main() calls WS.working_set_ask(IP, read_line=read_line_no_annotation): the
-# reader is a parameter, so R225's annotation refusal at this prompt stays this file's.
+# stage 10). The open step (circle_open.py, since 2026-09-09) calls
+# WS.working_set_ask(IP, read_line=read_line_no_annotation): the reader is a parameter, so
+# R225's annotation refusal at this prompt stays this file's.
 
 # ------------------------------------------------------------------ paths
 # ROOT and SANDBOX (and PART_TAGS, further down) moved to record_paths.py,

@@ -201,7 +201,7 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
     With `--commit`: write the staged changes to disk but skip the `git commit` step. Default: off.
 
 `--transaction-status`, `--transaction-finish`, `--transaction-rollback`
-    Inspect, complete, or undo an interrupted commit (a leftover transaction file from a process that died mid-file-swap). Each dispatches immediately and independently of every other flag. Default: off. The pre-B100 spellings `--journal-status` / `--journal-finish` / `--journal-rollback` (until 2026-09-04, R446/R448) are still accepted, hidden from `--help`, for one release: each prints a one-line note and does what its `--transaction-*` twin does. A leftover file named JOURNAL (left by a crash before the rename) is found and repaired exactly like a TRANSACTION; the report names whichever it found.
+    Inspect, complete, or undo an interrupted commit (a leftover transaction file from a process that died mid-file-swap). Each dispatches immediately and independently of every other flag. Default: off. The pre-B100 spellings `--journal-*` (until 2026-09-04, R446/R448) are gone: they were accepted hidden for one release, and two publishes have shipped since. A leftover file named JOURNAL (left by a crash before the rename) is found and repaired exactly like a TRANSACTION; the report names whichever it found.
 
 `--log`
     Mirror all printed output to a timestamped file under `work/logs/` (`circle_audit_<timestamp>.log`), in addition to stdout. Default: off.

@@ -135,7 +135,7 @@ FALSE_WORDS = ("no", "n", "off", "false", "0")
 class Setting:
     """One declared setting. `owner` is file::NAME, the constant that holds
     the default AND the reasoning — the editor prints it so a person can go
-    read why the number is what it is, and --check asserts it resolves.
+    read why the number is what it is, and system_setting_verify.py asserts it resolves.
 
     `why` is that reasoning in ONE SENTENCE, the one `/settings-list <n>` prints
     (R543). Written from the owner's own comment, and
@@ -535,7 +535,7 @@ SPEC: tuple[Setting, ...] = (
 
 BY_KEY: dict[str, Setting] = {s.key: s for s in SPEC}
 
-# `provider` accepts exactly this, and --check asserts SPEC still says so.
+# `provider` accepts exactly this, and system_setting_verify.py asserts SPEC still says so.
 # A provider selector is a policy surface as well as a technical one: this
 # project's standing rule is that nothing leaves this machine, so a second
 # entry here is a decision about that rule, not only about code.
@@ -647,7 +647,7 @@ def setting_value_read(key: str, default):
     """The active override for `key`, or `default`.
 
     `default` is the caller's own constant, and it is the documented default
-    — --check reads it back out of the source text and reports it, so the
+    — system_setting_verify.py reads it back out of the source text and reports it, so the
     editor can show a person what they are changing from without this module
     keeping a second copy of every number.
 
@@ -947,8 +947,9 @@ def setting_constants_refresh() -> list[tuple[str, object, object]]:
     single-pane way in and `circle` under the UI, and importing by name from the single-pane
     process would make a second module and refresh the wrong one. Every loaded module whose file
     is the owner's gets the attribute set. An owner not yet imported needs nothing — it will read
-    [active] when it imports. The default passed is the owner's SOURCE literal (what --check
-    reports), not the attribute's current value: after /settings-clear the current value IS the
+    [active] when it imports. The default passed is the owner's SOURCE literal (what
+    system_setting_verify.py reports), not the attribute's current value: after /settings-clear
+    the current value IS the
     stale override. Every next_circle key is re-read, not only the folded ones, for the same
     reason — a clear never appears in the fold's list. `immediate` keys are not this function's:
     they were never read at import as a rule, and a change to one is refused while a circle is

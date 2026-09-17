@@ -124,8 +124,8 @@ masked, whenever they differ:
 ```
 !! ANTHROPIC_API_KEY is set in the
    ENVIRONMENT and differs from .env.
-   environment  sk-ant-api03...5gAA <- IN USE
-   .env         sk-ant-api03...igAA <- IGNORED
+   environment  sk-ant-api03...xxxx <- IN USE
+   .env         sk-ant-api03...yyyy <- IGNORED
 ```
 
 Reconcile them or clear the variable; the warning is telling you which key
@@ -675,13 +675,12 @@ it at the user (`#16`).
 --parts a,b,c       comma-separated part dirs — TESTING ONLY, see "Roster"
                     below (a reduced roster leaves the omitted parts
                     unaware of the circle). Default: every member of the
-                    DEFAULT GROUP — the `ifs` row resolved through
+                    DEFAULT GROUP — the `ifs` descriptor resolved through
                     group_manager.group_resolve() (B117 stage 1,
                     R466/R467), never the parts/ scan; the scan is the
-                    fallback only where no group row exists. The Soul is
-                    among them (see "The Soul" below — it IS a
-                    participant; process_core.md's own §The Soul
-                    disagrees with the record, not this default).
+                    fallback only where no group descriptor exists. The
+                    Soul is among them — it IS a participant (see "The
+                    Soul" below).
 --group NAME        open on a NAMED group (coordinator/group_manager.py,
                     groups/<name>/group.toml — R468) instead of --parts — a deliberately
                     different roster, not a reduced one, so the REDUCED
@@ -737,17 +736,17 @@ sets the agenda.
 ## Roster
 
 **No, parts do not need to be named.** The default is **every member of the
-default group**, the Soul included — the `ifs` row resolved through
+default group**, the Soul included — the `ifs` descriptor resolved through
 `group_manager.group_resolve()`, never a `parts/` scan (B117 stage 1,
 R466/R467). `--parts` exists for cheap test rounds.
 
 ### The Soul — a doctrine discrepancy that has since been resolved
 
-This section quoted `process_core.md` §The Soul as saying it "does not speak
+This section quoted the rulebook's §The Soul as saying it "does not speak
 directly in circles… may graduate to speech if a circle specifically calls
 for it" and described a standing-override symbol keyed by the Soul's old directory name in
 `circle.py` as a workaround. Neither is accurate today: no such symbol
-exists anywhere in the tree, and `process_core.md` §The Soul now reads
+exists anywhere in the tree, and `process_ifs.md` §The Soul (the IFS layer, R464) reads
 **"It is present in every circle and it does speak — rarely, and on its own
 terrain"** (R303, 2026-08-22) — already matching the empirical record below
 rather than contradicting it.

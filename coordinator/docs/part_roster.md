@@ -38,7 +38,7 @@ The module has no `main()` function. Its top-level module body always executes, 
 None. The script takes no flags or positional arguments; running it directly performs the verification described above and prints its result.
 
 ## DEPENDENCIES
-Standard library only: `pathlib`, `__future__.annotations`. No sibling-module imports, no third-party packages, no external programs invoked.
+Standard library: `pathlib`, `__future__.annotations`, and `tomllib` — with `tomli` as the fallback import on interpreters older than 3.11, which the project's own `.venv` (3.10) is. One sibling module, `record_paths` (the bound group's parts/ directory, which the roster follows across `group_set()`). No external programs invoked.
 
 ## EXTERNAL FILES
 Read: `<repo root>/parts/` — every immediate subdirectory, and each one's `part.toml` if present. Read once at import time to build `ROSTER`/`ALT_TAGS`/`PROBLEMS`, and again on every `part_verify()` call, which re-scans rather than trusting the import-time snapshot so a tree edited since import is read as it is now. If `parts/` does not exist, this is treated as an empty set rather than an error.

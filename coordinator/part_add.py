@@ -55,6 +55,7 @@ import re
 from datetime import datetime
 
 import part_roster as R
+import record_paths as _RP
 import seam
 import phase_clock as PC   # stream_timed_read — a prompt is human time, and the
                            # heartbeat must not spin at someone typing
@@ -163,12 +164,62 @@ def part_precheck(name: str, tag: str, identity: str) -> str:
     return ""
 
 
+# THE TREE'S OWN RECORD IS NEVER WRITTEN FROM A TEST. On 2026-09-16 an audit's tracer ran the
+# suites in one process against the main checkout, a suite's isolation (R.PARTS_DIR pointed at
+# a temp dir) did not hold across that process, and part_add() wrote a part named after a test
+# file into groups/ifs/ and committed it — the roster seated it (audit-register 2026-09-16 #1;
+# part_retire's own comment records the same shape on 2026-09-12). Every suite isolates by
+# rebinding a module global, and a global is exactly what another suite, a follower or a
+# thread can rebind back. So the WRITER checks, at the one moment it matters: when the
+# directory it is about to write is under this checkout's own root AND a test suite is on the
+# stack (or is the program), it refuses before touching anything. A suite writing its own temp
+# tree is untouched (the target is not under LIVE_ROOT); the operator's own /part-add is
+# untouched (no suite on the stack). A probe proves the refusal against a temp LIVE_ROOT, so the
+# proof itself can never reach the record.
+LIVE_ROOT = _RP.ROOT
+
+
+def _suite_on_stack() -> str | None:
+    """The first test suite's filename on the call stack or in sys.argv[0], else None."""
+    import sys
+    import traceback
+    names = []
+    if sys.argv:
+        names.append(pathlib.Path(sys.argv[0]).name)
+    names += [pathlib.Path(f.filename).name for f in traceback.extract_stack()]
+    for n in names:
+        if n.startswith("test_") and n.endswith(".py"):
+            return n
+    return None
+
+
+def part_write_refused(target: pathlib.Path) -> str | None:
+    """The one-line refusal when `target` is under LIVE_ROOT and a suite is running, else None.
+    Pure: reads the stack and the path, writes nothing — which is what lets a probe call it
+    against the real path."""
+    try:
+        rp = target.resolve()
+        live = LIVE_ROOT.resolve()
+    except OSError:
+        return None
+    if live not in rp.parents:
+        return None
+    suite = _suite_on_stack()
+    if suite is None:
+        return None
+    return (f"refused: {suite} reached this tree's own record ({rp}) — a suite writes a temp "
+            f"tree, never this one. Nothing was written.")
+
+
 def part_add(name: str, tag: str, identity: str) -> tuple[bool, str]:
     """Create parts/<name>/ — long_term.md first, part.toml last (the marker
     makes it a part, so the identity must exist before membership does) —
     then put <name> on the group's `roles` and commit both (D127).
     IMMEDIATE: /abort does not undo it. Returns (ok, message)."""
     why = part_precheck(name, tag, identity)
+    if why:
+        return False, why
+    why = part_write_refused(R.PARTS_DIR / name)
     if why:
         return False, why
     from atomic_write import record_atomic_write
@@ -350,6 +401,10 @@ def part_retire(n_text: str) -> None:
         return
     why = PC.stream_timed_read(seam.read_line, "  why (one line, may be blank): ",
                                channel="command").strip()
+    refused = part_write_refused(R.PARTS_DIR / d)       # the same guard part_add() has
+    if refused:
+        seam.emit("command", f"  cancelled — {refused}")
+        return
     # OFF THE GROUP'S LIST FIRST (D127): a role left on `roles` with no seat makes every plain
     # open refuse ("unknown part"), so a list that cannot be edited stops the retire here.
     try:

@@ -213,3 +213,7 @@ work/ticker/
 # the parts' recall index cache (recall_index.py, R402) — derived,
 # rebuildable, one re-embed to recreate; never record.
 work/recall_index/
+
+# sanitize.py's own report — a bare run's snapshot, local since 2026-09-17: nothing
+# reads it and nothing regenerated it, so a committed copy was stale by construction.
+packaging/sanitize_report.toml

@@ -252,6 +252,39 @@ def ui_is_alert(line: str) -> bool:
     return line.lstrip("\n ").startswith(ALERT_MARK)
 
 
+# THE STILL-WORKING ROW — the operator, 2026-09-16 (R572):
+# *"stack '… still working' as Claude code does? By cycling the initial
+# character"*, and *"Still working vanishes after."* circle.py sends
+# command_surface.PROGRESS_LINE to the command pane once per beat; the pane keeps
+# ONE row for it, turns the glyph in place, and drops the row when the wait ends.
+_progress_line: "list[str | None]" = []   # empty until read; then [the line, or None]
+
+
+def ui_progress_line_read() -> "str | None":
+    """command_surface.PROGRESS_LINE, read once — None where that module cannot
+    be imported, and then no line is ever taken for a beat."""
+    if not _progress_line:
+        _progress_line.append(getattr(_command_surface(), "PROGRESS_LINE", None) or None)
+    return _progress_line[0]
+
+
+PROGRESS_FRAMES = ("·", "✢", "✳", "✶", "✻", "✽", "✻", "✶", "✳", "✢")
+# The classic Windows console has no font fallback, and draws a dingbat as a box.
+PROGRESS_FRAMES_PLAIN = ("-", "\\", "|", "/")
+PROGRESS_FRAME_SECONDS = 0.12
+
+
+def ui_progress_frames_read(env=None, platform: "str | None" = None) -> tuple[str, ...]:
+    """The glyphs this terminal can draw. Windows Terminal (WT_SESSION) and an
+    editor's terminal (TERM_PROGRAM) fall back to a symbol font; a bare
+    Windows console does not. Every other platform's terminals do."""
+    env = os.environ if env is None else env
+    platform = sys.platform if platform is None else platform
+    if platform == "win32" and not (env.get("WT_SESSION") or env.get("TERM_PROGRAM")):
+        return PROGRESS_FRAMES_PLAIN
+    return PROGRESS_FRAMES
+
+
 class Pane:
     """One logical pane's scrollback and in-progress input line.
 
@@ -318,6 +351,42 @@ class Pane:
         # the cursor sat at the question's own column — the operator's
         # cursor-80-columns-right screen from the install circle.
         self.input_prompt_drawn: "str | None" = None
+        # THE STILL-WORKING ROW, when this pane holds one: always its LAST
+        # logical line, drawn as the current glyph rather than as PROGRESS_LINE.
+        self.progress = False
+        self.progress_frame = 0
+        self.progress_frames: tuple[str, ...] = PROGRESS_FRAMES
+        self._progress_rows = 0        # display rows the still-working line takes
+
+    def progress_text(self) -> str:
+        """What the still-working row shows at the current frame."""
+        glyph = self.progress_frames[self.progress_frame % len(self.progress_frames)]
+        return f"  {glyph} still working…"
+
+    def progress_clear(self) -> bool:
+        """Drop the still-working row — the wait it marked is over. True if
+        there was one to drop."""
+        if not self.progress:
+            return False
+        self.logical.pop()
+        if self._progress_rows:
+            del self.lines[-self._progress_rows:]
+        self.progress, self.progress_frame, self._progress_rows = False, 0, 0
+        if self.scroll_top is not None:
+            self.scroll_top = max(0, min(self.scroll_top, self._max_top()))
+        return True
+
+    def progress_advance(self) -> bool:
+        """Turn the glyph one frame, in place. True if there is a row to turn."""
+        if not self.progress:
+            return False
+        self.progress_frame = (self.progress_frame + 1) % len(self.progress_frames)
+        rows = ui_line_wrap(self.progress_text(), self.width)
+        if self._progress_rows:
+            del self.lines[-self._progress_rows:]
+        self.lines.extend(rows)
+        self._progress_rows = len(rows)
+        return True
 
     def append(self, line: str) -> None:
         # circle.py's own text is written for a PLAIN SCROLLING TERMINAL —
@@ -334,6 +403,19 @@ class Pane:
         # answer. Splitting here (not only where the CircleEngine path
         # calls this) makes every caller's contract
         # match reality: one row in, one row out.
+        #
+        # A REPEATED BEAT DOES NOT STACK: PROGRESS_LINE is kept as one row while
+        # it is the last line, and anything else arriving ends the wait and
+        # drops that row first.
+        beat = ui_progress_line_read()
+        if beat is not None and line == beat:
+            if not self.progress:
+                self.logical.append(line)
+                rows = ui_line_wrap(self.progress_text(), self.width)
+                self.lines.extend(rows)
+                self.progress, self._progress_rows = True, len(rows)
+            return
+        self.progress_clear()
         for one in (line.split("\n") if "\n" in line else [line]):
             self.logical.append(one)
             self.lines.extend(ui_line_wrap(self._display_line(one), self.width))
@@ -497,8 +579,14 @@ class Pane:
         absolute row index means something different afterwards — see
         set_width()'s own long-standing reasoning, which now covers both."""
         rows: list[str] = []
-        for one in self.logical:
-            rows.extend(ui_line_wrap(self._display_line(one), self.width))
+        last = len(self.logical) - 1
+        for i, one in enumerate(self.logical):
+            if self.progress and i == last:
+                mine = ui_line_wrap(self.progress_text(), self.width)
+                self._progress_rows = len(mine)
+                rows.extend(mine)
+            else:
+                rows.extend(ui_line_wrap(self._display_line(one), self.width))
         self.lines = rows
         if self.scroll_top is not None:
             self.scroll_top = max(0, min(self.scroll_top, self._max_top()))
@@ -2583,6 +2671,49 @@ def ui_pane_render(state: AppState, which: str, width: int, write,
                      command_prompt=command_prompt)
 
 
+def ui_output_append(state: AppState, channel: str, line: str) -> bool:
+    """One content line from the engine into its pane. Any line but the beat's
+    own ends the wait, whichever pane it lands in, so the command pane's
+    still-working row goes first. True if the COMMAND pane changed."""
+    target = state.circle if channel == "circle" else state.command
+    touched = target is state.command
+    if line != ui_progress_line_read() and state.command.progress_clear():
+        touched = True
+    target.append(line)
+    return touched
+
+
+def ui_progress_wait_ended(state: AppState, finished: bool) -> bool:
+    """The program can stop working without saying anything: it is waiting for
+    an answer, or it has ended. Either drops the still-working row. True if a
+    row was dropped."""
+    b = state.backend
+    waiting = b is not None and bool(getattr(b, "waiting_for_input", False))
+    if finished or waiting:
+        return state.command.progress_clear()
+    return False
+
+
+def ui_progress_frame_render(state: AppState, width: int, write) -> None:
+    """Turn the still-working glyph one frame and draw it — that one row when
+    the rest of the command pane is already on screen, the pane body when it
+    is not (scrolled, wrapped, or stale), whose own guard then decides."""
+    pane = state.command
+    prompt = _command_prompt(state)
+    g = _input_geometry(state, "command", prompt, width)
+    single = (pane.scroll_top is None and pane._progress_rows == 1
+              and pane.width == width and not pane.body_needs_repaint(g["k"]))
+    pane.progress_advance()
+    if not single:
+        ui_pane_render(state, "command", width, write, command_prompt=prompt)
+        return
+    shown = pane.visible()[-g["body_rows"]:] if g["body_rows"] else []
+    if shown:
+        row = _pane_rows(state, "command")["top"] + len(shown) - 1
+        write(_move(row, 1) + CLR_LINE + shown[-1][:width])
+    pane.mark_painted(g["k"])
+
+
 def ui_chrome_render(state: AppState, width: int, write) -> None:
     """The divider and status line — the control legend, and nothing about
     focus. It used to end "focus: CIRCLE/COMMAND"; the split itself now
@@ -3301,6 +3432,8 @@ def ui_main_loop(engine: "CircleEngine",
     sys.path.insert(0, str(COORD_DIR))
     import stream_redaction as SR
     state.circle.set_redact(SR.REDACT_VIEW_DEFAULT)
+    state.command.progress_frames = ui_progress_frames_read()
+    progress_turned = 0.0              # when the still-working glyph last turned
     extra_argv = list(extra_argv or [])
 
     # on_finished() is a ONE-SHOT: the flag, not the Event, is what says
@@ -3418,9 +3551,7 @@ def ui_main_loop(engine: "CircleEngine",
                         state.circle.set_redact(line == "on")
                         drained = True
                         continue
-                    target = state.circle if channel == "circle" else state.command
-                    touched_command = touched_command or target is state.command
-                    target.append(line)
+                    touched_command = ui_output_append(state, channel, line) or touched_command
                     drained = True
                     # AN ERROR MUST NOT SCROLL PAST (2026-08-25). Checked
                     # here, AFTER the append, because the anchor is a row
@@ -3464,6 +3595,21 @@ def ui_main_loop(engine: "CircleEngine",
                                     command_prompt=command_prompt)
                     ui_cursor_render(state, write, circle_prompt=circle_prompt,
                                   width=cols, command_prompt=command_prompt)
+
+                # THE STILL-WORKING ROW (R572): gone once
+                # the program waits for an answer or has ended, and otherwise its
+                # glyph turns in place, one row, every PROGRESS_FRAME_SECONDS.
+                if ui_progress_wait_ended(state, engine.finished.is_set()):
+                    command_prompt = _command_prompt(state)
+                    ui_pane_render(state, "command", cols, write, command_prompt=command_prompt)
+                    ui_cursor_render(state, write, circle_prompt=_circle_prompt(state),
+                                  width=cols, command_prompt=command_prompt)
+                elif (state.command.progress
+                        and time.monotonic() - progress_turned >= PROGRESS_FRAME_SECONDS):
+                    progress_turned = time.monotonic()
+                    ui_progress_frame_render(state, cols, write)
+                    ui_cursor_render(state, write, circle_prompt=_circle_prompt(state),
+                                  width=cols, command_prompt=_command_prompt(state))
 
                 # THE END OF THE CIRCLE IS ANNOUNCED, ONCE — 2026-08-25, the
                 # operator: *"After /close finishes its post-close
@@ -3631,8 +3777,7 @@ def ui_main_loop(engine: "CircleEngine",
                                 try:
                                     while True:
                                         ch_, ln_ = q.get_nowait()
-                                        (state.circle if ch_ == "circle"
-                                         else state.command).append(ln_)
+                                        ui_output_append(state, ch_, ln_)
                                 except queue.Empty:
                                     pass
                                 extra_argv = _strip_resume(extra_argv) + ["--resume", ot]

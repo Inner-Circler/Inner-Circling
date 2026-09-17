@@ -118,7 +118,11 @@ if (not --yes and the answer to "type 'yes' to open a NEW circle: " is not "yes"
 if (not --resume) then { coalesce refresh (live only, hash-guarded — R356);
                          proposal_vet("before this circle's prompts are warmed", live) }
     core = group_shared_read()
-    chosen = None ; if not --resume and issue_prompt_projection.live_nodes() then chosen = working_set_manager.working_set_ask(issue_prompt_projection, read_line=read_line_no_annotation)
+    chosen = None
+    welcome = "" ; if not --resume and CIRCLE_HISTORY is empty then welcome = initialization.toml's `welcome` (a first circle)
+    if not --resume and issue_prompt_projection.live_nodes() then
+        chosen = [] (the whole graph, unasked) if welcome
+                 else working_set_manager.working_set_ask(issue_prompt_projection, read_line=read_line_no_annotation)
         (no live issue -> no question, chosen stays None — R330, 2026-08-23)
     briefing, unknown = circle_briefing_build(chosen)
 if (unknown) then { emit "unknown issue id(s) ignored: ..." }
@@ -139,7 +143,8 @@ if (--resume) then {
     emit "RESUMING circle_<OT> — transcript verified byte-for-byte", topic, statement count,
     last speaker, since-Self counters, "no opening round"
 } else {
-    loop {
+    topic = ""
+    loop while no welcome {
         topic = read_line_no_annotation("CIRCLE topic (blank = open): ", "topic", channel="circle")
             (two or fewer seated parts: "CIRCLE topic (blank = open, ? for suggestions): " — by
             count, R123)
@@ -151,7 +156,8 @@ if (--resume) then {
     }
     OT = now as YYYY-MM-DD_HHMM; guard = WriteGuard(live, OT); path = circle_path(OT)
 if (path exists) then { emit "already exists — refusing to overwrite it"; return 2 }
-    open_transcript(guard, path, OT, topic); working_set_manager.working_set_record(OT, chosen, topic, live)
+    open_transcript(guard, path, OT, topic); if welcome then append "[<welcome>]" (inside the head)
+    working_set_manager.working_set_record(OT, chosen, topic, live)
     emit "transcript: <path>"; _opened = {head: the file's bytes, armed: True}; atexit.register(discard_unspoken)
 }
     try: pdir = prompt_capture.prompt_capture_write(cap_OT, sysblocks, notes, live, ...)   (cap_OT = OT, or OT_resume_<k>)
@@ -167,10 +173,11 @@ if (pdir) then { emit "prompts captured: <dir> (KB, parts, verified byte-for-byt
     emit "pre-warming caches:" (dev only); stream_prewarm(client, parts, sysblocks, dry)
     on any exception: emit "PRE-WARM FAILED — <explanation>"; discard_unspoken(); return 2
     transcript = []; if topic then append the topic entry (speaker Self, is_topic, header = topic)
+    if welcome then append the Coordinator entry "[<welcome>]"
     since_self = {p: 0}; state = {"last": None}; issue_cmds = []; circle_ref = "<circle|sandbox>_<OT>"
     emit "/help for commands"
 if (resumed) then { transcript, since_self, state come from it }
-else { emit "opening round — BLIND"; circle_blind_round_run(...) }
+else { if welcome then emit it (circle); emit "opening round — BLIND"; circle_blind_round_run(...) }
     disarm _opened (the circle has had its opening round)
     THE SELF> LOOP — forever:
         cmd = read_line("\n<CONSOLE_NAME>> ", channel="circle").strip()
@@ -366,10 +373,12 @@ pre-warm, every statement and its retry, every short_term and its retry, the tok
 ## HUMAN I/O
 Prompts (channel in brackets): `type 'yes' to proceed:` [command], `type 'yes' to open a NEW
 circle:` [command], `Do you have specific issues you would like to focus on today ('?' to
-review) ? ` [circle — only when the live graph is non-empty], `CIRCLE topic (blank
+review) ? ` [circle — only when the live graph is non-empty, and not in a first circle, whose
+live issues all go to the room unasked], `CIRCLE topic (blank
 = open):` [circle; `CIRCLE topic (blank = open, ? for suggestions):` when two or fewer parts are
 seated, and a bare `?` at either is answered with the `help part` / `help issue` doors and
-asked again], `\n<CONSOLE_NAME>> ` [circle — the speaking turn], plus whatever the
+asked again; NOT asked in a first circle — no CIRCLE_HISTORY row yet — which shows
+initialization.toml's `welcome` on the circle channel instead], `\n<CONSOLE_NAME>> ` [circle — the speaking turn], plus whatever the
 dispatched verbs ask (`type 'yes' to apply:`, `/issue-add`'s two prompts — command channel) and
 vetting's `[<id>] a)pprove, d)eny, s)kip ?` [command]. Output: the banner, every notice and
 refusal on the COMMAND channel; the opening focus line, the room's help, the graph-ruling

@@ -850,8 +850,8 @@ Typed at the `cmd>` prompt; it re-asks that part's own personal questions. The
 command pane has no comment character, so nothing may follow the command on that
 line.
 
-**Every live run begins with up to two questions** -- the first only
-once you have a live issue to choose from.
+**From your second circle on, every live run begins with up to two
+questions** -- the first only once you have a live issue to choose from.
 
 Do you have specific issues to focus on today? ('?' to review) _
 
@@ -876,10 +876,20 @@ Enter a few words about what is on your mind:
 
 "Alcoholism sucks"
 
+**Your first circle asks neither question.** It opens instead with:
+
+Welcome to your first circle! Please introduce yourselves!
+
+and each part introduces itself. Any issue you recorded in full -- with
+what would be different when it no longer has you -- is already shared
+with the parts. Both questions arrive once your first circle has closed;
+a circle you abort does not count.
+
 **Your circle has started**
 
-Before you are asked to speak, every part speaks once on that topic,
-each without seeing the others -- the opening round. A part with
+Before you are asked to speak, every part speaks once on that topic --
+or, in your first circle, introduces itself -- each without seeing the
+others: the opening round. A part with
 nothing to add answers `[pass]`. Then you are at the circle prompt.
 Type to speak as Self:
 
@@ -915,9 +925,9 @@ then they will wait for you. Speaking spends the first of those two,
 because your statement is followed by a round straight away. So
 `/pass` or `/round` gives them the second one, and a further `/round`
 after that is quiet — the circle tells you who is holding, and they
-keep holding until you speak again. The exception is a part you have
-addressed by name since it last spoke: it may answer even at its
-limit.
+keep holding until you speak again. The exception is a part another
+part has addressed by name since it last spoke: it may answer even at
+its limit.
 
 **About remembering**
 
@@ -1039,9 +1049,12 @@ committed, so a close takes noticeably longer than the writing alone and
 adds to the circle's cost. That is the loop that turns circles into a
 part's memory; without it a part's identity never moves.
 
-If it fails it writes a report under `work/logs/`, prints the command to
-re-run it, and exits non-zero. Staging is all-or-nothing, so a failed run
-wrote nothing and the re-run is clean.
+If it fails it writes a report under `work/logs/`, exits non-zero, and
+tells you which of two cases you are in. Usually the failure came before
+anything was saved: it prints the command to re-run the processing, and
+that re-run is clean. If it came after the parts' new memory was already
+written, it says so and tells you **not** to re-run it; the report
+carries the repair by hand instead.
 
 ## Parts ... and the ones you will add
 
@@ -1071,8 +1084,9 @@ retired part leaves every circle, prompt and search from then on; its
 folder stays exactly where it is, its name stays its own, and what it
 said in past circles stays in the transcripts, marked retired. The parts
 are asked not to speak of it, and any bracket that names it is refused.
-To bring one back, rename `parts/<name>/retired.toml` to `part.toml` and
-put the name back on `roles` in the group's `group.toml`, both by hand —
+To bring one back, rename `groups/ifs/parts/<name>/retired.toml` to
+`part.toml` and put the name back on `roles` in the group's `group.toml`,
+both by hand —
 there is no command for that, on purpose.
 
 `docs/overview.md` covers the shape a circle takes and what happens when

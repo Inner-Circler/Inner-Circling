@@ -72,6 +72,7 @@ from transcript_store import (circle_transcript_open, circle_transcript_discard_
                               circle_transcript_resume_read)
 import transcript_store as TS
 import working_set_manager as WS
+import circle_history_manager as CH
 import circle_close as CC
 import token_count as TC
 
@@ -471,6 +472,16 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # one path that still silently brought the whole graph in.
     chosen: "list[str] | None" = None
     import issue_prompt_projection as IP
+    # A PERSON'S FIRST CIRCLE IS WELCOMED, NOT ASKED — the operator, 2026-09-16 (R571):
+    # *"The first time out, the coordinator could explicitly speak: 'Welcome to your first
+    # circle! Please introduce yourselves!'"*, with the topic question skipped for that
+    # circle; and (R573) the working-set question too, *"Yes, but do
+    # share with the parts"*: every live issue goes to the room unasked. "First" is the
+    # CIRCLE_HISTORY register's own fact; the words are initialization.toml's `welcome`,
+    # and an installation that empties them gets both questions back.
+    welcome = ""                          # the first circle's opening words; "" otherwise
+    if not args.resume and CH.circle_history_is_empty():
+        welcome = INIT.initialization_statements_read().get("welcome", "").strip()
     # NO LIVE ISSUE, NO QUESTION — R330, 2026-08-23: *"If
     # there are no issues[], do not ask the working set question."* The
     # answer blank would give, taken silently: None is "no issues in this
@@ -483,7 +494,7 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # asked at every future circle open. It stays empty-checked, not
     # deleted, for a fresh install with no issues/ at all.
     if not args.resume and IP.live_nodes():
-        chosen = WS.working_set_ask(IP, read_line=read_line_no_annotation)
+        chosen = [] if welcome else WS.working_set_ask(IP, read_line=read_line_no_annotation)
     with PC.PHASES.span("open.prompt_build"):
         briefing, unknown = circle_briefing_build(chosen)
         if unknown:
@@ -625,7 +636,9 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
         # never a topic — only the advertisement varies.
         topic_prompt = ("\nCIRCLE topic (blank = open, ? for suggestions): "
                         if len(parts) <= 2 else "\nCIRCLE topic (blank = open): ")
-        while True:
+        # A FIRST CIRCLE ASKS NO TOPIC (R571) — `welcome`, decided above the working set.
+        topic = ""
+        while not welcome:
             try:
                 topic = read_line_no_annotation(topic_prompt, "topic",
                                                 channel="circle")
@@ -667,6 +680,11 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                             f"--resume {ot}")
             return 2
         circle_transcript_open(guard, path, ot, topic)
+        if welcome:
+            # A COORDINATOR_NOTE, bracketed so the parser reads it back as one, and written
+            # BEFORE the head is taken below: a first circle that dies in its pre-warm is still
+            # bytes-equal to what was opened, and discard_unspoken() leaves no trace of it.
+            TS.circle_transcript_append(guard, path, f"[{welcome}]")
         WS.working_set_record(ot, chosen, topic, args.live)
         emit("command", f"\ntranscript: {path}")
 
@@ -804,6 +822,11 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                            # exercise parse/render round-trip and never
                            # execute main().
                            "header": topic})
+    if welcome:
+        # IN THE ROOM BEFORE THE OPENING ROUND — every part receives it as the Coordinator's
+        # line, so each introduces itself; blind is no obstacle to an introduction.
+        transcript.append({"speaker": "__coordinator__", "display": "Coordinator",
+                           "text": f"[{welcome}]"})
     since_self = {p: 0 for p in parts}
     state = {"last": None}
     issue_cmds: list[dict] = []
@@ -837,6 +860,10 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
         # opening round; nothing in the tree ever passed it and no probe ever
         # covered the branch. circle_round_run() is NOT orphaned by this: it is
         # what runs every round after the opening, from the Self> loop below.
+        if welcome:
+            # SHOWN TO SELF, the one COORDINATOR_NOTE that is: it speaks to the whole room,
+            # Self included, and is not the part protocol machinery 2026-08-13 withholds.
+            emit("circle", f"\n{welcome}")
         if CS.dev_mode:
             emit("command", "\nopening round — BLIND (parallel; CIRCLE_DESIGN §1).")
         with PC.PHASES.span("round"):

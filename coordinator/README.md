@@ -471,19 +471,26 @@ anything else is exit 2). A `--group` roster is deliberate and is not asked.
     on --resume, with --yes, or with no
     terminal
  6  working set prompt. ASKS, only when
-    the graph has a live node
+    the graph has a live node. NOT ASKED
+    in a first circle, which shares every
+    live issue with the parts
  7  the four blocks assembled, once, for
     the chosen set
  8  topic prompt. ASKS; Ctrl-C here
-    cancels, exit 2, nothing written
+    cancels, exit 2, nothing written.
+    NOT ASKED in a first circle (no
+    CIRCLE_HISTORY row yet), which is
+    welcomed instead
  9  OPEN TIME MINTED, path checked — a
     transcript already at that minute
-    REFUSES, exit 2 — transcript written,
+    REFUSES, exit 2 — transcript written
+    (a first circle's welcome inside it),
     working-set entry recorded
 10  BLOCK 4 finished (recall), prompt
     capture, pre-warm — a failed pre-warm
     discards the transcript, exit 2
-11  opening round, blind
+11  opening round, blind — after the
+    welcome, in a first circle
 12  the open report
 ```
 

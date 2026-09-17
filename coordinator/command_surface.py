@@ -651,6 +651,13 @@ SURFACE_SELF = "self"          # circle.py's own Self> prompt — the ADVANCED d
 SURFACE_COMMAND = "command"    # circling.py's command pane, and the Ticker's
 SURFACES = (SURFACE_SELF, SURFACE_COMMAND)
 
+# THE LINE A COMMAND PANE IS SENT once per progress beat (circle.py's
+# system_progress_render, R512). ui/circling.py matches it exactly to keep ONE row
+# whose glyph turns, dropped when the wait ends — the operator, 2026-09-16
+# (R572). Here because both ends read it and this is the
+# one module circling.py may import without importing the circle.
+PROGRESS_LINE = "  … still working"
+
 # ALWAYS AVAILABLE AND ALWAYS ADVERTISED, on every surface, at any dev state —
 # R527, the operator: *"a set of commands always available and advertised in
 # circle.py and in the circling.py circle pane: /help, /close, /round, /pass,

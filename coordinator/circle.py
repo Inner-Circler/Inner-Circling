@@ -460,16 +460,17 @@ def system_progress_render(line: str) -> None:
     already gates on dev, so:
 
         dev on          the phase line, which says WHICH slow thing is running
-        a command pane  a plain still-working line; a pane holds lines, and
-                        dots cannot concatenate there — CircleEngine._emit
-                        drops end= and flush= by design
+        a command pane  CS.PROGRESS_LINE; a pane holds lines, and dots cannot
+                        concatenate there — CircleEngine._emit drops end= and
+                        flush= by design. ui/circling.py keeps it as ONE row
+                        whose glyph turns, dropped when the wait ends
         a terminal      the concatenated dot, which is the one window where it
                         joins onto one line and the one window with no loop of
                         its own to draw an indicator from"""
     if CS.dev_mode:
         emit("command", line)
     elif seam.COMMAND_PANE:
-        emit("command", "  … still working")
+        emit("command", CS.PROGRESS_LINE)
     else:
         seam.system_progress_tick()
 

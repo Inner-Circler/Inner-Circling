@@ -118,6 +118,15 @@ def circle_history_latest_read() -> dict | None:
     return _JC.latest()
 
 
+def circle_history_is_empty() -> bool:
+    """True while no circle has been processed — the operator's "first circle" (2026-09-16,
+    R571), which circle_open.py welcomes instead of asking a topic.
+    SYNTHESIS writes the first CH- row at the first live close it processes, so a first
+    circle that is aborted, run dry, or whose processing fails leaves this True, and the
+    next open is welcomed again."""
+    return not _JC.read()
+
+
 def _rel() -> str:
     """PATH for printing. `PATH.relative_to(ROOT)` raises when PATH has been rebound to a
     temp file, which is exactly what a probe suite does to the constant above — so a module

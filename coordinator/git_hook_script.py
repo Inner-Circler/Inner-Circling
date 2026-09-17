@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v194"
+HOOK_MARK = "# inner-circling pre-commit v195"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -1057,6 +1057,14 @@ esac
 case "$FILES" in *coordinator/command_surface.py*|*coordinator/tests/test_dev_mode.py*)
     NOTE=""
     run coordinator/tests/test_dev_mode.py
+esac
+
+# A PERSON'S FIRST CIRCLE (R571): the open step decides it, the
+# CIRCLE_HISTORY register's reader is the fact, initialization.toml holds the words.
+case "$FILES" in *coordinator/circle_open.py*|*coordinator/circle_history_manager.py*\
+|*coordinator/initialization.toml*|*coordinator/tests/test_first_circle_welcome.py*)
+    NOTE="  pre-commit: the first circle's welcome touched — running real dry-run opens"
+    run coordinator/tests/test_first_circle_welcome.py
 esac
 
 # What a part may put in a [proposed: ...] bracket lives on FIVE surfaces, and

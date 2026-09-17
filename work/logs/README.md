@@ -26,9 +26,10 @@ delta_<OT>.json         what this one circle changed across the registers —
                         `circle_stats` setting is on.
 dream_<OT>.json         the dreaming/synthesis run's own record.
 dream_error_<OT>.json   written only when that run fails. The close names this
-                        file and prints the command to re-run the processing;
-                        read it first — a failed run wrote nothing, and the
-                        re-run is clean.
+                        file; read it first. `rerun_safe` true: nothing was
+                        written, and the printed re-run is clean. False: the
+                        parts' new memory already landed — do NOT re-run; the
+                        note carries the repair by hand.
 command_suggest_<OT>.json
                         the commands a live close found the circle's words
                         suggesting — each line as you would type it, who

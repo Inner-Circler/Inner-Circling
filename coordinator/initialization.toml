@@ -17,6 +17,12 @@ optional = "These brief steps are optional. They support more robust understandi
 completion = "Your answers have been recorded."
 skipped = "No answers for now - you will be invited again before your next circle."
 
+# THE FIRST CIRCLE'S OPENING WORDS — the operator, 2026-09-16 (R571),
+# verbatim. Not a dialog: circle_open.py speaks it into the room as a Coordinator note, in
+# place of the working-set and topic questions, while no circle has been processed. Empty =
+# no welcome, and the first circle asks both like every other.
+welcome = "Welcome to your first circle! Please introduce yourselves!"
+
 # ---------------------------------------------------------------- the issue dialog
 # ISSUE_ADD_DIALOG — R324 (once, at a circle start, while issues/ holds no
 # node), R328 (the two added questions: an issue needs a short name to be

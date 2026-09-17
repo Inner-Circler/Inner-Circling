@@ -87,8 +87,9 @@ _statements_shown = False
 
 
 def initialization_statements_read() -> dict[str, str]:
-    """The four policy statements, read from initialization.toml at call
-    time with {provider}/{model} filled from the transport."""
+    """The policy statements — the dialogs' four and the first circle's
+    `welcome` — read from initialization.toml at call time with
+    {provider}/{model} filled from the transport."""
     import llm_client as LC
     doc = tomllib.loads(STATEMENTS_PATH.read_text(encoding="utf-8"))
     st = dict(doc["statements"])

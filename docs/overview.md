@@ -102,8 +102,8 @@ proposals, those saying the same thing are grouped (the coalesce pass).
 Each of those makes its own model calls, so `/close` takes
 noticeably longer than the circle's own turns.
 There is no separate scheduled task and nothing runs overnight — if this
-step fails, `/close` reports it and nothing about it is left
-half-written.
+step fails, `/close` reports it and says whether running it again is
+safe.
 
 ## Goals
 

@@ -1947,6 +1947,96 @@ def self_test() -> int:
     check("set_width is idempotent — the same width does not rebuild",
           (pw.set_width(20), pw.lines == pw.lines)[1])
 
+    # --- THE STILL-WORKING ROW (2026-09-16; its ruling cites this suite) ----------
+    # The operator: *"stack '… still working' as Claude code does? By cycling the
+    # initial character"*, and *"Still working vanishes after."* One row per wait,
+    # its glyph turning in place, gone when anything else is said or the program
+    # stops to wait for an answer.
+    print("\n  the still-working row — one row, a turning glyph, gone when the wait ends")
+    _circle_src = (C.COORD_DIR / "circle.py").read_text(encoding="utf-8")
+    PL = C.ui_progress_line_read()
+    check("the pane reads the beat's line from its one home, command_surface — the match "
+          "is exact, so a second copy that drifted would silently stack again",
+          PL is not None and PL == C._command_surface().PROGRESS_LINE)
+    check("...and circle.py sends that same constant to the command pane, not a literal",
+          'emit("command", CS.PROGRESS_LINE)' in _circle_src)
+    pg = C.Pane("cmd", "cmd> ", 6)
+    pg.append("  something the program said")
+    for _ in range(3):
+        pg.append(PL)
+    check("three beats in a row make ONE row, not a stack",
+          pg.logical.count(PL) == 1 and len(pg.lines) == 2)
+    check("...drawn as the first glyph and 'still working…', never the beat's own text",
+          pg.lines[-1] == f"  {C.PROGRESS_FRAMES[0]} still working…" and pg.progress)
+    pg.progress_advance()
+    check("a frame turns the glyph IN PLACE — same row count, the next glyph",
+          len(pg.lines) == 2 and pg.lines[-1] == f"  {C.PROGRESS_FRAMES[1]} still working…")
+    for _ in range(len(C.PROGRESS_FRAMES) - 1):
+        pg.progress_advance()
+    check("...and the frames cycle back to the first", pg.progress_frame == 0)
+    pg.set_width(40)
+    check("a resize rebuilds the row as the glyph, not as the beat's text",
+          pg.lines[-1].endswith("still working…") and PL not in pg.lines)
+    pg.append("  the next real line")
+    check("any other line ends the wait: the row is GONE, not left behind",
+          not pg.progress and PL not in pg.logical
+          and pg.lines == ["  something the program said", "  the next real line"])
+    check("...and a pane with no row has nothing to turn", pg.progress_advance() is False)
+
+    sp = C.AppState(6, 6)
+    check("a beat lands in the command pane and says it changed it",
+          C.ui_output_append(sp, "command", PL) and sp.command.progress)
+    check("a line in the CIRCLE pane ends the wait too, and reports the command "
+          "pane changed", C.ui_output_append(sp, "circle", "[Soul]: a statement")
+          and not sp.command.progress and sp.circle.lines[-1] == "[Soul]: a statement")
+
+    class _Waiting:
+        waiting_for_input = False
+    sw = C.AppState(6, 6, backend=_Waiting())
+    sw.command.append(PL)
+    check("while the program is working and not waiting, the row stays",
+          C.ui_progress_wait_ended(sw, finished=False) is False and sw.command.progress)
+    sw.backend.waiting_for_input = True
+    check("once it waits for an answer, the row is dropped",
+          C.ui_progress_wait_ended(sw, finished=False) and not sw.command.progress)
+    sw.backend.waiting_for_input = False
+    sw.command.append(PL)
+    check("...and once it has ended", C.ui_progress_wait_ended(sw, finished=True)
+          and not sw.command.progress)
+
+    check("a bare Windows console gets plain glyphs — it draws a dingbat as a box",
+          C.ui_progress_frames_read({}, "win32") == C.PROGRESS_FRAMES_PLAIN)
+    check("...Windows Terminal gets the dingbats",
+          C.ui_progress_frames_read({"WT_SESSION": "x"}, "win32") == C.PROGRESS_FRAMES)
+    check("...and so does every other platform",
+          C.ui_progress_frames_read({}, "linux") == C.PROGRESS_FRAMES)
+
+    for _few in (1, 12):                  # fewer lines than the pane holds, and more
+        sr = C.AppState(6, 6)
+        for _i in range(_few):
+            sr.command.append(f"  line {_i} before the wait")
+        sr.command.append(PL)
+        _painted: list[str] = []
+        C.ui_pane_render(sr, "command", 80, _painted.append)
+        _row0 = [t for t in _painted if t.endswith(f"  {C.PROGRESS_FRAMES[0]} still working…")]
+        _frame: list[str] = []
+        C.ui_progress_frame_render(sr, 80, _frame.append)
+        check(f"{_few} line(s) above: a frame writes ONE row, not the pane body",
+              len(_frame) == 1 and _frame[0].count(C.CLR_LINE) == 1
+              and _frame[0].endswith(f"  {C.PROGRESS_FRAMES[1]} still working…"))
+        check(f"{_few} line(s) above: ...on the very screen row the body drew it on",
+              len(_row0) == 1 and bool(_frame)
+              and _frame[0].split(C.CLR_LINE)[0] == _row0[0].split(C.CLR_LINE)[0])
+        check(f"{_few} line(s) above: ...and records it as painted, so the next drain "
+              "does not repaint the body", not sr.command.body_needs_repaint(
+                  C._input_geometry(sr, "command", C._command_prompt(sr), 80)["k"]))
+    sr.command.line_up()
+    _scrolled: list[str] = []
+    C.ui_progress_frame_render(sr, 80, _scrolled.append)
+    check("scrolled away from the live edge, a frame draws no single row — the "
+          "body's own freeze decides", sr.command.is_scrolled() and not any(
+              t.endswith("still working…") and t.count(C.CLR_LINE) == 1 for t in _scrolled))
+
     # --- set_redact: toggling is architecturally a resize (2026-08-31) --
     sys.path.insert(0, str(C.COORD_DIR))   # _command_surface()'s own pattern
     import redaction_manager as _RDX

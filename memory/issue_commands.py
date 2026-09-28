@@ -331,19 +331,26 @@ def issue_command_parse(line: str, circle: str, *,
     return None, f"unknown issue verb {verb!r}"
 
 
-def issue_edges_read(graph: dict[str, dict] | None = None) -> list[dict]:
+def issue_edges_read(graph: dict[str, dict] | None = None, *,
+                     live_only: bool = False) -> list[dict]:
     """Every edge on a live node, flattened out — HELP_DESIGN.md §4 item
     3. Before this, "list all edges" meant "read every issue node and
     collect its edges array" inline wherever it was needed; this is
     that operation, named once. Each entry is the edge's own dict plus
     `src`, the node it hangs off — an edge carries no id of its own, so
     (src, type, target) is the closest thing to one (docs/HELP_DESIGN.md
-    §3: relationship's id is `<src> <type> <tgt>`)."""
+    §3: relationship's id is `<src> <type> <tgt>`).
+
+    `live_only` drops retired edges — what /issue-relationship-list shows,
+    since the room cannot see them either (issue_prompt_projection drops them
+    from BLOCK 2). The command re-implemented this inline until 2026-09-28
+    (audit-register 2026-09-27 #57); it calls here now."""
     if graph is None:
         graph = {d["id"]: d for d in (S.issue_read(p) for p in S.issue_live_read())}
     return [{"src": nid, **e}
             for nid in sorted(graph)
-            for e in graph[nid].get("edges", [])]
+            for e in graph[nid].get("edges", [])
+            if not (live_only and e.get("status") == "retired")]
 
 
 def issue_precheck(cmd: dict, graph: dict[str, dict]) -> str:

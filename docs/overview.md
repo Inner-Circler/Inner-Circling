@@ -65,7 +65,8 @@ for a different purpose, never a second opinion on the same one.
 Self posts a topic. Each part's prompt is built fresh, in four blocks: the
 shared rulebook, the circle's practices, and the note the last circle left
 for this one; what the issue graph currently owes; that part's own
-long-term identity, distilled; and anything addressed to that part alone. Statements are public and parts may address each other
+long-term identity, distilled; and that part's own newest memories, with
+anything it recalled. Statements are public and parts may address each other
 directly; no part speaks twice in a row. Each statement aims for a short
 length, and each part is told never to go past a word count — 150 unless
 you change the `statement_max_words` setting. The limit reaches the parts
@@ -94,10 +95,10 @@ writing the transcript, the same run immediately: each part reviews what
 happened in this circle and may keep one memory of it, in parallel
 across every part (dreaming); then one pass looks across the
 whole circle for practices that should apply to everyone (synthesis);
-then one pass reads the transcript for the commands its words suggest and
-stages each as a proposal for Self's next ruling (the command suggestions);
 then each part whose sources have moved has its distilled identity rebuilt
-(the refresh). Earlier in the close, just before you are asked to rule on
+(the refresh); then one pass reads the transcript for the commands its
+words suggest and stages each as a proposal for Self's next ruling (the
+command suggestions). Earlier in the close, just before you are asked to rule on
 proposals, those saying the same thing are grouped (the coalesce pass).
 Each of those makes its own model calls, so `/close` takes
 noticeably longer than the circle's own turns.

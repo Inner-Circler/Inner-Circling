@@ -2246,11 +2246,20 @@ def self_test() -> int:
           "space inside the batch, not a submit",
           units3 == [("text", "li ne2")])
 
-    fake_stream4 = iter(["b", "\t", "c"])
+    fake_stream4 = iter(["b", "UP", "c"])
     units4 = C.ui_burst_read("a", poll=lambda: next(fake_stream4, None))
     check("a control key mid-burst ends the current batch and is its own "
           "unit, in order, without losing what came after it",
-          units4 == [("text", "ab"), ("key", "\t"), ("text", "c")])
+          units4 == [("text", "ab"), ("key", "UP"), ("text", "c")])
+    # audit-register 2026-09-27 #77: a Tab inside a paste is content, never a focus toggle
+    fake_stream5 = iter(["b", "\t", "c"])
+    units5 = C.ui_burst_read("a", poll=lambda: next(fake_stream5, None))
+    check("a Tab MID-burst (a pasted tab) becomes a space inside the batch, so the "
+          "paste lands in ONE pane", units5 == [("text", "ab c")])
+    fake_stream6 = iter([])
+    units6 = C.ui_burst_read("\t", poll=lambda: next(fake_stream6, None))
+    check("...while a standalone Tab is still the focus key",
+          units6 == [("key", "\t")])
 
     # --- THE TWO PLATFORM ARMS, COMPARED WITHOUT RUNNING EITHER (audit #16). ------
     # ui/circling.py's `if IS_WINDOWS:` split means ~90 lines of the POSIX arm are dark

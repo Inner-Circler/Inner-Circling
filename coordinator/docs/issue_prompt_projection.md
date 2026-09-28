@@ -4,7 +4,8 @@
 
 *Title corrected 2026-08-17 — this man page's own header still said
 CHECK_ISSUES.PY from before the module was renamed to
-`issue_prompt_projection.py`; unrelated to today's relations_brief rename,
+`issue_prompt_projection.py`; unrelated to that day's relations_brief ->
+issue_relationship_brief rename (R219, 2026-08-17),
 fixed while already here.*
 
 ## NAME

@@ -37,7 +37,7 @@ the cmd> prompt (a developer verb in the two-pane interface), or by a
 part's `[proposed: /issue-add ...]` that you approve at a close.
 
 `issue_model.md` beside this file is not a node and does not go: it is the
-prologue every circle's briefing is built on, and a circle refuses to open
+prologue every circle's BLOCK 2 (circle_objectives) is built on, and a circle refuses to open
 without it.
 
 Prose lives in `"""` blocks, hard-wrapped; a single newline is soft.

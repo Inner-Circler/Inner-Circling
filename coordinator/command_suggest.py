@@ -224,7 +224,7 @@ def command_suggest_referents_counts(ref: dict) -> dict:
 
 # ------------------------------------------------------------------ the prompt
 SYSTEM_HEAD = """\
-You read the transcript of one Inner Circling session — an IFS inner circle: Self (the person)
+You read the transcript of one Inner Circling circle — an IFS inner circle: Self (the person)
 and named parts of that person speaking in turn. Your one job is RECOGNITION: find every place
 where what was SAID suggests an operation the coordinator can perform, and name the operation.
 
@@ -628,10 +628,19 @@ def command_suggest_run(ot: str, transcript_text: str, *, say=print, client=None
                      if e.get("speaker") == ID.SELF_ID and not e.get("is_topic")
                      and e.get("text", "").lstrip().startswith("/")]
             try:
-                result["staged"] = command_suggest_stage(result, ot, ref, typed)
+                ids = command_suggest_stage(result, ot, ref, typed)
             except Exception as e:                               # noqa: BLE001
                 result.setdefault("notes", []).append(
                     f"staging stopped ({type(e).__name__}: {e}) — what was staged stands")
+            else:
+                # THE KEY MEANS A ROW WAS WRITTEN, 2026-09-28 (audit-register 2026-09-27
+                # #11): set on an empty list, the report headed "staged for your ruling"
+                # and the log wrote report_only false for a close that staged nothing.
+                if ids:
+                    result["staged"] = ids
+                else:
+                    result.setdefault("notes", []).append(
+                        "nothing staged — no recognised line was runnable")
         say(command_suggest_report_render(ot, result))
         if stage and "staged" in result:
             say(command_suggest_staged_render(result))

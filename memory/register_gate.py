@@ -409,10 +409,9 @@ REGISTERS: dict[str, dict] = {
         # ORDER IS IMPORTED, NOT COPIED — see the circle_history entry
         # below for why a literal here would be a second source of truth.
         "order": PR.ORDER,
-        # No file exists yet — no [propose ...] has ever converged to a
-        # real row (R202, 2026-08-16). preamble=False: proposals.py's
-        # _doc() writes {register, next_id, proposal}, no [doc] block —
-        # unlike best_practices.toml, this register never had one.
+        # preamble=False: proposal_manager.py's _doc() writes {register,
+        # next_id, proposal}, no [doc] block — unlike best_practices.toml,
+        # this register never had one.
         "id_prefix": "P-", "cap": None, "per_run_max": None,
         "preamble": False, "new_state": "proposed",
         # Same state shape as best_practices.toml (PROPOSE_CLASS.py is

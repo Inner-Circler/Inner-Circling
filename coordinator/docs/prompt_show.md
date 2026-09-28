@@ -110,7 +110,7 @@ Formats a block header: position, name, character count, and an optional note li
 ### prompt_show_render(target) (`render()` before the B99 re-homing, 2026-09-03)
 ```
 {
-    Determine the block order for this mode via circle.block_order().
+    Determine the block order for this mode via prompt_build.block_order().
     Resolve "who" to render identity/objectives for: the target part,
     or (if target == "circle") an arbitrary first part, since the
     shared blocks are identical across parts anyway.
@@ -121,7 +121,7 @@ if (target is a part name and not a known roster tag) then {
     load core (process_core.md, via group_shared_read()) and circle_objectives
     (via circle_briefing_build([]) — the same construction for every
     circle, differing only in how richly `## Issues`
-    renders and whether the relations brief/narrative are included); if
+    renders and whether the issue relationship brief/narrative are included); if
     build the who's full system blocks — prompt_part_assemble() — exactly as
     circle.py would.
     start output with the mode banner.
@@ -152,7 +152,7 @@ if (name == "circle_identity") then {
 } else if (name == "circle_objectives") then {
     emit a TO BE SUPPLIED box for the working set (embedding the note
     text passed in, and explaining that this block IS the working-set
-    issue projection and relations brief, built by circle_briefing_build() —
+    issue projection and issue relationship brief, built by circle_briefing_build() —
     the same construction for every circle).
 } else if (name == "part_identity") then {
     emit a TO BE SUPPLIED box for dream entries, noting dreaming

@@ -1555,6 +1555,10 @@ class CircleEngine:
         # QUESTION must already have seen the seed, or it stops one item
         # short and the line comes up empty. Its own channel — it is not
         # content and must never be appended to a pane.
+        # THE CHANNEL FIRST, so the drain that applies the seed knows which
+        # pane's read it seeds (audit-register 2026-09-27 #65); it is set
+        # again, unchanged, beside the flag below.
+        self.waiting_for_channel = channel
         if prefill:
             self.out_queue.put(("prefill", prefill))
         if channel == "circle":
@@ -1826,14 +1830,24 @@ class CircleEngine:
         # Read once so a flag the engine thread flips mid-dispatch cannot
         # route the head one way and its arguments another.
         phase = self._phase()
-        if phase == "answer":
+        stripped = text.strip()
+        if phase == "answer" and not (
+                (stripped == "resume" or stripped.startswith("resume "))
+                and "NEW circle" in getattr(self, "pending_prompt", "")):
             # FIRST, even while closing: the close's own vetting ("at close"
             # a)pprove/d)eny/s)kip) is a command-channel read, and a line typed
             # then is its answer — the one thing a closing circle still
             # asks of the operator.
+            #
+            # EXCEPT `resume` AT THE ONE QUESTION IT EXISTS TO ANSWER, 2026-09-28
+            # (audit-register 2026-09-27 #71): circle_open's "type 'yes' to open a
+            # NEW circle" is a command-channel read, so `resume` typed there was
+            # forwarded as its answer — a decline — and the circle cancelled under
+            # the very line that said to resume instead. It falls through to the
+            # resume verb below, which declines that read itself and starts the
+            # resumed engine.
             self.command_in.put(text)
             return None
-        stripped = text.strip()
         # THE CLOSE IS PROCEEDING — 2026-08-21, the lab circle
         # 2026-08-21_1139, the operator: *"Disable cmd> entries while closing,
         # replace the prompt with a notice throughout."* Nothing typed here
@@ -3181,13 +3195,17 @@ def ui_burst_read(first_ch: str, poll=None) -> list[tuple[str, str]]:
     to disambiguate it; a production input stack would want that lookahead."""
     poll = poll or poll_key
     units: list[tuple[str, str]] = []
-    if first_ch in ("\r", "\n"):
+    if first_ch in ("\r", "\n", "\t"):
         return [("key", first_ch)]
     cur = ""
     ch = first_ch
     while ch is not None:
-        if len(ch) == 1 and (ch.isprintable() or ch in "\r\n"):
-            cur += " " if ch in "\r\n" else ch
+        # A TAB INSIDE A BURST IS PASTE CONTENT TOO, 2026-09-28 (audit-register
+        # 2026-09-27 #77): as a key it toggles focus, so a paste holding one
+        # landed half at Self> and half at cmd>. Folded to a space like CR/LF;
+        # a real Tab keypress is never batched, so focus still moves on one.
+        if len(ch) == 1 and (ch.isprintable() or ch in "\r\n\t"):
+            cur += " " if ch in "\r\n\t" else ch
         else:
             if cur:
                 units.append(("text", cur))
@@ -3522,8 +3540,20 @@ def ui_main_loop(engine: "CircleEngine",
                         # (finding 2): the invalid ids removed, the
                         # cursor at the end, so a bare Enter submits
                         # the valid remainder.
-                        state.circle.input_buf = line
-                        state.circle.input_cursor = len(line)
+                        #
+                        # THE PANE WHOSE READ IS PENDING, 2026-09-28
+                        # (audit-register 2026-09-27 #65): the engine sets
+                        # waiting_for_channel BEFORE it queues the seed, so
+                        # the seed of a command-channel question — the
+                        # part-context dialog, the bracket-seeded
+                        # /issue-add — lands at cmd>, not in the Self> row
+                        # over whatever Self was typing there. The Ticker's
+                        # two panes already applied it this way.
+                        pane = (state.command
+                                if getattr(engine, "waiting_for_channel", "circle") == "command"
+                                else state.circle)
+                        pane.input_buf = line
+                        pane.input_cursor = len(line)
                         drained = True
                         continue
                     if channel == "state":
@@ -3745,8 +3775,9 @@ def ui_main_loop(engine: "CircleEngine",
                                     pass
                                 state.command.append(
                                     f"  ! resume failed: the current circle "
-                                    f"session did not finish within 5s — "
-                                    f"try 'abort', then 'resume {ot}' again")
+                                    f"did not finish within 5s — answer the "
+                                    f"question it is waiting on (or /abort at "
+                                    f"Self>), then 'resume {ot}' again")
                                 ui_pane_render(state, "command", cols, write)
                             else:
                                 # `live` MUST carry forward — the OT this
@@ -3879,7 +3910,9 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | [OPTIONS...]]
                no effect on what the parts say. Default: unset — omit for
                real circles.
 
-  --yes        skip the confirmation prompt for a reduced live roster.
+  --yes        skip the open's three confirmations: a reduced live roster,
+               'type yes to open a NEW circle' when one may still be open,
+               and the first-run initialization dialog.
                Default: off — the prompt is asked.
 
   --resume <OPEN_TIME>

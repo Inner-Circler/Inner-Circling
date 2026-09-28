@@ -158,10 +158,9 @@ import setting_manager as SET                                         # noqa: E4
 
 PROMPT = "v10"  # v10, 2026-09-14: SYSTEM keeps Self's material in Self's own
                 # words and marks a phrase this part coined for it as the part's
-                # (the operator, on "the father's-cup material": "it is my
-                # father's plants, not his cup!" — Mourner's figure had replaced
-                # his sentence in two distillates). The bump re-derives all
-                # seven at the next close, as every bump does.
+                # (a part's figure of speech had replaced the operator's own
+                # sentence in two distillates, and he objected). The bump
+                # re-derives all seven at the next close, as every bump does.
                 # v9, 2026-08-25: SYSTEM now says RETURN THE WHOLE DOCUMENT
                 # EVERY TIME. v8 told the model to "revise it incrementally"
                 # and never said the reply REPLACES the file, so a model with

@@ -148,7 +148,7 @@ VERBATIM, AND CHECKED
 SIZE
 
     The Block files are ~80 KB per circle for seven parts (process_core.md
-    once, the briefing once, not seven times as before). The turn files are
+    once, circle_objectives once, not seven times as before). The turn files are
     the new cost: roughly one per part per round, each carrying BLOCK 4, the
     tail of the conversation and the reply. A content-addressed store is
     still deliberately NOT built: indirection costs a future reader a step.
@@ -387,6 +387,9 @@ def prompt_capture_write(ot: str, sysblocks: dict[str, list[dict]], notes: dict[
                 fname = block_filename(i, nm, p)
                 _emit(fname, b, i, nm, p)
             mine.append(fname)
+        # "briefing_filter" IS A PERSISTED KEY: every manifest on file carries it and
+        # test_prompt_capture asserts it, so the name stays although the word retired
+        # (audit-register 2026-09-27 #12). Its value is prompt_part_assemble()'s note.
         per_part[p] = {"briefing_filter": notes.get(p, ""), "blocks": mine,
                        "remember_projection": _remember_expectation(p)}
 
@@ -742,6 +745,10 @@ def block_items(name: str, text: str) -> list[dict]:
             items += _sub_items(secs["## Issues"], _ISSUE_ITEM,
                                 "## Issues (heading)", "issue: ")
         if "## Relations between issues" in secs:
+            # "relations brief" IS A PERSISTED LABEL — every manifest on file carries it and
+            # test_prompt_capture asserts it. The production was renamed
+            # <issue_relationship_brief> at R219 (2026-08-17); the label keeps the old
+            # spelling so the manifests stay comparable (audit-register 2026-09-27 #49).
             items.append({"label": "relations brief",
                           "chars": len(secs["## Relations between issues"])})
         if "## Topics for this circle's review" in secs:
@@ -795,7 +802,7 @@ def _leak_check(fname: str, text: str) -> list[str]:
 
     **INVERTED 2026-08-06, with the block restructure.** It used to assert
     that a per-part FILTER had removed the other six parts' entries from a
-    34,000-character briefing. There is no filter now — practices route by
+    34,000-character BLOCK 2. There is no filter now — practices route by
     self/best_practices.toml's own `addressee` field (R134), and
     circle_objectives is built directly by group_attention's `circle_briefing_build()`
     (2026-08-11, self/circle_briefing.md retired) — so the shared blocks

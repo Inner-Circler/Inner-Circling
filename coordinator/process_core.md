@@ -149,7 +149,7 @@ own voice, not what happened.
 ### `[recall: ...]` — search your own past, privately
 
 ```
-<recall> ::= "[recall:" <recall_scope>* ( <semantic_words> | '"' <exact_string> '"' ) <recall_breadcrumb>* "]"
+<recall> ::= "[recall:" <recall_scope>* ( <semantic_words> | '"' <exact_string> '"' | <recall_breadcrumb> )+ "]"
 <recall_scope>      ::= "mine" | "room" | "issues"      leading words only; mine is
                                                         the default
 <recall_breadcrumb> ::= <issue id like n0012> | <practice id like BP-0003>

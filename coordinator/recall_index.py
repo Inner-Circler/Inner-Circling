@@ -592,8 +592,9 @@ def recall_index_arm_start(parts: list, root: pathlib.Path | None = None, *,
 
 def recall_index_arm_wait(timeout: float | None = None) -> bool:
     """Block until the arm finishes; True if it is done. Nothing in a circle
-    calls this — the whole point is that no turn waits — but a probe must be
-    able to, and so must a caller that wants a deterministic close."""
+    calls this — the whole point is that no turn waits — and no close does
+    either; test_recall_index.py is its only caller (audit-register 2026-09-27
+    #60), and a caller that wants a deterministic close would use it."""
     t = _ARM_THREAD
     if t is None:
         return True
@@ -602,7 +603,8 @@ def recall_index_arm_wait(timeout: float | None = None) -> bool:
 
 
 def recall_index_arm_report_read() -> "str | None":
-    """What the last arm did, or None if it has not finished (or never ran)."""
+    """What the last arm did, or None if it has not finished (or never ran).
+    Read by test_recall_index.py alone (audit-register 2026-09-27 #60)."""
     return _ARM_REPORT
 
 

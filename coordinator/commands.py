@@ -1694,13 +1694,16 @@ def command_issue_relationship_list() -> None:
     if not live:
         seam.emit("command", "  no live issues")
         return
+    # THE ONE EDGE LISTER (audit-register 2026-09-27 #57): issue_edges_read() is the
+    # operation "list all edges", named once; this command flattened the arrays inline.
+    edges = IC.issue_edges_read({d["id"]: d for d in live}, live_only=True)
     n_rel = 0
     out = [""]
     for d in sorted(live, key=lambda d: d["id"]):
         label = d.get("label") or "(no label)"
         prefix = f"  {d['id']}  "
         out.append(prefix + label[:max(10, HELP_WIDTH - len(prefix))])
-        rels = [e for e in d.get("edges", []) if e.get("status") != "retired"]
+        rels = [e for e in edges if e["src"] == d["id"]]
         if not rels:
             out.append("         (no live issue-relationships)")
         for e in rels:
@@ -1718,7 +1721,7 @@ _ISSUE_ADD_ARG_RE = re.compile(r'"((?:[^"\\]|\\.)*)"|\u201c([^\u201d]*)\u201d')
 # THE VERBS WHOSE LINE IS QUOTED STRINGS \u2014 the two _issue_add_args() readers a
 # person can reach. A shell consumes the quotes it was given, so `--dev-cmd`
 # arrives as bare words; command_args_quote() puts the boundaries back for
-# exactly these verbs and no other (`--dev-cmd issue n0002 status` stays bare).
+# exactly these verbs and no other (`--dev-cmd issue-status n0002` stays bare).
 QUOTED_ARG_COMMANDS = frozenset({"/issue-add", "/part-add"})
 
 

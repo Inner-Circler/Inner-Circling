@@ -708,7 +708,9 @@ def main() -> int:
                          "polled within a round. Fixing it makes a test repeatable; "
                          "it has no effect on what the parts say. Omit for real circles.")
     ap.add_argument("--yes", action="store_true",
-                    help="skip the confirmation prompt for a reduced live roster")
+                    help="skip the open's three confirmations — a reduced live roster, "
+                         "'type yes to open a NEW circle' when one may still be open, and "
+                         "the first-run initialization dialog. Default: off.")
     ap.add_argument("--resume", metavar="OPEN_TIME",
                     help="reopen an unclosed circle, e.g. --resume 2026-08-02_1259. "
                          "The transcript must round-trip byte-for-byte or the "
@@ -752,8 +754,8 @@ def main() -> int:
                          "already a deliberate shell invocation, not "
                          "something that could leak into a running circle. "
                          "e.g. --dev-cmd practice-list, --dev-cmd "
-                         "practice-add \"text\", --dev-cmd issue n0002 "
-                         "status, --dev-cmd part-add \"<describe>\" \"<name>\" "
+                         "practice-add \"text\", --dev-cmd issue-status "
+                         "n0002, --dev-cmd part-add \"<describe>\" \"<name>\" "
                          "(both given: added at once, no dialog). "
                          "issue-label-update/issue-relationship-add/"
                          "close/abort/etc. are refused here — they attest against "
@@ -774,6 +776,22 @@ def main() -> int:
     # is updated to match.
     if args.dev:
         CS.dev_mode = True
+
+    # THE GROUP BINDS BEFORE EITHER EARLY DISPATCH, 2026-09-28 (audit-register 2026-09-27
+    # #73): both act on a group's own circles/ and parts/, and both ran before the group
+    # binding below, so `--group band` changed nothing and a refused band filing could not be
+    # repaired through the door built for it. The full binding (roster, --parts conflict) is
+    # still the block below; this is the record-path half alone, for two verbs that open
+    # no circle.
+    if (args.list_resumable or args.file_circle) and args.group is not None:
+        import group_manager as GA
+        if GA.group_resolve(args.group) is None:
+            emit("command", f"no group named {args.group!r} — "
+                            f"/group-list (or group_manager.group_rows_read()) shows what "
+                            f"exists")
+            return 2
+        if args.group != _RP.DEFAULT_GROUP:
+            _RP.group_set(args.group)
 
     if args.list_resumable:
         return CC.circle_resumable_list()
@@ -800,7 +818,7 @@ def main() -> int:
         # two bare elements; joined bare, _issue_add_args() reads the line as ONE describe
         # and the name is lost (the operator, 2026-09-15: "A --dev-cmd should flow
         # through"). For the quoted-string verbs each element is one string again; every
-        # other verb keeps the bare join (`--dev-cmd issue n0002 status`).
+        # other verb keeps the bare join (`--dev-cmd issue-status n0002`).
         if len(args.dev_cmd) > 1 and head in QUOTED_ARG_COMMANDS:
             rest_text = " " + command_args_quote(args.dev_cmd[1:])
         else:
@@ -1037,6 +1055,7 @@ def main() -> int:
             client = stream_client_build()
         except ImportError:
             emit("command", "pip install anthropic")
+            PC.PHASES.stop_heartbeat()
             return 2
         except RuntimeError:
             # HOW TO GET ONE, WHERE TO PUT IT, HOW TO KEEP IT — R330,
@@ -1046,6 +1065,7 @@ def main() -> int:
             # a first-run user. The text is the provider's, since every word
             # of it is that vendor's console.
             emit("command", "\n" + KEY_MISSING_HELP + "\n")
+            PC.PHASES.stop_heartbeat()
             return 2
 
     mode = "LIVE" if args.live else "sandbox"
@@ -1068,7 +1088,7 @@ def main() -> int:
         # The files are contained by construction; the REFS are not. A
         # worktree shares .git, so this circle's own `circle/<OT>` and its
         # processing's `dream/<OT>` land in the repository-wide namespace the
-        # main tree's already_processed() reads. B56(5) is the fix; until it
+        # main tree's circle_is_processed() reads. B56(5) is the fix; until it
         # lands, saying so is.
         # NEXT.md's B56(5) is the fix and is named in the comment above, not in
         # the message: this line ships, and a recipient has no NEXT.md. 2026-09-09.
@@ -1101,6 +1121,10 @@ def main() -> int:
     # its own exit code, having written nothing.
     opened = CO.circle_open(args, client, parts, ot, path, guard)
     if isinstance(opened, int):
+        # THE BEAT STOPS WITH THE REFUSAL, 2026-09-28 (audit-register 2026-09-27 #76): armed
+        # above, it outlived every declined open and went on printing dots — in the dual
+        # pane, over the screen explaining why the circle did not open.
+        PC.PHASES.stop_heartbeat()
         return opened
     ot, path, guard = opened.ot, opened.path, opened.guard
     transcript, sysblocks = opened.transcript, opened.sysblocks
@@ -1653,14 +1677,15 @@ def main() -> int:
         emit("command", "\n  !! close interrupted. THE TRANSCRIPT IS INTACT — every")
         emit("command", "     statement was written as it was made; nothing is lost.")
         # THE MODE MUST MATCH THIS SESSION'S OWN, 2026-09-01 (audit-register.md
-        # #25) — a hardcoded --live here told a --dry-run session to resume
+        # #25) — a hardcoded --live here told a --dry-run circle to resume
         # with --live, which circle_path() (above) resolves to ROOT/circles/
         # instead of the SANDBOX the transcript actually lives under. The
         # identical shape D-c (R428) fixed two lines below, on the one line
         # its approved scope did not touch.
         resume_flag = "--live" if args.live else "--dry-run"
+        group_flag = f" --group {args.group}" if args.group is not None else ""
         emit("command", f"     resume:   python coordinator\\circle.py {resume_flag} "
-                        f"--resume {ot}")
+                        f"--resume {ot}{group_flag}")
         if args.live:
             emit("command", "     or repair by hand:  circle_audit.py --backfill --commit")
         # else: circle_audit.py --backfill only ever touches a LIVE close's
@@ -1690,7 +1715,7 @@ def main() -> int:
         # call, and hand back — no automated catch-up). LIVE ONLY:
         # SYNTHESIS writes self/, which no sandbox may touch.
         if CS.dev_mode:
-            emit("command", "\nphase 2 — dreaming and synthesis "
+            emit("command", "\ninter-circle processing — dreaming and synthesis "
                   "(coordinator/inter_circle.py):")
         import inter_circle as ICP
         # THE WHOLE NARRATIVE IS TECHNICAL DETAIL, gated together
@@ -1723,12 +1748,13 @@ def main() -> int:
                  "commit; see the 'fail' line above for why. Nothing you "
                  "wrote is lost, and no reflection has run on it. When the "
                  "refusal is fixed, file it and reflect in one step:\n"
-                 f"    python coordinator\\circle.py --file-circle {ot}")
+                 f"    python coordinator\\circle.py --file-circle {ot}"
+                 + (f" --group {args.group}" if args.group is not None else ""))
         elif ICP.circle_process(ot, live=True, confirmed=confirmed_this_close,
                                 say=lambda s: emit("command", s) if CS.dev_mode
                                               else None,
                                 warn=lambda s: emit("command", s)):
-            fail("phase 2 (dreaming/synthesis) did not complete — the "
+            fail("inter-circle processing (dreaming/synthesis) did not complete — the "
                  "circle itself is filed; see work/logs/"
                  f"dream_error_{ot}.json and re-run by hand")
     else:

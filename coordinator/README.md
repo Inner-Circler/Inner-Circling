@@ -675,7 +675,9 @@ it at the user (`#16`).
 --parts a,b,c       comma-separated part dirs — TESTING ONLY, see "Roster"
                     below (a reduced roster leaves the omitted parts
                     unaware of the circle). Default: every member of the
-                    DEFAULT GROUP — the `ifs` descriptor resolved through
+                    DEFAULT GROUP — a rule, not a name (R468): the one
+                    group installed, or the one whose group.toml says
+                    default = true, resolved through
                     group_manager.group_resolve() (B117 stage 1,
                     R466/R467), never the parts/ scan; the scan is the
                     fallback only where no group descriptor exists. The
@@ -695,8 +697,10 @@ it at the user (`#16`).
                     (`delivered`), through every door, since 2026-09-10.
 --seed N            see "Seed" below. Default: unset (a fresh shuffle
                     every round).
---yes               skip the reduced-live-roster confirmation prompt.
-                    Default: off.
+--yes               skip the open's three confirmations: a reduced live
+                    roster, 'type yes to open a NEW circle' when one may
+                    still be open, and the first-run initialization dialog.
+                    Default: off — each is asked.
 --resume OPEN_TIME  reopen an unclosed circle, e.g. --resume
                     2026-08-02_1259; the transcript must round-trip
                     byte-for-byte or the resume is refused. Default: unset.
@@ -736,40 +740,26 @@ sets the agenda.
 ## Roster
 
 **No, parts do not need to be named.** The default is **every member of the
-default group**, the Soul included — the `ifs` descriptor resolved through
+default group**, the Soul included — the group ruled default (R468: the one
+installed, or the one whose group.toml says `default = true`) resolved through
 `group_manager.group_resolve()`, never a `parts/` scan (B117 stage 1,
 R466/R467). `--parts` exists for cheap test rounds.
 
-### The Soul — a doctrine discrepancy that has since been resolved
+### The Soul speaks, and an omitted part is absent
 
-This section quoted the rulebook's §The Soul as saying it "does not speak
-directly in circles… may graduate to speech if a circle specifically calls
-for it" and described a standing-override symbol keyed by the Soul's old directory name in
-`circle.py` as a workaround. Neither is accurate today: no such symbol
-exists anywhere in the tree, and `process_ifs.md` §The Soul (the IFS layer, R464) reads
-**"It is present in every circle and it does speak — rarely, and on its own
-terrain"** (R303, 2026-08-22) — already matching the empirical record below
-rather than contradicting it.
-
-The record: it has spoken in **21 circles between 2026-06-24 and 2026-08-09** (measured
-directly against circles/*.md, matching every historical spelling — "Soul"
-and "Injured Soul", since the two are the same part across a
-rename), including this morning's `circle_2026-07-26_1112`, and it keeps its
-own short_term records of having done so (`2026-07-05_1308`: *"Spoke three
-times."*). It is a participant, in `DEFAULT_PARTS`, and excluding it would
+The Soul is a full participant: it is in the default group's roster, and the
+IFS layer's §The Soul (`process_ifs.md`, R464) says **"It is present in every
+circle and it does speak — rarely, and on its own terrain"** (R303). Its own
+short_term records show it doing so. Excluding it from `--parts` would
 silently drop a part the live path includes.
 
-**Where the per-part addendum mechanism actually lives:** `identity_tail`
-in `part.toml` (R246, R304) — per-part, per-installation, landing in BLOCK
-3. A stricter addendum ("default to `[pass]`...") sat in the Soul's
-`part.toml` for a few hours on 2026-08-22 before R304 deleted it outright,
-not as a workaround kept in place: it duplicated (and was stricter than)
-`parts/soul/long_term.md`'s own "My role in circles" section, and deleting
-it delivered a softening Self had separately asked for. No part declares an
-`identity_tail` today — the mechanism is built; nothing installs one yet.
+**Where a per-part addendum lives:** `identity_tail` in `part.toml` (R246,
+R304) — per-part, per-installation, landing in BLOCK 3, in the part's own
+first-person voice. A rule that applies to every part belongs in the
+rulebook (BLOCK 1) instead; a rule about ONE part must never be sent to the
+other six (R303). The mechanism is built; a fresh install declares none.
 
-**Your inference is correct, and it matters.** An omitted part is not a quiet
-attendee — it is absent. Trace it through:
+**An omitted part is not a quiet attendee — it is absent.** Trace it through:
 
 - It never appears in the transcript, so it writes no short_term.
 - `coordinator/part_dreaming.py`'s `part_dream()` (inter_circle's until 2026-09-03) reads that via

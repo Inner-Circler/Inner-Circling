@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 """
-prompt_build.py — the prompt's construction: the identity read-layer,
-circle_objectives (circle_briefing_build), the four-block
-assembly (system_blocks and kin), and the transcript-to-messages view
-(render_messages). Phase 2 stage 2 of the coordinator partitioning
-(2026-08-16); until then all of it lived in circle.py. Verbatim move —
-bodies and comments unchanged.
+prompt_build.py — the four-block EXECUTOR: prompt_part_assemble() and system_blocks()
+finish the blocks the owners build (group_context.py for BLOCK 1,
+group_attention.circle_briefing_build() for BLOCK 2, role_context.py and
+role_attention.py for 3 and 4), block_order() names the order, and
+prompt_messages_render() is the transcript-to-messages view. Phase 2 stage 2
+of the coordinator partitioning (2026-08-16) moved all of this out of
+circle.py; the read layer moved on to parts_prompt_projection.py and BLOCK 2's
+builder to group_attention.py since, and the re-export facade retired
+2026-09-09 — import an assembler from its owner.
 
 THE PAYOFF THIS STAGE EXISTS FOR: five live modules (circle_audit.py,
 prompt_show.py, block_overlap_verify.py, part_mid_term_project.py,
@@ -125,14 +128,15 @@ def prompt_cache_control_read() -> "dict | None":
 #                      stopped being a BLOCK 3 source
 #                      2026-08-22, R302.)
 #   part_objectives    what has not stabilised into
-#                      either identity yet: your ask
-#                      fragments, anything addressed
-#                      to you alone. PER PART,
-#                      UNCACHED.
+#                      either identity yet: the
+#                      remember tail and the recall
+#                      pack (<remember_tail>?
+#                      <recall_pack>?), or empty. Ask
+#                      fragments retired 2026-08-12.
+#                      PER PART, UNCACHED.
 #
-# ONE ORDER NOW. `ORDER_MINIMAL` is gone: --minimal differs only in CONTENT.
-# The two constants encoded a distinction that no longer exists, and keeping
-# both would have outlived it.
+# ONE ORDER. `ORDER_MINIMAL` went with the --minimal mode (R360, 2026-08-27):
+# the two constants encoded a distinction that no longer exists.
 ORDER = ("circle_identity", "circle_objectives",
          "part_identity", "part_objectives")
 
@@ -209,7 +213,7 @@ def system_blocks(ident: str, objectives: str, identity: str, tail: str) -> list
 # strip_settled(), which still applies it where it still bites.
 
 
-def prompt_part_assemble(part: str, core: str, briefing: str) -> tuple[list[dict], str]:
+def prompt_part_assemble(part: str, core: str, objectives: str) -> tuple[list[dict], str]:
     """The full per-part block assembly — replaces the old shared_block() +
     system_blocks() two-step dance. shared_block() bundled BLOCK 2's
     already-built text together with BLOCK 1's and BLOCK 3's practices for
@@ -226,10 +230,12 @@ def prompt_part_assemble(part: str, core: str, briefing: str) -> tuple[list[dict
     module. `core` is group_context.group_shared_read()'s text (once per
     circle) — group_context.group_context_block_render() merges it with the practices
     broadcast; this function never touches best_practices.toml itself
-    any more. `briefing` is circle_briefing_build's constructed circle_objectives
-    text (once per circle).
+    any more. `objectives` is circle_briefing_build's constructed circle_objectives
+    text (once per circle) — the parameter was `briefing` until 2026-09-28, the
+    last live use of a word whose file retired 2026-08-11 (audit-register
+    2026-09-27 #12).
 
-    PRACTICES DO NOT COME FROM `briefing` (R134) — self/best_practices.toml
+    PRACTICES DO NOT COME FROM `objectives` (R134) — self/best_practices.toml
     is read directly, inside each block's own module: group_context.group_context_block_render()
     (BLOCK 1), role_context.part_context_block_render() (BLOCK 3).
 
@@ -240,9 +246,9 @@ def prompt_part_assemble(part: str, core: str, briefing: str) -> tuple[list[dict
     identity, cutoff, mine_len = _RC.part_context_block_render(part)
     tail = _RA.part_attention_stage(part, cutoff)
 
-    note = (f"objectives {len(briefing):,} + practices {prac_len:,} shared; "
+    note = (f"objectives {len(objectives):,} + practices {prac_len:,} shared; "
             f"{mine_len:,} to block 3")
-    return system_blocks(ident, briefing, identity, tail), note
+    return system_blocks(ident, objectives, identity, tail), note
 
 
 # ------------------------------------------------------------------ transcript view

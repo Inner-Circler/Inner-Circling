@@ -12,7 +12,7 @@ production (BLOCK 2) is the grammar this implements.
 MOVED VERBATIM from prompt_build.py's circle_briefing_build(), 2026-09-02 — same
 name, same body, same docstring. Every caller imports it from THIS module:
 prompt_build.py's re-export of it retired 2026-09-09, and prompt_build.py takes
-the built briefing as an argument.
+the built circle_objectives text as an argument.
 
 ISSUE_MODEL and read_ro() MOVED HERE, then MOVED AGAIN, same day. Both were
 exclusive to this function when this module was built (grep confirmed
@@ -82,7 +82,7 @@ def circle_briefing_build(chosen: list[str]) -> tuple[str, list[str]]:
     supplied it verbatim on 2026-08-03 and it is now a file.
 
     PART 3 IS GENERATED, NOT COPIED, FOR LIVE CIRCLES — new as of 2026-08-11.
-    Live circles never carried a relations brief before (self/circle_briefing.md
+    Live circles never carried an issue relationship brief before (self/circle_briefing.md
     had no such section); circle_briefing_build() gives them the one minimal circles
     already had (that mode itself lost it the same session, and retired R360)
     (see above). `docs/issue_relationship_types.md (archived)` was sent whole into
@@ -92,7 +92,7 @@ def circle_briefing_build(chosen: list[str]) -> tuple[str, list[str]]:
     called "Where the machinery is". It stays, for me. Live parts get
     `issue_prompt_projection.issue_relationship_brief()`: the five words glossed, and what is live.
 
-    Fails CLOSED on a missing issue_model.md: a briefing assembled without
+    Fails CLOSED on a missing issue_model.md: circle_objectives assembled without
     the prologue is a different experiment wearing the same name — enforced
     by issue_prompt_projection.issue_prologue_read() itself now, called first, below, so the
     failure still lands before any other part 2-5 work starts. Parts 3 and
@@ -113,7 +113,7 @@ def circle_briefing_build(chosen: list[str]) -> tuple[str, list[str]]:
     parts = [prologue, "", issues.rstrip("\n")]
     # PART 3 — see this function's docstring. Part 4 (the narrative) was
     # retired whole, B46 2026-08-17 — see the docstring's part-4 note.
-    # ...and `none` takes the relations brief with it: a brief about edges
+    # ...and `none` takes the issue relationship brief with it: a brief about edges
     # between issues that are not here would describe nothing this circle
     # can see.
     if chosen is not None:
@@ -122,8 +122,9 @@ def circle_briefing_build(chosen: list[str]) -> tuple[str, list[str]]:
     # BLOCK 2 material, open topics only, newest-first within its window
     # (coordinator/topic_manager.py, projected by topic_prompt_projection.py — split out
     # 2026-09-02, the same move group_context.py/role_context.py already
-    # made for their own registers). "" while the register is empty, so
-    # this line changes no briefing byte until SYNTHESIS ships a writer.
+    # made for their own registers). "" while the register is empty; SYNTHESIS
+    # writes it at every live close (inter_circle.py's topics step), so a
+    # circle after one with open topics carries the section.
     import topic_prompt_projection as TP
     top = TP.topic_block_render()
     if top:

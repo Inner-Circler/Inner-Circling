@@ -58,7 +58,7 @@ FIELDS:
     class     ADDED 2026-08-17 (D23, best_practices.toml's per-part
               entries moved here): free-text, absent on both live
               [remember: ...] records and DREAMING-authored ones alike
-              — present only on a record COORDINATOR-migrated in from
+              — present only on a record Coordinator-migrated in from
               elsewhere. "better_option" is the one value minted so
               far. Not read by project()/block_settled()/block_tail(); a marker for a human
               or a future filter, not the projection path.
@@ -79,7 +79,7 @@ BUDGETS. Ruled 2026-08-12, widened 2026-08-19 (R255):
 
     AUTHORED_WORD_CAP = 1000   words, a PART's own authored memory,
                                truncated (not refused)
-    RECORD_CAP        = 600    chars, a COORDINATOR-minted record —
+    RECORD_CAP        = 600    chars, a Coordinator-minted record —
                                dreaming's own (inter_circle.py),
                                quote-as-lands's "lands", anything
                                migrated in. UNCHANGED by R255: widening
@@ -144,7 +144,7 @@ TABLE = "remember"
 # id/chain ADDED 2026-08-15 with the DREAMING build (docs/
 # INTER_CIRCLE_DESIGN_V2.md, DREAMING): a DREAMING-authored record
 # carries "MEM-"-prefixed id (per-part high-water next_id, minted by the
-# COORDINATOR — R170) and, when it continues the prior dreamt memory, a
+# Coordinator — R170) and, when it continues the prior dreamt memory, a
 # chain naming that record's id. LIVE [remember: ...] records stay id-less
 # — backward compatible by the record spec's own rule, and dumps() renders
 # old records byte-identically because ORDER only ever grew around them.
@@ -154,7 +154,7 @@ TABLE = "remember"
 # reason: an existing record without one must keep dumping byte-identical.
 ORDER = ("id", "date", "circle", "text", "chain", "class", "salience")
 
-RECORD_CAP = 600    # chars, a COORDINATOR-minted record (see the header)
+RECORD_CAP = 600    # chars, a Coordinator-minted record (see the header)
 AUTHORED_WORD_CAP = SET.setting_value_read("remember_word_cap", 1000)   # words, a PART's
                     # own [remember: ...] (R255)
 BUDGET = SET.setting_value_read("remember_budget", 24000)   # chars, projected per part per
@@ -278,7 +278,7 @@ def remember_words_truncate(text: str, cap: int) -> str:
 # ------------------------------------------------------------------- paths
 # SELF IS NOT A PART, AND ITS REGISTER IS NOT UNDER parts/.
 #
-# docs/BNF.md, SELF: "Self's own reflexive note, private, unvetted — written
+# docs/BNF.md, Self: "Self's own reflexive note, private, unvetted — written
 # to self/remember.toml". Until 2026-08-15 this module could not express that:
 # every path was ROOT/"parts"/<name>, so _real_path("self") resolved to
 # parts/self/remember.toml — a directory that does not exist and a part that
@@ -332,7 +332,7 @@ def remember_has_written(part: str, guard) -> bool:
     2026-08-19, with quote-as-lands (R251). The cap this
     answers is "at most one per part per circle" on the entity's own
     DELIBERATE annotation: the `[remember: ...]` it typed. `class` is
-    present only on a record the COORDINATOR minted (see ORDER's own
+    present only on a record the Coordinator minted (see ORDER's own
     note) — quote_as_lands's "lands", the migrated "better_option" — and
     counting one of those would spend an entity's one use on something
     it never wrote. Without this, the first quote Self ratifies in a
@@ -351,7 +351,7 @@ def remember_add(part: str, guard, text: str, cls: str | None = None,
     close) decides whether this is the part's one use; this function only
     writes.
 
-    `cls` fills the optional `class` field, and only a COORDINATOR-minted
+    `cls` fills the optional `class` field, and only a Coordinator-minted
     record passes one — quote_as_lands.py is the first live caller
     (2026-08-19). A live `[remember: ...]` leaves it None and the key
     stays absent, so those records still render byte-identically.

@@ -144,7 +144,7 @@ def statement_line(display: str, to: str | None, text: str) -> str:
 # Legacy transcripts (June 2026, written by hand before this coordinator
 # existed) do not round-trip and are correctly refused: timestamp speakers like
 # `[22:10]`, `---` rules, blank lines inside statements. Refusing them is right.
-# They are history, not resumable sessions.
+# They are history, not resumable circles.
 
 _STMT_RE = re.compile(
     r"\[([^\]]+)\](?:\s\[To:\s*([^\]]+)\])?:\s(.*)", re.DOTALL)
@@ -636,9 +636,11 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
     The close's own order is what makes staging them here correct rather
     than hopeful: `proposal_vet("at close", ...)` runs before
     `circle_close_mark()`, which runs before the short_terms, the verifier
-    and this commit, so both files are final by the time it fires. And
-    SYNTHESIS does not write either — it reads confirmed proposals — so the
-    second commit has no later state of them to carry.
+    and this commit, so both files are final by the time it fires. SYNTHESIS
+    reads confirmed proposals and writes neither file; the one later writer is
+    the command-suggest step at the very end of inter_circle's live run, which
+    stages a pending row per recognised line, and the dream commit carries
+    self/proposals.toml whenever it did (2026-09-28).
 
     Staging an unchanged file is a no-op, so a circle that added no
     proposal simply commits the transcript it was always going to.

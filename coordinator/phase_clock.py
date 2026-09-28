@@ -16,7 +16,7 @@ WHY A CLOCK AT ALL. Nothing in this tree measured wall time. The Meter
 counts tokens and cost; the close reports carry sizes and hashes; the
 per-turn capture stamps each request to the second but records no
 duration. Total time is dominated by human time, which is out of scope —
-what this measures is everything else: agent time (API calls in flight)
+what this measures is everything else: the parts' time (API calls in flight)
 and local work, per named phase, so "which phase is expensive" is a fact
 on file rather than a guess. Human time is not invisible either: every
 console read is wrapped in the WAITING span, so it is separated out, never

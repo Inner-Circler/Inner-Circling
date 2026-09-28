@@ -21,7 +21,7 @@ what its recent dreams concluded, boiled down to what's actually actionable
 in a future prompt. Before this file (B28, 2026-08-07), that distillation
 was done by hand: a human read `--sources` output in a Claude conversation
 and pasted the result through `part_mid_term_write()`. That produced the first fourteen
-distillates and cannot be repeated automatically — a nightly cannot hold a
+distillates and cannot be repeated automatically — the close cannot hold a
 conversation. This file makes `--refresh` actually call the model.
 
 **Through `llm_client` since 2026-08-28** (stage 1 of the provider socket).

@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v196"
+HOOK_MARK = "# inner-circling pre-commit v197"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -231,6 +231,10 @@ esac
 case "$FILES" in *groups/*/group.toml*\
 |*coordinator/practice_manager.py*|*coordinator/practice_verify.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
+|*coordinator/tests/test_command_policy.py*|*coordinator/tests/test_issue_status_write.py*\
+|*memory/TRANSACTION_CLASS.py*|*coordinator/prompt_capture.py*|*coordinator/command_suggest.py*\
+|*coordinator/group_context.py*|*coordinator/short_term_manager.py*|*coordinator/parts_prompt_projection.py*\
+|*coordinator/group_attention.py*|*coordinator/circle_open_verify.py*\
 |*coordinator/prompt_build.py*|*coordinator/annotations.py*|*coordinator/propose_lifecycle.py*\
 |*coordinator/remember_expand.py*|*coordinator/tests/test_remember_expand.py*\
 |*coordinator/recall_index.py*|*coordinator/tests/test_recall_index.py*\
@@ -423,7 +427,7 @@ case "$FILES" in *NEXT.md*|*coordinator/logbook_next_verify.py*\
     run coordinator/tests/test_logbook_next_verify.py
 esac
 
-case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*coordinator/prompt_build.py*|*self/best_practices.toml*|*parts/*)
+case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*coordinator/process_ifs.md*|*coordinator/prompt_build.py*|*coordinator/group_context.py*|*coordinator/group_attention.py*|*self/best_practices.toml*|*parts/*)
     NOTE="  pre-commit: a prompt block source or its overlap checker touched"
     # Through the venv, not bare `python`: this checker imports circle.py,
     # which imports anthropic, and the hook's `python` is the system 3.10
@@ -901,7 +905,7 @@ case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_p
     run coordinator/tests/test_part_roster.py
 esac
 
-case "$FILES" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*parts/*)
+case "$FILES" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*coordinator/parts_prompt_projection.py*|*parts/*)
     NOTE="  pre-commit: who Self is, or what a part's recorded context renders to"
     run coordinator/tests/test_identity.py
 esac
@@ -911,7 +915,7 @@ case "$FILES" in *coordinator/part_add.py*|*coordinator/tests/test_part_add.py*)
     run coordinator/tests/test_part_add.py
 esac
 
-case "$FILES" in *coordinator/initialization.py*|*coordinator/initialization.toml*|*coordinator/tests/test_initialization.py*|*parts/*)
+case "$FILES" in *coordinator/initialization.py*|*coordinator/initialization.toml*|*coordinator/tests/test_initialization.py*|*coordinator/commands.py*|*coordinator/command_surface.py*|*parts/*)
     NOTE="  pre-commit: the first-run dialogs, their validator, their verb"
     # PART_CONTEXT_DIALOG and /part-context-update: the ruled validator
     # (data_type/data_max/unique_in, empty always valid, echo-and-loop on
@@ -1028,7 +1032,7 @@ esac
 case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
 |*coordinator/record_paths.py*|*coordinator/tests/test_record_paths.py*|*coordinator/part_roster.py*\
 |*coordinator/circle_close.py*|*coordinator/circle_open.py*|*coordinator/circle.py*\
-|*coordinator/group_manager.py*|*ui/tests/test_circle_engine_band.py*|*groups/*)
+|*coordinator/group_manager.py*|*ui/tests/test_circle_engine_band.py*|*coordinator/short_term_manager.py*|*groups/*)
     NOTE="  pre-commit: a record-safety module touched"
     # THE CLOSE STEP, THE OPEN STEP AND THE DRIVER ARE HERE for the band's
     # isolation suite: "a band close touches nothing under groups/ifs/" is

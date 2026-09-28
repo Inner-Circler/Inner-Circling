@@ -171,7 +171,9 @@ def circle_identity_slots_read(layer_text: str) -> dict[str, str]:
 
 
 def circle_identity_marks_read(universal_text: str) -> list[str]:
-    """The slot names the universal layer carries, in file order."""
+    """The slot names the universal layer carries, in file order. Read by
+    test_process_core_layers.py alone — the assembler fills slots without
+    listing them (audit-register 2026-09-27 #60)."""
     out = []
     for ln in universal_text.splitlines(keepends=True):
         name = _mark_name(ln, LAYER_MARK)

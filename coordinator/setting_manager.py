@@ -55,9 +55,8 @@ PARTS NEVER SEE ANY OF THIS, and three separate things have to hold:
        ONE. What a part may name in [proposed: <command>] is
        command_surface.PROPOSE_SUBSET_COMMANDS, minus the deferred, as
        PROPOSABLE_COMMANDS — annotations.py reads those two and has since R267
-       (it read DEV_CMD_HEADS before that, and command_surface's own
-       comment on DEV_CMD_HEADS still describes it in those terms, which is
-       why both are checked below rather than only the live one). A
+       (it read DEV_CMD_HEADS before that; that table is a suite fixture
+       now, and both are checked below rather than only the live one). A
        settings verb reaching either set would hand a part exactly the
        surface the operator forbade. They are dispatchable and deliberately not
        proposable; coordinator/tests/test_setting_manager.py asserts the
@@ -270,7 +269,7 @@ SPEC: tuple[Setting, ...] = (
        why="Sized from the two distillates first made by hand, which ran 3,094 and 4,113 "
            "characters."),
     _s("topics_budget",
-       "How much of the open topics is carried into the briefing",
+       "How much of the open topics is carried into circle_objectives (BLOCK 2)",
        "NUMERIC_STRING", 50000, "dev", "next_circle",
        "coordinator/topic_manager.py::BUDGET", unit="characters",
        why="About the three newest topics, as the topic design ratified on 2026-08-15 has it: "

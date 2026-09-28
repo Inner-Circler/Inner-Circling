@@ -252,6 +252,8 @@ def _token_re(tok: str):
 
 
 def proposal_by_id_read(pid: str) -> dict | None:
+    """One row by id, or None. A probe's door (test_proposal_suggestion.py); production
+    reads rows through the pending list (audit-register 2026-09-27 #60)."""
     return _PC.by_id(pid)
 
 

@@ -186,10 +186,10 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
     Delete all but the newest 14 (`KEEP_BASELINES`) snapshot directories under `work/circle_audit/`. Default: off.
 
 `--all-circles`
-    With `--backfill`: scan every circle on disk, not only unprocessed ones — needed because a short-term record lost after its circle was already dreamed is otherwise invisible to the normal (unprocessed-only) scope. Default: off.
+    With `--backfill`: scan every circle on disk, not only unprocessed ones — needed because a short_term record lost after its circle was already dreamed is otherwise invisible to the normal (unprocessed-only) scope. Default: off.
 
 `--backfill`
-    Run phase 3: reconstruct any short-term record that is missing or malformed for a part that actually spoke in an unprocessed circle. Stages only; requires `--commit` to actually write. Default: off.
+    Run phase 3: reconstruct any short_term record that is missing or malformed for a part that actually spoke in an unprocessed circle. Stages only; requires `--commit` to actually write. Default: off.
 
 `--stage-synthetic`
     Stage one legal synthetic change, so phases 6-9 (validate/commit/verify/record) can be exercised end-to-end with no model calls and no cost. Default: off.
@@ -716,7 +716,7 @@ States plainly whether inter_circle.py actually processed a circle between when 
 
 ### `circle_audit_backfill_run(run, tx, unprocessed, dry)`
 
-Reconstructs lost short-term records directly from a circle's transcript, staging the result rather than writing it — mechanizing a procedure the docstring says was previously done by hand for four parts on 2026-07-26, under the same rule: only `short_term_*.toml` (`.md` before 2026-09-04, R434) is ever written here, never `long_term.md` (and never `part_relationships.toml`, while that register existed — retired 2026-08-22).
+Reconstructs lost short_term records directly from a circle's transcript, staging the result rather than writing it — mechanizing a procedure the docstring says was previously done by hand for four parts on 2026-07-26, under the same rule: only `short_term_*.toml` (`.md` before 2026-09-04, R434) is ever written here, never `long_term.md` (and never `part_relationships.toml`, while that register existed — retired 2026-08-22).
 
     Find everything needing backfill via circle_audit_short_terms_missing_read().
     if (nothing needs it) then {
@@ -744,7 +744,7 @@ Reconstructs lost short-term records directly from a circle's transcript, stagin
         `shared_block`/`system_blocks` pair became that one call, 2026-09-02).
         Read the full transcript text for this circle.
         Send one message: the transcript plus the fixed BACKFILL_PROMPT
-        (which asks for the four short-term sections, grounding "What I
+        (which asks for the four short_term sections, grounding "What I
         said"/"What I observed in others" in the actual transcript and
         leaving "Shifts"/"Current emotional state" to the model's own
         judgment), capped at BACKFILL_MAX_TOKENS (16,000) output tokens.
@@ -778,7 +778,8 @@ Reconstructs lost short-term records directly from a circle's transcript, stagin
 One legal synthetic change, used to exercise the real tree, the real gate, and the phase 6-9 plumbing end-to-end with no model calls and no cost. ONE legal file since 2026-08-19 (review tier 2 #17): it used to also stage a fake [[dreams]] record, written before the register gate saw TOML — the gate then declared parts/*/dreams.toml FROZEN (R178), so the synthetic staging became a guaranteed phase-6 FAIL and --stage-synthetic could never reach phases 7-9 at all. The multi-file swap and both transaction file repairs are covered by coordinator/tests/test_TRANSACTION_CLASS.py against throwaway trees.
 
     {
-        Read the self-observation log and stage it with one synthetic
+        Read the CIRCLE_OBSERVATION register (circle_observation_log.toml,
+        R481) and stage it with one synthetic
         line appended.
 
         run.ok, reporting how many synthetic files were staged.

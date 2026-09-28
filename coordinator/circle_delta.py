@@ -676,7 +676,8 @@ def main(argv: list[str]) -> int:
     ap.add_argument("--group", default=None,
                     # B117 stage 5 — in the comment, not in help=, which ships.
                     help="report a circle of this GROUP's record (groups/<name>/). "
-                         "Default: the ifs group.")
+                         "Default: the group ruled default — the one installed, or the "
+                         "one whose group.toml says default = true.")
     ap.add_argument("--series", action="store_true",
                     help="part memory over every closed circle")
     ap.add_argument("--json", action="store_true",

@@ -84,7 +84,7 @@ Checks (evaluated against the state that REMAINS after any --prune):
                            retry loop. Fails CLOSED if the transcript can't be resolved
                            (a stale mount must not vacuously pass the check).
 
-Close report + reconcile (durability across the close->reconcile gap, #69866):
+Close report + reconcile (durability across the close->reconcile gap):
   --short-term-only --write-report  writes work/logs/close_<open-time>.json recording
       each speaking part's short_term size+sha256 — the durable manifest of what
       existed at close.
@@ -291,8 +291,9 @@ def circle_close_report_write(root: Path, ot: str, transcript: Path,
     """Persist work/logs/close_<ot>.json — the durable close manifest reconcile
     (circle_audit.py --reconcile, hand-invoked) verifies against. Records what
     SHOULD be on disk (per speaking part: size + sha256), so a later total
-    loss (#69866) is caught as a MISSING against a known expectation instead
-    of silently read as no-engagement."""
+    loss is caught as a MISSING against a known expectation instead of
+    silently read as no-engagement. (The two issue numbers this once cited
+    were the retired sandbox-mount runtime's; nothing here resolves them.)"""
     logs = root / "work" / "logs"
     logs.mkdir(parents=True, exist_ok=True)
     report = {
@@ -302,10 +303,9 @@ def circle_close_report_write(root: Path, ot: str, transcript: Path,
         "verifier": "circle_close_verify.py check #5",
         "result": "fail" if missing else "pass",
         "missing": sorted(missing),
-        "note": ("Hashes are the close-time on-disk view, read through the sandbox "
-                 "mount, which can cache/stale (#45433/#69866). Reconcile "
-                 "re-reads the durable store and treats any MISSING/DRIFT as a lost "
-                 "write to backfill — absence is caught unambiguously regardless."),
+        "note": ("Hashes are the close-time on-disk view. Reconcile re-reads the "
+                 "record and treats any MISSING/DRIFT as a lost write to backfill — "
+                 "absence is caught unambiguously regardless."),
         "parts": records,
     }
     path = logs / f"close_{ot}.json"
@@ -689,14 +689,15 @@ def main() -> int:
     ap.add_argument("--prune", action="store_true",
                     help="delete leftover team dirs and their matching tasks dirs")
     ap.add_argument("--short-term-only", action="store_true",
-                    help="run ONLY the short_term check (check #5) — for the "
-                         "/circle_close retry loop, before hard shutdown, while "
-                         "agents are still reachable; skips teardown checks, prune, "
-                         "and statement_temp deletion")
+                    help="run ONLY the short_term check (check #5): every part that spoke "
+                         "has a well-formed short_term. What the live close runs, through "
+                         "transcript_store.circle_close_verifier_run(); skips the team-dir "
+                         "checks and --prune. Default: off (every check).")
     ap.add_argument("--group", default=None,
                     # B117 stage 5 — in the comment, not in help=, which ships.
-                    help="verify this GROUP's record (groups/<name>/). "
-                         "Default: the ifs group.")
+                    help="verify this GROUP's record (groups/<name>/). Default: the group "
+                         "ruled default — the one installed, or the one whose group.toml "
+                         "says default = true.")
     ap.add_argument("--max-members", type=int, default=MAX_MEMBERS)
     ap.add_argument("--open-time", default=None,
                     help="circle open time YYYY-MM-DD_HHMM; if given, check for "
@@ -706,10 +707,10 @@ def main() -> int:
                          "after it)")
     ap.add_argument("--write-report", action="store_true",
                     help="with --short-term-only: emit work/logs/close_<open-time>.json "
-                         "recording each speaking part's short_term size+sha256, so the "
-                         "audit reconcile can verify the durable store against what "
-                         "existed at close (closes the silent 'clean close, empty "
-                         "reconcile' gap, #69866).")
+                         "recording each speaking part's short_term size+sha256, so "
+                         "circle_audit.py --reconcile can verify the record against what "
+                         "existed at close instead of reading a lost file as "
+                         "no-engagement. Default: off.")
     ap.add_argument("--postcondition", action="store_true",
                     help="read every close report against the transcript "
                          "it names (R368); --open-time narrows it to one")

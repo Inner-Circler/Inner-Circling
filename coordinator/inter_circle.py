@@ -318,11 +318,11 @@ def short_term_backfill_step(ot: str, say) -> int:
     import group_context as _GC
     import group_attention as _GA
     core = _GC.group_shared_read()
-    briefing, _ = _GA.circle_briefing_build([])
+    objectives, _ = _GA.circle_briefing_build([])
     failed: list[str] = []
     for part, n, why in todo:
         say(f"    {part}: spoke {n}x — {why}")
-        system, _ = C.prompt_part_assemble(part, core, briefing)
+        system, _ = C.prompt_part_assemble(part, core, objectives)
         # a real part prompt, so it records under the PART shape — kind
         # backfill, R277's own rule ("every request that carries a part's
         # system prompt"), which the wiring never honoured until R412
@@ -597,20 +597,6 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         for s in syn.get("suspect", []):
             say(f"  SUSPECT — {s}")
 
-        # COMMAND SUGGESTIONS — REPORT ONLY (R569, 2026-09-15:
-        # "lets go with B, I want to see what it finds"). One call over the transcript
-        # naming the verbs its prose suggests; nothing staged, nothing captured, and a
-        # failure is one line — command_suggest_run() never raises. Runs only where the
-        # record is real (live): a dry run has no model.
-        if live:
-            say("\ncommand suggestions — report only:")
-            with PC.PHASES.span("inter.command_suggest"):
-                import command_suggest as CSG
-                # AND STAGED — R570, 2026-09-15: each recognised line also
-                # becomes a pending proposal with its dependencies, for the next checkpoint.
-                # Only here, the live close; a hand run or a rehearsal never stages.
-                CSG.command_suggest_run(ot, transcript, say=say, stage=True)
-
         say("\nstaging + gate:")
         tx = T.Transaction(ROOT, f"dream_{ot}")
         # DESIGN_V2 LONG_TERM_CANDIDATE (2026-08-22): a qualifying chain
@@ -743,9 +729,31 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                      f"hand: python coordinator\\part_mid_term_manager.py --refresh "
                      f"<part>. Everything else committed.")
 
+            # COMMAND SUGGESTIONS (R569, 2026-09-15: "lets go with B, I want to see what
+            # it finds") AND STAGED (R570): one call over the transcript naming the verbs
+            # its prose suggests, each recognised line a pending proposal for the next
+            # checkpoint. command_suggest_run() never raises; a failure is one line.
+            # Only here, the live close; a hand run or a rehearsal never stages.
+            #
+            # AFTER THE GATE AND THE COMMIT, 2026-09-28 (audit-register 2026-09-27 #1). This
+            # ran before `tx` was opened, and its rows reach self/proposals.toml through the
+            # register's own writer, not through the transaction — so a gate refusal left
+            # them on disk while every report said "the live tree is untouched", and neither
+            # machine commit carried them: circle_commit() had already run, and the path
+            # list below did not name the file. Here, a refused run has not reached it, and
+            # the file joins the dream commit when a row was staged.
+            suggested = None
+            say("\ncommand suggestions:")
+            with PC.PHASES.span("inter.command_suggest"):
+                import command_suggest as CSG
+                suggested = CSG.command_suggest_run(ot, transcript, say=say, stage=True)
+
             import gitrepo as G
             paths = [ROOT / rel for rel in staged]
             paths += [MT.part_mid_term_locate(p) for p in parts if MT.part_mid_term_locate(p).is_file()]
+            proposals = _RP.record_dir(ROOT, "self") / "proposals.toml"
+            if suggested and suggested.get("staged") and proposals.is_file():
+                paths.append(proposals)
             # THE CIRCLE'S CAPTURE RIDES THIS COMMIT (R412/R413): the turns
             # recorded since circle_commit() took the directory, and the
             # manifest they rewrote. AND IT COMMITS EVEN WHEN NOTHING WAS
@@ -755,7 +763,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             # register.
             cap_paths, cap_moved = _capture_paths(ot)
             paths += cap_paths
-            to_commit = bool(staged) or cap_moved
+            to_commit = bool(staged) or cap_moved or (proposals in paths)
             committed, tag = False, None
             # NO GIT HISTORY IS A SUPPORTED TREE SINCE 2026-08-24, ruled by
             # the operator ("Tier 1"): a distributed bundle that was never
@@ -957,7 +965,8 @@ def main() -> int:
         return 1
     ot = a[a.index("--ot") + 1]
     # `--group <name>`: process a circle of that GROUP's record (groups/<name>/) — B117 stage 5
-    # (2026-09-07). Default: the ifs group. A live /close never needs it: circle.py has already
+    # (2026-09-07). Default: the group ruled default (record_paths.DEFAULT_GROUP, R468) — a
+    # rule, not a name. A live /close never needs it: circle.py has already
     # set the group in this process before the close runs.
     if "--group" in a:
         _RP.group_set(a[a.index("--group") + 1])

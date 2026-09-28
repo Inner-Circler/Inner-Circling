@@ -819,10 +819,10 @@ def circle_audit_backfill_run(run: Run, tx, unprocessed: list[str], dry: bool) -
     # shared_block() ITSELF RETIRED 2026-09-02, replaced by one call,
     # prompt_part_assemble() — see prompt_build.py's own docstring.
     core = _GC.group_shared_read()
-    briefing, _ = _GA.circle_briefing_build([])
+    objectives, _ = _GA.circle_briefing_build([])
     done = 0
     for ot, part, n in todo:
-        system, _ = C.prompt_part_assemble(part, core, briefing)
+        system, _ = C.prompt_part_assemble(part, core, objectives)
 
         def _call(system_, user_, max_tokens):
             """circle_audit's own client, in the one shape backfill.py takes.
@@ -1054,7 +1054,8 @@ def main() -> int:
                     help="complete an interrupted swap from staging")
     ap.add_argument("--transaction-rollback", action="store_true",
                     help="undo an interrupted swap from the rollback copies")
-    # The --journal-* spellings (until B100, 2026-09-04; R446, R448) are
+    # The --journal-* spellings (until B100, 2026-09-04; R446, R448) are gone —
+    # retired with their dispatch arm 2026-09-17 (the tenth register's #13).
     ap.add_argument("--log", action="store_true",
                     help="mirror all output to "
                          "work/logs/circle_audit_<timestamp>.log")

@@ -23,7 +23,7 @@ WHAT THIS IS
 
 WHY THIS FIRST
     A transaction guarantees a CONSISTENT set of files, not a CORRECT one. A
-    nightly run that drops three sections from long_term.md and commits cleanly
+    close that drops three sections from long_term.md and commits cleanly
     passes every atomicity check ever written. These invariants are the part that
     notices.
 
@@ -65,7 +65,7 @@ PARTS = R.ALPHA_DIR_NAMES   # B29: was a hand-typed alphabetical copy
 # retired. group_attention.py's circle_briefing_build() constructs circle_objectives directly
 # from issue_model.md and the live issues/*.toml graph (and, until B46
 # 2026-08-17, issues_narrative.md)
-# at prompt-assembly time -- there is no self/ file left for the nightly to
+# at prompt-assembly time -- there is no self/ file left for SYNTHESIS to
 # rewrite, and check_briefing() (which asserted this file's `## Issues`
 # section existed) went with it.
 # "self_observation_log.md": "append_only" REMOVED 2026-08-19

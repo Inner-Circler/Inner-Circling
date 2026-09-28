@@ -43,8 +43,8 @@ no inspection at all.
 PLACEHOLDERS, on the distinction Self drew:
 
     TO BE    the circle will certainly supply
-             it — the working set, the per-part
-             briefing split, dream entries.
+             it — the working set, the recall
+             pack, dream entries.
     MAY BE   it depends on the evening — a
              practice added mid-circle.
 
@@ -131,8 +131,8 @@ def prompt_show_render(target: str) -> str:
         return f"  no such part: {target}"
 
     core = _GC.group_shared_read()
-    briefing, unknown = _GA.circle_briefing_build([])
-    blocks, note = C.prompt_part_assemble(who, core, briefing)
+    objectives, unknown = _GA.circle_briefing_build([])
+    blocks, note = C.prompt_part_assemble(who, core, objectives)
     if target == "circle":
         # `note`'s block-4 figure is ONE part's, and this view has no part.
         # It read as a global until the roster went alphabetical (R123) and
@@ -173,7 +173,7 @@ def _notes(name: str, note: str, part: str) -> list[str]:
             {note}
 
             This block IS the working-set issue
-            projection and the relations brief, built
+            projection and the issue relationship brief, built
             from the nodes chosen at circle open —
             circle_briefing_build(), the same construction for
             every circle."""))

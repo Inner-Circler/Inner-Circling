@@ -20,7 +20,7 @@ converts; `self/self.md` does not, because SYNTHESIS reads it back as prompt
 input and replaces it whole — a document's shape, not a register's.
 
     id      "CO-" DIGIT+, per-register high-water next_id, minted by the
-            COORDINATOR after SYNTHESIS returns (R170's discipline). Records
+            Coordinator after SYNTHESIS returns (R170's discipline). Records
             written before the 2026-09-07 rename carry "SO-" and keep it —
             forward-only, one counter, both prefixes accepted by the gate.
     date    UTC ISO, microseconds. The 29 DAY-SCOPED migrated records carry

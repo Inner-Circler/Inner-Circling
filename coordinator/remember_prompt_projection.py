@@ -211,7 +211,7 @@ def _window(es: list[dict]) -> tuple[str, int, int]:
         # threw it away, so a part received an undated list and could not
         # tell a memory written last night from one written in June.
         #
-        # THE COORDINATOR STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
+        # THE Coordinator STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
         # the OT reaches no block and no message of its view — verified
         # 2026-08-27 against prompt_messages_render() and a rendered prompt — so a
         # part-authored tag could only ever be guessed. Stamping also covers

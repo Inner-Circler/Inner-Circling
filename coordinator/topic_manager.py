@@ -25,7 +25,7 @@ vetting checkpoint: that is exactly what R184 rules, and what separates
 this register from every PROPOSE-class one.
 
     id      "TP-" DIGIT+, one id space, high-water `next_id`, minted by
-            the COORDINATOR after the SYNTHESIS call returns — the model
+            the Coordinator after the SYNTHESIS call returns — the model
             never mints its own id (R170's MEM- discipline). A gap is a
             closure; an id is never reused.
     circle  the OT whose SYNTHESIS emitted it.

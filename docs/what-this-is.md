@@ -118,7 +118,7 @@ parts of the system that run.
 - graph derivation over the full transcript corpus
 - dreaming as a **preview** — it reads the live graph, proposes changes, verifies
   every citation, and writes nothing. There is no write path in the module at all.
-- a journalled transaction for atomic multi-file writes, and a local-only git
+- a write-ahead TRANSACTION for atomic multi-file writes, and a local-only git
   history where every circle is a tagged commit
 - the circle's issues briefing built fresh from the live graph at every open,
   not from a hand-maintained document — the graph reaches the parts this way,
@@ -131,8 +131,8 @@ parts of the system that run.
 - any mechanism by which a part can pass a commitment to its own future instances
 
 That last one is worth stating plainly. A part's prompt is assembled from its own
-long-term record, its mid-term distillate, and the circle's own live issues
-briefing. **Its own short-term record is written at close and never read back.**
+long_term record, its mid_term distillate, and the circle's own live issues
+(BLOCK 2, circle_objectives). **Its own short_term record is written at close and never read back.**
 So a promise made in
 a circle does not reach the part that made it. Six parts made weekly commitments
 in one circle recently; all six were structurally unkeepable, and none of them

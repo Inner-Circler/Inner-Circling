@@ -7,7 +7,6 @@ proposal_suggestion.py — run a staged SUGGESTION when Self approves it, and re
     PS.proposal_suggestion_validate(row)         what approval would do, for a sandbox
     PS.proposal_suggestion_placeholders_read(text)
     PS.proposal_suggestion_is_runnable(head)
-    PS.SUGGESTION_HEADS
 
 A SUGGESTION is a <proposal> row of kind "suggestion": a line the coordinator itself staged —
 a recognised action from the close-time report (R569), or a step of a dependency plan a removal
@@ -305,7 +304,6 @@ _EXECUTORS = {
     "/topic-close": _run_topic_close,
     "/topic-update": _run_topic_update,
 }
-SUGGESTION_HEADS: tuple[str, ...] = tuple(_EXECUTORS)
 
 
 # ------------------------------------------------------------------ the doors

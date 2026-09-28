@@ -598,11 +598,17 @@ def command_help_all_render() -> str:
     Wrapped at the one point text reaches a human, as command_help_render().
 
     EVERY DOOR ANSWERS IT, 2026-09-15: `_help_text_raw()` dispatches "all"
-    here, so the command pane with no circle open (`command_dev_dispatch`
-    -> `command_help`), `--dev-cmd help all`, and circle.py's Self> loop all
-    render the same page. Until then only the loop's own branch knew the
-    word, and `help all` typed at cmd> before a circle was open — or while
-    one was still opening — answered "unrecognized: help 'all'"."""
+    to `_help_all_raw()` below, so the command pane with no circle open
+    (`command_dev_dispatch` -> `command_help`), `--dev-cmd help all`, and
+    circle.py's Self> loop all render the same page. Until then only the
+    loop's own branch knew the word, and `help all` typed at cmd> before a
+    circle was open — or while one was still opening — answered
+    "unrecognized: help 'all'".
+
+    THIS WRAPPER HAS NO PRODUCTION CALLER (audit-register 2026-09-27 #60):
+    the doors take the raw page and wrap at their own edge; it is the wrapped
+    form test_help_system.py asserts, kept as the one place that form is
+    named."""
     return _wrap80(_help_all_raw())
 
 

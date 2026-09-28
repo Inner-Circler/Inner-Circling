@@ -17,7 +17,7 @@ the durable account of a whole circle. `self/narrative_<date>.md`'s
 longhand is unaffected and gains no writer here.
 
     id      "CH-" DIGIT+, per-register high-water next_id, minted by the
-            COORDINATOR after SYNTHESIS returns (R170's discipline). The
+            Coordinator after SYNTHESIS returns (R170's discipline). The
             id space is NEW with this file — flagged for docs/BNF.md's
             register-of-registers table, no collision on 2026-08-15.
     circle  the OT this entry is ABOUT.

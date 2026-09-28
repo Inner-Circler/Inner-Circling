@@ -131,10 +131,10 @@ CSS_TOKENS: list[tuple[str, str, str]] = [
     ("--warn-bg", "GOLD_WASH", ""),
     ("--warn-text", "GOLD_DIM", ""),
     ("--affordance", "AFFORD",
-     "where the user may act: the input band, the lower-pane tabs, the "
+     "where the user may act: the input pane, the lower-pane tabs, the "
      "text fields in them and their chips carry this while idle and drop "
      "to --accent once selected or focused"),
-    ("--status-ok", "GREEN", "the lower band's status line, and the "
+    ("--status-ok", "GREEN", "the lower pane's status line, and the "
      "completion line the close prints"),
     ("--status-warn", "GOLD", ""),
     ("--status-err", "RED", ""),

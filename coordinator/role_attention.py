@@ -34,8 +34,8 @@ PART_OBJECTIVES_EMPTY = "(nothing pending for you this circle)"
 def part_attention_stage(part: str, cutoff: "str | None") -> str:
     """Phase 1: the remember tail — entries not yet folded into mid_term's
     distillate, as of the SAME cutoff role_context.part_context_block_render() used for the
-    settled half. Called before the topic is known; ask fragments and
-    anything else topic-dependent are not part of this phase."""
+    settled half. Called before the topic is known; anything topic-dependent
+    (the recall pack) is not part of this phase."""
     import remember_prompt_projection as RPP
     tail, _why = RPP.remember_tail_render(part, cutoff)
     return tail.strip() or PART_OBJECTIVES_EMPTY

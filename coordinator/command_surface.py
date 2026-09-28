@@ -12,10 +12,11 @@ dispatcher, and ui/circling.py's command pane — and stages 3-7 of the
 split put those readers in separate modules. Wherever the table lived
 among them would have manufactured an import cycle (dispatch's /help
 calls help_text, which renders COMMANDS); a leaf module below all of
-them is what makes the later extractions acyclic. DEV_CMD_HEADS and
-ISSUE_NODE_RE ride along for the same reason: each is shared by the
-annotation grammar AND the dispatcher, and before this module they lived in
-one consumer's region while the other reached across the file.
+them is what makes the later extractions acyclic. ISSUE_NODE_RE rides along
+for the same reason: it is shared by the annotation grammar AND the
+dispatcher, and before this module it lived in one consumer's region while
+the other reached across the file. DEV_CMD_HEADS came with it and is a
+verifier-and-suite fixture today (see its own comment).
 
 dev_mode IS REBOUND AT RUNTIME — the same late-binding contract as
 seam.emit/seam.read_line (see seam.py's header): read and write it as
@@ -157,8 +158,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/better-option-list [<n>]",
      "how you move — the rows of the same register\n"
      "addressed to Self, numbered on their own; `<n>`\n"
-     "shows one whole. Runnable at any dev state;\n"
-     "listed only under --dev", "command"),
+     "shows one whole. Runnable at any dev state and\n"
+     "always listed", "command"),      # always listed: R288, at command_is_listed()
     ("/practice-delete <n>",
      "remove one, by the number /practice-list showed —\n"
      "that list's numbering, not /better-option-list's",
@@ -473,13 +474,17 @@ DEV_MIN_CMDS = ("/help", "/status")
 # proposal_vet()'s own "checkpoint 2"), so /round, /pass,
 # /close, /abort, /status, /tokens, /issue-evidence-list — anything circle-pane-
 # only or transcript-dependent — would be nonsense to "approve" here.
-# This is dispatch_dev_cmd()'s own accepted-heads set, named once so
-# PROPOSE's classifier and dispatch_dev_cmd() itself cannot drift apart
-# — test_proposal_manager.py asserts the two stay in sync. Lived beside the
-# annotation grammar until stage 0; both that grammar and the dispatcher
-# read it, which is exactly why it lives in this shared leaf now.
+# WHAT READS IT TODAY (2026-09-28, audit-register 2026-09-27 #27): no production
+# path. The classifier reads PROPOSE_SUBSET_COMMANDS, narrowed at call time by
+# command_proposable_read() (R267, B122 — annotations.py), and
+# the dispatcher, commands.command_dev_dispatch(), handles eight heads that are
+# not here (/propose-add, the /settings-* and /redact-alias-* verbs). What holds
+# this table to the dispatcher is the suites that compare them
+# (test_dispatch_partition.py, test_proposal_manager.py) and
+# system_setting_verify.py's by-name read — so it is a FIXTURE, kept because
+# those probes are how a verb reaching a set it should not is caught.
 # COMPLETED 2026-08-21: it was short by /recall, /issue-list, /issue-status
-# and /issue-status-update — heads dispatch_dev_cmd() had handled for days
+# and /issue-status-update — heads the dispatcher had handled for days
 # while test_proposal_manager' sync probe asserted only ⊆ — and it gains the verbs
 # minted the same day. Every entry is a no-circle head; /remember-list is
 # listed under its own name (/recall normalised to it until 2026-09-11).

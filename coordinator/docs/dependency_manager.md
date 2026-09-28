@@ -13,7 +13,7 @@ removal verbs and the vetting loop act on a plan. Ruled R570 (2026-09-15).
     DM.dependency_plan(kind, ident)                  the transitive plan, cycle-safe
     DM.dependency_plan_is_blocked(plan)              a REMOVE step or a ring blocks the act
     DM.dependency_plan_render(plan)                  the lines Self reads
-    DM.dependency_ids_read(row) · dependency_placeholders_read(row) · dependency_ring_find(rows, id, deps)
+    DM.dependency_ids_read(row)                      the proposal ids a row depends on
     DM.dependency_target_parse(text[, kind])
 
 ## DESCRIPTION
@@ -100,9 +100,11 @@ The CLI prints; nothing is asked.
         pop
     return {target, remove (leaves first), preserve, handled, cascade, rings}
 
-### `dependency_ring_find(rows, new_id, new_deps)`
-    the depends_on graph of `rows` plus the new row; a depth-first walk from new_id that meets
-    itself returns the ring as ids, else [] — the register refuses a row that would close one.
+### the ring refusal
+    lives in the register: `proposal_manager.proposal_dependency_ring_find(rows, new_id, new_deps)`
+    walks the depends_on graph of `rows` plus the new row depth-first from new_id, returns the
+    ring as ids or [], and `proposal_row_stage()` refuses a row that would close one. This
+    module forwarded to it until 2026-09-28; nothing called the forward.
 
 ## BUGS
 None known. Two observations from the first build: a part is resolved by Tag or directory,

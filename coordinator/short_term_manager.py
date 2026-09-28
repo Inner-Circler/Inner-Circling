@@ -413,8 +413,8 @@ def short_term_verify(path: str, data: bytes | None, part: str,
     something under it, and headed for the right part and circle.
 
     Empty sections matter. A backfill that emits the headings and nothing beneath
-    them passes a naive 'are the sections present' test and tells the nightly
-    nothing — which is indistinguishable, downstream, from the loss it was meant
+    them passes a naive 'are the sections present' test and tells the close's
+    dreaming nothing — which is indistinguishable, downstream, from the loss it was meant
     to repair."""
     text, out = M.record_file_verify(path, data)
     if text is None:

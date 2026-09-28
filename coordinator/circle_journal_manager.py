@@ -18,7 +18,7 @@ recommended answer after Claude's report of the standalone trial's findings —
 work/ablations/2026-09-04/). group_context.group_context_block_render() reads the
 newest entry into Block 1 (B94 stage 5, same day) — every part now sees it.
 
-    id          "CJ-" DIGIT+, per-register high-water next_id, minted by the COORDINATOR
+    id          "CJ-" DIGIT+, per-register high-water next_id, minted by the Coordinator
                 after SYNTHESIS returns (R170's discipline), never the model.
     date        UTC ISO, microseconds.
     circle      the OT this entry is ABOUT.

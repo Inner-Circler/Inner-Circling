@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """
-proposal_group_manager.py — the PROPOSAL COALESCE (R356, B69): one reader/writer of
+proposal_group_manager.py — the PROPOSAL_GROUP register (R356, B69), built by the
+coalesce pass: one reader/writer of
 (coalesce.py until 2026-09-03 — B99 stage 18c under R435: a register's one reader/writer is <CLASS>_manager.py)
 self/coalesce.toml, and the one model pass that groups a pending queue.
 
@@ -45,9 +46,10 @@ set with the current hash and a `note` saying why — the queue is still
 vetted, just ungrouped, and the next set change retries. Every invalid
 line is dropped with a note, never guessed at.
 
-WRITTEN IMMEDIATELY, NEVER CIRCLE-COMMITTED — proposal_vet()'s
-own pattern for the registers it rules: this file is real on disk the
-moment it changes and sits uncommitted until a human commits it.
+WRITTEN IMMEDIATELY — proposal_vet()'s own pattern for the registers it
+rules: this file is real on disk the moment it changes. Since 2026-09-09
+transcript_store.circle_commit_paths() carries it with the circle's own
+commit; between closes it sits uncommitted until a human commits it.
 
     python coordinator/proposal_group_manager.py             state: freshness + groups
     python coordinator/proposal_group_manager.py --refresh   force one derive (model call)

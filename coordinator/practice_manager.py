@@ -284,11 +284,11 @@ STAGING_ONLY = ("op", "target_id", "circle", "proposed_at")
 
 
 def _now() -> str:
-    # UTC since 2026-08-16, RULED — proposals.py's convention becomes the
-    # standard for every new stamp; the naive-local stamps already sitting
-    # in settled rows are HISTORY and stay exactly as written. Nothing
-    # orders rows by parsing these strings (verified across coordinator/,
-    # memory/ and scripts/ before the change), so mixed conventions in one
+    # UTC since 2026-08-16, RULED — proposal_manager.py's convention (proposals.py
+    # then) becomes the standard for every new stamp; the naive-local stamps
+    # already sitting in settled rows are HISTORY and stay exactly as written.
+    # Nothing orders rows by parsing these strings (verified across coordinator/
+    # and memory/ before the change), so mixed conventions in one
     # file cost nothing beyond honesty about when each row was ruled.
     import datetime
     return datetime.datetime.now(datetime.timezone.utc).isoformat(

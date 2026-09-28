@@ -57,7 +57,7 @@ import annotations as MK                                           # noqa: E402 
 #     [proposed: ...]   1 per circle. No word cap any more — see above.
 #
 # THE CEILING IS ON WHAT A PART WRITES, NOT ON THE REGISTER.
-# remember_manager.RECORD_CAP (600 chars) still governs a record the COORDINATOR
+# remember_manager.RECORD_CAP (600 chars) still governs a record the Coordinator
 # mints — dreaming's own memories, quote-as-lands's "lands", anything
 # migrated in — so widening what a part may say does not silently widen
 # what dreaming may write.

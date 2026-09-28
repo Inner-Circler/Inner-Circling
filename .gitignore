@@ -27,7 +27,7 @@ __pycache__/
 # for prompt prefixes the model service has already counted (R260,
 # 2026-08-20). It makes no claim about this project — losing it costs one
 # re-count and nothing else — and it would otherwise churn in every diff
-# whenever a practice, a briefing or a distillate moved.
+# whenever a practice, a circle_objectives block or a distillate moved.
 work/token_counts.json
 work/sandbox/*
 !work/sandbox/prompts/
@@ -53,10 +53,10 @@ work/logs/circle_audit*.log
 #                      and close_<OT>.json beside it is committed.
 #   dream_<OT>.json    phase 2's run marker. The `dream/<OT>` git tag is
 #                      the evidence a circle was processed; the file is
-#                      already_processed()'s second reader, kept for the
+#                      inter_circle.circle_is_processed()'s second reader, kept for the
 #                      tree where git cannot answer at all (R349), and
 #                      still on disk there whether git tracks it or not.
-# The registers a circle writes — self/working_sets.toml, self/proposals.toml
+# The registers a circle writes — circles/working_sets.toml, self/proposals.toml
 # — are the opposite case and are STAGED by the close now, not ignored.
 #
 # `dream_[0-9]*` AND NOT `dream_*`: dream_error_<OT>.json is a FAILURE REPORT,

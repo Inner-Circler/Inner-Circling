@@ -174,6 +174,64 @@ def circle_open_verifier_run(ot: str, live: bool, path: pathlib.Path,
 
 
 
+def circle_issue_cmds_rebuild(transcript: list[dict], circle_ref: str, ot: str,
+                              live: bool) -> list[dict]:
+    """The graph rulings a RESUMED circle still owes its close — audit-register 2026-09-27
+    #64 (2026-09-28). Every /issue ruling Self types is echoed to the transcript with the
+    `cmd` flag (R079) and queued in memory for the close; a resume restored the transcript
+    and started the queue empty, so the record SAID Self ruled while the close applied
+    nothing. Quitting the dual pane mid-circle makes that interruption routine.
+
+    The queue is rebuilt from the echoed lines, through the same parser, resolver and
+    precheck the Self> loop uses — so a ruling that no longer prechecks (its node gone since)
+    is reported and dropped, exactly as it would be typed fresh. ONCE ONLY: a close that
+    reached the rulings writes circles/commands_<OT>.toml before applying them
+    (circle.py's close sequence), so if that file exists the rulings were recorded and, in a
+    live circle, applied; re-queueing them would apply them twice, and the close after an
+    interrupted COLLECTION must not. That case says so and queues nothing."""
+    import issue_commands as IC
+    import proposal_vetting as VT
+    from commands import statement_resolve
+    emit = seam.emit
+    cdir = record_dir(ROOT, "circles") if live else SANDBOX_CIRCLES
+    if (cdir / f"commands_{ot}.toml").is_file():
+        emit("command", f"  graph rulings from before the interruption are already on record "
+                        f"(commands_{ot}.toml) — not queued again")
+        return []
+    graph = VT.issue_graph_now_read()
+    out: list[dict] = []
+    for i, e in enumerate(transcript):
+        if not e.get("cmd") or e.get("speaker") != ID.SELF_ID:
+            continue
+        line = e.get("text", "")
+        if line.split(" ", 1)[0] not in IC.HEADS:
+            continue
+        c, why = IC.issue_command_parse(line, circle_ref)
+        if c is None:
+            emit("command", f"  a ruling from before the interruption no longer parses — "
+                            f"dropped: {line}  ({why})")
+            continue
+        if c["verb"] == "issue-evidence-add":
+            stmt_e, why3 = statement_resolve(transcript[:i], c["stmt"])
+            if stmt_e is None:
+                emit("command", f"  a ruling from before the interruption names a statement "
+                                f"that is not there — dropped: {line}  ({why3})")
+                continue
+            c["part"] = stmt_e["speaker"]
+            c["quote"] = stmt_e["text"]
+            c["source"] = circle_ref
+        if why2 := IC.issue_precheck(c, graph):
+            emit("command", f"  a ruling from before the interruption no longer holds — "
+                            f"dropped: {line}  ({why2})")
+            continue
+        c["index"] = i
+        out.append(c)
+    if out:
+        emit("command", f"  {len(out)} graph ruling(s) from before the interruption queued "
+                        f"again for the close")
+    return out
+
+
 def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                 guard) -> "CircleOpen | int":
     """Open the circle. Returns CircleOpen, or an exit code if it refused."""
@@ -496,7 +554,7 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     if not args.resume and IP.live_nodes():
         chosen = [] if welcome else WS.working_set_ask(IP, read_line=read_line_no_annotation)
     with PC.PHASES.span("open.prompt_build"):
-        briefing, unknown = circle_briefing_build(chosen)
+        objectives, unknown = circle_briefing_build(chosen)
         if unknown:
             emit("command", f"  unknown issue id(s) ignored: {', '.join(unknown)}")
         if chosen:
@@ -506,8 +564,8 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                      else " · NO LIVE ISSUE-RELATIONSHIP reaches these"))
         sysblocks, notes = {}, {}
         for p in parts:
-            sysblocks[p], notes[p] = prompt_part_assemble(p, core, briefing)
-    # The per-part briefing note used to print here unconditionally, every
+            sysblocks[p], notes[p] = prompt_part_assemble(p, core, objectives)
+    # The per-part assembly note used to print here unconditionally, every
     # open — a development artifact once circling made
     # it one of the first things on screen. REVISED 2026-08-10: moved to
     # /status alongside the parts-count summary (same move, same reason).
@@ -767,7 +825,7 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                 emit("command", f"\n  emitted prompt identical to prompts/{ot}/ "
                       f"for all {len(parts)} part(s)")
         # briefing.md, the old --minimal extra, is GONE with the old layout:
-        # Block2_circle_objectives.md IS the constructed briefing, once, as
+        # Block2_circle_objectives.md IS the constructed circle_objectives, once, as
         # its own document — what that file existed to provide.
         if CS.dev_mode:
             if pdir:
@@ -854,6 +912,7 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
 
     if resumed:
         _, transcript, since_self, state = resumed
+        issue_cmds = circle_issue_cmds_rebuild(transcript, circle_ref, ot, args.live)
     else:
         # BLIND, ALWAYS — the --no-blind opt-out is retired (2026-09-09). It
         # existed so the PRIOR sequential protocol could still be run for the

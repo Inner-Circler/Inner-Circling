@@ -4,7 +4,7 @@ quote_as_lands.py — QUOTE-AS-LANDS. Self quotes a part's own words back to
 it at the circle prompt; that quoting IS a ratification, and this module
 is what records it.
 
-    python coordinator/quote_as_lands.py --demo
+    python coordinator/quote_as_lands.py     the demo (no flags; it takes none)
 
 RULED 2026-08-13 (R155), VERBATIM: *"Any statement made by self that
 includes a quoted <prior statement in this circle by any part> generates
@@ -277,7 +277,9 @@ def lands_quote_apply(guard, transcript: list[dict],
 
 
 def main() -> int:
-    """--demo renders the matcher against a small transcript. There is
+    """Renders the matcher against a small transcript (a bare run; there is no
+    flag to give — audit-register 2026-09-27 #16 found `--demo` documented and
+    never parsed). There is
     nothing to verify here that test_quote_as_lands.py does not verify
     properly; this exists so the rules can be READ off a run."""
     # GENERIC SPEAKERS — audit-register.md #1, 2026-09-08. This demo needs two distinct

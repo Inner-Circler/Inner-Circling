@@ -3,7 +3,7 @@
 token_count.py — what a prompt actually costs, asked of the model service
 rather than guessed. R260, 2026-08-20.
 
-    python coordinator/token_count.py --stats     what the cache holds
+    python coordinator/token_count.py     what the cache holds (no flags; it takes none)
 
 EVERY TOKEN FIGURE THIS PROJECT PRINTED WAS `len(text) // 4`. Measured on
 2026-08-20 against `prewarm`'s own `cache_creation_input_tokens` for circle
@@ -35,7 +35,7 @@ block would not be safe and is not done anywhere here.
 MEASURED ONCE, THEN FREE. Every prefix is keyed by the sha256 of its own text
 and kept in work/token_counts.json, so the two blocks every part shares are
 counted once per CHANGE rather than once per part — and a circle whose
-practices, briefing and distillates have not moved since the last open pays
+practices, circle_objectives and distillates have not moved since the last open pays
 for nothing but its seven BLOCK 4 tails. A first run on a cold cache costs 17
 requests; the run after it usually costs 7.
 

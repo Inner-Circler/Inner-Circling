@@ -75,8 +75,8 @@ def part_settled_strip(text: str) -> str:
     they are concluded history — a resolved 2026-06-17 concern sitting in the same
     file, in the same format, at the same apparent weight as live material. The
     cost is not tokens, which are cached; it is attention competing with what is
-    actually live. The section stays on disk untouched and the nightly still reads
-    it; only the prompt is trimmed. (2026-07-27, per the issue-model decision that
+    actually live. The section stays on disk untouched and the close's derivation
+    (part_mid_term_manager) still reads it; only the prompt is trimmed. (2026-07-27, per the issue-model decision that
     settled material does not reach a part.)"""
     i = text.find("\n## Settled")
     return text if i < 0 else text[:i].rstrip() + "\n"

@@ -1039,9 +1039,9 @@ circle would have cost without it.
 4  the close report is verified, and the whole circle is committed to git,
    with the report its open wrote
 5  THEN dreaming runs for every part, one circle-wide synthesis after it,
-   then the command suggestions are found and staged as proposals for your
-   next ruling, and each part whose record moved has its distilled identity
-   rebuilt
+   then each part whose record moved has its distilled identity rebuilt,
+   and the command suggestions are found and staged as proposals for your
+   next ruling
 ```
 
 Step 5 makes model calls of its own **after** the transcript is already

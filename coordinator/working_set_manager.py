@@ -367,6 +367,14 @@ def working_set_argv_parse(argv, g=None):
     for i, a in enumerate(argv):
         if a == "--working-set" and i + 1 < len(argv):
             ids += [x.strip() for x in argv[i + 1].split(",") if x.strip()]
+            # THE BARE IDS THE DOCSTRING PROMISED, 2026-09-28 (audit-register 2026-09-27
+            # #7): `--working-set n0002 n0003` read one id and dropped the rest without a
+            # word. Every following token shaped like an id (n0002, or a bare 2) joins;
+            # the next flag or any other word ends the run.
+            j = i + 2
+            while j < len(argv) and re.fullmatch(r"[nN]?\d+", argv[j]):
+                ids.append(argv[j])
+                j += 1
         elif a.startswith("--working-set="):
             ids += [x.strip() for x in a.split("=", 1)[1].split(",") if x.strip()]
     return [issue_id_normalise(x) for x in ids]

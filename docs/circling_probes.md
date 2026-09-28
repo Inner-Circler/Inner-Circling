@@ -88,7 +88,7 @@ signature: each strategy intensifies in response to the other.
 > believe. Not something you object to in principle — something you let pass.
 
 **A4 — the cost of warmth.** Aimed at `nNNNN`, the circle itself.
-> This circle has been warm for thirty-four sessions. Name what that warmth has
+> This circle has been warm for thirty-four circles. Name what that warmth has
 > cost you. If it has cost you nothing, say that.
 
 **A5 — the unspoken first answer.** Structural: parts are polled sequentially

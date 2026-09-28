@@ -11,7 +11,7 @@ inter_circle.py — what happens between circles: each part dreams, then one pas
     python coordinator/inter_circle.py --ot <OT> --group band --live  a named group's re-run
 
 `--group <name>`: process a circle of `groups/<name>/`'s record. Parsed from argv by hand, not by
-argparse (`:910-911`), which is why a flag scan that reads `add_argument` calls alone will miss it.
+argparse (`main()`'s own `a.index("--ot")` read), which is why a flag scan that reads `add_argument` calls alone will miss it.
 Default: unset — the DEFAULT GROUP, which is a rule and not a name (R468, B120 stage 4).
 
 ## DESCRIPTION

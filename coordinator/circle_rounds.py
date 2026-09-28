@@ -351,7 +351,7 @@ def circle_blind_round_run(client, parts, sysblocks, transcript, since_self, sta
         # annotation_route() reads. The circle PANE shows statement_display(text) --
         # the same string with its whitespace-only lines dropped, 2026-08-20,
         # and that transform reaches nothing else. `record` is
-        # COORDINATOR's: this part's own statement with the remember bracket
+        # Coordinator's: this part's own statement with the remember bracket
         # intact — valid or malformed alike — and it goes to the transcript
         # FILE and nowhere else.
         #
@@ -611,7 +611,7 @@ def circle_round_run(client, parts, sysblocks, transcript, since_self, state,
         # annotation_route() reads. The circle PANE shows statement_display(text) --
         # the same string with its whitespace-only lines dropped, 2026-08-20,
         # and that transform reaches nothing else. `record` is
-        # COORDINATOR's: this part's own statement with the remember bracket
+        # Coordinator's: this part's own statement with the remember bracket
         # intact — valid or malformed alike — and it goes to the transcript
         # FILE and nowhere else.
         #

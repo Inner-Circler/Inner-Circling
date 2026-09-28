@@ -266,17 +266,12 @@ def dependency_ids_read(row: dict) -> list[str]:
     return PR.proposal_dependency_ids_read(row)
 
 
-def dependency_placeholders_read(row: dict) -> dict[str, str]:
-    """{proposal id: placeholder token} for the depends_on entries that name a token."""
-    import proposal_manager as PR
-    return PR.proposal_dependency_placeholders_read(row)
-
-
-def dependency_ring_find(rows: list[dict], new_id: str, new_deps: list[str]) -> list[str]:
-    """Would a row `new_id` depending on `new_deps` close a ring among `rows`? The ring as
-    ids, or []."""
-    import proposal_manager as PR
-    return PR.proposal_dependency_ring_find(rows, new_id, new_deps)
+# dependency_placeholders_read() and dependency_ring_find() were two more forwards to
+# proposal_manager's proposal_dependency_*; nothing in production called them (the
+# register calls its own directly) and the grammar attributed the ring refusal to the
+# wrapper. Removed 2026-09-28 (audit-register 2026-09-27 #58); the owners are
+# proposal_manager.proposal_dependency_placeholders_read() and
+# proposal_manager.proposal_dependency_ring_find().
 
 
 def dependency_plan_stage(plan: dict, final_line: str, *, sources: tuple[str, ...] = ("Self",),

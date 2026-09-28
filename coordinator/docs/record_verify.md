@@ -40,7 +40,7 @@ under `groups/<name>/` at R467/B117 and this table kept the old spelling until 2
                                  a part, so corrupting it means the part does not
                                  exist for this circle — a part silently missing,
                                  not an error.
-    issues/issue_model.md        the briefing's ONE hard file dependency.
+    issues/issue_model.md        circle_objectives' ONE hard file dependency.
     issues/*.toml                the graph behind it. Both feed BLOCK 2, which is
     self/best_practices.toml     byte-identical for all parts and CACHED — so one
                                  corrupt file poisons every prompt at once, and the

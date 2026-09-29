@@ -108,12 +108,11 @@ BUDGET = SET.setting_value_read("topics_budget", 2400)   # chars projected into 
                 # newest first (~3 topics)
 
 _PREAMBLE = (
-    "SYNTHESIS's unvetted BLOCK 2 topics -- R184, 2026-08-15: 'unvetted "
-    "synthesis output can reach BLOCK 2 ... as a means of circle-review "
-    "of the proposal.' Mechanism (TP- ids, cap 800, 2,400-char "
-    "newest-first window, open-until-Self-closes) ratified by Self "
-    "post-sweep the same day. Direct write, never vetted -- R172 still "
-    "governs BLOCK 1. Closed rows are tombstones, never deleted.")
+    "SYNTHESIS's unvetted BLOCK 2 topics: unvetted synthesis output "
+    "reaches BLOCK 2 so the circle itself can review it. TP- ids, 800 "
+    "characters each, a 2,400-character newest-first window, open until "
+    "Self closes one. Direct write, never vetted -- BLOCK 1 still takes "
+    "vetted content only. Closed rows are tombstones, never deleted.")
 
 
 def _doc() -> dict:

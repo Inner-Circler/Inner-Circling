@@ -7,31 +7,21 @@
 #
 # The directory name gives the id. Nothing in a directory name can give the
 # display Tag, which is why this file exists.
-#
-# R123, 2026-08-08 — *"other parts will be created per-user; NOT 7 parts."*
-# The roster was seven names hardcoded in a module that SHIPS, which is one
-# person's system exported as though it were mechanism.
 
 tag = "Child"
 
 # Historical spellings of this part's Tag, for reading CLOSED transcripts
 # written before a rename. Empty is the normal case and the expected one.
-#
-# This is where `part_roster.ALT_TAGS` went, ruled 2026-08-08: a historical
-# spelling is one installation's history, not mechanism, so it belongs in
-# the part's own file rather than in shipped code.
 alt_tags = []
 
 # ---------------------------------------------------------------- [context]
-# WHAT THE CHILD WANTS TO KNOW ABOUT ITS HUMAN'S CHILDHOOD — R331,
-# 2026-08-23 (R331). The initialization dialog asks these at
-# a circle start while every answer below is empty, records the answers in the
-# `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
-# its `render` sentence, in my own voice —
-# `parts_prompt_projection.part_identity_tail_render()` (prompt_build's
-# identity_tail() until 2026-09-02).
+# WHAT THE CHILD WANTS TO KNOW ABOUT ITS HUMAN'S CHILDHOOD. The initialization
+# dialog asks these at a circle start while every answer below is empty,
+# records the answers in the `[context.answers]` block, and BLOCK 3 renders
+# each ANSWERED question through its `render` sentence, in my own voice —
+# `parts_prompt_projection.part_identity_tail_render()`.
 #
-# `data_type` / `data_max` ride with each question (R332) and
+# `data_type` / `data_max` ride with each question and
 # are read at call time: hand-tune a number here and the next dialog enforces
 # it. STRING: at most data_max characters. NUMERIC_STRING: numerals only, at
 # most data_max as a number. An empty answer is always valid.

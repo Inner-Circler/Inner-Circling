@@ -7,72 +7,44 @@
 #
 # The directory name gives the id. Nothing in a directory name can give the
 # display Tag, which is why this file exists.
-#
-# R123, 2026-08-08 — *"other parts will be created per-user; NOT 7 parts."*
-# The roster was seven names hardcoded in a module that SHIPS, which is one
-# person's system exported as though it were mechanism.
 
 tag = "Soul"
 
 # Historical spellings of this part's Tag, for reading CLOSED transcripts
 # written before a rename. Empty is the normal case and the expected one.
-#
-# This is where `part_roster.ALT_TAGS` went, ruled 2026-08-08: a historical
-# spelling is one installation's history, not mechanism, so it belongs in
-# the part's own file rather than in shipped code.
 alt_tags = []
 
-# HISTORY of a key that is no longer here. `identity_tail` — this part's own
-# speaking rules, appended in BLOCK 3 every circle (R303; arrived R246 as
-# `--minimal`'s block-4 suffix, a mode retired R360) — lived in this file
-# until 2026-08-22 and does not any more; see below.
+# The Soul's speaking rules are in `long_term.md` beside this file, under
+# `## My role in circles`, in its own first person.
 #
-# RULED 2026-08-19 (R246): *"put it in a part.toml field"*. This text used
-# to be a literal in `prompt_build.py` keyed by the part NAME "soul" — so
-# it SHIPPED as code, and a renamed directory would have emptied it
-# silently. It ships as the Soul's own data now, and travels with the
-# directory.
+# `long_term.md` is universal and ships unchanged: it names the categories a
+# Soul is made of -- timeframe, parent genetics, gender, race, cultural and
+# economic and religious and educational context -- without filling them,
+# because they differ for every user. The initialization dialog fills the
+# [context] section below, per installation, by asking -- it opens in the
+# command pane the first time a live circle is opened; the bundle's README.md
+# walks through it under "Your first live run asks you some questions."
 #
-# NO SPEAKING RULES HERE ANY MORE, 2026-08-22
-# (R304). They lived here as
-# `identity_tail`; `long_term.md` beside this file now carries them, in
-# `## My role in circles`, in the same first person and the same block.
-# Two sources for one subject is how wordings drift apart, and the copy
-# here was the stricter of the two.
-#
-# WHAT THIS KEY IS FOR IN A BUNDLE. `long_term.md` is universal and ships
-# unchanged: it names the categories a Soul is made of -- timeframe, parent
-# genetics, gender, race, cultural and economic and religious and
-# educational context -- without filling them, because they differ for
-# every user. The initialization dialog fills the [context] section below,
-# per installation, by asking -- it opens in the command pane the first time a live circle is
-# opened (R331/R332); the bundle's README.md walks through it under "Your
-# first live run asks you some questions."
-#
-# A bundle that ships with this key absent is correct: an uninitialised
-# Soul has universal content and no particulars, which is exactly true of
-# it until someone is asked.
+# Empty answers are correct: an uninitialised Soul has universal content and
+# no particulars, which is exactly true of it until someone is asked.
 
 # ---------------------------------------------------------------- [context]
-# WHAT THE SOUL WANTS TO KNOW ABOUT ITS HUMAN — R331, 2026-08-23
-# (R331). The initialization dialog asks these at a circle
-# start while every answer below is empty, records the answers in the
-# `[context.answers]` block, and BLOCK 3 renders each ANSWERED question through
-# its `render` sentence, in my own voice —
-# `parts_prompt_projection.part_identity_tail_render()` (prompt_build's
-# identity_tail() until 2026-09-02).
+# WHAT THE SOUL WANTS TO KNOW ABOUT ITS HUMAN. The initialization dialog asks
+# these at a circle start while every answer below is empty, records the
+# answers in the `[context.answers]` block, and BLOCK 3 renders each ANSWERED
+# question through its `render` sentence, in my own voice —
+# `parts_prompt_projection.part_identity_tail_render()`.
 #
-# `data_type` / `data_max` ride with each question (R332) and
+# `data_type` / `data_max` ride with each question and
 # are read at call time: hand-tune a number here and the next dialog enforces
 # it. STRING: at most data_max characters. NUMERIC_STRING: numerals only, at
 # most data_max as a number. An empty answer is always valid.
 #
-# `given_name` and `preferred_name` DECLARE NO `render`, DELIBERATELY —
-# R329: they are PII (R132), recorded here and never
-# rendered into a prompt; `preferred_name` names the console prompt instead
-# (identity.user_name_read(), R325). A question without a render string
-# has no path into BLOCK 3 at all. Adding one here is a person choosing to
-# contradict R132 in their own tree.
+# `given_name` and `preferred_name` DECLARE NO `render`, DELIBERATELY: they
+# are personal identifiers, recorded here and never rendered into a prompt;
+# `preferred_name` names the console prompt instead (identity.user_name_read()).
+# A question without a render string has no path into BLOCK 3 at all. Adding
+# one here is a person choosing to send their name to the model.
 #
 # THE RENDER SENTENCES ARE DRAFTS, for the operator to rewrite in the Soul's
 # voice. They are first person, and sentences rather than a table, because a
@@ -97,17 +69,15 @@ key       = "birth_year"
 ask       = "What year were you born"
 data_type = "NUMERIC_STRING"
 gate      = "BOUNDED"
-# RULED 2026-08-28: 1940 as the minimum, and the current year less fifteen as
-# the point past which this program says something.
+# 1940 as the minimum, and the current year less fifteen as the point past
+# which this program says something.
 #
-# THE MAXIMUM IS A RULE, NOT A NUMBER, and has to be. `year_minus_15` is 2011
-# today and 2012 on the first of January; a literal here would be quietly
-# wrong within months, which is the shape of every stale number this project
-# has had to find twice.
+# THE MAXIMUM IS A RULE, NOT A NUMBER, and has to be: a literal year here would
+# be quietly wrong within months.
 minimum   = 1940
 data_max  = 2100
 advisory_maximum = "year_minus_15"
-# ADVISORY, NOT A REFUSAL — ruled the same day. A limit that can only be
+# ADVISORY, NOT A REFUSAL. A limit that can only be
 # passed by lying protects nobody: refusing here would teach a fourteen-year-
 # old to enter a false year and then proceed on it, which is a corrupted
 # record AND the suggestion unheeded. So the true answer is kept, the true
@@ -154,7 +124,7 @@ data_max  = 40
 # THE ONE CONTEXT ANSWER THE MECHANISM READS — identity.user_name_read() takes it
 # for the console prompt, and part_roster.part_verify() treats it as Self's reserved
 # name. So it declares HOW it is kept valid, which every mechanism-facing
-# field must (2026-08-28). Every other question here reaches a model or
+# field must. Every other question here reaches a model or
 # reaches nothing, and neither needs one.
 gate      = "UNIQUE_IN"
 unique_in = "part_tags"        # a part's Tag would collide (part_roster.part_verify)

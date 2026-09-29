@@ -48,8 +48,7 @@ Free of charge, offered as-is, by one person who is not a clinician.
 **Nothing here is a safety net.** No part of this system notices distress,
 escalates, or reaches a human being on your behalf. The registers under
 `groups/ifs/self/` arrive empty by design, and nothing is watched or
-monitored. Earlier versions of this file implied otherwise; they were
-wrong.
+monitored.
 
 **The parts do carry crisis lines, and one may offer you them.** The
 rulebook every part reads — `coordinator/process_core.md` — names **988**,
@@ -182,13 +181,12 @@ SHIPS
                                   coordinator/process_ifs.md is the IFS group's own)
   - groups/ifs/parts/soul/, groups/ifs/parts/child/     two seed parts
   - groups/ifs/group.toml         the group's own descriptor — its presence makes the folder a
-                                  group (R468): roles, reserved roles, the first-run order, the
+                                  group: roles, reserved roles, the first-run order, the
                                   role whose answer names the console, its rulebook layer
 
 ARRIVES EMPTY, WITH A README — under groups/ifs/, the IFS group's own folder; a second
-group gets a folder of the same shape beside it (groups/<name>/). Which groups a bundle
-carries is a list (packaging/groups.toml on the publishing side) — this one carries IFS;
-a bundle may carry any one or more, and the program resolves whatever it finds
+group gets a folder of the same shape beside it (groups/<name>/). This bundle carries
+IFS; a bundle may carry any one or more, and the program resolves whatever it finds
   - groups/ifs/circles/           transcripts land here, and the four
                                   one-per-circle registers sit beside them
   - groups/ifs/issues/            the issue graph
@@ -202,9 +200,8 @@ a bundle may carry any one or more, and the program resolves whatever it finds
                                   writes it, as its own README says
   - work/circle_audit/            the record audit's own lock and snapshots
   - work/nightly/                 the staging root a write passes through
-                                  before it lands. Nothing is scheduled — the
-                                  name is historical and its own README says
-                                  so
+                                  before it lands. Despite the name, nothing
+                                  is scheduled
 
 NEVER SHIPS
   - any transcript, any part, any issue, any remember, any proposal 
@@ -616,7 +613,7 @@ Windows:
 What each should say, in that order: `INTEGRITY PASS`, then `0 FAIL`, then
 `SELF-TEST: PASS`. The self-test may also report a few checks SKIPPED — for
 missing data, and off Windows for one platform-only check. The Verify section
-above says which is which. **A skip is not a failure and is never counted as a
+below says which is which. **A skip is not a failure and is never counted as a
 pass.**
 
 Only once those pass is the new directory yours. Rename the old one out of the
@@ -670,8 +667,7 @@ file** — `.env` is not read for a value the environment already has. That
 is worth knowing if you ever rotate a key and nothing seems to change.
 `IFS_USER_NAME` is the opposite: it is read from `.env` **only**, never
 from the environment, so editing the file always takes effect on the next
-run with nothing else to clear. The key taught that lesson; the name was
-built not to repeat it.
+run with nothing else to clear.
 
 `IFS_USER_NAME` sets the name the console greets you by. **It does not
 change the record** — the transcript writes `[Self]:` for everything you
@@ -801,7 +797,7 @@ macOS / Linux:
 
 **Dry run is the default HERE** — a bare run passes `--dry-run` to the
 coordinator for you unless you ask for `--live` by name. (`coordinator/circle.py`
-run on its own REFUSES a bare invocation since R360: it wants `--live` or
+run on its own REFUSES a bare invocation: it wants `--live` or
 `--dry-run` spelled out.) `--live` may sit anywhere on the command line;
 every other option is forwarded to the coordinator unchanged.
 `ui/circling.py --help` lists this program's own options, and
@@ -1012,7 +1008,7 @@ cost meter at the end of every circle, computed from the rates in
 number written here**, since published rates change and this line 
 will go stale.
 
-Measured on the original seven-part installation, and recorded in
+Measured with seven parts in the circle, and recorded in
 `coordinator/README.md`:
 
 ```
@@ -1065,8 +1061,7 @@ structural in the IFS model rather than particular to any one person.
 
 **Nothing is missing.** Every other part is yours to discover and name,
 and a system that has not met them yet is not incomplete — it is at the
-beginning. Parts arrive as they surface, which is how they arrived in the
-circle this came from.
+beginning. Parts arrive as they surface.
 
 `/part-add` at the cmd> prompt opens the dialog that creates one: a
 Tag, a description, and the files a part needs to be spoken to.
@@ -1145,8 +1140,7 @@ conversion would break every sha256 and byte-identical check here.
 
 **That setting cuts both ways.** `* -text` stops git normalising on the
 way through — which also means nothing removes a carriage return that a
-writer put there. On one occasion this project's own repair scripts
-converted three files wholesale, and every other check passed:
+writer put there, and no other check notices one:
 `pathlib.Path.write_text(..., encoding="utf-8")` translates `\n` to
 `\r\n` on Windows unless `newline=""` is passed. If you write to these
 files from your own code, pass it.
@@ -1213,7 +1207,7 @@ NEVER — the historical record, and what is derived from it
                                 the graph rulings one circle made, beside
                                 its transcript (circles/README.md)
   groups/ifs/parts/*/short_term_<OT>.toml
-                                each part's record of a circle (.md before 2026-09-04)
+                                each part's record of a circle
   groups/ifs/parts/*/mid_term.md
                                 the distillate
   work/logs/*.json              open and close reports
@@ -1258,9 +1252,8 @@ NEVER while a circle is open
 
 Use a plain-text editor, formatting OFF
     a markdown-aware editor may "normalise" a file on save — escaping [
-    and _, merging emphasis across lines. That has silently corrupted a
-    part's history in this project before, while still looking correct to
-    a reader. Windows Notepad's formatting mode is one of these; turn it
+    and _, merging emphasis across lines. That can silently corrupt a
+    part's record while it still looks correct to a reader. Windows Notepad's formatting mode is one of these; turn it
     off under View -> Formatting. On macOS, TextEdit defaults to RICH
     TEXT and will not save these files correctly at all — either switch
     it with Format -> Make Plain Text before saving, or use a code
@@ -1350,7 +1343,7 @@ wrong:
 **A part that spoke but lost its record of the circle would otherwise be
 *invisible*, not noisy** — an absent file reads as a part that stayed silent,
 which is a legal outcome. So a completing close rebuilds that record from the
-transcript itself, as its first step, before dreaming and synthesis run (B54);
+transcript itself, as its first step, before dreaming and synthesis run;
 and if the close dies after that point, the re-run command it prints does the
 same rebuild before it dreams. The audit's copy of the repair is for the two
 cases that path never reaches: an `/abort`, which never gets as far as

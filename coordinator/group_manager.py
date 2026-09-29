@@ -101,8 +101,8 @@ ORDER = ("name", "display", "default", "roles", "reserved", "initialization", "l
 NAME_RE = re.compile(r"^[a-z][a-z0-9_-]*$")
 
 _HEADER = (
-    "# group.toml — the presence of THIS FILE is what makes this folder a GROUP (R468,\n"
-    "# 2026-09-07; R123's part.toml rule one level up). coordinator/group_manager.py writes\n"
+    "# group.toml — the presence of THIS FILE is what makes this folder a GROUP, as\n"
+    "# part.toml's presence makes a directory a part. coordinator/group_manager.py writes\n"
     "# it; record_paths.py reads it. It carries what shipped code must not hardcode about\n"
     "# ONE group: its roles, the roles /part-retire refuses, which roles' first-run dialogs\n"
     "# come first, which role's answer names the console, its BLOCK 1 layer, the commands its\n"

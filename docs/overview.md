@@ -30,9 +30,7 @@ vulnerability). Every other part is yours to add, one at a time, as your
 own circle surfaces it — parts are never manufactured in a batch to fill
 out a roster.
 
-An earlier draft of this document described a specific seven-part roster
-as if it shipped with the product. That was one person's own roster, not
-a set you are expected to reproduce. Look at `groups/ifs/parts/child/` and
+No particular roster is expected of you. Look at `groups/ifs/parts/child/` and
 `groups/ifs/parts/soul/` for the shape a part takes, and type `/part-add`
 at the `cmd>` prompt to add one — it opens a dialog that asks what you
 need. Only you can add a part; a part cannot ask for one. A part that has
@@ -110,7 +108,7 @@ safe.
 
 stability · learning · satisfaction · appreciation · self-esteem · **honesty** · **mutual-knowing**
 
-Honesty (2026-06-17) anchors the rest — keeping stability from becoming comfort, appreciation from becoming appeasement, hope from becoming anesthesia. Mutual-knowing (2026-06-17) runs both directions: each part comes to know its counterpart in Self; Self comes to know each part faithfully.
+Honesty anchors the rest — keeping stability from becoming comfort, appreciation from becoming appeasement, hope from becoming anesthesia. Mutual-knowing runs both directions: each part comes to know its counterpart in Self; Self comes to know each part faithfully.
 
 ## Framework
 

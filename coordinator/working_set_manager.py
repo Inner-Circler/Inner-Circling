@@ -262,10 +262,10 @@ _RPf.group_follow(_working_sets_rebind)
 # unreadable in a diff and would trip the 116-char line limit.
 WORKING_SETS_PREAMBLE = SS.register_wrap(
     "Which issues each circle was shown, chosen by Self at open. "
-    "chosen is \"none\" for no issues at all (the blank answer's meaning "
-    "since the default flipped, R301), [] for the whole live graph (all), "
-    "or the issue ids. Ruled 2026-08-03. Withdrawn in "
-    "the one case ruled 2026-08-09: a circle that died before its first "
+    "chosen is \"none\" for no issues at all (what a blank answer "
+    "means), [] for the whole live graph (all), "
+    "or the issue ids. Withdrawn in "
+    "one case only: a circle that died before its first "
     "statement leaves no trace, so its transcript is removed and this "
     "entry with it. An entry naming a transcript that does not exist is "
     "a dangling reference, not a record of what a room was shown. "

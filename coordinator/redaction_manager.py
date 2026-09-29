@@ -100,11 +100,10 @@ KIND_PREFIX = {"person": "P", "place": "L", "org": "O", "other": "G"}
 
 _ALIAS_PREAMBLE = (
     "The operator's own curated redaction targets -- names, places, orgs "
-    "to hide in ui/circling.py's redacted CIRCLE-pane view. Ruled "
-    "2026-08-31: CRUD, stable reversible opaque ids, adapted from a "
-    "design used in a separate personal project (see this module's own "
-    "docstring). Part names are never eligible, "
-    "in either circles or consults -- redaction_manager.py refuses one at "
+    "to hide in ui/circling.py's redacted CIRCLE-pane view: added, "
+    "updated and removed one at a time, each under a stable, reversible "
+    "opaque id. Part names are never eligible "
+    "-- redaction_manager.py refuses one at "
     "add/update time and filters it out of the compiled pattern besides.")
 
 # ---------------------------------------------------------- the reverse map

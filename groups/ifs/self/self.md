@@ -35,9 +35,8 @@ should carry forward, not instructions to the parts.
 
 ## Psychological context
 
-Whatever context helps synthesis keep the account of Self true. This installation's live file uses a
-short table of dimensions and a values summary, but nothing in the code requires
-that shape — it is prose to the reader, and the reader is a language model.
+Whatever context helps synthesis keep the account of Self true. A short table of dimensions and a values
+summary works well, but nothing in the code requires that shape — it is prose to the reader, and the reader is a language model.
 
 Keep it to what changes how a part should respond. A central insight that
 organises the rest is worth more here than a complete inventory.

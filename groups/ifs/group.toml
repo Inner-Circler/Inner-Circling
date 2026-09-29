@@ -1,5 +1,5 @@
-# group.toml — the presence of THIS FILE is what makes this folder a GROUP (R468,
-# 2026-09-07; R123's part.toml rule one level up). coordinator/group_manager.py writes
+# group.toml — the presence of THIS FILE is what makes this folder a GROUP, as
+# part.toml's presence makes a directory a part. coordinator/group_manager.py writes
 # it; record_paths.py reads it. It carries what shipped code must not hardcode about
 # ONE group: its roles, the roles /part-retire refuses, which roles' first-run dialogs
 # come first, which role's answer names the console, its BLOCK 1 layer, the commands its

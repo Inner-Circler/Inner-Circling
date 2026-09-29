@@ -15,9 +15,9 @@ The project's `.gitattributes` sets `* -text`, which tells git to store every by
 The scope is deliberately not "everything in the repository": `SCOPE_DIRS`/`SCOPE_ROOT_SUFFIX`/`SCOPE_SELF_SUFFIX`
 name exactly the directories and file kinds this project writes, hashes, parses, or ships. `SCOPE_DIRS` derives
 its first four legs from `record_paths.CODE_DIRS` rather than hand-copying them, and resolves to
-`coordinator/`, `memory/`, `ui/`, `packaging/`, `docs/`, `groups/ifs/issues/`, `groups/ifs/parts/`,
-`rulings/`, `groups/ifs/circles/`, `work/logs/` and `work/prompts/`. Root-level `.md`/`.toml`/`.py`/`.json`
-files are in scope as well, and inside `groups/ifs/self/` only the generated `.md`/`.toml`/`.json` kinds —
+`coordinator/`, `memory/`, `ui/`, `packaging/`, `docs/`, the bound group's `groups/<name>/issues/`,
+`groups/<name>/parts/` and `groups/<name>/circles/`, `rulings/`, `work/logs/` and `work/prompts/`. Root-level `.md`/`.toml`/`.py`/`.json`
+files are in scope as well, and inside `groups/<name>/self/` only the generated `.md`/`.toml`/`.json` kinds —
 that directory also holds Self's own hand-authored `.txt` notes, which are explicitly not this project's to
 police. `OUT_OF_SCOPE` explicitly excludes vendored/third-party material and sandbox output. (It named `archive/`
 too until 2026-08-19; that entry was always redundant, since `archive/` is not in `SCOPE_DIRS` and

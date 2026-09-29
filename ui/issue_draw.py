@@ -114,9 +114,9 @@ def issue_draw_out_bind(issues_dir: pathlib.Path) -> None:
     ONE FOLDER, TWO CONSEQUENCES, AND THE SECOND IS THE BAD ONE. R365 ruled ONE output
     folder and that is unchanged; what was missing is that the FILENAMES were group-blind
     while circle.py:1977 runs the redraw at every live close OF ANY GROUP, handing over that
-    group's own issues/ (group-aware since 60af4de). So a band close overwrote the IFS
+    group's own issues/ (group-aware since 60af4de). So a band close overwrote the default
     group's picture — and worse, issue_draw_is_stale() compared THIS group's newest source
-    mtime against the SHARED picture's mtime, so after an IFS close wrote a fresh picture a
+    mtime against the SHARED picture's mtime, so after a default-group close wrote a fresh picture a
     band close would decide "not stale", print nothing, and never draw at all. Silent, and
     the reverse of what the staleness test exists to guarantee.
 

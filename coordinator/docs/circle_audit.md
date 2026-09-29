@@ -23,7 +23,7 @@ circle_audit.py — the circle-record audit (renamed from nightly.py 2026-08-19)
 `--group <name>`: audit `groups/<name>/`'s record instead of the default group's tree (B117
 stage 5). Default: unset — the DEFAULT GROUP, which is a RULE and not a name (R468, B120 stage 4):
 the one group installed, or the one whose `group.toml` says `default = true`. The flag's own
-`--help` said "the ifs group" until 2026-09-08; that literal was accidentally right for this
+`--help` named the group by its literal until 2026-09-08; that literal was accidentally right for this
 install and wrong for any other (audit-register.md #26).
 
 ## DESCRIPTION
@@ -857,7 +857,7 @@ Phases 7 (commit), 8 (verify), 9 (record) — the docstring notes explicitly tha
 
 `install_tasks`/`uninstall_tasks`/`TASK_XML`/`TASKS`/`task_defs` — REMOVED WHOLESALE
 2026-08-15, code included. They registered/removed the two Windows Task Scheduler jobs that
-snapshotted before and validated after the separate, since-retired `ifs-nightly` Cowork task.
+snapshotted before and validated after the separate, since-retired nightly Cowork task.
 See `rulings/` and `docs/NIGHTLY_DESIGN.md`'s own §7 retirement note: nothing schedules
 dreaming/synthesis any more (`docs/INTER_CIRCLE_DESIGN_V2.md`'s Placement ruling — synchronous
 at `/close`).

@@ -27,7 +27,7 @@ What a corrupted file costs depends on where it sits:
 
 EVERY PATH BELOW IS RECORD-RELATIVE, AND THE RECORD IS PER GROUP. `record_verify.py:357` builds
 its bases as `group_tree(g) / subdir` for every `g` in `group_present_read()`, so `parts/` here
-means `groups/<name>/parts/` for each group installed — `groups/ifs/parts/` and
+means `groups/<name>/parts/` for each group installed — the default group's and
 `groups/band/parts/` today. None of these four directories exists at the tree root; they moved
 under `groups/<name>/` at R467/B117 and this table kept the old spelling until 2026-09-08
 (audit-register.md #16).

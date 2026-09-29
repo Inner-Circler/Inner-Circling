@@ -12,11 +12,7 @@ circling.py — how you sit down with your parts. The two-pane window where an i
 
 ## WHAT THIS IS FOR
 
-Internal Family Systems starts from a simple observation: you are not one voice. Different parts of you carry different jobs — one keeps watch, one grieves, one wants to be good, one wants to be left alone — and they rarely get to speak in the same place at the same time. Most of the time they take turns running things without ever being heard.
-
-An **inner circle** is that place. Seven parts are given a seat, a topic, and permission to speak in their own voice, and **you** sit among them as Self — not as another part, and not as a manager, but as the one who can listen without being taken over.
-
-The aim is not to fix anything in one sitting. It is **greater health, by way of better options discovered through uncovering and understanding issues** — and uncovering and understanding are the early stages of something that keeps going as long as you keep bringing attention to it. A circle is one sitting's worth of attention.
+An **inner circle** is a place where the members of a group — each with its own job and its own voice — are given a seat, a topic, and permission to speak in turn, and **you** sit among them as Self. What a member is, and what the circle is for, belong to the group: the group you received explains itself in its own folder, `groups/<group>/docs/overview.md`.
 
 This program is the room. It gives each part its turn, keeps the record, and makes sure what was said is still there tomorrow.
 

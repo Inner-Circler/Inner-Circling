@@ -12,9 +12,9 @@ identity.py — resolves who "Self" is for this installation: the fixed internal
 This module resolves ruling 2026-08-07: "during circles, the role of the user 'Self' should be personalized, that is, code should accept and generate 'Self' unless a 'UserName' is present." It exists to prevent conflating two distinct names that a single earlier hardcoded value used to be:
 
 - `SELF_ID` ("self") — the canonical internal id, never displayed or written to a transcript, used for every `speaker ==` comparison in the codebase.
-- `user_name_read()` — the CONSOLE-ONLY name: the home role's recorded preferred_name (the role the group's own group.toml names, R468 — the Soul for the IFS group), else $IFS_USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
+- `user_name_read()` — the CONSOLE-ONLY name: the home role's recorded preferred_name (the role the group's own group.toml names, R468 — the Soul for the default group), else $USER_NAME from the .env file, else "Self" (R325, 2026-08-23). Shown at the console prompt, in /help and --identity, and nowhere else; the transcript writes the fixed DISPLAY `[Self]:`.
 
-The docstring documents, in some detail, a Windows-specific trap: `os.environ` is case-insensitive on Windows and Windows always sets `USERNAME` for every process, so a naive `os.environ.get("UserName")` silently returns the OS login name (lower-cased) rather than an unset default, and `.env` cannot override it because `load_dotenv()` never overwrites a variable the OS already set. The module works around this by checking a project-specific variable, `IFS_USER_NAME`, first — it is the only variable `.env` can actually control on this platform — and the ruled `UserName` variable second, as the fallback that in practice is rarely reached once `IFS_USER_NAME` is set (which it now is, per the docstring, as of 2026-08-07).
+The docstring documents, in some detail, a Windows-specific trap: `os.environ` is case-insensitive on Windows and Windows always sets `USERNAME` for every process, so a naive `os.environ.get("UserName")` silently returns the OS login name (lower-cased) rather than an unset default, and `.env` cannot override it because `load_dotenv()` never overwrites a variable the OS already set. The module works around this by checking a project-specific variable, `USER_NAME`, first — it is the only variable `.env` can actually control on this platform — and the ruled `UserName` variable second, as the fallback that in practice is rarely reached once `USER_NAME` is set (which it now is, per the docstring, as of 2026-08-07).
 
 The module also maintains the set of tags a transcript reader should recognize as meaning Self (`self_tags()`), used by parsers elsewhere to distinguish Self's statements from a part's. This set is built explicitly (a fixed historical-names tuple, plus any configured retired tags, plus the current display name) rather than by the earlier, shorter, and wrong heuristic "any tag that is not a part is Self" — a real corpus of transcripts caught that heuristic accepting malformed tags like `[Self, sings]` or `[Child — Self-report]` as ordinary Self statements, which a stricter, explicit-set version correctly refuses. A literal personal name was once in the historical-names tuple and was removed by ruling on 2026-08-07 as PII that a proper export should not carry; `self_tags()` already unions in the *current* configured name, so removing the literal changed nothing functionally for the current installation.
 
@@ -26,7 +26,7 @@ This module has no `main()` function; running it directly executes a flat diagno
         print the resolved display name and source, the canonical internal id (fixed), the transcript tag form, the operator prompt form, and the full set of tags this installation reads as Self (self_tags()).
     }
     if (the resolved name's source is the ruled $UserName environment variable) then {
-        print a note that $UserName is the OS login on Windows, not a name deliberately chosen, and that $IFS_USER_NAME should be set in .env to control it.
+        print a note that $UserName is the OS login on Windows, not a name deliberately chosen, and that $USER_NAME should be set in .env to control it.
     }
     {
         print a pointer to `gitrepo.py --identity` for the separate git-author identity question.
@@ -60,7 +60,7 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
     {
         read the bound group's group.toml [identity]: HOME_DIR = its `role` ("" when the group
         names none), HOME_KEY = its `key` (preferred_name when absent). R468, B120 — the home role is
-        the group's own; SOUL_DIR = "soul" was the literal until then, and is the IFS group's value.
+        the group's own; SOUL_DIR = "soul" was the literal until then, and is the default group's value.
     }
 
 ### `self_home_name_read()`   (soul_preferred_name() until R468)
@@ -82,8 +82,8 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
 ### `user_name_source()`
     {
         (value, source-label), most explicit first: self_home_name_read() if non-blank
-        ("parts/<HOME_DIR>/part.toml <HOME_KEY>"); else IFS_USER_NAME from the .env FILE
-        ("$IFS_USER_NAME"); else the literal "Self" ("default"). Never the OS login (R132). The
+        ("parts/<HOME_DIR>/part.toml <HOME_KEY>"); else USER_NAME from the .env FILE
+        ("$USER_NAME"); else the literal "Self" ("default"). Never the OS login (R132). The
         console-only name — DISPLAY and SELF_ID do not move (R329).
     }
 

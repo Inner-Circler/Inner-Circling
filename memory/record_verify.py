@@ -137,21 +137,14 @@ import record_paths as _RP                                         # noqa: E402
 PROCESS_ANCHORS = ["## Orchestration", "## Coordinator constraints",
                    "## Close", "## Nightly"]
 CORE_ANCHORS = ["## What is with you", "## Speaking rules", "## After each circle"]
-# The IFS layer (R464, B115, 2026-09-07): process_core.md is the universal layer since then, and
-# "## The Soul" lives in coordinator/process_ifs.md — the same truncation guard, on that file.
-IFS_LAYER_ANCHORS = ["## What you are", "## The Soul", "## Goals"]
-
-# EVERY GROUP'S LAYER, NOT A HARDCODED LIST. The pairs below named process.md, process_core.md and
-# process_ifs.md by hand, so coordinator/process_band.md — the band's BLOCK 1 layer since B115
-# stage 4 — was guarded by nothing: it is in neither the pairs nor STATE_GLOBS, and truncating it
-# passed. A hardcoded tuple would have repeated that for the next group, so the layer set is read
-# from each groups/<name>/group.toml's own `layer` field instead.
+# EVERY GROUP'S LAYER, NOT A HARDCODED LIST. The layer set is read from each
+# groups/<name>/group.toml's own `layer` field, so a new group's layer is guarded the day it is
+# declared and no group's file is named here.
 #
 # LAYER_ANCHORS are the sections every layer carries whatever its craft — a cut-short layer loses
-# Goals and the honesty mandate first, because they sit at the end. LAYER_ANCHORS_EXTRA adds what
-# one layer alone must keep.
+# Goals and the honesty mandate first, because they sit at the end, so a section any one layer
+# carries before them is covered by the same three.
 LAYER_ANCHORS = ["## What you are", "## Goals", "## The honesty mandate"]
-LAYER_ANCHORS_EXTRA = {"coordinator/process_ifs.md": ["## The Soul"]}
 
 
 def record_group_layers_read(root: Path = ROOT) -> list[tuple[Path, list[str]]]:
@@ -169,15 +162,7 @@ def record_group_layers_read(root: Path = ROOT) -> list[tuple[Path, list[str]]]:
             continue
         if not isinstance(layer, str) or not layer:
             continue
-        out.append((root / layer, LAYER_ANCHORS + LAYER_ANCHORS_EXTRA.get(layer, [])))
-    # A FLOOR, not a default. A flat tree (a snapshot, a probe's temp tree) has no groups/,
-    # and discovering nothing would silently drop the layer check that was unconditional
-    # before. Checking the IFS layer when it exists and no descriptor named one keeps the
-    # coverage this function replaced.
-    if not out:
-        ifs = root / "coordinator" / "process_ifs.md"
-        if ifs.is_file():
-            out.append((ifs, IFS_LAYER_ANCHORS))
+        out.append((root / layer, LAYER_ANCHORS))
     return out
 
 # Every operational state file, by (subdirectory, glob). A directory that is absent
@@ -367,7 +352,7 @@ def record_sweep(root: Path = ROOT) -> tuple[list[Finding], int]:
     for subdir, pattern in STATE_GLOBS:
         # a record kind resolves through the group's tree under the real ROOT (B117), flat
         # elsewhere. Under the real ROOT EVERY group's tree is swept (stage 6): a damaged file in
-        # groups/band/ is as much a refusal as one in groups/ifs/.
+        # groups/band/ is as much a refusal as one in the default group's tree.
         if subdir in _RP.RECORD_KINDS:
             if Path(root).resolve() == _RP._REAL_ROOT:
                 bases = [_RP.group_tree(g) / subdir for g in _RP.group_present_read()]

@@ -27,7 +27,7 @@ an evicted memory returns only when newer ones age past it. This is a second axi
 that door: candidates are the FULL register, deliberately, and the selection is topic-conditional,
 per-circle and expiring. Because the pack QUOTES the seed beside its excerpt, all three visibility cases
 — settled in BLOCK 3, tail in BLOCK 4, or out of view entirely — are served uniformly with no special
-casing. The IFS consequence is named in the design and is close to the point of the work: an unresolved
+casing. The consequence for the circle is named in the design and is close to the point of the work: an unresolved
 `charged` seed will resurface whenever its topic returns.
 
 **PLACEMENT (R387).** Content decides the block, and this content is each part's own private seeds — so

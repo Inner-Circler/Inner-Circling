@@ -33,7 +33,7 @@ circle, and if those bytes are CRLF then the recorded sha256 is the hash
 of the CRLF bytes. Converting such a file does not clean it — it BREAKS
 A RECORD, which stops verifying against itself.
 
-`line_endings_grandfathered.toml` beside this file is that register, and
+`groups/<name>/line_endings_grandfathered.toml`, in the group whose record it is, is that register, and
 it is a data file rather than a list in here for a reason: the paths
 belong to one corpus and this checker ships. **An entry must be
 MEASURED** — read the sha256 the record claims and confirm it matches the
@@ -153,8 +153,14 @@ OUT_OF_SCOPE = ("our_art/", ".fileintel/", ".venv/", ".git/",
                 "ui/ticker/node_modules/", "ui/ticker/dist/",
                 "ui/ticker/src-tauri/target/", "ui/ticker/src-tauri/gen/")
 
-REGISTER = pathlib.Path(__file__).resolve().parent \
-    / "line_endings_grandfathered.toml"
+# ONE REGISTER PER GROUP: a grandfathered file is a group's own record, so its entry lives in that
+# group's folder, groups/<name>/line_endings_grandfathered.toml, with tree-relative paths.
+REGISTER_NAME = "line_endings_grandfathered.toml"
+
+
+def _registers() -> list[pathlib.Path]:
+    groups = ROOT / "groups"
+    return sorted(groups.glob(f"*/{REGISTER_NAME}")) if groups.is_dir() else []
 
 
 def _grandfathered() -> dict[str, str]:
@@ -162,14 +168,15 @@ def _grandfathered() -> dict[str, str]:
 
     An ABSENT or EMPTY register is the normal state, not a fault: a system
     that has never written a CRLF file has nothing to grandfather."""
-    if not REGISTER.is_file():
-        return {}
     try:
         import tomllib
     except ModuleNotFoundError:                      # pragma: no cover
         import tomli as tomllib                      # type: ignore
-    doc = tomllib.loads(REGISTER.read_text(encoding="utf-8"))
-    return {e["path"]: e for e in doc.get("file", [])}
+    out: dict[str, str] = {}
+    for reg in _registers():
+        doc = tomllib.loads(reg.read_text(encoding="utf-8"))
+        out.update({e["path"]: e for e in doc.get("file", [])})
+    return out
 
 
 GRANDFATHERED = _grandfathered()

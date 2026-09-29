@@ -4,13 +4,13 @@
 issue_draw.py — render the issue graph (issues/*.toml, or a sandbox graph.json snapshot) as a force-directed SVG plus a self-contained interactive HTML page.
 
 ## SYNOPSIS
-    python ui/issue_draw.py groups/ifs/issues/
-    python ui/issue_draw.py groups/ifs/issues/ --working-set nNNNN,nNNNN,...
-    python ui/issue_draw.py groups/ifs/issues/ --if-stale
+    python ui/issue_draw.py groups/<name>/issues/
+    python ui/issue_draw.py groups/<name>/issues/ --working-set nNNNN,nNNNN,...
+    python ui/issue_draw.py groups/<name>/issues/ --if-stale
     python ui/issue_draw.py work/issue_derive/<RUN>/graph.json
 
-The first argument is A GROUP'S issue directory — `groups/<name>/issues/`, the IFS
-circle's above. A root `issues/` has not existed since B117, and passing one does
+The first argument is A GROUP'S issue directory — `groups/<name>/issues/`, the
+default group's above. A root `issues/` has not existed since B117, and passing one does
 not fail cleanly: `arg.is_dir()` is False for a directory that is not there, so
 control falls through to the snapshot branch and raises FileNotFoundError trying to
 read it as a graph.json.
@@ -97,7 +97,7 @@ Also read, by `issue_draw_is_stale()` under `--if-stale`: the mtimes of `issue_g
 
 Written: `issue_graph.svg` and `issue_graph.html` in the output directory — the NAMED constant `OUT_DIR` = `<repo>/work/graph/` when drawing from `issues/`, or beside the given `graph.json` when drawing from a snapshot.
 
-**THE STEM IS PER GROUP since 2026-09-08 (audit-register.md #6).** `issue_draw_out_bind()` matches the `issues/` argument against every group's tree and points `OUT_SVG`/`OUT_HTML` at that group's own pair: the DEFAULT group keeps the plain `issue_graph.*` — it is the picture a person has open and the one `.gitignore` names literally — and any other group draws `issue_graph_<name>.*` beside it. Still ONE folder; R365 is unchanged. Before this, one pair of filenames served every group, so a band close overwrote the IFS picture, and `issue_draw_is_stale()` compared THIS group's newest source mtime against the OTHER group's picture — able to answer "not stale" and skip the draw entirely. The binding happens BEFORE the staleness question, because that question reads both constants. A directory that is no group's `issues/` leaves the default names alone. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
+**THE STEM IS PER GROUP since 2026-09-08 (audit-register.md #6).** `issue_draw_out_bind()` matches the `issues/` argument against every group's tree and points `OUT_SVG`/`OUT_HTML` at that group's own pair: the DEFAULT group keeps the plain `issue_graph.*` — it is the picture a person has open and the one `.gitignore` names literally — and any other group draws `issue_graph_<name>.*` beside it. Still ONE folder; R365 is unchanged. Before this, one pair of filenames served every group, so a band close overwrote the default group's picture, and `issue_draw_is_stale()` compared THIS group's newest source mtime against the OTHER group's picture — able to answer "not stale" and skip the draw entirely. The binding happens BEFORE the staleness question, because that question reads both constants. A directory that is no group's `issues/` leaves the default names alone. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
 
 ## NETWORK ACCESS
 None. The generated HTML is deliberately self-contained (SVG inlined) so it needs no network access to view either.
@@ -330,7 +330,7 @@ note pointing at the toggle.
 
 **Run at a close, 2026-08-27 (R365).** `coordinator/circle.py::issue_graph_redraw()`
 shells out to `python ui/issue_draw.py <record_rel("issues")>/ --if-stale` — the
-CURRENT group's issue directory, `groups/ifs/issues/` by default — at every LIVE
+CURRENT group's issue directory, the default group's by default — at every LIVE
 `/close`, positioned immediately after `proposal_vetting.proposal_vet()` and
 immediately before `circle_close_mark()`. That position is the whole
 design: both routes by which a circle moves the graph are complete by then

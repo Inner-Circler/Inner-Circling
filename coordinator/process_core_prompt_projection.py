@@ -35,6 +35,7 @@ from __future__ import annotations
 
 import pathlib
 
+import record_paths as _RP                 # the bound group's descriptor: its layer and its word
 import setting_manager as SET              # the length rule's two numbers
 import remember_manager as RM              # the remember rule's two numbers (B139): the register's
                                            # own AUTHORED_WORD_CAP and BUDGET, read where they are
@@ -77,7 +78,7 @@ def record_ro_read(p: pathlib.Path) -> str:
 # group only — its title, what a part is, the register it speaks from, the commands it may propose,
 # the dual-mirror, the Soul, its goals, its honesty examples, mutual knowing — the universal layer
 # carries a SLOT MARK, one line, and the group's own layer file carries that slot's text under the
-# matching mark. Composing is line substitution and nothing else: the IFS layer over the universal
+# matching mark. Composing is line substitution and nothing else: the default group's layer over the universal
 # reproduces the pre-split rulebook byte for byte (coordinator/tests/test_process_core_layers.py holds
 # the sha256). A group whose layer omits a slot gets nothing there — the mark line vanishes.
 #
@@ -89,34 +90,44 @@ SLOT_MARK = "<!-- slot: "
 MARK_END = " -->"
 
 # THE GROUP'S LAYER. circle.py sets it at open from the group's own descriptor `layer` field
-# (groups/<name>/group.toml, group_manager.group_layer_read()); a circle opened without --group, a
-# descriptor with no `layer`, and every install this bundle ships run the IFS layer — DEFAULT_LAYER is
-# the literal the packaging scan traces, so the file ships. A path is read relative to the tree.
-DEFAULT_LAYER = HERE / "process_ifs.md"
+# (groups/<name>/group.toml, group_manager.group_layer_read()). Unset, it is the BOUND group's own
+# `layer` — record_paths.group_read(), which a bare open binds to the default group — so no group's
+# file is named here. A group that declares no layer gets the universal layer alone. A path is read
+# relative to the tree.
 _LAYER: "pathlib.Path | None" = None
 
 
-def circle_identity_layer_set(layer: "str | pathlib.Path | None") -> pathlib.Path:
-    """Choose the layer file for this circle. None -> DEFAULT_LAYER. Returns the path chosen;
-    refuses loudly if it does not exist — a circle must not open on a rulebook with a hole."""
+def _layer_resolve(layer: "str | pathlib.Path") -> pathlib.Path:
+    p = pathlib.Path(layer)
+    return p if p.is_absolute() else HERE.parent / p
+
+
+def circle_identity_layer_default_read() -> "pathlib.Path | None":
+    """The bound group's declared layer file, or None when it declares none."""
+    layer = _RP.group_descriptor_read(_RP.group_read()).get("layer")
+    return _layer_resolve(str(layer).strip()) if isinstance(layer, str) and layer.strip() else None
+
+
+def circle_identity_layer_set(layer: "str | pathlib.Path | None") -> "pathlib.Path | None":
+    """Choose the layer file for this circle. None -> the bound group's own. Returns the path
+    chosen (None: no layer, the universal layer alone); refuses loudly if a named file does not
+    exist — a circle must not open on a rulebook with a hole."""
     global _LAYER
-    p = DEFAULT_LAYER if layer is None else pathlib.Path(layer)
-    if not p.is_absolute():
-        p = HERE.parent / p
-    if not p.is_file():
+    p = circle_identity_layer_default_read() if layer is None else _layer_resolve(layer)
+    if p is not None and not p.is_file():
         raise FileNotFoundError(f"BLOCK 1 layer file not found: {p}")
     _LAYER = p
     return p
 
 
-def circle_identity_layer_read() -> pathlib.Path:
-    return _LAYER if _LAYER is not None else DEFAULT_LAYER
+def circle_identity_layer_read() -> "pathlib.Path | None":
+    return _LAYER if _LAYER is not None else circle_identity_layer_default_read()
 
 
 # THE GROUP'S WORD FOR ONE OF ITS MEMBERS — D104 (2026-09-07), on D99's ruling that PART is
-# IFS speak for a ROLE. The universal layer is read by EVERY group and said "part" 29 times, so the
+# the default group's word for a ROLE. The universal layer is read by EVERY group and said "part" 29 times, so the
 # band's three roles were told they are parts by the layer that carries only what is true of any
-# group. The word is a token now, filled per group, so no prompt mixes the two: the IFS group
+# group. The word is a token now, filled per group, so no prompt mixes the two: the default group
 # declares "part" in its own descriptor and reads exactly as it always has, and a group that
 # declares nothing gets the product's word.
 #
@@ -127,20 +138,26 @@ def circle_identity_layer_read() -> pathlib.Path:
 # (R551, 2026-09-11) — a member is told what its record is called, not
 # what it is.
 DEFAULT_WORDS = ("role", "roles")
-IFS_WORDS = ("part", "parts")               # what a circle opened without --group gets, as with
-_WORDS: "tuple[str, str] | None" = None     # DEFAULT_LAYER above: the shipped install is the family
+_WORDS: "tuple[str, str] | None" = None     # unset: the bound group's own, as with the layer above
+
+
+def circle_identity_words_default_read() -> tuple[str, str]:
+    """The bound group's declared `member`/`members`, or DEFAULT_WORDS when it declares neither."""
+    d = _RP.group_descriptor_read(_RP.group_read())
+    one, many = str(d.get("member", "")).strip(), str(d.get("members", "")).strip()
+    return (one, many) if one and many else DEFAULT_WORDS
 
 
 def circle_identity_words_set(words: "tuple[str, str] | None") -> tuple[str, str]:
-    """Choose this circle's word for one of its members, singular and plural. None -> the IFS
-    group's, matching DEFAULT_LAYER. Returns what was chosen."""
+    """Choose this circle's word for one of its members, singular and plural. None -> the bound
+    group's own, matching the layer. Returns what was chosen."""
     global _WORDS
-    _WORDS = tuple(words) if words else IFS_WORDS               # type: ignore[assignment]
+    _WORDS = tuple(words) if words else circle_identity_words_default_read()   # type: ignore[assignment]
     return _WORDS
 
 
 def circle_identity_words_read() -> tuple[str, str]:
-    return _WORDS if _WORDS is not None else IFS_WORDS
+    return _WORDS if _WORDS is not None else circle_identity_words_default_read()
 
 
 def _mark_name(line: str, prefix: str) -> "str | None":
@@ -196,7 +213,7 @@ def circle_identity_layers_render(universal_text: str, layer_text: "str | None")
 
 def circle_identity_text_render() -> str:
     """BLOCK 1's rulebook text: the universal layer (process_core.md) with the group's layer
-    composed in (R464, B115, 2026-09-07 — for the IFS group, byte-identical to the one-file
+    composed in (R464, B115, 2026-09-07 — for the default group, byte-identical to the one-file
     rulebook it replaced), then the length rule's two numbers and the remember rule's two
     substituted. THE ONE PLACE either file is read — thirty-plus callers go through
     group_context.group_shared_read(), which calls straight into this — so there is nowhere else
@@ -212,7 +229,8 @@ def circle_identity_text_render() -> str:
     contain a brace, and a rulebook must not fail to load because someone
     wrote one."""
     universal = record_ro_read(HERE / "process_core.md")
-    layer = record_ro_read(circle_identity_layer_read())
+    layer_path = circle_identity_layer_read()
+    layer = record_ro_read(layer_path) if layer_path is not None else None
     one, many = circle_identity_words_read()
     return (circle_identity_layers_render(universal, layer)
             .replace("{LENGTH_AIM}", str(LENGTH_AIM_WORDS))

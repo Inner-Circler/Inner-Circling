@@ -40,7 +40,7 @@ turn file's block references resolve.
 **These files inherit the privacy of what they capture.** A prompt
 embeds the part's own identity file verbatim, and a turn file carries the
 part's reply plus a summary of what the model
-reasoned. Treat this directory exactly as you treat `groups/ifs/parts/`.
+reasoned. Treat this directory exactly as you treat `groups/<group>/parts/`.
 
 That last part is yours to switch off: the reasoning summary is captured
 only while the `record_thinking` setting is on, which it is by default.

@@ -1,7 +1,7 @@
 # Inner Circling
 
-An Internal Family Systems inner circle, run as a multi-part simulation
-across parts you describe. Circles are driven by a local Python 
+An inner circle, run as a multi-part simulation across parts you
+describe. Circles are driven by a local Python 
 "coordinator" calling an AI LLM API directly.
 
 Licensed under Apache-2.0 — see `LICENSE` and `NOTICE`.
@@ -47,7 +47,7 @@ Free of charge, offered as-is, by one person who is not a clinician.
 
 **Nothing here is a safety net.** No part of this system notices distress,
 escalates, or reaches a human being on your behalf. The registers under
-`groups/ifs/self/` arrive empty by design, and nothing is watched or
+`groups/<group>/self/` arrive empty by design, and nothing is watched or
 monitored.
 
 **The parts do carry crisis lines, and one may offer you them.** The
@@ -81,7 +81,7 @@ pane has a redacted view: names, places and organisations you list are
 shown as stable opaque ids while the transcript on disk, and what the
 model receives, stay exactly as written. `/redact-alias-add`,
 `/redact-alias-update`, `/redact-alias-delete` and `/redact-alias-list`
-keep the list, in `groups/ifs/self/redaction.toml`; part names are never
+keep the list, in `groups/<group>/self/redaction.toml`; part names are never
 eligible. The view starts OFF: turn it on with `/settings-update
 redact_view yes`, and `/settings-list` shows its current value.
 It is presentation only — a screen someone else might see — not privacy
@@ -126,7 +126,7 @@ coordinator sends, to Anthropic:
      summary of the circle and its newest memory
   -- synthesis: the transcript, what each part kept, the proposals you
      confirmed, the circle's previous notes, and
-     `groups/ifs/self/self.md` in full -- whatever you write about
+     `groups/<group>/self/self.md` in full -- whatever you write about
      yourself there travels at every close
   -- the refresh: each part's own record, to rebuild its distilled
      identity
@@ -166,31 +166,31 @@ SHIPS
                                   Ticker flavor, ui/ticker/, is NOT in
                                   this bundle)
   - docs/overview.md              how it works — the long account
-  - docs/what-this-is.md          a description written for readers outside
-                                  the project, with what is BUILT and what is
-                                  DESIGNED marked separately
   - docs/licensing.md             the licence (Apache-2.0) and the attribution
                                   it asks for
-  - docs/circling_probes.md       draft questions Self may ask at a circle's
-                                  open. Wired into nothing — reading them
-                                  changes no file and no rule
-                                  These four are the whole of docs/ that a
+                                  These two are the whole of docs/ that a
                                   bundle carries; the rest of the live
                                   tree's docs/ never ships
   - coordinator/process_core.md   the rulebook every part reads (the universal layer;
-                                  coordinator/process_ifs.md is the IFS group's own)
-  - groups/ifs/parts/soul/, groups/ifs/parts/child/     two seed parts
-  - groups/ifs/group.toml         the group's own descriptor — its presence makes the folder a
+                                  each group's own layer is in its folder, named
+                                  by its group.toml)
+  - groups/<group>/docs/          the group's own documents: its overview — its
+                                  parts, its goals, the framework it draws on
+  - groups/<group>/process_<group>.md
+                                  the group's own rulebook layer, composed onto
+                                  process_core.md at every circle open
+  - groups/<group>/parts/soul/, groups/<group>/parts/child/     two seed parts
+  - groups/<group>/group.toml     the group's own descriptor — its presence makes the folder a
                                   group: roles, reserved roles, the first-run order, the
                                   role whose answer names the console, its rulebook layer
 
-ARRIVES EMPTY, WITH A README — under groups/ifs/, the IFS group's own folder; a second
-group gets a folder of the same shape beside it (groups/<name>/). This bundle carries
-IFS; a bundle may carry any one or more, and the program resolves whatever it finds
-  - groups/ifs/circles/           transcripts land here, and the four
+ARRIVES EMPTY, WITH A README — under groups/<group>/, the shipped group's own folder; a
+second group gets a folder of the same shape beside it (groups/<name>/). This bundle carries
+one; a bundle may carry any one or more, and the program resolves whatever it finds
+  - groups/<group>/circles/       transcripts land here, and the four
                                   one-per-circle registers sit beside them
-  - groups/ifs/issues/            the issue graph
-  - groups/ifs/self/              Self's registers
+  - groups/<group>/issues/        the issue graph
+  - groups/<group>/self/          Self's registers
   - work/prompts/                 captured prompts
   - work/logs/                    open and close reports
   - work/graph/                   the issue graph's PICTURE, redrawn at every
@@ -285,7 +285,7 @@ files in one folder, which is what makes that enough.
 **There is no package to install, and that is deliberate.** This is not a
 library you import — it is a working directory that becomes your own
 record. The code reads and writes `groups/<name>/{parts,self,issues,circles}/`
-— `groups/ifs/` for the group you receive — and `work/` *beside itself*: every path is derived from where
+— one folder per group you have — and `work/` *beside itself*: every path is derived from where
 the modules sit on disk. Installed into a Python packages directory, your
 transcripts and your parts' identities would be written there too, among
 the libraries, where nothing expects to find them and an upgrade would
@@ -465,8 +465,8 @@ as they do for `python-dotenv`, which imports as `dotenv`.
 
 **Read this before you download an update over the top of what you have.** The
 code and your record live in ONE directory, and the copy you download carries an
-EMPTY STARTER RECORD at exactly the paths yours occupies — `groups/ifs/parts/`,
-`groups/ifs/self/`, `groups/ifs/circles/`. Unpacking it over your folder
+EMPTY STARTER RECORD at exactly the paths yours occupies — `groups/<group>/parts/`,
+`groups/<group>/self/`, `groups/<group>/circles/`. Unpacking it over your folder
 replaces your record with blanks. Nothing warns you.
 
 So update into a NEW directory and carry the record across. Your old folder stays
@@ -494,7 +494,9 @@ cd Inner-Circling-new
 rm -rf .git
 python3 -m venv .venv
 .venv/bin/python -m pip install -r requirements.txt
+mkdir ../layers-new && tar -cf ../layers-new/layers.tar groups/*/process_*.md
 cp -a ../Inner-Circling/groups/. groups/
+tar -xf ../layers-new/layers.tar
 cp -a ../Inner-Circling/work/. work/
 cp ../Inner-Circling/.env .
 ```
@@ -506,7 +508,9 @@ cd Inner-Circling-new
 Remove-Item -Recurse -Force .git
 python -m venv .venv
 .venv/Scripts/python -m pip install -r requirements.txt
+robocopy groups ..\layers-new process_*.md /S
 robocopy ..\Inner-Circling\groups groups /E
+robocopy ..\layers-new groups process_*.md /S
 robocopy ..\Inner-Circling\work work /E
 copy ..\Inner-Circling\.env .env
 ```
@@ -560,7 +564,12 @@ error; anything below 8 means it copied.)
 
 **Copy OVER, never delete first.** Your own files win where both exist, and a
 register the new version adds that your record has never had is left in place
-rather than removed.
+rather than removed. The one exception is each group's rulebook layer,
+`groups/<group>/process_<group>.md`: it lives in the group's folder but is the
+PROGRAM's, not your record, so the lines around the `groups` copy set the new
+version's aside first and put it back after — the new layer arrives, your record
+does not overwrite it. (`layers-new`, beside your install, can be deleted once
+you are done.)
 
 Three things carry everything a circle wrote:
 
@@ -590,8 +599,9 @@ the comparing, not the shell, and `--no-index` means the files do not have to be
 in a repository. No output means they are identical.
 
 Any difference is either your own edit or a real change in the new version. Read
-it and decide. If you changed `coordinator/process_ifs.md` or anything else that
-arrived with the bundle, compare it the same way — the rule is that the three
+it and decide. If you changed your group's own layer, compare
+`../Inner-Circling/groups/<group>/process_<group>.md` with the new one the same
+way, and anything else that arrived with the bundle — the rule is that the three
 directories above carry your RECORD, and a shipped file you edited is not part
 of it.
 
@@ -645,7 +655,7 @@ that file, put your key and preferred first name (NEVER shared):
 
 ```
 ANTHROPIC_API_KEY=sk-ant-...
-IFS_USER_NAME=<the name shown at your prompt>
+USER_NAME=<the name shown at your prompt>
 ```
 
 No quotes, no spaces around the `=`. `.env` is listed in `.gitignore`,
@@ -665,11 +675,11 @@ Cmd-Shift-. toggles hidden files in Finder.*
 `ANTHROPIC_API_KEY`, a shell variable of the same name **wins over the
 file** — `.env` is not read for a value the environment already has. That
 is worth knowing if you ever rotate a key and nothing seems to change.
-`IFS_USER_NAME` is the opposite: it is read from `.env` **only**, never
+`USER_NAME` is the opposite: it is read from `.env` **only**, never
 from the environment, so editing the file always takes effect on the next
 run with nothing else to clear.
 
-`IFS_USER_NAME` sets the name the console greets you by. **It does not
+`USER_NAME` sets the name the console greets you by. **It does not
 change the record** — the transcript writes `[Self]:` for everything you
 say, always. It is the *fallback*: once the first-run dialog records a
 preferred name against the Soul, that answer wins and editing `.env`
@@ -1054,10 +1064,10 @@ carries the repair by hand instead.
 
 ## Parts ... and the ones you will add
 
-**A circle starts at two.** `groups/ifs/parts/soul/` and
-`groups/ifs/parts/child/` arrive with
+**A circle starts at two.** `groups/<group>/parts/soul/` and
+`groups/<group>/parts/child/` arrive with
 an identity and no history — the substrate and the root of wonder,
-structural in the IFS model rather than particular to any one person.
+structural in the group's model rather than particular to any one person.
 
 **Nothing is missing.** Every other part is yours to discover and name,
 and a system that has not met them yet is not incomplete — it is at the
@@ -1079,7 +1089,7 @@ retired part leaves every circle, prompt and search from then on; its
 folder stays exactly where it is, its name stays its own, and what it
 said in past circles stays in the transcripts, marked retired. The parts
 are asked not to speak of it, and any bracket that names it is refused.
-To bring one back, rename `groups/ifs/parts/<name>/retired.toml` to
+To bring one back, rename `groups/<group>/parts/<name>/retired.toml` to
 `part.toml` and put the name back on `roles` in the group's `group.toml`,
 both by hand —
 there is no command for that, on purpose.
@@ -1090,15 +1100,19 @@ one closes, in plainer terms than this file.
 ## Where to read next
 
 ```
-docs/overview.md              the parts, and what each is for
+docs/overview.md              how a circle works, for any group
+groups/<group>/docs/overview.md
+                              your group's own: its parts, and what
+                              each is for
 coordinator/README.md         how to run a circle, step by step
 coordinator/process_core.md   the rulebook every part is given — the
                               UNIVERSAL half, shared by every group
-coordinator/process_ifs.md    the IFS group's own half, composed into
+groups/<group>/process_<group>.md
+                              the group's own half, composed into
                               the above at every circle open
 coordinator/process.md        the operations rulebook — closing,
                               auditing, recovery
-groups/ifs/issues/issue_model.md
+groups/<group>/issues/issue_model.md
                               what an issue is, and what is not one
 ```
 
@@ -1171,31 +1185,33 @@ YOURS — the system expects you to update this; the API key is required.
   .env                          your key and your name
 
 YOURS — the system is pretty tolerant if you update these
-  groups/ifs/self/self.md       more about you
-  groups/ifs/self/best_practices.toml
+  groups/<group>/self/self.md   more about you
+  groups/<group>/self/best_practices.toml
                                 how the CIRCLE behaves, and how you move
-  groups/ifs/parts/<name>/long_term.md
+  groups/<group>/parts/<name>/long_term.md
                                 a part's identity
-  groups/ifs/parts/<name>/part.toml
+  groups/<group>/parts/<name>/part.toml
                                 a part's tag, and its first-run
                                 questions with your answers
   coordinator/process_core.md   the rulebook every part reads — the
                                 universal layer
-  coordinator/process_ifs.md    the IFS group's own layer, composed onto
-                                it: the Soul, the goals, the honesty
-                                mandate, mutual knowing
+  groups/<group>/process_<group>.md
+                                the group's own layer, composed onto
+                                it: what a member is, its goals, its
+                                honesty mandate, and whatever else the
+                                group says of itself
 
 WITH CARE — machine-written, but hand-editable
-  groups/ifs/issues/issue_model.md
+  groups/<group>/issues/issue_model.md
                                 what an issue is
-  groups/ifs/issues/*.toml      the issue graph
-  groups/ifs/self/*.toml        the registers
+  groups/<group>/issues/*.toml  the issue graph
+  groups/<group>/self/*.toml    the registers
     Each has one owning module that reads and writes it. Keep the shape,
     edit between circles, and run the gate named below afterwards.
 
 NEVER — the historical record, and what is derived from it
-  groups/ifs/circles/*.md       transcripts
-  groups/ifs/circles/circle_history.toml, circle_journal.toml,
+  groups/<group>/circles/*.md   transcripts
+  groups/<group>/circles/circle_history.toml, circle_journal.toml,
   circle_observation_log.toml, working_sets.toml
                                 the four one-per-circle registers, beside the
                                 transcripts: one row per circle, written by the
@@ -1203,12 +1219,12 @@ NEVER — the historical record, and what is derived from it
                                 (circles/README.md). The observation log alone
                                 has verbs of its own — /observation-add, -continue,
                                 -retire, -purge — and those are the way to touch it
-  groups/ifs/circles/commands_<OT>.toml
+  groups/<group>/circles/commands_<OT>.toml
                                 the graph rulings one circle made, beside
                                 its transcript (circles/README.md)
-  groups/ifs/parts/*/short_term_<OT>.toml
+  groups/<group>/parts/*/short_term_<OT>.toml
                                 each part's record of a circle
-  groups/ifs/parts/*/mid_term.md
+  groups/<group>/parts/*/mid_term.md
                                 the distillate
   work/logs/*.json              open and close reports
   work/prompts/**               captured prompts
@@ -1284,12 +1300,12 @@ anything at all
       a failure prints INTEGRITY FAIL and, per file, the defect and the
       remedy, then exits non-zero. There is no --force.
 
-groups/ifs/parts/, groups/ifs/self/ or groups/ifs/circles/*.toml
+groups/<group>/parts/, groups/<group>/self/ or groups/<group>/circles/*.toml
   .venv/Scripts/python coordinator/circle_audit.py --selftest
       watch for   0 FAIL · 0 WARN · N OK
       a WARN is not a pass. Read it.
 
-groups/ifs/issues/
+groups/<group>/issues/
   .venv/Scripts/python memory/issue_gate.py
       watch for   GATE PASS — every invariant satisfied
       and the "quote(s) verified verbatim" count. It should not fall.

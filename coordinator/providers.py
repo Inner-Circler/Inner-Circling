@@ -227,7 +227,7 @@ class Provider:
         also turn up tokens, and vice versa, perhaps a single 'effort' dial
         set externally adjusts both in the adapter?"* Right, and it belongs
         HERE rather than in circle policy, because "thinking is billed against
-        max_tokens" is a fact about a model and not about IFS. One external
+        max_tokens" is a fact about a model and not about any group. One external
         dial; the provider moves both."""
         return 1.0
 

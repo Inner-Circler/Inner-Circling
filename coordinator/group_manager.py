@@ -10,8 +10,8 @@ WHY THIS EXISTS. `circle.py --parts <list>` already selects an arbitrary
 subset of whatever `parts/` holds (part_roster.py, R123) — the mechanism was
 already general, only the ergonomics were missing. It matters more than
 convenience the moment a second, differently-purposed roster exists:
-MAX_MEMBERS (circle_close_verify.py) is 9 — 8 parts + Self — so an IFS roster (the
-current seven) and any future roster of a different character cannot both
+MAX_MEMBERS (circle_close_verify.py) is 9 — 8 parts + Self — so the default group's roster
+(the current seven) and any future roster of a different character cannot both
 live under `parts/` and be invoked together; they can only be invoked
 SEPARATELY, by name. GROUPS are how "separately, by name" stays usable.
 docs/CIRCLE_TYPES_DESIGN.md is the design this implements.
@@ -22,7 +22,7 @@ descriptor carries what shipped code must not hardcode about ONE group (the oper
 initialization sequence, reserved dirs, and user identity will become group specific"):
 
     name               the folder's name, what --group resolves
-    display            what a person reads ("IFS Circle")
+    display            what a person reads ("Band")
     default            true on the one group a bare open runs (at most one)
     roles              the parts/<dir>/ names under the group's own tree — the roster
     reserved           the roles /part-retire refuses
@@ -89,7 +89,7 @@ DEFAULT_GROUP = _RP.DEFAULT_GROUP       # the group circle.DEFAULT_PARTS reads (
 # The descriptor's keys, in the order group_descriptor_dumps() writes them. `identity` is the one
 # table (`[identity]`, written last so every scalar above it stays at the root — the TOML rule
 # REGISTER_CLASS.register_dumps() learned at B35).
-# `member`/`members` (D104, f8aaac8) landed in groups/ifs/group.toml and in the reader
+# `member`/`members` (D104, f8aaac8) landed in the default group's group.toml and in the reader
 # (group_member_words_read below) without reaching this tuple, and group_descriptor_dumps()
 # raises on any key outside it — so /group-update could not complete for the DEFAULT group.
 # Invisible to bnf_conformance.py because the nine-field list was copied three times (here,
@@ -330,7 +330,7 @@ def group_layer_read(name: str) -> "str | None":
 
 def group_member_words_read(name: str) -> "tuple[str, str] | None":
     """A group's own word for one of its members, singular and plural — its descriptor's `member`
-    and `members`, or None when it declares neither. D104, on D99: PART is the IFS group's word for
+    and `members`, or None when it declares neither. D104, on D99: PART is the default group's word for
     a ROLE, so the universal rulebook carries a token and each group fills it. A group that declares
     nothing gets process_core_prompt_projection.DEFAULT_WORDS, the product's own."""
     d = _RP.group_descriptor_read(name)
@@ -344,7 +344,7 @@ def _layer_precheck(layer: "str | None") -> str:
         return ""
     p = pathlib.Path(layer)
     if p.is_absolute() or ".." in p.parts:
-        return "the layer is a path relative to the tree (coordinator/process_ifs.md), not absolute"
+        return "the layer is a path relative to the tree (groups/<name>/process_<name>.md), not absolute"
     if not (ROOT / p).is_file():
         return f"no such layer file: {layer}"
     return ""
@@ -425,8 +425,8 @@ def _record_scaffold(name: str, roles: list[str]) -> list[str]:
 def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[bool, str]:
     """Make one group: the RECORD its descriptor promises first, the descriptor LAST (the head
     docstring). IMMEDIATE: /abort does not undo it. Returns (ok, message). `layer` (B115) is
-    optional; without one the group runs on the IFS layer with the product's own words
-    (process_core_prompt_projection.DEFAULT_LAYER / DEFAULT_WORDS), and the message says so."""
+    optional; without one the group runs on the universal layer alone with the product's own words
+    (process_core_prompt_projection.DEFAULT_WORDS), and the message says so."""
     name = name.strip()
     why = group_precheck(name, roles) or _layer_precheck(layer)
     if why:
@@ -461,8 +461,8 @@ def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[
         lines.append(f"  stub files: {', '.join(stubs)} — the operator writes them; the folders "
                      f"issues/, self/ and circles/ are the group's record")
     if not layer:
-        lines.append(f"  no layer given: the group runs on the IFS rulebook with \"role\" "
-                     f"substituted for \"part\" until group.toml names a layer file")
+        lines.append(f"  no layer given: the group runs on the universal rulebook alone, with "
+                     f"\"role\" for its members, until group.toml names a layer file")
     return True, "\n".join(lines)
 
 

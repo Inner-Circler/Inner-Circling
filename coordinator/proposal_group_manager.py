@@ -78,7 +78,7 @@ import LLM_response_disassembler as RD                         # noqa: E402
 import record_paths as _RP                                         # noqa: E402
 
 SYSTEM = """\
-You are grouping a vetting queue for an IFS-circle coordinator. Below are
+You are grouping a vetting queue for an Inner Circling coordinator. Below are
 pending proposals, each with a ref, its provenance, and its text. Group ONLY
 rows that are the SAME ask in different words — the same intended practice,
 or the same intended command. Sharing a theme is NOT the same ask; when in

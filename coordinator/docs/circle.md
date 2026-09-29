@@ -1,7 +1,7 @@
 # CIRCLE.PY(1)
 
 ## NAME
-circle — the driver: opens an IFS inner circle, assembles each part's four prompt blocks, runs
+circle — the driver: opens an inner circle, assembles each part's four prompt blocks, runs
 the Self> loop, closes, and hands the closed circle to phase 2
 
 ## SYNOPSIS
@@ -278,7 +278,7 @@ checkout now.
   `--dry-run` also off the run is refused, not sandboxed.
 - `--dry-run`: no network, no API key needed; every part passes; writes only under
   `work/sandbox/`. Default: off — see the line above.
-- `--parts <dirs>`: comma-separated part directories. Default: every member of the DEFAULT GROUP — a rule, not a name (R468, B120 stage 4: the one group installed, or the one whose group.toml says `default = true`; here groups/ifs/group.toml) resolved through `group_manager.group_resolve()`, never the `parts/` scan (B117 stage 1, R466/R467, 2026-09-07); the scan is the fallback only where no group descriptor exists, as in a fresh bundle's empty delegate. There is no `parts/` at the repository root either; it is `groups/<group>/parts/`. This bullet said "every part in `parts/` (the roster)" until 2026-09-08 (audit-register.md #18) — while the `--group` bullet three lines below documented the default-group rule correctly, so the page disagreed with itself across two adjacent entries.
+- `--parts <dirs>`: comma-separated part directories. Default: every member of the DEFAULT GROUP — a rule, not a name (R468, B120 stage 4: the one group installed, or the one whose group.toml says `default = true`; here the default group's own group.toml) resolved through `group_manager.group_resolve()`, never the `parts/` scan (B117 stage 1, R466/R467, 2026-09-07); the scan is the fallback only where no group descriptor exists, as in a fresh bundle's empty delegate. There is no `parts/` at the repository root either; it is `groups/<group>/parts/`. This bullet said "every part in `parts/` (the roster)" until 2026-09-08 (audit-register.md #18) — while the `--group` bullet three lines below documented the default-group rule correctly, so the page disagreed with itself across two adjacent entries.
   A reduced LIVE roster asks for `yes` unless `--yes`.
 - `--group <name>`: open on a NAMED group — its own `groups/<name>/group.toml` (R468, B120;
   `coordinator/group_manager.py`, `/group-add`; `/group-update <n>` replaces its roles in place,

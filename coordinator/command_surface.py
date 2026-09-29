@@ -271,7 +271,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "the descriptor whose presence makes the folder a group\n"  # R468
      "— naming its roles; circle.py --group <name> opens on\n"
      "it. layer= names the group's own BLOCK 1 layer file;\n"   # B115
-     "omitted, the IFS layer. IMMEDIATE — /abort does not undo\n"
+     "omitted, the universal layer alone. IMMEDIATE — /abort\n"
+     "does not undo "
      "it", "command"),
     ("/group-list [<n>]",
      "every group, numbered — name and its roles; `<n>`\n"

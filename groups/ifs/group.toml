@@ -20,7 +20,7 @@ initialization = [
     "soul",
     "child",
 ]
-layer = "coordinator/process_ifs.md"
+layer = "groups/ifs/process_ifs.md"
 member = "part"
 members = "parts"
 proposed_commands = [

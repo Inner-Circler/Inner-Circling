@@ -38,7 +38,7 @@ expects it; the Tag stays taken; the part's old lines still parse and its
 quotes stay attributed; nothing it owned is ever searched or sent again.
 Reversal is the rename back AND the name back on the group's `roles`, both by
 hand — no verb (R561; the list is deliberate, R548). The group's RESERVED
-roles (its group.toml, R468 — Soul and Child for the IFS group, docs/BNF.md) are
+roles (its group.toml, R468 — Soul and Child for the default group, docs/BNF.md) are
 refused before any dialog; a retire while a circle may be open is refused
 outright (circle_state fails closed) — the next round's read of a part that
 just left the roster would take the circle down.
@@ -167,7 +167,7 @@ def part_precheck(name: str, tag: str, identity: str) -> str:
 # THE TREE'S OWN RECORD IS NEVER WRITTEN FROM A TEST. On 2026-09-16 an audit's tracer ran the
 # suites in one process against the main checkout, a suite's isolation (R.PARTS_DIR pointed at
 # a temp dir) did not hold across that process, and part_add() wrote a part named after a test
-# file into groups/ifs/ and committed it — the roster seated it (audit-register 2026-09-16 #1;
+# file into the default group's tree and committed it — the roster seated it (audit-register 2026-09-16 #1;
 # part_retire's own comment records the same shape on 2026-09-12). Every suite isolates by
 # rebinding a module global, and a global is exactly what another suite, a follower or a
 # thread can rebind back. So the WRITER checks, at the one moment it matters: when the
@@ -309,8 +309,8 @@ def part_view(n_text: str) -> tuple[bool, str]:
 
 def part_reserved_read() -> tuple[str, ...]:
     """The roles /part-retire refuses — the bound group's group.toml `reserved` list (R468,
-    B120; RESERVED_DIRS = ("soul", "child") was the literal until then, and is the IFS group's
-    own value of it)."""
+    B120; RESERVED_DIRS = ("soul", "child") was the literal until then, and is the default
+    group's own value of it)."""
     import record_paths as _RP
     return tuple(str(d) for d in _RP.group_descriptor_read(_RP.group_read()).get("reserved", []))
 
@@ -436,7 +436,7 @@ def part_retire(n_text: str) -> None:
     # transcript_store's TAG_TO_PART among them. Nothing in this process reads an old transcript
     # between here and there without an open circle. (A record_paths.group_set() HERE would
     # rebind to the real tree under a probe that pointed R.PARTS_DIR elsewhere — measured
-    # 2026-09-12, when it wrote a probe's part into groups/ifs/.)
+    # 2026-09-12, when it wrote a probe's part into the default group's tree.)
     seam.emit("command", f"  {t} is retired — parts/{d}/{R.MARKER} is now {R.RETIRED_MARKER}"
                          + (", and it is off the group's list." if desc else "."))
     try:

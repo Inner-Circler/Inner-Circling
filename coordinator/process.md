@@ -1,4 +1,4 @@
-# IFS Inner Circle — Process Rules (operations)
+# Inner Circle — Process Rules (operations)
 Version: 2026-09-01
 
 Part-facing rules — what you are, circle start, speaking, challenge, signals,
@@ -185,9 +185,8 @@ citing the 2026-08-07 incident that taught it. Update both together.
 RETIRED — R228 removed the batch shape, and the scheduled tasks are gone from
 the scheduler. Dreaming and synthesis now run synchronously, as `/close`'s
 phase 2: `coordinator/inter_circle.py` (design: `docs/INTER_CIRCLE_DESIGN_V2.md`).
-The old prompts are in git at their own paths,
-`scripts/ifs-nightly-dreaming-SKILL.md` and
-`scripts/ifs-nightly-synthesis-SKILL.md`.
+The old prompts are in git at their own paths under `scripts/`, the
+nightly dreaming and synthesis SKILL.md files.
 
 `coordinator/circle_audit.py` (renamed from `nightly.py` 2026-08-19, same
 ruling) is NOT the successor — it is the independent audit: preflight, survey

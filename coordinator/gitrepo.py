@@ -782,7 +782,7 @@ def main() -> int:
 
     # THE CONSOLE NAME TOO, because "who am I" has two answers here and
     # having to remember two commands to get them is how they drift apart.
-    # REPORTED, NOT CHAINED: IFS_USER_NAME is deliberately NOT a fallback
+    # REPORTED, NOT CHAINED: USER_NAME is deliberately NOT a fallback
     # for git user.name. They are the same person and often a different
     # string — a given name is shown at the console, a full name authors a
     # commit — and silently borrowing one for the other would write an

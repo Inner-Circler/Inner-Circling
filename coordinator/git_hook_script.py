@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v197"
+HOOK_MARK = "# inner-circling pre-commit v200"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -180,7 +180,6 @@ case "$FILES" in *groups/*)
     run memory/record_verify.py
     for gdir in groups/*/; do
         gname="${{gdir#groups/}}"; gname="${{gname%/}}"
-        [ "$gname" = "ifs" ] && continue
         [ -d "$gdir/parts" ] || continue
         run coordinator/circle_audit.py --selftest --group "$gname"
         [ -d "$gdir/issues" ] && run memory/issue_gate.py "$gdir/issues"
@@ -264,7 +263,7 @@ case "$FILES" in *groups/*/group.toml*\
 |*coordinator/remember_manager.py*|*coordinator/tests/test_remember_manager.py*\
 |*coordinator/remember_prompt_projection.py*|*coordinator/remember_list_projection.py*\
 |*coordinator/quote_as_lands.py*|*coordinator/tests/test_quote_as_lands.py*\
-|*coordinator/process_core.md*|*coordinator/process_ifs.md*|*coordinator/part_roster.py*\
+|*coordinator/process_core.md*|*groups/*/process_*.md*|*coordinator/part_roster.py*\
 |*coordinator/tests/test_annotation_exemplars.py*\
 |*coordinator/transcript_store.py*|*coordinator/tests/test_transcript_store.py*\
 |*coordinator/part_mid_term_manager.py*|*coordinator/tests/test_part_mid_term_manager.py*\
@@ -290,12 +289,10 @@ esac
 # exactly as often as the single case fired before the split.
 if [ -n "$IC_RECORD" ]; then
     NOTE="  pre-commit: the record, or code that reads it, was touched"
-    # THE TRIGGER NAMES coordinator/process_ifs.md AS WELL AS process_core.md,
-    # because test_annotation_exemplars.py reads the COMPOSED rulebook -- the
-    # [proposed:] exemplars live in the IFS layer, so the file that holds the
-    # counted exemplars must fire the suite that counts them. process_band.md is
-    # deliberately NOT added: circle_identity_text_render() composes the DEFAULT
-    # layer, so this suite reads the IFS one and never the band's.
+    # THE TRIGGER NAMES EVERY GROUP'S LAYER (groups/*/process_*.md) AS WELL AS
+    # process_core.md, because test_annotation_exemplars.py reads the COMPOSED
+    # rulebook -- the [proposed:] exemplars live in a group's layer, so the file
+    # that holds the counted exemplars must fire the suite that counts them.
     run coordinator/circle_audit.py --selftest
     run coordinator/practice_verify.py
     run coordinator/logbook_ruling_verify.py
@@ -427,7 +424,7 @@ case "$FILES" in *NEXT.md*|*coordinator/logbook_next_verify.py*\
     run coordinator/tests/test_logbook_next_verify.py
 esac
 
-case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*coordinator/process_ifs.md*|*coordinator/prompt_build.py*|*coordinator/group_context.py*|*coordinator/group_attention.py*|*self/best_practices.toml*|*parts/*)
+case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*groups/*/process_*.md*|*coordinator/prompt_build.py*|*coordinator/group_context.py*|*coordinator/group_attention.py*|*self/best_practices.toml*|*parts/*)
     NOTE="  pre-commit: a prompt block source or its overlap checker touched"
     # Through the venv, not bare `python`: this checker imports circle.py,
     # which imports anthropic, and the hook's `python` is the system 3.10
@@ -1035,12 +1032,12 @@ case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guar
 |*coordinator/group_manager.py*|*ui/tests/test_circle_engine_band.py*|*coordinator/short_term_manager.py*|*groups/*)
     NOTE="  pre-commit: a record-safety module touched"
     # THE CLOSE STEP, THE OPEN STEP AND THE DRIVER ARE HERE for the band's
-    # isolation suite: "a band close touches nothing under groups/ifs/" is
+    # isolation suite: "a band close touches nothing under the default group's tree" is
     # decided in circle_close._dest_for() and the open step's group binding,
     # and that suite executes 99 lines of the one and 189 of the other
     # (audit-register 2026-09-11 #4). group_manager.py is here because that
     # suite opens a dry-run circle on a group /group-add scaffolded (2026-09-11)
-    # and proves groups/ifs/ byte-identical after it.
+    # and proves the default group's tree byte-identical after it.
     run coordinator/tests/test_record_paths.py
     run ui/tests/test_circle_engine_band.py
     run coordinator/tests/test_write_guard.py
@@ -1084,8 +1081,8 @@ esac
 # that no single edit touches together. A group's layer is hand-written
 # markdown, so the code and the rulebook would otherwise agree by memory alone.
 case "$FILES" in *coordinator/command_surface.py*|*coordinator/annotations.py*\
-|*coordinator/process_ifs.md*|*coordinator/process_band.md*|*coordinator/process_core.md*\
-|*groups/*/group.toml*|*packaging/scaffold/coordinator/process_ifs.md*\
+|*groups/*/process_*.md*|*coordinator/process_core.md*\
+|*groups/*/group.toml*\
 |*coordinator/tests/test_proposable_surfaces.py*)
     NOTE=""
     run coordinator/tests/test_proposable_surfaces.py
@@ -1136,8 +1133,7 @@ case "$FILES" in *.claude/skills/scaffold-check/scaffold_check.py*\
     run .claude/skills/scaffold-check/test_scaffold_check.py
 esac
 
-case "$FILES" in *coordinator/process_core.md*|*coordinator/process_ifs.md*\
-|*coordinator/process_band.md*\
+case "$FILES" in *coordinator/process_core.md*|*groups/*/process_*.md*\
 |*coordinator/process_core_prompt_projection.py*\
 |*coordinator/tests/test_process_core_layers.py*)
     NOTE="  pre-commit: BLOCK 1's layers touched — the byte-identity probe runs"

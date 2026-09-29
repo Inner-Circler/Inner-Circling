@@ -482,7 +482,7 @@ def circle_close_postcondition_verify(name: str, report: dict, root: Path,
     # EVERY REPORT IS READ WITH ITS OWN GROUP'S ROSTER — B117 stage 3's
     # mechanism, which this sweep never called. The speaker grammar and
     # DIR_NAMES below are the CURRENT group's; a band report read with the
-    # IFS roster finds no speaker at all and fails every row it carries.
+    # default group's roster finds no speaker at all and fails every row it carries.
     # Restored in `finally`: a sweep must not leave the process bound to
     # the last report's group.
     bound = _RP.group_read()

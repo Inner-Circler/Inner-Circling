@@ -16,7 +16,7 @@ REGISTER_CLASS.py and check_best_practices.py (practice_manager.py since
 sweep.
 
 A RECORD IS A GROUP'S TREE — R466/R467, B117 (2026-09-07): groups/<name>/{parts,issues,self,
-circles}/, the IFS group's at groups/ifs/ since stage 2 (the move, "move the IFS family now").
+circles}/, the default group's in its own folder since stage 2 (the move R467 ruled be made then).
 `group_tree(name)` is the one lookup, and every constant below is the DEFAULT group's tree. Every
 literal `ROOT / "parts"`-style path in the tree asks this module instead, absolute
 (`PARTS_DIR / part`) or ROOT-relative (`record_rel("self/topics.toml")`) — the relative form is
@@ -47,7 +47,7 @@ SANDBOX = ROOT / "work" / "sandbox"     # moved from coordinator/sandbox, R176, 
 # stdlib-only (pathlib) and so importable from a checker running under bare python.
 CODE_DIRS = ("coordinator", "memory", "ui", "packaging")
 GROUPS_DIR = ROOT / "groups"            # every group's tree (B117 stage 1; the default's too, stage 2)
-SHIPPED_GROUP = "ifs"                   # IFS_CIRCLE — the GROUP a fresh bundle carries (packaging/groups.toml)
+PLACEHOLDER_GROUP = "default"           # a name for the path constants in a tree holding no group
 # A GROUP DESCRIBES ITSELF — R468, B120 (2026-09-07): groups/<name>/group.toml, whose presence is
 # what makes a folder a group (R123's part.toml rule one level up). It carries what shipped code
 # must not hardcode about ONE group: its roles, its reserved roles, the head of its initialization
@@ -92,7 +92,7 @@ def _group_names_read() -> list[str]:
 
 def group_default_read() -> "str | None":
     """THE GROUP A BARE OPEN RUNS — R468, B120 stage 4 (2026-09-07), the rule that replaced the
-    literal "ifs": exactly one group installed -> it; several -> the one whose group.toml says
+    default group's literal name: exactly one group installed -> it; several -> the one whose group.toml says
     `default = true`, if exactly one does; otherwise None, and circle.py asks for --group. A
     bundle carrying only a band is a working install; a bundle carrying no group is not."""
     names = _group_names_read()
@@ -119,10 +119,10 @@ def group_default_refusal_read() -> str:
 
 
 # THE BOUND GROUP AT IMPORT: the ruled default when there is one; else the first group present
-# (so every path constant resolves and --group can still rebind); else the shipped group's name,
-# which is only a placeholder in a tree that holds no group at all. Never a literal a working
-# install depends on: circle.py refuses a bare open unless group_default_read() answers.
-DEFAULT_GROUP = group_default_read() or (_group_names_read() or [SHIPPED_GROUP])[0]
+# (so every path constant resolves and --group can still rebind); else PLACEHOLDER_GROUP, a name
+# only, in a tree that holds no group at all. Never a literal a working install depends on:
+# circle.py refuses a bare open unless group_default_read() answers.
+DEFAULT_GROUP = group_default_read() or (_group_names_read() or [PLACEHOLDER_GROUP])[0]
 
 
 def group_present_read() -> list[str]:
@@ -148,14 +148,14 @@ def group_stray_read() -> list[str]:
 
 
 def group_tree(name: str) -> pathlib.Path:
-    """The tree a group's RECORD lives in: groups/<name>/ — every group the same shape, the IFS
-    group's at groups/ifs/ (B117 stage 2, R467: "move the IFS family now"). Through GROUPS_DIR,
+    """The tree a group's RECORD lives in: groups/<name>/ — every group the same shape, the
+    default group's included (B117 stage 2; R467 ruled that move be made then). Through GROUPS_DIR,
     so a probe that rebinds it sees every group under its temp tree."""
     return GROUPS_DIR / name
 
 
 def group_rel(name: str) -> str:
-    """group_tree(name) relative to ROOT, posix ("groups/ifs")."""
+    """group_tree(name) relative to ROOT, posix ("groups/<name>")."""
     t = group_tree(name)
     return "" if t == ROOT else t.relative_to(ROOT).as_posix()
 
@@ -170,7 +170,7 @@ def group_read() -> str:
 def record_rel(rel: str, name: "str | None" = None) -> str:
     """A record-relative path ("self/topics.toml", "parts/<p>/remember.toml") as a
     ROOT-relative posix string for the group — the shape git, the hook's globs and the
-    transaction's stage() take ("groups/ifs/self/topics.toml")."""
+    transaction's stage() take ("groups/<name>/self/topics.toml")."""
     base = group_rel(_GROUP if name is None else name)
     return f"{base}/{rel}" if base else rel
 

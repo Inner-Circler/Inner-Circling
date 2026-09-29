@@ -984,7 +984,7 @@ def circle_audit_run_log(mode: str, result: str, detail: str) -> None:
 # Task Scheduler install/uninstall (TASK_XML, TASKS, task_defs(), install_tasks(),
 # uninstall_tasks()) REMOVED WHOLESALE 2026-08-15 — see rulings/ and
 # docs/NIGHTLY_DESIGN.md's own §7 retirement note. It existed to snapshot/validate
-# around the separate, since-retired ifs-nightly Cowork task; nothing schedules
+# around the separate, since-retired nightly Cowork task; nothing schedules
 # dreaming/synthesis any more (docs/INTER_CIRCLE_DESIGN_V2.md's Placement ruling —
 # synchronous at /close).
 

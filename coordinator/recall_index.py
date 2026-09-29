@@ -67,7 +67,7 @@ B121, 2026-09-07. The refresh was lazy and nothing was indexed at open or
 close, so the first `[recall:]` of a circle paid the fastembed model load plus
 an embed of whatever had moved — the only close-speed candidate whose cost
 landed in ROOM time, in front of a person mid-circle. And it was COLD: after
-B117 moved the caches to work/recall_index/<group>/, six of seven IFS parts had
+B117 moved the caches to work/recall_index/<group>/, six of the default group's seven parts had
 never been indexed at all. recall_index_arm_start() now runs that build on a
 background thread from circle open, so it overlaps the pre-warm and the opening
 round and is finished before anyone types. THE LAZY PATH REMAINS THE FALLBACK:
@@ -147,7 +147,7 @@ CACHE_DIR = P.ROOT / "work" / "recall_index"
 
 def recall_cache_locate(part: str) -> pathlib.Path:
     """The embedding cache for one part of the CURRENT group — work/recall_index/<group>/
-    <part>.ndjson (B117 stage 5, 2026-09-07: keyed by group, so a band role and an IFS part
+    <part>.ndjson (B117 stage 5, 2026-09-07: keyed by group, so a band role and a default-group part
     with the same directory name can never share a cache). Derived, never the record; a
     missing file is one re-embed to rebuild — the pre-B117 flat files are simply orphaned."""
     d = CACHE_DIR / P.group_read()

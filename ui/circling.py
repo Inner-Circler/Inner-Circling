@@ -1528,7 +1528,7 @@ class CircleEngine:
         #
         # ONE EXCEPTION, RULED 2026-08-13 (only ever one prompt in the
         # circle pane): circle.py's own speaking prompt, `f"\n{CONSOLE_NAME}>
-        # "` (e.g. "\n<configured IFS_USER_NAME>> " — a console-only
+        # "` (e.g. "\n<configured USER_NAME>> " — a console-only
         # value, R132, never a literal name in this codebase), is written
         # for a real terminal where it sits on the same line the typed
         # answer's echo appears on. `circling` already draws its OWN
@@ -2491,12 +2491,12 @@ def _waiting_tag(backend) -> str:
 def _circle_prompt(state: AppState) -> str:
     """RULED 2026-08-13: there is only ever ONE prompt in the circle pane,
     and it reads "N> ", N being circle.py's own `CONSOLE_NAME` (the
-    user's configured console name if IFS_USER_NAME is set, else "Self" —
+    user's configured console name if USER_NAME is set, else "Self" —
     identity.py's DEFAULT_NAME) — the exact same value circle.py's own
     terminal loop prompts with. Before this, `state.circle.prompt` was a
     SEPARATE hardcoded "Self> " literal — a second, independent naming
     source that silently disagreed with circle.py's own prompt the moment
-    IFS_USER_NAME was set to anything else. CONSOLE_NAME is console-only,
+    USER_NAME was set to anything else. CONSOLE_NAME is console-only,
     same scope circle.py itself confines it to: never written to a
     transcript, never sent to a part (R132) — reusing it here for a
     render-only prompt carries nothing new across that boundary.
@@ -2525,7 +2525,7 @@ def _circle_prompt(state: AppState) -> str:
     been gone for minutes."""
     backend = state.backend
     # THE ONE SOURCE, circle.py's own circle_prompt_read() — R563 (2026-09-12): the prompt carries
-    # the BOUND GROUP ("Self (ifs)> "), read at every render because the group can change at an
+    # the BOUND GROUP ("Self (<group>)> "), read at every render because the group can change at an
     # open. Reading CONSOLE_NAME here and composing a second string is what this docstring's own
     # history warns against.
     prompt_read = getattr(getattr(backend, "_C", None), "circle_prompt_read", None)
@@ -2576,7 +2576,7 @@ def _circle_prompt(state: AppState) -> str:
             getattr(backend, "waiting_for_input", True)
             and getattr(backend, "waiting_for_channel", "circle") == "circle"):
         tag = _waiting_tag(backend)
-        # the wait-state tag goes INSIDE the "> " of whatever the prompt reads: "Self (ifs) (waiting)> "
+        # the wait-state tag goes INSIDE the "> " of whatever the prompt reads: "Self (<group>) (waiting)> "
         return f"{base[:-2]}{tag}> " if base.endswith("> ") else f"{base}{tag}> "
     return base
 

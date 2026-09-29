@@ -224,8 +224,8 @@ def command_suggest_referents_counts(ref: dict) -> dict:
 
 # ------------------------------------------------------------------ the prompt
 SYSTEM_HEAD = """\
-You read the transcript of one Inner Circling circle — an IFS inner circle: Self (the person)
-and named parts of that person speaking in turn. Your one job is RECOGNITION: find every place
+You read the transcript of one Inner Circling circle: Self (the person) and the circle's named
+members speaking in turn. Your one job is RECOGNITION: find every place
 where what was SAID suggests an operation the coordinator can perform, and name the operation.
 
 You do not perform anything. Nothing you name is executed or staged. The report you produce is

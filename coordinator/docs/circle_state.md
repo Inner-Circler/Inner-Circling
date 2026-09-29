@@ -56,7 +56,7 @@ Standard library: `pathlib`, `sys`, `time`, plus `from __future__ import annotat
     Read
         Every file matching `circle_*.md` directly under two directories:
         the live circles directory (`record_paths.CIRCLES_DIR` — the bound group's
-        `groups/<name>/circles/`, `groups/ifs/circles/` by default) and the
+        `groups/<name>/circles/`, the default group's by default) and the
         sandbox circles directory (`work/sandbox/circles/`) — read
         only for their filesystem metadata (modification time via
         `stat()`), never their contents. Each candidate file's

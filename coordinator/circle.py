@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-IFS inner circle — local coordinator (direct Messages API).
+Inner Circling circle — local coordinator (direct Messages API).
 
 WHAT THIS IS
     THE DRIVER, NOT THE PROGRAM. A local Python "Coordinator" drives the parts as
@@ -275,7 +275,7 @@ HERE = pathlib.Path(__file__).resolve().parent
 #   SELF_DISPLAY   ID.DISPLAY, fixed "Self". Written into the transcript as
 #                  [Self]: and into every prompt block that names Self.
 #                  Never reads configuration.
-#   CONSOLE_NAME   ID.user_name_read(), from $IFS_USER_NAME in .env. Shown only
+#   CONSOLE_NAME   ID.user_name_read(), from $USER_NAME in .env. Shown only
 #                  at the console prompt and in /help — never written to a
 #                  transcript, never sent to a model.
 #
@@ -287,7 +287,7 @@ CONSOLE_NAME = ID.user_name_read()
 def circle_prompt_read() -> str:
     """The Self> prompt's text, with the BOUND GROUP — R563 (2026-09-12): "add the bound group in
     /status and prompt line". Every self/ register a cmd> verb writes is the bound group's, so the
-    prompt says which: `Self (ifs)> `. Read at every prompt, not once, because the window and the
+    prompt says which: `Self (<group>)> `. Read at every prompt, not once, because the window and the
     Ticker run more than one circle in a process and the group can change at an open. ui/circling.py's
     _circle_prompt() reads THIS, so the two prompts cannot disagree. Console-only, as CONSOLE_NAME
     is: never written to a transcript, never sent to a model."""
@@ -307,10 +307,10 @@ def circle_prompt_read() -> str:
 # PART_TAGS (parts/<dir> -> transcript tag, B29) moved to record_paths.py with
 # its comment, 2026-08-16 — imported at the top of this file.
 
-# The default roster IS THE DEFAULT GROUP'S MEMBERS — the `ifs` row of the groups register —
+# The default roster IS THE DEFAULT GROUP'S MEMBERS — the roles its own group.toml names —
 # B117 stage 1 (R466/R467, 2026-09-07): never the parts/ scan again, so a directory added under
 # parts/ cannot widen the plain live open (MAX_MEMBERS is 9). The scan is the fallback only
-# where no `ifs` row exists (a fresh bundle's empty delegate).
+# where no group descriptor exists (a fresh bundle's empty delegate).
 
 
 def _default_parts_read() -> list[str]:
@@ -636,7 +636,7 @@ def main() -> int:
     except ImportError:
         pass
     _roster_refresh()
-    ap = argparse.ArgumentParser(description="IFS circle — local coordinator")
+    ap = argparse.ArgumentParser(description="Inner Circling circle — local coordinator")
     ap.add_argument("--live", action="store_true",
                     help="write to the group's own record — groups/<group>/circles/ and "
                          "groups/<group>/parts/<name>/short_term_<OT>.toml — and run "
@@ -918,13 +918,13 @@ def main() -> int:
             _RP.group_set(args.group)
     else:
         parts = [p.strip() for p in args.parts.split(",") if p.strip()]
-    # BLOCK 1's group layer (R464, B115, 2026-09-07): the group row's `layer` file, or the IFS
-    # layer for a row without one and for every circle opened without --group. Set BEFORE the
-    # one group_shared_read() below, which composes it in. A missing file refuses the open.
+    # BLOCK 1's group layer (R464, B115, 2026-09-07): the group's own `layer` file — for a circle
+    # opened without --group, the bound (default) group's. None when the group declares no layer:
+    # the universal layer alone. Set BEFORE the one group_shared_read() below, which composes it
+    # in. A missing file refuses the open.
     PCP.circle_identity_layer_set(GA.group_layer_read(args.group) if used_group else None)
-    # ...and its word for one of its members (D104): the IFS group declares "part", a group that
-    # declares nothing gets "role", and a circle opened without --group gets the family's, as the
-    # layer above does. Set here so BLOCK 1 never mixes the two words in one prompt.
+    # ...and its word for one of its members (D104): the group's declared `member`, "role" when it
+    # declares none. Set here so BLOCK 1 never mixes the two words in one prompt.
     PCP.circle_identity_words_set(
         (GA.group_member_words_read(args.group) or PCP.DEFAULT_WORDS) if used_group else None)
     bad = [p for p in parts if p not in PART_TAGS or not (record_dir(ROOT, "parts") / p).is_dir()]
@@ -943,8 +943,8 @@ def main() -> int:
     # whatever the issue graph's state has become by the next circle it attends.
     missing_roster = [p for p in DEFAULT_PARTS if p not in parts]
     # A NAMED GROUP IS DELIBERATE, NEVER "REDUCED" — the warning below exists
-    # to catch an ACCIDENTALLY partial --parts roster in a live IFS circle;
-    # --group ifs-that-cuts-someone or a genuinely different roster (an
+    # to catch an ACCIDENTALLY partial --parts roster in a live default-group circle;
+    # a --group whose roster cuts someone or a genuinely different roster (an
     # engineering group, say) chose its own membership on purpose and gets no
     # scare, per docs/CIRCLE_TYPES_DESIGN.md.
     if args.live and missing_roster and not used_group:
@@ -1069,7 +1069,7 @@ def main() -> int:
             return 2
 
     mode = "LIVE" if args.live else "sandbox"
-    emit("command", f"\nIFS circle coordinator — {mode} — "
+    emit("command", f"\nInner Circling circle coordinator — {mode} — "
           f"{ot or 'open time assigned when the topic is entered'}")
     # B56(1), 2026-08-19: NAME THE TREE, at open. Named as the one thing to
     # watch on 2026-08-04 and never built. record_paths.ROOT is derived from
@@ -1142,7 +1142,7 @@ def main() -> int:
     while True:
         try:
             # THE PROMPT IS THE CONFIGURED NAME, CONSOLE-ONLY. Ruled
-            # 2026-08-07 (support IFS_USER_NAME), narrowed 2026-08-11: this
+            # 2026-08-07 (support USER_NAME), narrowed 2026-08-11: this
             # text never leaves the console — the transcript always records
             # SELF_DISPLAY ("Self") regardless of what this prompt shows, so
             # personalising it here carries no PII into a part's prompt.

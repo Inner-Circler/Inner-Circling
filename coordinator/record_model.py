@@ -3,7 +3,7 @@
 record_model.py — structural model of the RECORD's memory files (the invariant gate that
 judges with it is register_gate.py's, since 2026-09-03).
 
-EVERY GROUP'S, NOT THE IFS GROUP'S. Nothing here is IFS: the shapes it parses —
+EVERY GROUP'S, NOT ONE GROUP'S. Nothing here belongs to any one group: the shapes it parses —
 long_term.md's `## required end` boundary, the four short_term sections, the dream
 entries, self.md — are all <record> productions in docs/PRODUCT_BNF.md, "everything
 true of ANY group", and groups/band/ already carries every one of them. `PARTS` is

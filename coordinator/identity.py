@@ -25,8 +25,8 @@ THREE NAMES, AND CONFLATING THEM IS THE BUG THIS MODULE PREVENTS.
                 role's       the `Self> ` prompt and in `/help` and
                 preferred_   `--identity`. Never written to a
                 name, else   transcript, never sent to a model.
-                $IFS_USER_   (The preferred name joined the order
-                NAME, else   2026-08-23, R325; the home role is the
+                $USER_NAME,  (The preferred name joined the order
+                else         2026-08-23, R325; the home role is the
                 "Self"       group's own since R468 — see
                              self_home_name_read() below.)
 
@@ -44,7 +44,7 @@ today, a fresh install writes `[Self]:`, and both parse. See
 `HISTORICAL_NAMES` for the parsing side of this — it is unaffected by
 today's ruling, which is about what gets WRITTEN, not what can be READ.
 
-`user_name_read()` READS `IFS_USER_NAME` FROM THE `.env` FILE ONLY, never from
+`user_name_read()` READS `USER_NAME` FROM THE `.env` FILE ONLY, never from
 the process environment. `ANTHROPIC_API_KEY` already demonstrated the
 failure mode a process-environment check invites (NEXT.md A16): a stale
 value set hours ago silently outlives the file that was supposed to
@@ -67,7 +67,7 @@ SELF_ID = "self"
 DEFAULT_NAME = "Self"
 DISPLAY = DEFAULT_NAME
 
-ENV_PROJECT = "IFS_USER_NAME"
+ENV_PROJECT = "USER_NAME"
 
 
 def _load_env() -> None:
@@ -101,10 +101,10 @@ def _env_file() -> dict[str, str]:
 
 
 # THE SOUL'S ANSWER TO "WHAT DO YOU PREFER TO BE CALLED" — R325,
-# 2026-08-23: *"6 - b; if none given use IFS_USER_NAME, if no IFS user name
-# use 'Self'."* The initialization dialog (docs/Initialization.md) records it
+# 2026-08-23: option 6-b: the
+# Soul's answer, else $USER_NAME, else 'Self'. The initialization dialog (docs/Initialization.md) records it
 # in parts/soul/part.toml [context.answers].preferred_name, and it names the
-# CONSOLE — the same console-only standing $IFS_USER_NAME has under R132:
+# CONSOLE — the same console-only standing $USER_NAME has under R132:
 # never a transcript, never a model (R329). Read directly
 # with tomllib, the way self_installed_tags_read() reads self/identity.toml, because
 # this module must stay dependency-light (roster imports it); and read on
@@ -112,8 +112,8 @@ def _env_file() -> dict[str, str]:
 #
 # THE HOME ROLE — R468, B120 (2026-09-07): the role that holds the user's own particulars is
 # named by the group's own group.toml (`[identity] role`, `key`), never by shipped code. HOME_DIR
-# is that role's directory for the group this process is bound to ("soul" for the IFS group,
-# "" for a group that names none — the console name then falls through to $IFS_USER_NAME and
+# is that role's directory for the group this process is bound to ("soul" for the default group,
+# "" for a group that names none — the console name then falls through to $USER_NAME and
 # "Self"); it follows record_paths.group_set(). SOUL_DIR was the literal until R468.
 PREFERRED_NAME_KEY = "preferred_name"
 HOME_DIR = ""
@@ -191,7 +191,7 @@ def user_name_read(explicit: str | None = None) -> str:
     written to a transcript, never sent to a model — see DISPLAY for that.
 
     RESOLUTION, most explicit first (R325): an explicit
-    argument; the home role's recorded preferred_name (the group's own, R468); $IFS_USER_NAME
+    argument; the home role's recorded preferred_name (the group's own, R468); $USER_NAME
     from the .env FILE; the literal "Self"."""
     if explicit and explicit.strip():
         return explicit.strip()

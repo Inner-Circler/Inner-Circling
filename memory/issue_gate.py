@@ -86,8 +86,9 @@ ISSUES = pathlib.Path(sys.argv[1]) if len(sys.argv) > 1 else S.ISSUES
 # (coordinator/gitrepo.py, the groups/ case). Only ISSUES followed that argument. Everything
 # else this gate reasons from stayed bound to the DEFAULT group: issue_source_read()'s
 # SELF_DIR arm, issue_schema's circle_transcript() roots, and part_roster's speaker tables.
-# So a band node citing `circle_<OT>` or a bare session ref resolved against groups/ifs/,
-# and its speaker markers were normalised with the IFS roster — a wrong answer, not a crash.
+# So a band node citing `circle_<OT>` or a bare session ref resolved against the default
+# group's tree, and its speaker markers were normalised with the default group's roster — a
+# wrong answer, not a crash.
 # groups/band/issues/ holds 0 nodes today, so nothing had fired yet; the gate was passing on
 # an empty world and reporting the reassuring answer.
 #

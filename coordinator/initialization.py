@@ -57,7 +57,7 @@ UNIQUE KEYS ARE REFUSED AT ENTRY — the operator, 2026-08-23: *"Duplicates of
 any UNIQUE KEY member (e.g. part name "Soul", issue id "n0001") must be
 detected and rejected, echo error and loop at the prompt."* A question
 declares `unique_in` (part_roster.UNIQUE_SPACES) and initialization_validate() refuses an answer
-already in that space. The home role's preferred_name (the IFS group's Soul, group.toml
+already in that space. The home role's preferred_name (the default group's Soul, group.toml
 [identity], R468) declares part_tags: it feeds
 identity.user_name_read(), which part_roster.part_verify() treats as Self's reserved name,
 so a part's Tag there would refuse every later open.
@@ -623,7 +623,7 @@ def initialization_pending_dialogs_read(base: pathlib.Path | None = None) -> lis
     """The parts whose PART_CONTEXT_DIALOG is due: a declared [context]
     with at least one question and EVERY answer empty (R331 — the trigger
     is "no particulars recorded yet", read from the record). Ordered: the group's own
-    initialization head first (group.toml `initialization`, R468 — for the IFS group that is
+    initialization head first (group.toml `initialization`, R468 — for the default group that is
     Soul, then Child, the order R324 spoke them in), then any other declaring part in roster
     order."""
     due = []

@@ -1651,7 +1651,7 @@ def self_test() -> int:
     # --- RULED 2026-08-13: only one prompt, and it names CONSOLE_NAME —
     # _circle_prompt() must derive from circle.py's own attribute, not a
     # second hardcoded literal that can silently disagree with it the
-    # moment IFS_USER_NAME is set to anything other than the default. ---
+    # moment USER_NAME is set to anything other than the default. ---
     eng7 = C.CircleEngine(queue.Queue())
     s7 = C.AppState(4, 4, backend=eng7)
     check("circle-pane prompt reads circle.py's own CONSOLE_NAME, not a "
@@ -1700,7 +1700,7 @@ def self_test() -> int:
     busy_state = C.AppState(circle_height=3, command_height=3, backend=eng5)
     check("a real engine NOT yet blocked in read_line shows as busy, "
           "named from CONSOLE_NAME (not necessarily 'Self' — whatever "
-          "IFS_USER_NAME is set to; eng5's speaking turn above set "
+          "USER_NAME is set to; eng5's speaking turn above set "
           "loop_reached, so the busy state names the parts)",
           C._circle_prompt(busy_state)
           == f"{eng5._C.circle_prompt_read()[:-2]} (waiting — the parts are replying)> ")

@@ -236,7 +236,7 @@ is cut — land your point before the limit rather than after it.
 ```
 
 <!-- layer: proposed_exemplars -->
-**Purpose:** ask Self to RUN one of those commands. He sees every one at
+**Purpose:** ask Self to RUN one of those commands. Self sees every one at
 close and rules; approving it does the thing. You are asking, not deciding.
 
 **It must name one of those commands.** A bracket that names anything else —

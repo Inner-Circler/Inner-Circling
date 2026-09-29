@@ -107,7 +107,7 @@ ISSUE_MODEL = ISSUES / "issue_model.md"
 def _issue_dirs_rebind() -> None:
     """BLOCK 2 is built from the CURRENT group's issue graph and prologue — B117 stage 4
     (2026-09-07): record_paths.group_set() runs this after rebinding, so a band circle's
-    circle_objectives carry the band's issue_model.md and none of the IFS group's nodes."""
+    circle_objectives carry the band's issue_model.md and none of the default group's nodes."""
     global ISSUES, CIRCLES, ISSUE_MODEL
     ISSUES = _RP.ISSUES_DIR
     CIRCLES = _RP.CIRCLES_DIR

@@ -23,8 +23,8 @@ Either mechanism can be used for any given circle.
 are the four kinds inside a GROUP's tree, and a group's tree is `groups/<name>/` — R466/R467,
 B117, 2026-09-07. So every record path written in this file and in the man pages —
 `self/best_practices.toml`, `circles/working_sets.toml`, `parts/<p>/remember.toml`,
-`issues/issue_model.md` — is shorthand for `groups/<group>/…`, resolving to `groups/ifs/…`
-for the default group.
+`issues/issue_model.md` — is shorthand for `groups/<group>/…`, resolving to the default group's own tree
+(`record_paths.DEFAULT_GROUP`).
 
 **Stated here once rather than rewritten at forty sites** (audit-register.md #27, 2026-09-08).
 The convention was already how every document wrote these paths and was declared nowhere: a
@@ -55,7 +55,7 @@ Unchanged and still authoritative: `process_core.md`, each part's
 the transcript format, the four-section short_term format,
 `coordinator/circle_close_verify.py`, and dreaming/synthesis — no longer nightly
 tasks (R228 removed the batch shape 2026-08-18 — this line said 2026-07-28, the
-date ifs-nightly last ran, until 2026-09-04); they run automatically,
+date the retired nightly task last ran, until 2026-09-04); they run automatically,
 synchronously, inside every completing live `/close`, via
 `coordinator/inter_circle.py`.
 (`self/open_concerns.md`/`.toml`, the OC register, retired outright
@@ -748,7 +748,7 @@ R466/R467). `--parts` exists for cheap test rounds.
 ### The Soul speaks, and an omitted part is absent
 
 The Soul is a full participant: it is in the default group's roster, and the
-IFS layer's §The Soul (`process_ifs.md`, R464) says **"It is present in every
+default group's layer (its group.toml `layer`, R464), §The Soul, says **"It is present in every
 circle and it does speak — rarely, and on its own terrain"** (R303). Its own
 short_term records show it doing so. Excluding it from `--parts` would
 silently drop a part the live path includes.
@@ -777,7 +777,7 @@ The one channel back in is Self. SYNTHESIS reads the **transcript**,
 not the short_terms, so Self sees the whole circle regardless; whatever the
 circle changed in `issues/*.toml` reaches every part's `circle_objectives` at
 the next circle start. So an absent part learns of the circle secondhand, from
-the issue graph's state, without a memory of its own. That is coherent IFS —
+the issue graph's state, without a memory of its own. That is coherent with the model —
 Self is the one present at everything — but it is not the same as having
 been there.
 

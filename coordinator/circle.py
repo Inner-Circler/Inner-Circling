@@ -1146,7 +1146,19 @@ def main() -> int:
             # text never leaves the console — the transcript always records
             # SELF_DISPLAY ("Self") regardless of what this prompt shows, so
             # personalising it here carries no PII into a part's prompt.
+            # ONE EXCEPTION, by the operator's request of 2026-09-29: /me (below)
+            # puts CONSOLE_NAME into the statement's TEXT, on purpose — the
+            # speaker is still SELF_DISPLAY.
             cmd = read_line(f"\n{circle_prompt_read()}", channel="circle").strip()
+            # /me IS SPEECH, REWRITTEN AT THE READ — the operator, 2026-09-29:
+            # "captured, replaced with the user name, and sent to the dialog
+            # along with any words following it reproduced verbatim." Here,
+            # ahead of every branch, so the rest of the loop — remember,
+            # annotations, quote-as-lands, the append — sees only the
+            # expanded statement, and a close in progress treats it as the
+            # speech it is.
+            if cmd.split(" ", 1)[0] == "/me":
+                cmd = CS.command_me_expand(cmd, CONSOLE_NAME)
             # THE WORD "help" ALONE IS /help — the operator, 2026-08-25
             # (R347's session): "Accept the single word
             # '[Hh]elp' alone at the circle pane prompt as a synonym for

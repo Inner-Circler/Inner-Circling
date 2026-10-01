@@ -433,6 +433,7 @@ _HELP_ONE_LINERS = {
     "/pass": "alias for /round",
     "/close": "collect short_terms, verify, apply rulings, report",
     "/abort": "end the circle without a close; a second /abort confirms",
+    "/me": "'/me smiles' is spoken as '<your name> smiles'",
     "/help": "this list",
 }
 

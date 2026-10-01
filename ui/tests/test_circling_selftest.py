@@ -528,6 +528,21 @@ def self_test() -> int:
         # echo (finding 11), so the echo is not the last row for that one.
         check(f"{verb} is a CIRCLE-pane verb and still goes through",
               f"[You]: {verb}" in s_ok.circle.lines)
+    # /me — the operator, 2026-09-29. The line goes to the engine AS TYPED (circle.py's loop
+    # does the rewrite, so the record has one writer), and the echo shows what the room hears.
+    import types as _types
+    me_sent: list[str] = []
+    me_be = _types.SimpleNamespace(_C=_types.SimpleNamespace(CONSOLE_NAME="Dana"),
+                                   _CS=C._command_surface(), loop_reached=True,
+                                   waiting_for_input=False, submit_circle=me_sent.append)
+    s_me = C.AppState(6, 6, backend=me_be)
+    s_me.focus = "circle"
+    s_me._submit(s_me.circle, "/me smiles")
+    check("/me in the room is forwarded as typed and echoed as '[You]: Dana smiles'",
+          me_sent == ["/me smiles"] and "[You]: Dana smiles" in s_me.circle.lines)
+    s_me._submit(s_me.circle, "/meh")
+    check("...and /meh is not /me — echoed as typed",
+          "[You]: /meh" in s_me.circle.lines)
     # BARE /help PASSES THE GUARD, 2026-08-21 (R287): the room's own help
     # answers it; `/help <arg>` and `/dev` are refused like any
     # command-pane verb.

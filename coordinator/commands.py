@@ -884,6 +884,24 @@ def command_redact_alias_list(rest: str = "") -> None:
     _list_or_record(rest, "/redact-alias-list", RDX.alias_list, RDX.alias_record_show)
 
 
+# ------------------------------------------------------- /redact-speaker-*
+def command_redact_speaker_list(rest: str = "") -> None:
+    import redaction_manager as RDX
+    _list_or_record(rest, "/redact-speaker-list", RDX.redaction_speaker_list,
+                    RDX.redaction_speaker_record_show)
+
+
+def command_redact_speaker_delete(arg: str) -> None:
+    import redaction_manager as RDX
+    a = arg.strip()
+    if not a.isdigit():
+        seam.emit("command", "  usage: /redact-speaker-delete <n>  — the "
+                             "number /redact-speaker-list showed")
+        return
+    _ok, msg = RDX.redaction_speaker_delete(int(a))
+    seam.emit("command", f"  {msg}")
+
+
 def command_issue_apply(rest: list[str]) -> None:
     if not rest:
         seam.emit("command", "  usage: /issue-apply <commands.toml>")
@@ -1505,6 +1523,10 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         command_redact_alias_update(rest_text)
     elif head == "/redact-alias-delete":
         command_redact_alias_delete(rest_text)
+    elif head == "/redact-speaker-list":
+        command_redact_speaker_list(rest_text)
+    elif head == "/redact-speaker-delete":
+        command_redact_speaker_delete(rest_text)
     elif head == "/practice-add":
         command_practice_add(rest_text, record=record)
     elif head == "/practice-list":

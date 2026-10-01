@@ -217,3 +217,9 @@ work/recall_index/
 # sanitize.py's own report — a bare run's snapshot, local since 2026-09-17: nothing
 # reads it and nothing regenerated it, so a committed copy was stale by construction.
 packaging/sanitize_report.toml
+
+# the redaction reverse map (redaction_manager.py) — `literal` IS the raw PII the redacted
+# view hides: emails, urls, phones, and the names of detected chat-log speakers, third
+# parties the operator never typed. Local only, ruled 2026-09-30; a fresh tree
+# rebuilds its ids from whatever it encounters.
+groups/*/self/redaction_map.toml

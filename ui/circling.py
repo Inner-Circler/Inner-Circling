@@ -1256,6 +1256,15 @@ class AppState:
             # nothing. The legend is read off the prompt text, so this pane
             # learns no coordinator vocabulary of its own.
             shown = text if text.strip() else self._blank_echo()
+            # /me IS ECHOED AS THE ROOM WILL HEAR IT — the operator, 2026-09-29.
+            # The name is the engine's own CONSOLE_NAME, the one the Self> loop
+            # expands with, so the echo and the record cannot disagree; a loop
+            # waiting on a question (the topic, the working set) reads no /me.
+            b = self.backend
+            c = getattr(b, "_C", None)
+            me = getattr(getattr(b, "_CS", None), "command_me_expand", None)
+            if me is not None and c is not None and getattr(b, "loop_reached", False):
+                shown = me(text, c.CONSOLE_NAME) or shown
             # TWO EMPTY LINES BEFORE SELF'S OWN LINE — same finding, the operator:
             # *"preface them with an extra empty line"*, his example showing
             # two. The parts' statements arrive with one blank between them;

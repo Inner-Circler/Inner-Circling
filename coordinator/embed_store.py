@@ -116,21 +116,52 @@ def memory_refresh(records: list, embedder, cache_path: pathlib.Path) -> dict:
     return rows
 
 
+def memory_center(vec: list, centroid: list) -> list:
+    """vec minus the corpus centroid, re-normalized to unit length. A
+    near-zero result (a one-record corpus, identical texts, a query that IS
+    the centroid) stays the zero vector, which memory_cosine() scores 0."""
+    out = [x - c for x, c in zip(vec, centroid)]
+    norm = math.sqrt(sum(x * x for x in out))
+    return [x / norm for x in out] if norm > 1e-6 else [0.0] * len(out)
+
+
 def memory_rank(query: str, records: list, embedder,
-         cache_path: pathlib.Path, limit: int) -> list:
+         cache_path: pathlib.Path, limit: int, center: bool = False) -> list:
     """Cosine-ranked copies of the records, each with a `score` in [0, 1].
-    Raises IndexUnavailable when the local stack cannot run."""
+    Raises IndexUnavailable when the local stack cannot run.
+
+    center=False (the default, and recall's): raw cosine. bge's raw cosines
+    sit in a narrow high band (~0.5-0.9 for related and unrelated alike),
+    and recall_index.FLOOR (0.62) was MEASURED on that scale — keep it.
+
+    center=True (Self's lens, 2026-09-29): mean-centered cosine, the fix
+    Ticker's own semantic_search uses. The centroid of THIS corpus's
+    vectors (the records passed in, so one per scope) is subtracted from
+    the query and every passage, each re-normalized; the common component
+    that packs raw cosines together is gone and scores spread over [-1, 1],
+    so the pane's min-sim floor separates related from unrelated. Ranking
+    uses the signed score; the reported `score` is clamped at 0 — below 0
+    means "less related than the corpus average", under any floor the
+    slider (0-0.9) can set, and [0, 1] stays the contract the pane reads."""
     if not query.strip() or not records:
         return []
     rows = memory_refresh(records, embedder, cache_path)
     qvec = embedder([QUERY_PREFIX + query])[0]
+    hits = [(r, rows[r["id"]]["vec"]) for r in records if r["id"] in rows]
+    if center and hits:
+        dim, n = len(hits[0][1]), len(hits)
+        centroid = [0.0] * dim
+        for _, v in hits:
+            for i, x in enumerate(v):
+                centroid[i] += x
+        centroid = [c / n for c in centroid]
+        qvec = memory_center(qvec, centroid)
+        hits = [(r, memory_center(v, centroid)) for r, v in hits]
     scored = []
-    for r in records:
-        row = rows.get(r["id"])
-        if row is None:
-            continue
+    for r, vec in hits:
+        sim = memory_cosine(qvec, vec)
         out = dict(r)
-        out["score"] = round(max(0.0, min(1.0, memory_cosine(qvec, row["vec"]))), 4)
-        scored.append(out)
-    scored.sort(key=lambda r: r["score"], reverse=True)
-    return scored[:limit]
+        out["score"] = round(max(0.0, min(1.0, sim)), 4)
+        scored.append((sim, out))
+    scored.sort(key=lambda s: s[0], reverse=True)
+    return [out for _, out in scored[:limit]]

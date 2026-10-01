@@ -396,6 +396,14 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "something its own row no longer says", "command"),
     ("/redact-alias-delete <n>",
      "remove one, by the number /redact-alias-list showed", "command"),
+    ("/redact-speaker-list [<n>]",
+     "the chat-log speakers the redacted view detected by itself,\n"
+     "numbered — id, the speaker as written, and every form it\n"
+     "hides; `<n>` shows one whole", "command"),
+    ("/redact-speaker-delete <n>",
+     "remove one that is not really a name, by the number\n"
+     "/redact-speaker-list showed — shown again at once, and\n"
+     "never detected again", "command"),
     ("/help",
      "this list", "command"),
     ("/close",
@@ -423,6 +431,13 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/abort",
      "end the circle without a close — shows what stays and\n"
      "what's discarded first; a second /abort confirms.", "circle"),
+    # SPEECH, NOT A RESERVED WORD — the operator, 2026-09-29: "it is only
+    # recognised as the first word of an entry by self, and it is captured,
+    # replaced with the user name, and sent to the dialog along with any words
+    # following it reproduced verbatim." command_me_expand() is the one rewrite.
+    ("/me <words>",
+     "speak as an action: '/me smiles' reaches the room as\n"
+     "'<your name> smiles'. Recognised as the first word only", "circle"),
 )
 
 # DERIVED from COMMANDS — the two can no longer drift apart.
@@ -574,6 +589,7 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
     # tool for yourself. 2026-08-31.
     "/redact-alias-add", "/redact-alias-list", "/redact-alias-update",
     "/redact-alias-delete",
+    "/redact-speaker-list", "/redact-speaker-delete",
     # /abort LEFT this table 2026-08-31 with its reclassification to the
     # circle pane (R414) — like /close, /round and /pass it
     # is no command-pane verb, and these tables are the command pane's.
@@ -670,12 +686,15 @@ PROGRESS_LINE = "  … still working"
 # /abort."* ANNOTATIONS join them there; they are not commands and so are not in
 # this tuple — help_system carries them as their own subject.
 #
-# FOUR OF THE FIVE ARE IN NEITHER TABLE, which is exactly why this constant has to
+# /me joined 2026-09-29 (the operator's /me request): speech, not a reserved word,
+# but a room verb a person cannot guess, so advertised with the others.
+#
+# FIVE OF THE SIX ARE IN NEITHER TABLE, which is exactly why this constant has to
 # exist. /close, /round, /pass and /abort were reachable only because circle.py
 # intercepts them at :1122, :1142 and :1215 AHEAD of the availability gate — real
 # behaviour resting on dispatch order, advertised by nothing, so a mainstream user
 # had no way to learn /close exists.
-ALWAYS_COMMANDS: tuple[str, ...] = ("/help", "/close", "/round", "/pass", "/abort")
+ALWAYS_COMMANDS: tuple[str, ...] = ("/help", "/close", "/round", "/pass", "/abort", "/me")
 
 # LIST_SUBSET_COMMANDS WAS HERE AND IS RETIRED — R527, 2026-09-10. It derived, by
 # the `-list` SUFFIX and regardless of table, a third state the policy has no room
@@ -929,6 +948,22 @@ def verb_class(text: str) -> str | None:
     if head == "/quit":
         return "window"
     return PANE_OF.get(head)
+
+
+def command_me_expand(text: str, name: str) -> str | None:
+    """`/me smiles` -> `<name> smiles`, or None when `/me` is not the line's first word.
+
+    THE OPERATOR, 2026-09-29: "it is only recognised as the first word of an entry by
+    self, and it is captured, replaced with the user name, and sent to the dialog along
+    with any words following it reproduced verbatim." So the test is the whole first
+    word — `/meh` and `/measure` are not /me — and everything after the verb is kept
+    byte for byte, its own separating whitespace included. A bare `/me` sends the name
+    alone. The Self> loop and ui/circling.py's echo both call this, so the room and the
+    pane cannot disagree about what was said."""
+    text = text.lstrip()
+    if text.split(None, 1)[0:1] != ["/me"]:
+        return None
+    return name + text[3:]
 
 
 def command_head_normalise(word: str) -> str:

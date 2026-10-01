@@ -173,6 +173,15 @@ take a canonical label and optional extra forms in quotes; `list`/`delete`
 number the same way every other register here does.
 '''
 
+[[class]]
+name = "redact-speaker"
+description = '''
+A chat-log speaker the redacted view found by itself, from a line shaped
+`[time] Name (user.name): text` — never one you typed in. `list` numbers
+them; `delete` removes one that is not really a name, and it is not
+detected again.
+'''
+
 # ADDED 2026-09-01, the same reason settings and redact-alias joined above:
 # test_help_system.py's "every USER verb is reachable through its class"
 # caught the five /observation-* verbs' absence the moment they joined

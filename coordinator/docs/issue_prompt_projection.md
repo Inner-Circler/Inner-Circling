@@ -88,7 +88,14 @@ Stdout only, from `main()`: the live-node count and ruled/unruled split, then ei
     build the provenance line: "*ruled by Self in <ref>*" if label_ruled is
     set, else "*the 2026-07-27 derivation's wording — NOT YET RULED*"
     return (the assembled "### id — label\nprovenance\n**Absent when:**
-    absence" block text, the accumulated failures list)
+    absence" block text — followed by issue_actions_render()'s "**Being practised:**"
+    line when the node carries actions — and the accumulated failures list)
+
+### `issue_actions_render(d)` — R591, 2026-10-03
+    the node's actions as they stand, numbered as /issue-action-update names them, on one
+    "**Being practised:** 1. … · 2. …" line, so a part can propose revising one; "" when
+    the node carries none, which leaves every block that projects it byte-identical.
+    issue_full_render() (a focus node) carries the same line after its live edges.
 
 ### `narrative()` — REMOVED, B46 2026-08-17
     Read self/issues_narrative.md if it exists, stripped its own header up

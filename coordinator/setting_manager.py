@@ -203,6 +203,18 @@ SPEC: tuple[Setting, ...] = (
        "coordinator/circle_close.py::SHORT_TERM_MAX_TOKENS", unit="tokens",   # circle.py's until 2026-09-03
        why="Four sections and a full-length remembered note did not fit in 2,000, and a record "
            "cut short is retried, so a ceiling too small pays for the record twice."),
+    _s("arousal_loud",
+       "How strongly a memory must be felt before it counts as loud",
+       "FLOAT", 1, "dev", "next_circle",
+       "coordinator/remember_manager.py::AROUSAL_LOUD", unit="arousal",
+       why="Placed by your own anchors: below it the response is still chosen, at it the memory "
+           "is hard to function except in relation to; Claude's arithmetic until ruled (B125)."),
+    _s("issue_aging_look",
+       "Circles an issue may go unmentioned before it is listed for you to look at",
+       "NUMERIC_STRING", 1000, "dev", "immediate",
+       "memory/issue_schema.py::AGING_LOOK", unit="circles",
+       why="An issue that has gone quiet is either easing or being avoided and the count cannot "
+           "tell which, so it is shown to you, never closed by the program (R592)."),
     _s("quiet_minutes",
        "Minutes of silence before an unclosed circle reads as finished",
        "NUMERIC_STRING", 1440, "dev", "immediate",

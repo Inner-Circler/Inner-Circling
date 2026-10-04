@@ -231,6 +231,11 @@ class Provider:
         dial; the provider moves both."""
         return 1.0
 
+    def tuning_step_down(self, tuning: dict) -> "dict | None":
+        """The same tuning with effort one step lower, for ONE retry — or None
+        when this provider has no effort dial or is already at its lowest."""
+        return None
+
 
 # ------------------------------------------------------------------ Anthropic
 class AnthropicProvider(Provider):
@@ -295,6 +300,14 @@ class AnthropicProvider(Provider):
     def ceiling_scale(self, tuning: dict) -> float:
         eff = tuning.get("effort")
         return self.EFFORT.get(eff, ("", 1.0))[1] if eff else 1.0
+
+    def tuning_step_down(self, tuning: dict) -> "dict | None":
+        # EFFORT is ordered low -> max; an unset effort is the knob's default.
+        levels = list(self.EFFORT)
+        eff = tuning.get("effort") or "high"
+        if eff not in levels or levels.index(eff) == 0:
+            return None
+        return {**tuning, "effort": levels[levels.index(eff) - 1]}
 
     # cache_ttl(): the base class's, unchanged — `5m` or `1h`, straight into
     # cache_control()'s ttl. (Its only caller arrived 2026-09-04; until then

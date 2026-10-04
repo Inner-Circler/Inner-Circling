@@ -215,7 +215,11 @@ def issue_draw_read(d: pathlib.Path) -> dict:
                   # by Self reading the table and asking whether it was
                   # "mostly null". It was always null.
                   "absence": S.issue_unwrap(doc.get("absence", "")),
-                  "evidence": ev, "edges": edges, "actions": [],
+                  "evidence": ev, "edges": edges,
+                  # R591: the practices as they stand — the panel's actions list, which
+                  # had been wired to an empty list since the drawing was written.
+                  "actions": [{"what": f"{n}. {rows[-1]['practice']}"}
+                              for n, rows in S.issue_actions_read(doc).items()],
                   "held": sorted({e["part"] for e in doc.get("evidence", [])}),
                   "opened": doc.get("opened", "").replace("circle_", ""),
                   "status": doc["status"],

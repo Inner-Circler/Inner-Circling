@@ -10,7 +10,7 @@ python coordinator/circle.py --dry-run
 python coordinator/circle.py --live
 python coordinator/circle.py (--live | --dry-run) [--parts <dir>,<dir>,... | --group <name>]
                               [--recall-arm off|delivered|withheld]
-                              [--seed <n>] [--yes] [--dev]
+                              [--seed <n>] [--yes]
                               [--resume OPEN_TIME] [--list-resumable]
 python coordinator/circle.py --dev-cmd VERB [args...]
 python coordinator/circle.py --file-circle OPEN_TIME
@@ -58,7 +58,7 @@ source of truth for both (R221).
     roster as it is NOW, so a part /part-add wrote since the process started is in this circle
     (R548; circling.py runs main() more than once)
     parse the command line (see COMMAND-LINE ARGUMENTS)
-if (--dev) then { command_surface.dev_mode = True }                    (R286; /dev at the prompt is the other door)
+if (the hidden developer switch is given) then { command_surface.dev_mode = True }   (R286)
 if (--list-resumable) then { return circle_resumable_list() }
 if (--dev-cmd given) then {
 if (no verb) then { emit the usage line; return 2 }
@@ -202,8 +202,8 @@ else { emit help_text(argument) }
 if (cmd == "/status") then { emit the tree name and mode, the part count, part_token_table(...), the running cost;
         continue }
 if (cmd in ("/round", "/pass")) then { circle_round_run(...); continue }
-if (cmd == "/dev") then { dev_mode = not dev_mode; emit "dev: on" or "dev: off"; continue }
-        TOGGLES, and exact like the command pane's `dev` (R542)
+if (cmd is the hidden developer toggle) then { dev_mode = not dev_mode; emit its state; continue }
+        TOGGLES, and exact like the command pane's own toggle (R542)
 if (cmd starts "/" and not command_is_allowed(head, dev_mode, surface="self")) then {
             emit junk_help(cmd); continue                                          JUNK -> help (R285)
         }                                                                          (never taken here: R527)
@@ -298,12 +298,6 @@ checkout now.
 - `--yes`: skip the reduced-live-roster and new-vs-resume confirmation prompts. Default: off.
 - `--resume OPEN_TIME`: reopen an unclosed circle, e.g. `--resume 2026-08-02_1259`; the transcript
   must round-trip byte-for-byte or the resume is refused. Default: unset.
-- `--dev[=BOOL]`: open with dev mode on — DEV-table verbs, the help hierarchy, the room's own
-  `/help` listing the command verbs, and progress lines all answer at this terminal's `Self>`
-  prompt. Bare `--dev` means `--dev=true`; `--dev true` and `--dev false` parse too. Default: off.
-  **HIDDEN FROM `--help` since 2026-09-09** and supported exactly as before — this page is where a
-  hidden flag is documented. `--dev=false` declines to turn dev on; it cannot turn it off, since
-  the branch that reads it has no `else`.
 - `--list-resumable`: show circles that have a transcript but no close report, then exit.
   Default: off.
 - `--dev-cmd VERB ...`: run ONE always-available command directly from the shell, no circle needed.

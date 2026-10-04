@@ -1,0 +1,1126 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Memory ordering</title>
+<!--
+  remember_ordering.html — the page ui/remember_ordering.py serves. One file, nothing loaded from
+  the network. The server substitutes the token below; every /api call carries it back.
+  The page holds no rule about what lands in a prompt: it asks the server, which asks the
+  assembly's own code (remember_prompt_projection.remember_window_read). The one rule the page
+  does hold is SAVE IS WHAT YOU SEE — plan(), below — and the server is sent exactly that.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f8; --panel: #ffffff; --ink: #1b2230; --muted: #5d6877; --faint: #8a94a3;
+  --line: #dfe3ea; --line-strong: #c6ccd6; --chip: #eef0f5;
+  --accent: #3d5bd9; --accent-soft: #e9edfd; --accent-ink: #ffffff;
+  --good: #23803a; --good-soft: #e3f4e7; --warn: #a8690b; --warn-soft: #fbf0d9;
+  --bad: #c0302b; --bad-soft: #fde8e6; --shadow: 0 1px 2px rgba(20, 28, 45, .06), 0 4px 14px rgba(20, 28, 45, .05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151b; --panel: #1a2029; --ink: #e7ebf1; --muted: #9aa5b4; --faint: #6f7a89;
+    --line: #2a323e; --line-strong: #3a4553; --chip: #242c37;
+    --accent: #8aa4ff; --accent-soft: #232d4d; --accent-ink: #0d1220;
+    --good: #6fd685; --good-soft: #1b3324; --warn: #f0b955; --warn-soft: #3a2e17;
+    --bad: #ff8a80; --bad-soft: #3d1f1d; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+  }
+}
+* { box-sizing: border-box; }
+[hidden]:not(.twist) { display: none !important; }
+html { scroll-padding-top: 200px; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+body.dragging, body.dragging * { user-select: none !important; cursor: grabbing !important; }
+button, select, input { font: inherit; color: inherit; }
+.wrap { max-width: 1020px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------------------------------------------------------------- the head */
+header.top {
+  position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
+}
+.bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 0 10px; }
+.bar h1 { font-size: 17px; font-weight: 650; margin: 0 6px 0 0; letter-spacing: -.01em; }
+.field { display: flex; align-items: center; gap: 7px; color: var(--muted); font-size: 13px; }
+select {
+  appearance: none; -webkit-appearance: none; background: var(--panel); border: 1px solid var(--line-strong);
+  border-radius: 9px; padding: 7px 32px 7px 11px; font-size: 14px; font-weight: 550; color: var(--ink); cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, var(--muted) 50%), linear-gradient(135deg, var(--muted) 50%, transparent 50%);
+  background-position: calc(100% - 16px) 55%, calc(100% - 11px) 55%; background-size: 5px 5px; background-repeat: no-repeat;
+}
+select:focus-visible, button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.right { margin-left: auto; display: flex; align-items: center; gap: 12px; }
+#part { max-width: 236px; text-overflow: ellipsis; }
+.btn.icon { padding: 7px 9px; }
+.status { font-size: 13px; color: var(--muted); display: flex; align-items: center; gap: 7px; min-height: 22px; white-space: nowrap; }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.status.saved .dot { background: var(--good); } .status.dirty .dot { background: var(--warn); }
+.status.busy .dot { background: var(--accent); animation: pulse 1s infinite; } .status.error .dot { background: var(--bad); }
+@keyframes pulse { 50% { opacity: .35; } }
+
+.filters, .tools { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.filters { padding: 0 0 8px; }
+.tools { padding: 0 0 11px; }
+.tabs { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; margin-right: 6px; }
+.tabs button { border: 0; background: transparent; padding: 6px 13px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.tabs button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.tabs button small { font-weight: 500; color: var(--faint); margin-left: 4px; }
+.btn {
+  border: 1px solid var(--line-strong); background: var(--panel); border-radius: 9px; padding: 6px 12px; font-size: 13.5px;
+  font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .42; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.07); }
+.btn.danger:hover:not(:disabled) { border-color: var(--bad); color: var(--bad); }
+.btn kbd { font: 11px ui-monospace, Consolas, monospace; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.sep { width: 1px; height: 22px; background: var(--line); margin: 0 2px; }
+.grow { flex: 1; }
+.check { display: inline-flex; align-items: center; gap: 7px; font-size: 13.5px; color: var(--muted); cursor: pointer; user-select: none; white-space: nowrap; }
+input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); cursor: pointer; margin: 0; }
+.count { font-size: 13.5px; color: var(--muted); min-width: 84px; }
+
+/* ------------------------------------------------------------- the summary */
+main.wrap { padding-top: 16px; padding-bottom: 90px; }
+.notice {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 11px 14px; margin: 0 0 12px;
+  font-size: 14px; display: flex; gap: 10px; align-items: flex-start;
+}
+.notice.warn { border-color: color-mix(in srgb, var(--warn) 55%, var(--line)); background: var(--warn-soft); }
+.notice.bad { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); background: var(--bad-soft); }
+.notice.info { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.notice .grow { min-width: 0; }
+.notice button.link { border: 0; background: none; color: var(--accent); font-weight: 650; cursor: pointer; padding: 0; }
+.summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 12px; margin: 0 0 14px; }
+.meter { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 11px 14px; box-shadow: var(--shadow); }
+.meter .name { font-size: 12px; font-weight: 700; letter-spacing: .05em; color: var(--muted); text-transform: uppercase; }
+.meter .big { font-size: 15px; font-weight: 600; margin: 2px 0 7px; }
+.meter .big small { font-weight: 500; color: var(--muted); font-size: 13px; }
+.track { height: 6px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+.track i { display: block; height: 100%; background: var(--good); border-radius: 4px; }
+.track i.full { background: var(--warn); }
+.meter .sub { font-size: 12.5px; color: var(--muted); margin-top: 6px; }
+
+/* ---------------------------------------------------------------- the list */
+ol.list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.row {
+  position: relative; display: grid; grid-template-columns: 34px 26px 1fr; gap: 0 4px; align-items: start;
+  background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 10px 14px 11px 6px;
+  box-shadow: var(--shadow); transition: border-color .12s, background .12s, opacity .12s;
+}
+.row:hover { border-color: var(--line-strong); }
+/* A very soft cast says at a glance what a memory is: green, written by dreaming and carried;
+   amber, the part's own words and carried; red, beyond the prompt window; gray, sidelined. The
+   later rule wins, so a cut memory is red whoever wrote it, and a sidelined one is gray. */
+.row.origin-dreaming { background: color-mix(in srgb, var(--good) 14%, var(--panel)); }
+.row.origin-own { background: color-mix(in srgb, var(--warn) 18%, var(--panel)); }
+.row.cut { background: color-mix(in srgb, var(--bad) 16%, var(--panel)); }
+.row.cut .text { color: var(--muted); }
+.row.sidelined { opacity: .62; border-style: dashed; box-shadow: none; background: var(--panel); }
+.row.sidelined .text { text-decoration: line-through; text-decoration-color: var(--faint); color: var(--muted); }
+.row.selected { border-color: var(--accent); background: color-mix(in srgb, var(--accent-soft) 55%, var(--panel)); }
+.row.moving { opacity: .35; }
+.row.drop-after::after {
+  content: ""; position: absolute; left: 4px; right: 4px; bottom: -6px; height: 3px; border-radius: 3px; background: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 22%, transparent);
+}
+.grip {
+  grid-row: 1 / span 2; align-self: stretch; display: flex; flex-direction: column; align-items: center; gap: 5px; padding-top: 2px;
+  cursor: grab; touch-action: none; color: var(--faint); border-radius: 8px; user-select: none;
+}
+.grip:hover { color: var(--accent); background: var(--chip); }
+.grip .n { font: 600 11px ui-monospace, Consolas, monospace; }
+.grip .dots { width: 12px; height: 20px; background-image: radial-gradient(currentColor 1.6px, transparent 1.8px); background-size: 6px 7px; }
+.tick { grid-row: 1; display: flex; align-items: center; height: 24px; }
+.body { grid-column: 3; min-width: 0; }
+.meta { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; min-height: 24px; font-size: 12.5px; color: var(--muted); cursor: grab; user-select: none; }
+.meta .when { font-weight: 650; color: var(--ink); font-size: 13px; }
+.meta .ot { font: 12px ui-monospace, Consolas, monospace; color: var(--faint); }
+.chip { background: var(--chip); border-radius: 20px; padding: 1px 9px; font-size: 12px; font-weight: 550; white-space: nowrap; }
+/* B149: the part's ratings and yours, under the memory's text */
+.ratings { margin-top: 6px; font-size: 12.5px; opacity: .85; display: grid; gap: 2px; }
+.ratings b { font-weight: 600; }
+.ratings button.rate { margin-left: 8px; font-size: 12px; padding: 0 8px; }
+.rate-edit { display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; margin-top: 4px; }
+.rate-edit select { font-size: 12px; }
+.chip.new { background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+.meta .fate { margin-left: auto; font-weight: 700; font-size: 12px; border-radius: 20px; padding: 1px 10px; white-space: nowrap; }
+.fate.lands { color: var(--good); background: var(--good-soft); }
+.fate.cut { color: var(--warn); background: var(--warn-soft); }
+.fate.aside { color: var(--muted); background: var(--chip); }
+.twist {
+  border: 0; background: none; padding: 0; width: 22px; height: 22px; border-radius: 6px; cursor: pointer; color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; margin-left: -4px; flex: none;
+}
+.twist:hover { background: var(--chip); color: var(--ink); }
+.twist svg { width: 11px; height: 11px; transition: transform .14s; }
+.twist[aria-expanded="true"] svg { transform: rotate(90deg); }
+.twist[hidden] { display: inline-flex; visibility: hidden; }
+.text { white-space: pre-wrap; overflow-wrap: anywhere; margin-top: 3px; font-size: 14.5px; line-height: 1.55; cursor: text; }
+/* Folded: two lines of running text — paragraph breaks are kept for the unfolded memory. */
+.text.folded { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; line-clamp: 2; overflow: hidden; white-space: normal; }
+.restore { border: 0; background: none; color: var(--accent); font-weight: 650; font-size: 12.5px; cursor: pointer; padding: 0 2px; }
+
+/* Two kinds of divider: a block's cutoff (where its budget runs out) and the line under the
+   memories written since the last save. */
+li.cutoff, li.newline {
+  display: flex; align-items: center; gap: 12px; margin: 4px 2px; font-size: 12.5px; font-weight: 700; letter-spacing: .01em;
+}
+li.cutoff { color: var(--warn); } li.newline { color: var(--accent); }
+li.cutoff::before, li.cutoff::after, li.newline::before, li.newline::after { content: ""; flex: 1; height: 0; border-top: 2px dashed currentColor; opacity: .55; }
+li.cutoff span, li.newline span { border-radius: 20px; padding: 2px 12px; text-align: center; }
+li.cutoff span { background: var(--warn-soft); } li.newline span { background: var(--accent-soft); }
+/* Shown while dragging, fixed under the head so it never moves the list: let go on it to place first. */
+.topzone {
+  position: fixed; z-index: 30; left: 50%; transform: translateX(-50%); width: min(980px, calc(100vw - 40px)); display: none;
+  border: 2px dashed var(--line-strong); border-radius: 10px; padding: 7px 12px; font-size: 12.5px; font-weight: 600;
+  color: var(--muted); text-align: center; background: var(--panel); box-shadow: var(--shadow);
+}
+body.dragging .topzone { display: block; }
+.topzone.drop-here { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+.ghost {
+  position: fixed; z-index: 60; pointer-events: none; background: var(--accent); color: var(--accent-ink); border-radius: 20px;
+  padding: 5px 13px; font-size: 13px; font-weight: 700; box-shadow: 0 8px 22px rgba(0, 0, 0, .25); transform: translate(14px, 12px);
+}
+.empty { text-align: center; color: var(--muted); padding: 46px 10px; background: var(--panel); border: 1px dashed var(--line-strong); border-radius: 12px; }
+.empty button.link { border: 0; background: none; color: var(--accent); font-weight: 650; cursor: pointer; padding: 0; font: inherit; font-weight: 650; }
+.lead { font-size: 14px; color: var(--muted); margin: 0 0 12px; }
+.lead b { color: var(--ink); font-weight: 650; }
+.foot { margin-top: 18px; font-size: 13px; color: var(--muted); display: flex; gap: 14px; flex-wrap: wrap; align-items: center; }
+.foot button.link { border: 0; background: none; color: var(--accent); font-weight: 650; cursor: pointer; padding: 0; font-size: 13px; }
+.foot button.link.danger { color: var(--bad); }
+.keys { margin-top: 26px; font-size: 12.5px; color: var(--faint); line-height: 1.9; }
+.keys kbd { font: 11.5px ui-monospace, Consolas, monospace; border: 1px solid var(--line-strong); border-radius: 5px; padding: 1px 5px; color: var(--muted); background: var(--panel); }
+.swatch { display: inline-block; width: 13px; height: 13px; border-radius: 4px; border: 1px solid var(--line-strong); vertical-align: -2px; margin-right: 2px; background: var(--panel); }
+.swatch.dreaming { background: color-mix(in srgb, var(--good) 14%, var(--panel)); }
+.swatch.own { background: color-mix(in srgb, var(--warn) 18%, var(--panel)); }
+.swatch.cut { background: color-mix(in srgb, var(--bad) 16%, var(--panel)); }
+.swatch.aside { border-style: dashed; opacity: .62; }
+
+dialog { border: 1px solid var(--line-strong); border-radius: 14px; padding: 20px 22px; background: var(--panel); color: var(--ink); max-width: 430px; box-shadow: 0 20px 60px rgba(0, 0, 0, .3); }
+dialog::backdrop { background: rgba(10, 14, 22, .45); }
+dialog h2 { margin: 0 0 6px; font-size: 16.5px; } dialog p { margin: 0 0 16px; color: var(--muted); font-size: 14px; }
+dialog .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+@media (max-width: 640px) {
+  .wrap { padding: 0 12px; } .right { margin-left: 0; width: 100%; justify-content: space-between; } .btn kbd { display: none; }
+  .row { grid-template-columns: 28px 24px 1fr; padding-right: 10px; }
+}
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap">
+    <div class="bar">
+      <h1>Memory ordering</h1>
+      <label class="field">Group <select id="group" aria-label="Group"></select></label>
+      <label class="field">Part <select id="part" aria-label="Part"></select></label>
+      <button class="btn icon" id="reload" title="Reload: read this part's memories from disk again" aria-label="Reload">
+        <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75M13.4 2.2v3.1h-3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+      </button>
+      <div class="right">
+        <div class="status" id="status" role="status"><span class="dot"></span><span id="statusText">Loading…</span></div>
+        <button class="btn primary" id="save" title="Save the list as shown: what is listed is carried, in this order; everything else on file is sidelined (Ctrl+S)">Save</button>
+      </div>
+    </div>
+    <div class="filters">
+      <div class="tabs" role="group" aria-label="Which memories are shown" id="origin">
+        <button type="button" data-origin="dreaming" aria-pressed="true" title="Only the memories dreaming wrote for this part">Written by dreaming<small id="nDreaming"></small></button>
+        <button type="button" data-origin="own" aria-pressed="false" title="Only what the part itself chose to remember in a circle">The part's own words<small id="nOwn"></small></button>
+        <button type="button" data-origin="both" aria-pressed="false" title="Every memory on file">Both<small id="nBoth"></small></button>
+      </div>
+      <label class="check" title="Also list the sidelined memories, in their place, so they can be restored"><input type="checkbox" id="showSidelined"> <span id="showSidelinedText">Show sidelined</span></label>
+    </div>
+    <div class="tools">
+      <label class="check" title="Select every memory shown"><input type="checkbox" id="all"> <span class="count" id="count">none selected</span></label>
+      <button class="btn danger" id="sideline" title="Sideline the selected memories: kept on file, carried in no prompt block, still within the part's recall (Del)">Sideline</button>
+      <button class="btn" id="restore" title="Carry the selected sidelined memories again" hidden>Restore</button>
+      <span class="sep"></span>
+      <button class="btn" id="toTop" title="Move the selected memories to the top">To top</button>
+      <button class="btn" id="toBottom" title="Move the selected memories to the bottom">To bottom</button>
+      <span class="sep"></span>
+      <button class="btn" id="undo" title="Undo the last change (Ctrl+Z)">Undo</button>
+      <button class="btn" id="redo" title="Redo the change just undone (Ctrl+Y)">Redo</button>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div id="notices"></div>
+  <div class="summary" id="summary"></div>
+  <p class="lead" id="lead"></p>
+  <ol class="list" id="list" aria-label="Memories"></ol>
+  <div class="foot" id="foot"></div>
+  <div class="keys">
+    <span class="swatch dreaming"></span> written by dreaming, carried · <span class="swatch own"></span> the part's own words, carried ·
+    <span class="swatch cut"></span> beyond the prompt window · <span class="swatch aside"></span> sidelined
+    <br>Tick memories, then drag one of them by its handle or its top line: the ticked memories are placed after the memory under the pointer when you let go.
+    <br><kbd>Shift</kbd>+click ticks a range · <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> moves the ticked memories one place ·
+    <kbd>Del</kbd> sidelines · <kbd>Ctrl</kbd>+<kbd>Z</kbd> undo · <kbd>Ctrl</kbd>+<kbd>Y</kbd> redo · <kbd>Ctrl</kbd>+<kbd>S</kbd> save · <kbd>Esc</kbd> clears the ticks
+  </div>
+</main>
+
+<div class="topzone" id="topzone">Let go here to place the ticked memories first</div>
+
+<dialog id="ask">
+  <h2 id="askTitle"></h2>
+  <p id="askText"></p>
+  <div class="acts" id="askActs"></div>
+</dialog>
+
+<script>
+(() => {
+"use strict";
+const TOKEN = "%%ORDERING_TOKEN%%";
+const $ = (sel, root = document) => root.querySelector(sel);
+const BLOCK_NAMES = {
+  "3": "BLOCK 3 · settled into the part's identity",
+  "4": "BLOCK 4 · written since its last identity refresh",
+};
+const ORIGIN_LABEL = { dreaming: "the memories written by dreaming", own: "the part's own words", both: "every memory" };
+const CHEVRON = '<svg viewBox="0 0 12 12" aria-hidden="true"><path d="M4 1.5 8.5 6 4 10.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+
+// ------------------------------------------------------------------ state
+const S = {
+  groups: [], parts: [], group: null, part: null,
+  view: null,              // what the server last said is SAVED for this part
+  items: [],               // the working list, most kept first; sidelined ones included
+  byKey: new Map(),
+  selected: new Set(),
+  open: new Set(),         // unfolded twisties
+  undo: [], redo: [],
+  baseline: "",            // snapshot of the list as loaded; differs from snap() once a hand changed it
+  origin: "dreaming",      // the switch: "dreaming" (the default), "own" or "both" — kept for the session
+  showSidelined: false,    // the second switch, independent of the first; off at every load
+  est: { blocks: {}, budget: 0 },
+  seq: 0, busy: false, lastTick: null, loadSeq: 0,
+  rating: null,            // the memory whose rating editor is open (B149)
+};
+
+function h(tag, attrs, ...kids) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs || {})) {
+    if (v === null || v === undefined || v === false) continue;
+    if (k === "class") el.className = v;
+    else if (k === "html") el.innerHTML = v;
+    else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+    else if (v === true) el.setAttribute(k, "");
+    else el.setAttribute(k, v);
+  }
+  for (const kid of kids.flat()) {
+    if (kid === null || kid === undefined || kid === false) continue;
+    el.append(kid.nodeType ? kid : document.createTextNode(String(kid)));
+  }
+  return el;
+}
+const num = n => Number(n || 0).toLocaleString();
+const plural = (n, one, many) => `${num(n)} ${n === 1 ? one : (many || one + "s")}`;
+
+// -------------------------------------------------------------------- api
+async function api(path, body) {
+  const opt = { headers: { "X-Ordering-Token": TOKEN }, cache: "no-store" };
+  if (body !== undefined) {
+    opt.method = "POST";
+    opt.headers["Content-Type"] = "application/json";
+    opt.body = JSON.stringify(body);
+  }
+  let res;
+  try { res = await fetch(path, opt); }
+  catch (e) { throw Object.assign(new Error("The ordering tool is not answering. Is it still running?"), { status: 0 }); }
+  let data = {};
+  try { data = await res.json(); } catch (e) { /* an empty or non-JSON reply */ }
+  if (!res.ok) throw Object.assign(new Error(data.error || `The tool answered ${res.status}.`), { status: res.status, data });
+  return data;
+}
+
+// ------------------------------------------------------------- the status
+function setStatus(kind, text) {
+  $("#status").className = "status " + kind;
+  $("#statusText").textContent = text;
+}
+function fmtWhen(iso, withTime) {
+  const d = new Date(iso);
+  if (!iso || isNaN(d)) return iso || "undated";
+  const day = d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+  return withTime ? `${day}, ${d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : day;
+}
+/* When an ordering was saved: the time alone for today, the day and the time before that. */
+function fmtSaved(iso) {
+  const d = new Date(iso);
+  if (isNaN(d)) return iso;
+  const time = d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  return d.toDateString() === new Date().toDateString() ? `at ${time}`
+       : `${d.toLocaleDateString(undefined, { day: "numeric", month: "short" })}, ${time}`;
+}
+function refreshStatus() {
+  if (S.busy) return;
+  if (!S.view) return setStatus("", "");
+  if (isDirty()) return setStatus("dirty", "Unsaved changes");
+  const hidden = hiddenKept().length;
+  if (hidden) return setStatus("dirty", `Save would sideline ${num(hidden)} not shown`);
+  if (S.view.saved) return setStatus("saved", `Saved ${fmtSaved(S.view.saved)}`);
+  setStatus("", "No ordering saved yet");
+}
+const notices = [];
+function notice(kind, text, action) {
+  notices.push({ kind, text, action });
+  renderNotices();
+}
+function clearNotices() { notices.length = 0; renderNotices(); }
+function renderNotices() {
+  const box = $("#notices");
+  box.replaceChildren(...notices.map((n, i) => h("div", { class: "notice " + n.kind },
+    h("div", { class: "grow" }, n.text),
+    n.action ? h("button", { class: "link", onclick: n.action.run }, n.action.label) : null,
+    h("button", { class: "link", title: "Dismiss", onclick: () => { notices.splice(i, 1); renderNotices(); } }, "Dismiss"))));
+}
+
+// ------------------------------------------------- what is shown, and saved
+const originMatch = it => S.origin === "both" || it.origin === S.origin;
+/* The memories listed: the switch's, and the sidelined ones only when the second switch is on. */
+function visible() { return S.items.filter(it => originMatch(it) && (S.showSidelined || !it.sidelined)); }
+/* Memories carried today that the switch hides — a save sidelines them. */
+function hiddenKept() { return S.items.filter(it => !originMatch(it) && !it.sidelined); }
+/* SAVE IS WHAT YOU SEE: the list as shown is carried, in this order; everything else on file is
+   sidelined. One definition, sent to the estimate and to the save alike. */
+function plan() {
+  return { order: visible().filter(it => !it.sidelined).map(it => it.key),
+           sidelined: S.items.filter(it => it.sidelined || !originMatch(it)).map(it => it.key) };
+}
+/* What the file holds now, in plan()'s shape: the memories it names as carried, in its order,
+   and the ones it names as sidelined. An unsorted memory is in neither list. */
+function filePlan() {
+  const v = S.view;
+  return { order: v.memories.filter(m => m.sorted && !m.sidelined).map(m => m.key),
+           sidelined: v.memories.filter(m => m.sidelined).map(m => m.key) };
+}
+/* Would a save change the file? True for a hand change, for a memory the switch hides, and for a
+   new memory not yet sorted. */
+function changed() { return !!S.view && JSON.stringify(plan()) !== JSON.stringify(filePlan()); }
+
+// --------------------------------------------------------------- snapshots
+const sidelinedKeys = () => S.items.filter(i => i.sidelined).map(i => i.key);
+const snap = () => JSON.stringify([S.items.map(i => i.key), sidelinedKeys()]);
+/* A change made by hand — a move, a sideline, a restore — since the list was loaded or saved. The
+   switch is not a change: it decides what a save means, and the status says so separately. */
+const isDirty = () => !!S.view && snap() !== S.baseline;
+function restore(snapshot) {
+  const [order, sidelined] = JSON.parse(snapshot);
+  const gone = new Set(sidelined);
+  S.items = order.map(k => S.byKey.get(k)).filter(Boolean);
+  for (const it of S.items) it.sidelined = gone.has(it.key);
+}
+function pruneSelection() {
+  const shown = new Set(visible().map(i => i.key));
+  for (const k of [...S.selected]) if (!shown.has(k)) S.selected.delete(k);
+}
+
+/* Every change to the list goes through here: it is what makes undo exact, and what closes the
+   twisties after a sideline, a restore or a re-order. */
+function mutate(change) {
+  const before = snap();
+  change();
+  if (snap() === before) { render(); return false; }
+  S.undo.push(before);
+  if (S.undo.length > 300) S.undo.shift();
+  S.redo = [];
+  afterChange();
+  return true;
+}
+function afterChange() {
+  S.open.clear();
+  pruneSelection();
+  render();
+  estimate();
+}
+function undo() {
+  if (!S.undo.length) return;
+  S.redo.push(snap());
+  restore(S.undo.pop());
+  afterChange();
+}
+function redo() {
+  if (!S.redo.length) return;
+  S.undo.push(snap());
+  restore(S.redo.pop());
+  afterChange();
+}
+
+// ------------------------------------------------------------- operations
+function selectedInOrder() { return S.items.filter(i => S.selected.has(i.key)).map(i => i.key); }
+/* Place `keys` — kept in their own order — after the memory `anchor`; anchor null places them first. */
+function moveAfter(keys, anchor) {
+  const moving = new Set(keys);
+  if (anchor !== null && moving.has(anchor)) anchor = anchorAbove(anchor, moving);
+  return mutate(() => {
+    const lifted = S.items.filter(i => moving.has(i.key));
+    const rest = S.items.filter(i => !moving.has(i.key));
+    const at = anchor === null ? 0 : rest.findIndex(i => i.key === anchor) + 1;
+    S.items = rest.slice(0, at).concat(lifted, rest.slice(at));
+  });
+}
+/* The nearest memory shown above `key` that is not itself being moved — null when there is none. */
+function anchorAbove(key, moving) {
+  const shown = visible();
+  for (let i = shown.findIndex(it => it.key === key) - 1; i >= 0; i--) if (!moving.has(shown[i].key)) return shown[i].key;
+  return null;
+}
+function sidelineSelected() {
+  const keys = selectedInOrder().filter(k => !S.byKey.get(k).sidelined);
+  if (!keys.length) return;
+  mutate(() => { for (const k of keys) S.byKey.get(k).sidelined = true; if (!S.showSidelined) S.selected.clear(); });
+}
+function restoreKeys(keys) {
+  keys = keys.filter(k => S.byKey.get(k) && S.byKey.get(k).sidelined);
+  if (!keys.length) return;
+  mutate(() => { for (const k of keys) S.byKey.get(k).sidelined = false; sortCarriedByDate(); });
+}
+/* Under "both", while memories of both kinds are carried, the carried list runs by date, newest
+   first (the operator, 2026-10-02: "When selecting Both and there are non-sidelined memories of
+   both sorts, sort by Date&Time"); the sidelined keep their places after it. Applied when a
+   part loads under "both" (as the list it opens with, not a change), and as an undoable change
+   when "both" is selected or a restore brings the second kind back. A save writes what is
+   shown, so an order made by hand lives under one kind at a time; with one kind carried the
+   saved order stands. */
+function sortCarriedByDate() {
+  if (S.origin !== "both") return;
+  const carried = S.items.filter(i => !i.sidelined);
+  if (new Set(carried.map(i => i.origin)).size < 2) return;
+  const byDate = carried.slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
+  S.items = byDate.concat(S.items.filter(i => i.sidelined));
+}
+function dateSortIfBoth() { return mutate(sortCarriedByDate); }
+function moveToEdge(top) {
+  const keys = selectedInOrder();
+  if (!keys.length) return;
+  if (top) return moveAfter(keys, null);
+  const moving = new Set(keys);
+  const rest = S.items.filter(i => !moving.has(i.key));
+  moveAfter(keys, rest.length ? rest[rest.length - 1].key : null);
+}
+function nudge(up) {
+  const keys = selectedInOrder();
+  if (!keys.length) return;
+  const moving = new Set(keys), shown = visible();
+  const first = shown.findIndex(i => moving.has(i.key));
+  let last = -1;
+  shown.forEach((i, n) => { if (moving.has(i.key)) last = n; });
+  if (up) {
+    let p = first - 1;
+    while (p >= 0 && moving.has(shown[p].key)) p--;
+    if (p < 0) return moveAfter(keys, null);
+    moveAfter(keys, anchorAbove(shown[p].key, moving));
+  } else {
+    let n = last + 1;
+    while (n < shown.length && moving.has(shown[n].key)) n++;
+    moveAfter(keys, n < shown.length ? shown[n].key : (shown.filter(i => !moving.has(i.key)).pop() || { key: null }).key);
+  }
+}
+function setOrigin(origin) {
+  if (!ORIGIN_LABEL[origin] || origin === S.origin) return;
+  S.origin = origin;
+  S.open.clear();
+  pruneSelection();
+  if (dateSortIfBoth()) return;              // the change rendered and re-estimated
+  render();
+  estimate();
+}
+function setShowSidelined(on) {
+  S.showSidelined = !!on;
+  S.open.clear();
+  pruneSelection();
+  render();
+}
+
+// --------------------------------------------------------------- estimate
+/* The estimate is of the SAVE: the server judges plan(), not the whole working list. Only each
+   memory's landing comes back into the list — never its sidelining, which a save alone decides. */
+function estimate() {
+  if (!S.view || !S.view.projected) return Promise.resolve();
+  const seq = ++S.seq;
+  const run = (async () => {
+    try {
+      const v = await api("/api/estimate", Object.assign({ group: S.group, part: S.part }, plan()));
+      // An answer about a list that has since changed, or about another part, is dropped.
+      if (seq !== S.seq || v.group !== S.group || v.part !== S.part) return;
+      S.est = { blocks: v.blocks, budget: v.budget };
+      let grew = false;
+      for (const m of v.memories) {
+        const it = S.byKey.get(m.key);
+        if (it) { it.lands = m.lands; it.block = m.block; it.chars = m.chars; }
+        else { grew = true; adoptItem(m, true); }
+      }
+      if (grew) notice("info", "A memory was written while this page was open. It has been added at the top as new.");
+      render();
+    } catch (e) {
+      setStatus("error", e.message);
+    }
+  })();
+  S.inflight = run;                          // the self-test waits on it; the page never does
+  return run;
+}
+function adoptItem(m, atTop) {
+  const it = Object.assign({}, m, { sidelined: !!m.sidelined, fresh: !!(S.view && S.view.saved) && !m.sorted });
+  if (atTop) { it.fresh = true; S.items.unshift(it); } else S.items.push(it);
+  S.byKey.set(it.key, it);
+}
+
+// ----------------------------------------------------------------- render
+function originOf(it) {
+  if (it.origin === "dreaming") return "written by dreaming";
+  return S.part === "self" ? "Self's own words" : "the part's own words";
+}
+function classOf(it) {
+  if (it.class === "lands") return "a quote that landed";
+  if (it.class === "better_option") return "a better option";
+  if (it.class) return it.class;
+  if (it.circle === "self.md migration") return "migrated from self.md";
+  return null;
+}
+function fateOf(it) {
+  if (it.sidelined) return h("span", { class: "fate aside" }, "sidelined");
+  if (!S.view.projected || it.lands === null || it.lands === undefined) return null;
+  return it.lands ? h("span", { class: "fate lands", title: BLOCK_NAMES[it.block] }, `lands · BLOCK ${it.block}`)
+                  : h("span", { class: "fate cut", title: BLOCK_NAMES[it.block] }, `cut · BLOCK ${it.block}`);
+}
+// --------------------------------------------------- the ratings (B149, R595)
+// The part's own ratings and yours, side by side; yours is kept beside the part's, never over
+// it. Nothing steers on either yet, so "places it" records your choice for when something does.
+const VALENCES = ["warning", "call", "pain", "pleasure"];
+const AROUSALS = ["0", "0.25", "0.5", "0.75", "1"];
+const COURAGES = { "-1": "cowardice", "-0.5": "timidity", "0": "courage", "0.5": "rashness", "1": "recklessness" };
+function fmtRating(r) {
+  if (!r) return "";
+  const out = VALENCES.filter(k => r[k] != null).map(k => `${k} ${r[k]}`);
+  if (r.courage != null) out.push(COURAGES[r.courage] || `courage ${r.courage}`);
+  return out.length ? out.join(" · ") : "nothing rated";
+}
+function ratingsOf(it) {
+  if (!S.view.projected) return null;
+  const r = it.ratings || {};
+  const editing = S.rating === it.key;
+  const lines = [
+    h("div", {}, h("b", {}, "The part: "), r.part_first ? `first, ${fmtRating(r.part_first)}` : "not rated yet",
+      r.part_latest ? ` — re-rated ${plural(r.part_count, "time")}, latest ${fmtRating(r.part_latest)}` : "",
+      r.still_applies ? ` · came back: ${r.still_applies}` : ""),
+    h("div", {}, h("b", {}, "Yours: "), r.self ? fmtRating(r.self) : "not rated",
+      r.self ? ` · places it: ${r.steers === "self" ? "yours" : "the part's"}` : "",
+      h("button", { class: "rate", type: "button", onclick: e => { e.stopPropagation(); S.rating = editing ? null : it.key; render(); } },
+        editing ? "Close" : (r.self ? "Change" : "Rate"))),
+  ];
+  if (editing) lines.push(rateEditor(it, r));
+  return h("div", { class: "ratings", onclick: e => e.stopPropagation() }, lines);
+}
+function rateEditor(it, r) {
+  const cur = r.self || {};
+  const pick = (k, values, label) => {
+    const sel = h("select", { "data-k": k, "aria-label": k },
+      h("option", { value: "" }, "unrated"),
+      values.map(v => h("option", { value: v }, label ? `${v} ${label(v)}` : v)));
+    sel.value = cur[k] != null ? cur[k] : "";
+    return h("label", {}, k, " ", sel);
+  };
+  const steer = h("select", { "data-k": "steers", "aria-label": "places it" },
+    h("option", { value: "part" }, "the part's"), h("option", { value: "self" }, "yours"));
+  steer.value = r.steers || "part";
+  const box = h("div", { class: "rate-edit" },
+    VALENCES.map(k => pick(k, AROUSALS)),
+    pick("courage", Object.keys(COURAGES), v => COURAGES[v]),
+    h("label", { title: "Whose rating places this memory, once anything steers on ratings — nothing does yet" }, "places it ", steer),
+    h("button", { type: "button", onclick: async e => {
+      e.stopPropagation();
+      const ratings = {};
+      for (const s of box.querySelectorAll("select[data-k]")) if (s.dataset.k !== "steers") ratings[s.dataset.k] = s.value;
+      try {
+        const res = await api("/api/rate", { group: S.group, part: S.part, key: it.key, ratings, steers: steer.value });
+        it.ratings = res.ratings; S.rating = null; render();
+        setStatus("saved", "Your rating is kept beside the part's — the part's own is unchanged.");
+      } catch (err) { setStatus("error", err.message); }
+    } }, "Save rating"));
+  return box;
+}
+function rowOf(it, n) {
+  const open = S.open.has(it.key);
+  const twist = h("button", { class: "twist", "aria-expanded": String(open), "aria-label": "Show the whole memory", hidden: true, html: CHEVRON,
+    onclick: e => { e.stopPropagation(); S.open.has(it.key) ? S.open.delete(it.key) : S.open.add(it.key); syncFold(row, it.key); } });
+  const box = h("input", { type: "checkbox", "aria-label": "Select this memory" });
+  box.checked = S.selected.has(it.key);
+  box.addEventListener("click", e => { e.stopPropagation(); tick(it.key, box.checked, e.shiftKey); });
+  const cls = classOf(it);
+  const row = h("li", { class: "row" + (S.selected.has(it.key) ? " selected" : "") + (it.sidelined ? " sidelined" : " origin-" + it.origin) +
+                               (S.view.projected && it.lands === false && !it.sidelined ? " cut" : ""), "data-key": it.key },
+    h("div", { class: "grip", title: "Drag to move the ticked memories" }, h("span", { class: "n" }, n), h("span", { class: "dots" })),
+    h("div", { class: "tick" }, box),
+    h("div", { class: "body" },
+      h("div", { class: "meta" }, twist,
+        h("span", { class: "when", title: it.date || "" }, fmtWhen(it.date)),
+        it.circle ? h("span", { class: "ot", title: "The circle it was written in" }, /^\d{4}-/.test(it.circle) ? "R" + it.circle : it.circle) : null,
+        h("span", { class: "chip origin" }, originOf(it)),
+        cls ? h("span", { class: "chip" }, cls) : null,
+        it.salience && it.salience !== "passing" ? h("span", { class: "chip", title: "The part's own word for its weight" }, it.salience) : null,
+        it.fresh ? h("span", { class: "chip new", title: "Written since the last save: not sorted yet" }, "new") : null,
+        h("span", { class: "size" }, `${num((it.text || "").length)} characters`),
+        it.sidelined ? h("button", { class: "restore", onclick: e => { e.stopPropagation(); restoreKeys([it.key]); } }, "Restore") : null,
+        fateOf(it)),
+      h("div", { class: "text" + (open ? "" : " folded") }, it.text || ""),
+      ratingsOf(it)));
+  return row;
+}
+function syncFold(row, key) {
+  const open = S.open.has(key);
+  $(".text", row).classList.toggle("folded", !open);
+  $(".twist", row).setAttribute("aria-expanded", String(open));
+}
+/* A twistie is shown only on a memory longer than its two visible lines. */
+function measureFolds() {
+  for (const row of $("#list").querySelectorAll(".row")) {
+    const text = $(".text", row), twist = $(".twist", row);
+    const wasOpen = !text.classList.contains("folded");
+    if (wasOpen) text.classList.add("folded");
+    const long = text.scrollHeight > text.clientHeight + 1;
+    if (wasOpen) text.classList.remove("folded");
+    twist.hidden = !long;
+    if (!long) text.classList.remove("folded");
+  }
+}
+function cutoffLine(block) {
+  const b = S.est.blocks[block];
+  const fit = b ? `BLOCK ${block}: ${num(b.shown)} of ${num(b.total)} land · ${num(b.chars)} of ${num(S.est.budget)} characters` : `BLOCK ${block} cutoff`;
+  return h("li", { class: "cutoff", "data-block": block }, h("span", {}, `▲ lands in the prompt (${fit}) · cut ▼`));
+}
+function newLine(n) {
+  return h("li", { class: "newline" }, h("span", {}, `▲ ${plural(n, "memory", "memories")} written since the last save, not yet sorted · sorted ▼`));
+}
+
+function render() {
+  if (!S.view) { $("#list").replaceChildren(); return; }
+  renderList();
+  renderSummary();
+  renderTools();
+  refreshStatus();
+  measureFolds();
+}
+
+const originLabel = o => (o === "own" && S.part === "self") ? "Self's own words" : ORIGIN_LABEL[o];
+function leadText() {
+  const v = S.view;
+  const first = v.saved
+    ? "The memory to keep longest is at the top. Memories written since the last save sit above the line, newest first, and the next save sorts them in."
+    : "No ordering is saved for this part, so this is the newest-first list its prompt uses today. The memory to keep longest is at the top; saving fixes the list as you leave it.";
+  const hidden = hiddenKept().length;
+  let rule;
+  if (S.origin === "both") {
+    const kinds = new Set(S.items.filter(i => !i.sidelined).map(i => i.origin));
+    rule = "Showing every memory. Save is what you see: what is listed is carried, in this order." +
+           (kinds.size > 1 ? " With both kinds carried, the list runs by date, newest first." : "");
+  }
+  else {
+    const otherKind = S.origin === "dreaming" ? "own" : "dreaming";
+    const other = otherKind === "dreaming" ? "written by dreaming" : "in " + originLabel("own");
+    rule = `Showing only ${originLabel(S.origin)}. Save is what you see: what is listed is carried, in this order, and ` +
+           (hidden ? `the ${plural(hidden, "memory", "memories")} ${other} not shown ${hidden === 1 ? "is" : "are"} sidelined by a save.`
+                   : `none of ${originLabel(otherKind)} is carried.`);
+  }
+  return [first, " ", h("b", {}, rule)];
+}
+
+function renderList() {
+  const shown = visible();
+  const list = $("#list");
+  $("#lead").replaceChildren(...leadText());
+  if (!S.items.length) {
+    list.replaceChildren(h("li", { class: "empty" }, "Nothing is on file for this part yet."));
+    $("#foot").replaceChildren();
+    return;
+  }
+  // Where each block's cutoff falls: after its last memory that lands, when any of its memories is cut.
+  const after = new Map(), before = new Map();
+  if (S.view.projected) {
+    for (const block of [4, 3]) {
+      const mine = shown.filter(i => !i.sidelined && i.block === block);
+      if (!mine.some(i => i.lands === false)) continue;
+      const landed = mine.filter(i => i.lands === true);
+      if (landed.length) after.set(landed[landed.length - 1].key, block);
+      else before.set(mine[0].key, block);
+    }
+  }
+  // The line under the memories written since the last save: after the last one shown as new.
+  const fresh = shown.filter(i => i.fresh);
+  const lastNew = S.view.saved && fresh.length ? fresh[fresh.length - 1].key : null;
+  const kids = [];
+  shown.forEach((it, n) => {
+    if (before.has(it.key)) kids.push(cutoffLine(before.get(it.key)));
+    kids.push(rowOf(it, n + 1));
+    if (it.key === lastNew) kids.push(newLine(fresh.length));
+    if (after.has(it.key)) kids.push(cutoffLine(after.get(it.key)));
+  });
+  if (!shown.length) {
+    const hidden = hiddenKept().length;
+    const aside = S.items.filter(i => originMatch(i) && i.sidelined).length;
+    const bits = [];
+    if (S.origin !== "both") bits.push(h("span", {}, `none ${S.origin === "dreaming" ? "written by dreaming" : "in " + originLabel("own")}`,
+      hidden ? [" — ", h("button", { class: "link", onclick: () => setOrigin(S.origin === "dreaming" ? "own" : "dreaming") },
+                                     `${plural(hidden, "memory", "memories")} in ${originLabel(S.origin === "dreaming" ? "own" : "dreaming")}`), " not shown"] : null));
+    if (aside) bits.push(h("span", {}, `${bits.length ? "; " : ""}${plural(aside, "sidelined memory", "sidelined memories")} hidden — `,
+      h("button", { class: "link", onclick: () => setShowSidelined(true) }, "show them")));
+    kids.push(h("li", { class: "empty" }, "Nothing to show under these switches: ", ...bits, ".",
+      hidden ? h("div", {}, `A save now would sideline ${hidden === 1 ? "that memory" : "all " + num(hidden) + " of them"}.`) : null));
+  }
+  list.replaceChildren(...kids);
+  $("#foot").replaceChildren(
+    S.view.saved || S.view.error
+      ? h("button", { class: "link danger", onclick: clearOrdering, title: "Go back to the newest-first list, with nothing sidelined" }, "Remove this part's saved ordering")
+      : null);
+}
+
+function renderSummary() {
+  const box = $("#summary"), v = S.view;
+  const p = plan();
+  if (!v.projected) {
+    box.replaceChildren(h("div", { class: "meter" },
+      h("div", { class: "name" }, "Self"),
+      h("div", { class: "big" }, `${plural(S.items.length, "memory", "memories")} `, h("small", {}, p.sidelined.length ? `· ${num(p.sidelined.length)} sidelined` : "")),
+      h("div", { class: "sub" }, "No prompt carries Self's own memories today. Their order and the sidelining are still saved.")));
+    return;
+  }
+  const aside = new Set(p.sidelined);
+  const cards = [];
+  for (const block of ["3", "4"]) {
+    const b = (S.est.blocks || {})[block];
+    if (!b || !b.total) continue;
+    const mine = S.items.filter(i => String(i.block) === block);
+    const gone = mine.filter(i => aside.has(i.key)).length;
+    const cut = mine.filter(i => !aside.has(i.key) && i.lands === false).length;
+    const share = S.est.budget ? Math.min(100, Math.round(100 * b.chars / S.est.budget)) : 0;
+    cards.push(h("div", { class: "meter" },
+      h("div", { class: "name" }, BLOCK_NAMES[block]),
+      h("div", { class: "big" }, `${num(b.shown)} of ${num(b.total)} expected to land `,
+        h("small", {}, [cut ? `· ${num(cut)} cut` : "", gone ? ` · ${num(gone)} sidelined` : ""].join(""))),
+      h("div", { class: "track" }, h("i", { class: cut ? "full" : "", style: `width:${share}%` })),
+      h("div", { class: "sub" }, `${num(b.chars)} of ${num(S.est.budget)} characters used`)));
+  }
+  if (!cards.length) cards.push(h("div", { class: "meter" }, h("div", { class: "name" }, "Nothing on file"),
+    h("div", { class: "sub" }, "This part has written no memory yet.")));
+  box.replaceChildren(...cards);
+}
+
+function renderTools() {
+  const shown = visible(), n = S.selected.size;
+  const all = $("#all");
+  all.checked = shown.length > 0 && n === shown.length;
+  all.indeterminate = n > 0 && n < shown.length;
+  $("#count").textContent = n ? `${num(n)} selected` : "none selected";
+  const picked = selectedInOrder().map(k => S.byKey.get(k));
+  $("#sideline").disabled = !picked.some(i => !i.sidelined);
+  $("#restore").hidden = !picked.some(i => i.sidelined);
+  $("#toTop").disabled = $("#toBottom").disabled = !n;
+  $("#undo").disabled = !S.undo.length;
+  $("#redo").disabled = !S.redo.length;
+  const dreaming = S.items.filter(i => i.origin === "dreaming").length;
+  $("#nDreaming").textContent = `(${num(dreaming)})`;
+  $("#nOwn").textContent = `(${num(S.items.length - dreaming)})`;
+  $("#nBoth").textContent = `(${num(S.items.length)})`;
+  for (const b of $("#origin").querySelectorAll("button")) b.setAttribute("aria-pressed", String(b.dataset.origin === S.origin));
+  const aside = S.items.filter(i => originMatch(i) && i.sidelined).length;
+  $("#showSidelinedText").textContent = `Show sidelined (${num(aside)})`;
+  $("#showSidelined").checked = S.showSidelined;
+  $("#save").disabled = S.busy || !S.view || !S.items.length || (!changed() && !!S.view.saved);
+}
+
+// -------------------------------------------------------------- selection
+function tick(key, on, range) {
+  const shown = visible().map(i => i.key);
+  if (range && S.lastTick && shown.includes(S.lastTick)) {
+    const a = shown.indexOf(S.lastTick), b = shown.indexOf(key);
+    for (const k of shown.slice(Math.min(a, b), Math.max(a, b) + 1)) on ? S.selected.add(k) : S.selected.delete(k);
+  } else if (on) S.selected.add(key); else S.selected.delete(key);
+  S.lastTick = key;
+  for (const row of $("#list").querySelectorAll(".row")) {
+    const picked = S.selected.has(row.dataset.key);
+    row.classList.toggle("selected", picked);
+    const box = $("input", row);
+    if (box) box.checked = picked;
+  }
+  renderTools();
+}
+
+// ------------------------------------------------------------------- drag
+let drag = null;
+/* The memory the ticked ones would follow if the pointer were let go at height `y`: the one
+   under it, or the one above a gap. null means "place first" — the pointer is on the bar under
+   the head, or above the first memory. */
+function dragTarget(y) {
+  if (y <= $("#topzone").getBoundingClientRect().bottom) return null;
+  const rows = [...$("#list").querySelectorAll(".row")];
+  let hit = null;
+  for (const row of rows) { if (row.getBoundingClientRect().top <= y) hit = row; else break; }
+  return hit;
+}
+function paintTarget(row) {
+  for (const el of $("#list").querySelectorAll(".drop-after")) el.classList.remove("drop-after");
+  $("#topzone").classList.toggle("drop-here", !row);
+  if (row) row.classList.add("drop-after");
+}
+function startDrag(e) {
+  drag.active = true;
+  if (!S.selected.has(drag.key)) { S.selected.clear(); S.selected.add(drag.key); S.lastTick = drag.key; }
+  drag.keys = selectedInOrder();
+  document.body.classList.add("dragging");
+  for (const row of $("#list").querySelectorAll(".row")) {
+    row.classList.toggle("selected", S.selected.has(row.dataset.key));
+    row.classList.toggle("moving", S.selected.has(row.dataset.key));
+    const box = $("input", row); if (box) box.checked = S.selected.has(row.dataset.key);
+  }
+  drag.ghost = h("div", { class: "ghost" }, plural(drag.keys.length, "memory", "memories"));
+  document.body.append(drag.ghost);
+  $("#topzone").style.top = ($("header.top").getBoundingClientRect().bottom + 8) + "px";
+  renderTools();
+  // Near the top or the bottom of the window the page scrolls under the pointer, faster the
+  // nearer the edge. On the bar itself nothing scrolls: letting go there places first.
+  const step = () => {
+    if (!drag || !drag.active) return;
+    const edge = 70, y = drag.y, bar = $("#topzone").getBoundingClientRect().bottom;
+    if (y > bar && y < bar + edge) window.scrollBy(0, -Math.ceil((bar + edge - y) / 5));
+    else if (y > window.innerHeight - edge) window.scrollBy(0, Math.ceil((y - (window.innerHeight - edge)) / 5));
+    paintTarget(dragTarget(drag.y));
+    drag.raf = requestAnimationFrame(step);
+  };
+  drag.raf = requestAnimationFrame(step);
+}
+function endDrag(apply) {
+  if (!drag) return;
+  const d = drag;
+  drag = null;
+  if (d.raf) cancelAnimationFrame(d.raf);
+  if (d.ghost) d.ghost.remove();
+  const row = d.active && apply ? dragTarget(d.y) : null;     // read while the bar is still shown
+  document.body.classList.remove("dragging");
+  $("#topzone").classList.remove("drop-here");
+  for (const el of $("#list").querySelectorAll(".drop-after, .moving")) el.classList.remove("drop-after", "moving");
+  if (!d.active) return;
+  if (!apply) { render(); return; }
+  moveAfter(d.keys, row ? row.dataset.key : null);
+}
+$("#list").addEventListener("pointerdown", e => {
+  if (e.button !== 0 || S.busy) return;
+  const zone = e.target.closest(".grip, .meta");
+  if (!zone || e.target.closest("button, input, a, select")) return;
+  const row = zone.closest(".row");
+  if (!row) return;
+  drag = { key: row.dataset.key, x0: e.clientX, y0: e.clientY, x: e.clientX, y: e.clientY, active: false, shift: e.shiftKey };
+  // Captured, so the release still arrives when the pointer is let go outside the window.
+  try { zone.setPointerCapture(e.pointerId); } catch (err) { /* not a live pointer */ }
+});
+window.addEventListener("pointermove", e => {
+  if (!drag) return;
+  // A mouse moving with no button down was released somewhere this page did not hear of.
+  if (drag.active && e.pointerType === "mouse" && e.buttons === 0) return endDrag(false);
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (!drag.active && Math.hypot(e.clientX - drag.x0, e.clientY - drag.y0) > 5) startDrag(e);
+  if (drag.active) {
+    e.preventDefault();
+    drag.ghost.style.left = e.clientX + "px";
+    drag.ghost.style.top = e.clientY + "px";
+    paintTarget(dragTarget(e.clientY));
+  }
+}, { passive: false });
+window.addEventListener("pointerup", e => {
+  if (!drag) return;
+  drag.x = e.clientX; drag.y = e.clientY;
+  if (drag.active) return endDrag(true);
+  const key = drag.key, shift = drag.shift;      // a press with no movement ticks the memory
+  drag = null;
+  tick(key, !S.selected.has(key), shift);
+});
+window.addEventListener("pointercancel", () => endDrag(false));
+
+// ------------------------------------------------------------ load & save
+async function ask(title, text, choices) {
+  const dlg = $("#ask");
+  $("#askTitle").textContent = title;
+  $("#askText").textContent = text;
+  return new Promise(resolve => {
+    const done = value => { dlg.close(); resolve(value); };
+    $("#askActs").replaceChildren(...choices.map(c => h("button", { class: "btn" + (c.primary ? " primary" : "") + (c.danger ? " danger" : ""), onclick: () => done(c.value) }, c.label)));
+    dlg.oncancel = ev => { ev.preventDefault(); done(null); };
+    dlg.showModal();
+  });
+}
+/* True when it is fine to leave this part: nothing changed by hand, or Self chose to save or discard. */
+async function mayLeave() {
+  if (!isDirty()) return true;
+  const who = (S.parts.find(p => p.name === S.part) || {}).tag || S.part;
+  const choice = await ask(`Save the changes to ${who}?`, "This ordering has changes that are not saved.",
+    [{ label: "Stay", value: null }, { label: "Discard them", value: "discard", danger: true }, { label: "Save", value: "save", primary: true }]);
+  if (choice === "save") return await save();
+  return choice === "discard";
+}
+function partLabel(p) {
+  const bits = [plural(p.memories, "memory", "memories")];
+  if (p.unsorted) bits.push(`${num(p.unsorted)} new`);
+  if (p.sidelined) bits.push(`${num(p.sidelined)} sidelined`);
+  return `${p.tag} — ${bits.join(" · ")}`;
+}
+async function loadParts() {
+  S.parts = await api(`/api/parts?group=${encodeURIComponent(S.group)}`);
+  $("#part").replaceChildren(...S.parts.map(p => h("option", { value: p.name }, partLabel(p))));
+  if (!S.parts.some(p => p.name === S.part)) S.part = S.parts.length ? S.parts[0].name : null;
+  $("#part").value = S.part;
+}
+function adopt(view) {
+  S.view = view;
+  S.seq++;                                   // any estimate still on its way is for the old list
+  S.items = []; S.byKey = new Map();
+  for (const m of view.memories) adoptItem(m, false);
+  S.est = { blocks: view.blocks, budget: view.budget };
+  S.baseline = snap();
+}
+async function loadMemories() {
+  const seq = ++S.loadSeq;
+  S.busy = true; setStatus("busy", "Loading…");
+  try {
+    const view = await api(`/api/memories?group=${encodeURIComponent(S.group)}&part=${encodeURIComponent(S.part)}`);
+    if (seq !== S.loadSeq) return;
+    adopt(view);
+    S.selected.clear(); S.open.clear(); S.undo = []; S.redo = []; S.lastTick = null; S.showSidelined = false;
+    clearNotices();
+    if (view.error) notice("bad", `The ordering on file for this part does not read (${view.error}). It is being treated as no ordering, and saving is refused until the file is repaired or removed.`,
+                           { label: "Remove the file", run: clearOrdering });
+    if (view.legacy) notice("info", "This ordering was saved in the register's first shape, by a tool started before the change of 2026-10-02. It reads as it was meant; the next save writes it in the current shape.");
+    // The server reads its code once, at start; the page is read from disk at each request. A
+    // tool started before the switch existed serves this page and answers without `origin`.
+    if (view.memories.some(m => m.origin === undefined)) notice("bad", "The tool serving this page is older than the page: it was started before the change of 2026-10-02 and does not say who wrote each memory, so nothing shows as written by dreaming and a save is refused. Stop it (Ctrl+C in its terminal), start it again, and reload this page.");
+    if (view.circle_open) notice("info", "A circle may be open. Saving is safe; an ordering saved now applies from the next circle.");
+    history.replaceState(null, "", `#${encodeURIComponent(S.group)}/${encodeURIComponent(S.part)}`);
+  } catch (e) {
+    S.view = null;
+    notice("bad", e.message);
+    setStatus("error", "Could not load");
+  } finally {
+    if (seq === S.loadSeq) {
+      S.busy = false;
+      sortCarriedByDate(); S.baseline = snap();    // a load is not a change: the list as it opens
+      render(); estimate();
+    }
+  }
+}
+async function save() {
+  if (S.busy || !S.view) return false;
+  S.busy = true; setStatus("busy", "Saving…"); renderTools();
+  const group = S.group, part = S.part;
+  try {
+    const view = await api("/api/save", Object.assign({ group, part, base: S.view.saved }, plan()));
+    if (group !== S.group || part !== S.part) { S.busy = false; return true; }   // saved; the page has moved on
+    adopt(view);                               // the file's own answer: what the switch hid is sidelined now
+    S.selected.clear(); S.open.clear();
+    S.busy = false;
+    if (view.dropped && view.dropped.length) notice("warn", `${plural(view.dropped.length, "memory")} named by this page ${view.dropped.length === 1 ? "is" : "are"} no longer in the register and ${view.dropped.length === 1 ? "was" : "were"} left out.`);
+    render();
+    estimate();
+    loadParts().catch(() => {});
+    return true;
+  } catch (e) {
+    S.busy = false;
+    if (e.status === 409) notice("warn", e.message, { label: "Reload", run: () => loadMemories() });
+    else notice("bad", `Not saved: ${e.message}`);
+    render();
+    return false;
+  }
+}
+async function clearOrdering() {
+  const who = (S.parts.find(p => p.name === S.part) || {}).tag || S.part;
+  const sure = await ask(`Remove ${who}'s saved ordering?`,
+    "Every memory becomes unsorted again and none is sidelined: the newest-first list is used. No memory is deleted.",
+    [{ label: "Keep it", value: null }, { label: "Remove the ordering", value: "yes", danger: true }]);
+  if (sure !== "yes") return;
+  try {
+    await api("/api/clear", { group: S.group, part: S.part, base: S.view.saved });
+    await loadMemories();
+    loadParts().catch(() => {});
+  } catch (e) { notice("bad", e.message); }
+}
+
+// ------------------------------------------------------------------ wiring
+/* While a save or a load is on its way the page stays where it is. */
+$("#group").addEventListener("change", async e => {
+  if (S.busy || !(await mayLeave())) { e.target.value = S.group; return; }
+  S.group = e.target.value; S.part = "self";
+  try { await loadParts(); await loadMemories(); } catch (err) { notice("bad", err.message); }
+});
+$("#part").addEventListener("change", async e => {
+  if (S.busy || !(await mayLeave())) { e.target.value = S.part; return; }
+  S.part = e.target.value;
+  await loadMemories();
+});
+$("#reload").addEventListener("click", async () => {
+  if (S.busy || !(await mayLeave())) return;
+  await loadParts().catch(() => {});
+  await loadMemories();
+});
+$("#origin").addEventListener("click", e => {
+  const b = e.target.closest("button[data-origin]");
+  if (b) setOrigin(b.dataset.origin);
+});
+$("#showSidelined").addEventListener("change", e => setShowSidelined(e.target.checked));
+$("#all").addEventListener("change", e => {
+  S.selected = new Set(e.target.checked ? visible().map(i => i.key) : []);
+  render();
+});
+$("#sideline").addEventListener("click", sidelineSelected);
+$("#restore").addEventListener("click", () => restoreKeys(selectedInOrder()));
+$("#toTop").addEventListener("click", () => moveToEdge(true));
+$("#toBottom").addEventListener("click", () => moveToEdge(false));
+$("#undo").addEventListener("click", undo);
+$("#redo").addEventListener("click", redo);
+$("#save").addEventListener("click", () => save());
+window.addEventListener("keydown", e => {
+  if ($("#ask").open) return;
+  const typing = e.target && /^(INPUT|SELECT|TEXTAREA)$/.test(e.target.tagName) && e.target.type !== "checkbox";
+  const mod = e.ctrlKey || e.metaKey;
+  if (e.key === "Escape") { if (drag && drag.active) return endDrag(false); if (S.selected.size) { S.selected.clear(); render(); } return; }
+  if (typing) return;
+  const key = e.key.toLowerCase();
+  if (mod && key === "s") { e.preventDefault(); if (!$("#save").disabled) save(); }
+  else if (mod && key === "z" && !e.shiftKey) { e.preventDefault(); undo(); }
+  else if (mod && (key === "y" || (key === "z" && e.shiftKey))) { e.preventDefault(); redo(); }
+  else if (mod && key === "a") { e.preventDefault(); S.selected = new Set(visible().map(i => i.key)); render(); }
+  else if (e.key === "Delete") { e.preventDefault(); sidelineSelected(); }
+  else if (e.altKey && e.key === "ArrowUp") { e.preventDefault(); nudge(true); }
+  else if (e.altKey && e.key === "ArrowDown") { e.preventDefault(); nudge(false); }
+});
+window.addEventListener("beforeunload", e => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+let resizeTimer = null;
+window.addEventListener("resize", () => { clearTimeout(resizeTimer); resizeTimer = setTimeout(measureFolds, 120); });
+
+async function init() {
+  try {
+    S.groups = await api("/api/groups");
+    if (!S.groups.length) throw new Error("No group is installed.");
+    $("#group").replaceChildren(...S.groups.map(g => h("option", { value: g.name }, g.display)));
+    const [wantGroup, wantPart] = decodeURIComponent(location.hash.slice(1)).split("/");
+    const first = S.groups.find(g => g.default) || S.groups[0];
+    S.group = S.groups.some(g => g.name === wantGroup) ? wantGroup : first.name;
+    S.part = wantPart || "self";                       // Self is the part shown first
+    $("#group").value = S.group;
+    await loadParts();
+    await loadMemories();
+  } catch (e) {
+    notice("bad", e.message);
+    setStatus("error", "Could not start");
+  }
+}
+const ready = init();
+window.__ordering = { S, ready, api, render, estimate, save, undo, redo, moveAfter, sidelineSelected, restoreKeys, tick, loadMemories, loadParts,
+                      isDirty, changed, visible, plan, setOrigin, setShowSidelined, dateSortIfBoth };
+})();
+</script>
+</body>
+</html>

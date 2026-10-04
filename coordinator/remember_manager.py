@@ -32,10 +32,13 @@ second derivation call: the part already knows why it is writing this, so
 authoring time instead of a model re-deriving intent after the fact from a
 statement written for a different purpose.
 
-NEVER VETTED. Unlike self/best_practices.toml's PRACTICE LIFECYCLE,
-nothing here is staged, approved, denied, or seen by Self at all — a
-remember never reaches the circle, another part, or the UI. It reaches
-only this part's own future BLOCK 4.
+NEVER VETTED AT WRITING. Unlike self/best_practices.toml's PRACTICE
+LIFECYCLE, nothing here is staged, approved or denied — a remember never
+reaches the circle or another part. It reaches only this part's own
+future BLOCK 3 and BLOCK 4. AFTERWARDS Self may read a part's memories in
+the ordering tool, put them in order and sideline some
+(remember_ordering_manager.py, 2026-10-02); that is a file beside this
+register and never a write to it.
 
 FIELDS:
 
@@ -110,7 +113,12 @@ ACCUMULATE, NEVER PRUNE. Nothing here ever deletes a record. project()
 windows the projected VIEW to the budget, newest first; the register
 itself only grows. A part's only lever over what stays in view is to
 write about something again — recency IS the priority signal, so there is
-no second annotation for supersede/retire.
+no second annotation for supersede/retire. SELF has a second lever, by
+hand: an ordering saved for a part decides the order its windows are cut
+in and which memories are carried in no block (remember_ordering_manager.py).
+A sidelined record stays here whole, within recall's reach; and a memory
+written after that save is unsorted and goes first, so writing it again
+still brings it into view.
 """
 
 from __future__ import annotations
@@ -152,7 +160,14 @@ TABLE = "remember"
 # a best_practices.toml entry migrated in by the coordinator.
 # `salience` ADDED 2026-08-22 (DESIGN_V2 DREAMING extension) — LAST, same
 # reason: an existing record without one must keep dumping byte-identical.
-ORDER = ("id", "date", "circle", "text", "chain", "class", "salience")
+# THE VALENCES AND COURAGE — B125, R599 (2026-10-03), the record's final words: four valence
+# columns, each that valence's AROUSAL, and `courage`, the part's relation to them; `asked`
+# stamps the prompt version that produced the rating, so a later change of wording is a
+# segment boundary, never a lost clock. APPENDED LAST, so every existing row dumps
+# byte-identical. STRINGS, never floats: REGISTER_CLASS's serialiser has no float branch and
+# raises inside the close before the gate can report it. ABSENT IS UNRATED, NEVER 0.
+ORDER = ("id", "date", "circle", "text", "chain", "class", "salience",
+         "warning", "call", "pain", "pleasure", "courage", "asked")
 
 RECORD_CAP = 600    # chars, a Coordinator-minted record (see the header)
 AUTHORED_WORD_CAP = SET.setting_value_read("remember_word_cap", 1000)   # words, a PART's
@@ -178,6 +193,82 @@ SALIENCE_WEIGHT = {"passing": 0, "notable": 1, "charged": 1, "resolved": 2}
 # passing ones without a short, deeply-chained thread jumping the whole
 # window. Flagged for Self, not a ruling.
 SALIENCE_K = SET.setting_value_read("salience_lift", 3)
+
+# ------------------------------------------------- the valences and courage (B125, R599)
+# A memory is rated by WHAT IS PRESENT IN IT (R528, R529): four VALENCES, each carrying its own
+# AROUSAL on R521's five anchors (R536), and COURAGE, the part's relation to them (R523), on
+# five steps with its good at the middle. The part rates; the coordinator stores what it
+# is given and never scores one (R175). The asking is BLIND (R538): no earlier value reaches
+# anything the dreaming call reads.
+VALENCES = ("warning", "call", "pain", "pleasure")
+AROUSAL_DETENTS = ("0", "0.25", "0.5", "0.75", "1")
+COURAGE_DETENTS = ("-1", "-0.5", "0", "0.5", "1")
+COURAGE_WORDS = {"-1": "cowardice", "-0.5": "timidity", "0": "courage",
+                 "0.5": "rashness", "1": "recklessness"}
+RATING_FIELDS = VALENCES + ("courage",)
+# The version of the asking that produced a rating — part_dreaming.DREAMING_PROMPT_V2.
+ASKED_VERSION = "dreaming-v2"
+# LOUD: the one loudness threshold the model uses, placed by the operator's own anchors — at 0.5
+# "the response is still chosen", at 0.75 "it is difficult to function except in relation to
+# it" (R521). Claude's arithmetic until ruled; a setting so it can move.
+AROUSAL_LOUD = SET.setting_value_read("arousal_loud", 0.75)
+
+
+def _nearest(raw: "str | None", detents: tuple[str, ...]) -> "str | None":
+    """The detent nearest the first number in `raw`, or None when there is none — an
+    absent or unreadable answer is UNRATED, never coerced to a value (R523: on courage 0 is
+    the virtue, so a coerced 0 would be a false claim)."""
+    m = re.search(r"[-+]?\d*\.?\d+", raw or "")
+    if not m:
+        return None
+    try:
+        x = float(m.group(0))
+    except ValueError:
+        return None
+    return min(detents, key=lambda d: abs(float(d) - x))
+
+
+def remember_arousal_coerce(raw: "str | None") -> "str | None":
+    """One valence's AROUSAL as the part answered it: the nearest of 0, 0.25, 0.5, 0.75, 1, or
+    None when the answer holds no number. Snaps, never refuses the run."""
+    return _nearest(raw, AROUSAL_DETENTS)
+
+
+def remember_courage_coerce(raw: "str | None") -> "str | None":
+    """COURAGE as the part answered it: the nearest of -1, -0.5, 0, 0.5, 1 — or, when the
+    answer names a step by its word (cowardice, timidity, courage, rashness, recklessness),
+    that step. None when it holds neither."""
+    words = {w: d for d, w in COURAGE_WORDS.items()}
+    low = (raw or "").lower()
+    for w, d in words.items():
+        if re.search(rf"\b{w}\b", low) and not re.search(r"[-+]?\d", low):
+            return d
+    return _nearest(raw, COURAGE_DETENTS)
+
+
+def remember_ratings_read(row: dict) -> dict:
+    """The rating fields a row actually carries — {field: detent string} — absent ones left
+    out, so a caller testing `is not None` never reads an unrated member as 0."""
+    return {k: row[k] for k in RATING_FIELDS if row.get(k) is not None}
+
+
+def remember_loud_read(row: dict) -> bool:
+    """DERIVED, never stored (R519): is this memory LOUD? The legacy word says so (notable,
+    charged), or any valence's arousal is at or above AROUSAL_LOUD. Courage is not read —
+    whether any lever may read it is unruled (B125)."""
+    if row.get("salience") in ("notable", "charged"):
+        return True
+    return any(float(row[v]) >= AROUSAL_LOUD for v in VALENCES if row.get(v) is not None)
+
+
+def remember_quiet_read(row: dict) -> bool:
+    """DERIVED: is this memory QUIET? The legacy word says so (passing, resolved), or every
+    valence is rated and every one is 0. An unrated valence is NOT quiet — unrated is not a
+    claim of nothing."""
+    if row.get("salience") in ("passing", "resolved"):
+        return True
+    vals = [row.get(v) for v in VALENCES]
+    return all(v is not None for v in vals) and all(float(v) == 0 for v in vals)
 
 # THE GATE'S CEILING, and it is deliberately NOT a third budget. Added
 # 2026-08-20, after it refused a real live close.
@@ -382,7 +473,8 @@ _JC = JOURNAL_CLASS.JournalClass(table=TABLE, id_prefix="MEM-", cap=None)
 
 
 def remember_dreamt_render(doc: dict, text: str, circle: str,
-                  continues: bool, salience: str | None = None) -> tuple[dict, dict]:
+                  continues: bool, salience: str | None = None,
+                  ratings: "dict | None" = None) -> tuple[dict, dict]:
     """PURE — the DREAMING tail for the phase-2 driver: mutates a COPY of
     `doc` (the loaded register) with one coordinator-minted MEM- record,
     returns (new_doc, record). No I/O here: the driver stages the render
@@ -406,11 +498,127 @@ def remember_dreamt_render(doc: dict, text: str, circle: str,
     this function only stores what it is given. `None` leaves the field
     absent entirely, same as every record minted before this build, so a
     caller with nothing to say about salience keeps this function's output
-    byte-identical to before this change."""
+    byte-identical to before this change.
+
+    `ratings` (B125, R599): {field: detent string} for the valences and courage the part gave,
+    already coerced — an unrated member is simply absent. When any rating is given the row is
+    stamped `asked` = ASKED_VERSION; with none, nothing new is written."""
     fields = {"circle": circle, "text": remember_truncate(text)}
     if salience is not None:
         fields["salience"] = salience
+    given = {k: v for k, v in (ratings or {}).items() if k in RATING_FIELDS and v is not None}
+    if given:
+        fields.update(given)
+        fields["asked"] = ASKED_VERSION
     return _JC.new_render(doc, fields, chain=continues)
+
+
+# ------------------------------------------------------------- the re-rate register (B125)
+# A RE-RATE is the part asked again, blind, about a memory it rated before (R538), and its
+# answer written NEXT TO the old one, never over it — the series is the instrument (R520's
+# persistence is read off it). It cannot be a second table in remember.toml: the serialiser
+# renders one table per file and emits any other as a Python repr that does not parse
+# (docs/MEMORY_DESIGN.md, stage 1's finding 1). So it is its own file beside remember.toml,
+# its own table and id series (RR-), append-only. ONE row per part per close in this build:
+# the prior memory dreaming already shows; the blind draw of older memories is not built.
+RERATE_TABLE = "rerate"
+RERATE_ORDER = ("id", "date", "circle", "memory", "warning", "call", "pain", "pleasure",
+                "courage", "still_applies", "occasion", "asked")
+# Why the part was asked about this memory (R599): it CONTINUED it, LET it STAND (wrote
+# nothing new), or wrote a NEW THREAD beside it. The third value is Claude's word for the case
+# the ruled three did not name — the draw, the ruled third, is not built.
+RERATE_OCCASIONS = ("continued", "let-stand", "new-thread")
+_JC_RR = JOURNAL_CLASS.JournalClass(table=RERATE_TABLE, id_prefix="RR-", cap=None)
+
+
+def remember_rerate_path_read(part: str) -> pathlib.Path:
+    """The REAL re-rate file, beside the part's remember.toml."""
+    return _root_for(part, ROOT) / "rerate.toml"
+
+
+def remember_rerate_read(part: str) -> list[dict]:
+    p = remember_rerate_path_read(part)
+    return (SS.register_read(p) if p.is_file() else {}).get(RERATE_TABLE, [])
+
+
+def remember_rerate_render(doc: dict, memory_id: str, circle: str, ratings: dict,
+                           still_applies: "str | None", occasion: str) -> tuple[dict, dict]:
+    """PURE — one re-rate row for the phase-2 driver, as remember_dreamt_render() is for the
+    memory itself. `ratings` already coerced, unrated members absent; `still_applies` "yes",
+    "no" or None (unanswered, so absent)."""
+    if occasion not in RERATE_OCCASIONS:
+        raise ValueError(f"occasion {occasion!r} is not one of {RERATE_OCCASIONS}")
+    fields = {"circle": circle, "memory": memory_id}
+    fields.update({k: v for k, v in ratings.items() if k in RATING_FIELDS and v is not None})
+    if still_applies in ("yes", "no"):
+        fields["still_applies"] = still_applies
+    fields.update(occasion=occasion, asked=ASKED_VERSION)
+    return _JC_RR.new_render(doc, fields, chain=False)
+
+
+# ------------------------------------------------------- Self's own ratings (B149, R595)
+# Self may rate a part's memory in the ordering tool. R595: Self's rating is SELF'S OWN, kept
+# BESIDE the part's, never over it — so it has its own file, parts/<p>/self_rating.toml, and the
+# part's rows (remember.toml, rerate.toml) are never touched. Append-only: the latest row for a
+# memory is Self's rating as it stands, and the earlier ones are how it changed. `steers` is
+# Self's choice of whose rating places the memory — R595's second sentence — and is INERT until
+# a lever reads ratings at all (D140); it is recorded so the choice is not lost meanwhile. No
+# part-facing reader opens this file: dreaming, the blocks and recall each name their own files,
+# so the asking stays blind (R538).
+SELF_RATING_FILE = "self_rating.toml"
+SELF_RATING_TABLE = "self_rating"
+SELF_RATING_ORDER = ("id", "date", "memory", "warning", "call", "pain", "pleasure",
+                     "courage", "steers")
+SELF_RATING_STEERS = ("part", "self")
+_JC_SR = JOURNAL_CLASS.JournalClass(table=SELF_RATING_TABLE, id_prefix="SR-", cap=None)
+
+
+def remember_self_rating_path_read(part: str) -> pathlib.Path:
+    """The REAL file, beside the part's remember.toml."""
+    return _root_for(part, ROOT) / SELF_RATING_FILE
+
+
+def remember_self_rating_read(part: str) -> list[dict]:
+    p = remember_self_rating_path_read(part)
+    return (SS.register_read(p) if p.is_file() else {}).get(SELF_RATING_TABLE, [])
+
+
+def remember_self_rating_write(part: str, memory: str, ratings: dict, steers: str) -> dict:
+    """Append Self's rating of one memory. `ratings` holds only the members Self set, each
+    already a detent string (the caller checks); a member left out is unrated. Returns the row."""
+    if steers not in SELF_RATING_STEERS:
+        raise ValueError(f"steers {steers!r} is not one of {SELF_RATING_STEERS}")
+    p = remember_self_rating_path_read(part)
+    doc = SS.register_read(p) if p.is_file() else {}
+    fields = {"memory": memory}
+    fields.update({k: v for k, v in ratings.items() if k in RATING_FIELDS and v is not None})
+    fields["steers"] = steers
+    doc, rec = _JC_SR.new_render(doc, fields, chain=False)
+    p.parent.mkdir(parents=True, exist_ok=True)
+    SS.register_write(p, doc, SELF_RATING_TABLE, SELF_RATING_ORDER)
+    return rec
+
+
+def remember_ratings_by_memory_read(part: str) -> dict:
+    """{memory id or key: {part_first, part_latest, part_count, self, steers}} for every memory
+    anyone has rated — the part's first rating (its remember row), its latest re-rate, how many
+    re-rates there are, and Self's latest own rating with its `steers` choice. For SELF's eyes
+    only: the ordering tool is its one caller."""
+    out: dict = {}
+    for r in remember_read(part):
+        if r.get("id") and remember_ratings_read(r):
+            out.setdefault(r["id"], {})["part_first"] = remember_ratings_read(r)
+    for rr in sorted(remember_rerate_read(part), key=lambda x: x.get("date", "")):
+        e = out.setdefault(rr.get("memory", ""), {})
+        e["part_latest"] = remember_ratings_read(rr)
+        e["part_count"] = e.get("part_count", 0) + 1
+        if rr.get("still_applies"):
+            e["still_applies"] = rr["still_applies"]
+    for sr in sorted(remember_self_rating_read(part), key=lambda x: x.get("date", "")):
+        e = out.setdefault(sr.get("memory", ""), {})
+        e["self"] = remember_ratings_read(sr)
+        e["steers"] = sr.get("steers", "part")
+    return out
 
 
 def remember_chain_read(doc: dict, rec_id: str) -> list[dict]:
@@ -438,12 +646,15 @@ def remember_chain_qualifies(doc: dict, rec: dict) -> bool:
     notable or charged. Never auto-writes long_term.md — the caller
     surfaces a candidate topic; a human applies it by hand, same as every
     long_term.md edit today."""
-    if rec.get("salience") != "resolved":
+    # B125: re-keyed off the legacy words onto the DERIVED readings, which keep the words'
+    # own meaning for every row written before the valences. The terminal record is
+    # "resolved" when it is quiet (legacy "resolved" included) after a loud link.
+    if not remember_quiet_read(rec) or rec.get("salience") == "passing":
         return False
     chain = remember_chain_read(doc, rec.get("id", ""))
     if len(chain) < 3:
         return False
-    return any(r.get("salience") in ("notable", "charged") for r in chain[1:])
+    return any(remember_loud_read(r) for r in chain[1:])
 
 
 def remember_newest_dreamt_read(part: str) -> dict | None:

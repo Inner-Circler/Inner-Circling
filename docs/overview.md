@@ -34,8 +34,8 @@ member; a member cannot ask for one. A member that has done its work is
 retired, never deleted: `/part-retire` takes it out of every circle, prompt
 and search and keeps its record whole — the system respects records and
 history. Its name stays its own, and its past words stay in the
-transcripts, marked retired. Retiring is a developer verb: open the circle
-with `--dev` to use `/part-retire`, where `/part-add` needs no such thing.
+transcripts, marked retired. `/part-retire` is typed at the `Self>` prompt
+of `coordinator/circle.py` run on its own; `/part-add` works in either window.
 
 ## Why every path starts `groups/<group>/`
 
@@ -63,12 +63,10 @@ long-term identity, distilled; and that member's own newest memories, with
 anything it recalled. Statements are public and members may address each
 other directly; no member speaks twice in a row. Each statement aims for a
 short length, and each member is told never to go past a word count — 150
-unless you change the `statement_max_words` setting. The limit reaches the
+by default. The limit reaches the
 members as an instruction; nothing counts the words or cuts a statement at it.
-That one is a developer setting: open the
-circle with `--dev` to see it or change it. `/settings-list` shows what
-you can reach — three settings on a normal run, and all thirty-five under
-`--dev` — numbered, and `/settings-list <n>` shows one whole: its default,
+`/settings-list` shows the settings you can reach — three on a normal run —
+numbered, and `/settings-list <n>` shows one whole: its default,
 what it accepts, and why the default is what it is. The three are
 `model`, which model the members speak on; `redact_view`, whether the
 circle pane shows names, emails and phone numbers as opaque tokens

@@ -214,6 +214,10 @@ work/ticker/
 # rebuildable, one re-embed to recreate; never record.
 work/recall_index/
 
+# the local embedding model itself (embed_store.MODEL_CACHE, B145) — ~65 MB,
+# one download to recreate; kept here because Windows cleans the temp folder.
+work/embed_model/
+
 # sanitize.py's own report — a bare run's snapshot, local since 2026-09-17: nothing
 # reads it and nothing regenerated it, so a committed copy was stale by construction.
 packaging/sanitize_report.toml

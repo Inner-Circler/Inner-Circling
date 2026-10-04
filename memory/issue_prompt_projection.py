@@ -200,7 +200,24 @@ def issue_block_render(p: pathlib.Path, d: "dict | None" = None) -> tuple[str, l
                      f"circle that did not happen")
     prov = (f"*ruled by {ID.DISPLAY} in {ruled}*" if ruled
             else "*the 2026-07-27 derivation's wording — NOT YET RULED*")
-    return (f"### {p.stem} — {lab}\n{prov}\n**Absent when:** {ab}", fails)
+    return (f"### {p.stem} — {lab}\n{prov}\n**Absent when:** {ab}"
+            + _actions_line(d), fails)
+
+
+def issue_actions_render(d: dict) -> str:
+    """R591: the practices being tried on this issue, as they stand, numbered as
+    /issue-action-update names them — so a part can propose revising one. Empty when the
+    node carries none, which leaves every block that projects it byte-identical."""
+    acts = S.issue_actions_read(d)
+    if not acts:
+        return ""
+    return "**Being practised:** " + " · ".join(
+        f"{n}. {S.issue_unwrap(rows[-1]['practice'])}" for n, rows in acts.items())
+
+
+def _actions_line(d: dict) -> str:
+    a = issue_actions_render(d)
+    return f"\n{a}" if a else ""
 
 
 # narrative() RETIRED — B46, 2026-08-17. self/issues_narrative.md was
@@ -300,6 +317,8 @@ def issue_full_render(p: pathlib.Path, d: "dict | None" = None) -> str:
     if e:
         L += ["", "**Live edges:** "
               + " · ".join(f"`{ty}` {to}" for ty, to in e)]
+    if a := issue_actions_render(d):
+        L += ["", a]
     return "\n".join(L)
 
 

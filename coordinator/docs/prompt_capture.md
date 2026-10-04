@@ -216,7 +216,9 @@ on; a verifier reading today's register would be answering a different
 question. So the bytes to look for travel WITH the capture. The two paths stay
 independent — `prompt_build` assembles Block 3/4 through
 `remember_prompt_projection.remember_settled_render()`/`remember_tail_render()`, this reads
-`remember_manager.remember_read()` —
+the register itself, less the memories Self sidelined
+(`remember_ordering_manager.remember_ordering_kept_read()`: a sidelined memory is promised to no
+block) —
 which is the point: a check that reads the same object twice checks nothing.
 
 ### prompt_manifest_read(d) / block_shas(manifest)

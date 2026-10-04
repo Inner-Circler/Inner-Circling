@@ -104,16 +104,31 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      # comment, and not in the description, because help_system prints the
      # description verbatim to a recipient who has no rulings/ (2026-09-09).
      "The ruling forms are RECORDED TO THE TRANSCRIPT AS\n"
-     "YOUR WORDS AND NOT SENT TO THE PARTS;\n"
+     "YOUR WORDS AND NOT SENT TO THE GROUP MEMBERS;\n"
      "validated as a batch and applied at close —\n"
      "automatically in a LIVE circle, never in a sandbox\n"
      "one", "command"),
-    ('/issue-evidence-add nNNNN <stmt#> "why"',
+    ('/issue-evidence-add nNNNN <stmt#> "why" [absent]',
      "attach a PRIOR statement (its number from\n"
      "/issue-evidence-list) as evidence — quote and speaker\n"
      "come from the transcript, not typed fresh. Same\n"
-     "RECORDED/NOT SENT/batch-at-close rule",           # R160/B40
+     "RECORDED/NOT SENT/batch-at-close rule. `absent`:\n"     # R592
+     "evidence AGAINST — the issue was expected in that\n"
+     "statement and did not appear. Default: evidence for",
      "command"),
+    # R591, 2026-10-03: an issue's ACTIONS — evolving practices, never results. The two
+    # writers are ruling forms like the three above: recorded, batched, applied at close.
+    ('/issue-action-add nNNNN "practice" ["why"]',
+     "record what is being tried when this issue appears —\n"
+     "an evolving practice, numbered within the issue.\n"
+     "Same RECORDED/NOT SENT/batch-at-close rule", "command"),
+    ('/issue-action-update nNNNN <action#> "practice" ["why"]',
+     "revise a practice as it is learned; the earlier\n"
+     "wording is kept, never overwritten. <action#> from\n"
+     "/issue-action-list. Batch-at-close", "command"),
+    ("/issue-action-list [nNNNN]",
+     "every issue's actions as they stand, or one issue's\n"
+     "with how each practice has changed", "command"),
     ('/issue-relationship-status nNNNN <type> nMMMM = retired "reason"',
      "retire an issue-relationship — the property construct\n"
      "again; <type> as for /issue-relationship-add.\n"
@@ -130,7 +145,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "open a NEW issue: its name, what it is, and what its\n"
      "absence looks like. All three -> a LIVE issue (nobody\n"
      "holds it yet); fewer -> a LEAD (L_nNNNN) until the rest\n"
-     "is written. At cmd> a missing one is asked for. A part\n"
+     "is written. At cmd> a missing one is asked for. A member\n"
      "may propose it: [proposed: /issue-add \"label\" ...]",   # R290
      "command"),
     ("/issue-apply <commands.toml>",
@@ -139,8 +154,8 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/prompt-show circle | <part>",
      "the assembled system prompt, with placeholders\n"
      "where a circle supplies or may supply a piece.\n"
-     "`circle` shows the blocks every part shares,\n"
-     "a part name shows the two that are its own", "command"),
+     "`circle` shows the blocks every member shares,\n"
+     "a member's name shows the two that are its own", "command"),
     ("/practice-add <your practice statement>",
      "a best practice, in YOUR words, punctuation and\n"
      "all. Always addressed to the whole circle.\n"
@@ -181,8 +196,24 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "YOUR OWN [remember: ...] records — bare lists them\n"
      "numbered, one line each; `<n>` shows one whole.\n"
      "Reads self/remember.toml directly, no circle needed.\n"
-     "A part's own register is private to it and is NEVER\n"
+     "A member's own register is private to it and is NEVER\n"
      "reachable from here", "command"),                          # R224, BNF REMEMBER_PROJECTION
+    # THE MEMORY TOOL — R588, 2026-10-03: the ordering tool
+    # (ui/remember_ordering.py, R580) reached from the command
+    # pane. A NOUN LEAD on purpose — the operator: "remember is itself a verb and
+    # I prefer a noun lead" — and the broad word on purpose: "a tool for general
+    # management of memory content, order, salience, annotation, etc". It starts
+    # the tool as its own process beside this one (never inside it: the tool
+    # rebinds the process's group as you click, which would pull a running
+    # circle's record out from under it) and opens the page in your browser on
+    # the active group's Self record; the tool stops when this program does.
+    ("/memory-edit",
+     "open the memory tool in your browser — every member's\n"
+     "memories and your own: put them in order, sideline\n"
+     "some, see what each prompt will carry. Opens on the\n"
+     "active group's Self record; a second /memory-edit\n"
+     "reopens the page. No circle needed, and safe with one\n"
+     "open: an ordering applies from the next circle", "command"),
     # CIRCLE_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
     # CRUD operations and a help entry." circles/circle_observation_log.toml is
     # SYNTHESIS's own note to Self about the CIRCLE (never about Self, never
@@ -321,11 +352,11 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     ("/propose-add <command>   (also bare propose)",
      "stage a proposal yourself — <command> is a\n"
      "proposable command with its arguments ('help propose'\n"
-     "lists them), the same set a part's [proposed: ...]\n"
+     "lists them), the same set a member's [proposed: ...]\n"
      "may name. Ruled at the next checkpoint; a sandbox\n"
      "circle refuses it (a draft, not the record)", "command"),
     ("/round",
-     "let the parts take another round without a Self\n"
+     "let the group members take another round without a Self\n"
      "statement. /pass (below) is an equally valid alias", "circle"),
     ("/pass",
      "a new alias for /round, above — same operation,\n"
@@ -335,7 +366,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
     # fold note left the gloss and "since-Self" became "dialog turn"
     # R347 (the operator's wording, 2026-08-25).
     ("/status",
-     "parts, every prompt block's size IN TOKENS as the\n"
+     "group members, every prompt block's size IN TOKENS as the\n"
      "model service counts them, the dialog turn counters,\n"
      "and the running cost.", "command"),
     # NAMED /statements UNTIL 2026-08-21 (D59), the operator: *""statement" is
@@ -384,7 +415,7 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "curate a name/place/org to hide in the redacted CIRCLE-pane\n"
      "view — kind is one of: person, place, org, other (default).\n"
      "Extra quoted forms are matched alongside the canonical one,\n"
-     "longest-first. Part names are refused outright — they are\n"
+     "longest-first. Member names are refused outright — they are\n"
      "never redacted, in circles or consults", "command"),
     ("/redact-alias-list [<n>]",
      "the alias registry, numbered — id, kind, canonical label\n"
@@ -509,8 +540,8 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/practice-update", "/topic-update",         # B116, R465, 2026-09-07
                  "/topic-list", "/topic-close", "/prompt-show", "/issue-apply",
                  "/issue-list", "/issue-status", "/issue-status-update",
-                 "/issue-relationship-list", "/issue-add",
-                 "/remember", "/remember-list", "/propose-list",
+                 "/issue-relationship-list", "/issue-add", "/issue-action-list",
+                 "/remember", "/remember-list", "/memory-edit", "/propose-list",
                  "/observation-add", "/observation-list",
                  "/observation-continue", "/observation-retire",
                  "/observation-purge",
@@ -567,6 +598,7 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
 USER_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-list", "/practice-add", "/practice-list", "/better-option-list",
     "/remember", "/remember-list", "/propose-list", "/propose-add",
+    "/memory-edit",                          # the memory tool is Self's own, 2026-10-03
     "/observation-add", "/observation-list", "/observation-continue",
     "/observation-retire", "/observation-purge",          # 2026-09-01
     "/issue-evidence-list", "/issue-evidence-add",        # R533, 2026-09-10
@@ -608,6 +640,8 @@ DEV_SUBSET_COMMANDS: tuple[str, ...] = (
     "/group-update",                         # beside view/delete, B112 2026-09-06
     "/practice-update", "/topic-update",     # beside practice-delete and the topic verbs
                                              # (R288's split), B116 2026-09-07
+    "/issue-action-add", "/issue-action-update",   # D141 (b), R602:
+    "/issue-action-list",                          # always run in circle.py, elsewhere dev only
 )
 
 # /dev IS IN NEITHER TABLE, and that is R199 (2026-08-16), verbatim: *"yes,
@@ -661,6 +695,7 @@ PROPOSE_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-label-update", "/issue-relationship-add",
     "/issue-evidence-add", "/practice-add", "/better-option-add",
     "/issue-add",
+    "/issue-action-add", "/issue-action-update",   # R591, 2026-10-03
 )
 
 # THE TWO SURFACES THE POLICY DISTINGUISHES — R527/B134, 2026-09-10. Availability
@@ -805,7 +840,7 @@ PROPOSABLE_COMMANDS: tuple[str, ...] = tuple(
 # a bracket to ride in. /help's propose page prints the bracket form, not the
 # typed spec, for the same reason.
 OWN_STATEMENT_COMMANDS: dict[str, str] = {
-    "/issue-evidence-add": '/issue-evidence-add nNNNN "why"',
+    "/issue-evidence-add": '/issue-evidence-add nNNNN "why" [shown-by <Tag> "their words"] [absent]',
 }
 
 

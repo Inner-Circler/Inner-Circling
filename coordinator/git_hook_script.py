@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v200"
+HOOK_MARK = "# inner-circling pre-commit v201"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -261,6 +261,7 @@ case "$FILES" in *groups/*/group.toml*\
 |*coordinator/backfill.py*|*coordinator/tests/test_register_gate.py*\
 |*coordinator/record_model.py*|*memory/register_gate.py*|*coordinator/tests/test_annotations.py*\
 |*coordinator/remember_manager.py*|*coordinator/tests/test_remember_manager.py*\
+|*coordinator/remember_ordering_manager.py*|*coordinator/tests/test_remember_ordering_manager.py*\
 |*coordinator/remember_prompt_projection.py*|*coordinator/remember_list_projection.py*\
 |*coordinator/quote_as_lands.py*|*coordinator/tests/test_quote_as_lands.py*\
 |*coordinator/process_core.md*|*groups/*/process_*.md*|*coordinator/part_roster.py*\
@@ -323,6 +324,12 @@ if [ -n "$IC_CODE" ]; then
     run coordinator/tests/test_journal_class.py
     run coordinator/tests/test_circle_history_manager.py
     run coordinator/tests/test_remember_manager.py
+    # SELF'S ORDERING OF A PART'S MEMORIES. Its register module and every path that
+    # must respect it are in this case already -- the two windows
+    # (remember_prompt_projection.py), the distillate's sources
+    # (part_mid_term_manager.py), recall_index.py, remember_expand.py,
+    # prompt_capture.py -- and the suite drives each of them against one ordering.
+    run coordinator/tests/test_remember_ordering_manager.py
     # It rides this case because its subjects are already here: circle.py's
     # Self> loop calls it, and it writes through remember_manager.py, whose cap
     # it changed.
@@ -458,6 +465,7 @@ case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_k
 |*coordinator/prompt_capture.py*|*coordinator/proposal_group_manager.py*|*coordinator/proposal_manager.py*\
 |*coordinator/proposal_vetting.py*|*coordinator/recall_index.py*|*coordinator/record_paths.py*\
 |*coordinator/redaction_manager.py*|*coordinator/remember_list_projection.py*|*coordinator/remember_manager.py*\
+|*coordinator/remember_ordering_manager.py*\
 |*coordinator/ruling_manager.py*|*coordinator/setting_manager.py*|*coordinator/short_term_manager.py*\
 |*coordinator/stream_redaction.py*|*coordinator/topic_manager.py*|*coordinator/working_set_manager.py*\
 |*memory/TRANSACTION_CLASS.py*|*memory/issue_gate.py*|*memory/issue_schema.py*|*memory/issue_status.py*\
@@ -889,6 +897,25 @@ case "$FILES" in *ui/*|*coordinator/seam.py*|*coordinator/circle.py*|*coordinato
     run ui/tests/test_palette.py
 esac
 
+# THE ORDERING TOOL -- the page a person orders and sidelines a part's memories on,
+# and the server under it. ITS OWN ARM, not a line in the ui/ case above: the suite
+# is fired by the tool, its page and its suite, AND by the four coordinator modules
+# the tool serves from, none of which the ui/ case sees. The server holds no rule of
+# its own -- what lands is remember_prompt_projection's answer, the ordering is
+# remember_ordering_manager's, the cutoff part_mid_term_manager's -- so a change to
+# any of them is a change to what the page shows.
+#
+# The suite builds its own temp record and binds the tool to it; it reads nothing
+# under groups/ and asserts as much. Its --browser half (the real page, driven in a
+# headless Chrome or Edge) is NOT run here: a commit gate cannot assume a browser.
+case "$FILES" in *ui/remember_ordering.py*|*ui/remember_ordering.html*\
+|*ui/tests/test_remember_ordering.py*|*ui/tests/remember_ordering_selftest.js*\
+|*coordinator/remember_ordering_manager.py*|*coordinator/remember_prompt_projection.py*\
+|*coordinator/remember_manager.py*|*coordinator/part_mid_term_manager.py*)
+    NOTE="  pre-commit: the ordering tool, its page, or a module it serves from touched"
+    run ui/tests/test_remember_ordering.py
+esac
+
 case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_part_roster.py*)
     NOTE="  pre-commit: the roster is read from the tree, so the tree can lie"
     # A missing or malformed part.toml shrinks the roster, and a part outside
@@ -941,6 +968,7 @@ case "$FILES" in *coordinator/circle_delta.py*|*coordinator/circling_verify.py*\
 |*coordinator/part_mid_term_manager.py*|*coordinator/part_roster.py*\
 |*coordinator/proposal_group_manager.py*|*coordinator/proposal_manager.py*\
 |*coordinator/redaction_manager.py*|*coordinator/remember_manager.py*\
+|*coordinator/remember_ordering_manager.py*\
 |*coordinator/setting_manager.py*|*coordinator/topic_manager.py*\
 |*memory/issue_schema.py*|*memory/issue_commands.py*|*packaging/scan.py*\
 |*coordinator/ruling_sweep.py*|*coordinator/gitrepo.py*\

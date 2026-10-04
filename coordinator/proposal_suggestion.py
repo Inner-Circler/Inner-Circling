@@ -286,6 +286,8 @@ _EXECUTORS = {
     "/issue-relationship-add": _run_issue_ruling,
     "/issue-evidence-add": _run_issue_ruling,
     "/issue-relationship-status": _run_issue_ruling,
+    "/issue-action-add": _run_issue_ruling,          # R591 — issue rulings, one runner
+    "/issue-action-update": _run_issue_ruling,
     "/issue-status": _run_issue_status,
     "/issue-add": _run_issue_add,
     "/practice-add": _run_practice_add,

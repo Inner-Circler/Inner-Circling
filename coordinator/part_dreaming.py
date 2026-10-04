@@ -8,7 +8,7 @@ one). inter_circle.py keeps the DRIVER (circle_process: the marker, the capture,
 calls in parallel, the transaction, the commit, the diagnostic); this module is what one
 part's pass IS. Every function below is the verbatim body it had there; only the file moved.
 
-    DREAMING_PROMPT_V1   the pass's prompt — versioned code, never a payload
+    DREAMING_PROMPT_V2   the pass's prompt — versioned code, never a payload
     DREAM_MAX_TOKENS     its cap (settings-overridable)
     _call                the one call every pass makes, through the transport; circle_synthesis
                          and the driver's diagnostic read it here (PD._call), and the probes
@@ -82,7 +82,12 @@ DREAM_GROUNDING_MIN_OVERLAP = SET.setting_value_read("dream_grounding_min_overla
 # docstring, "part_relationships IS INERT." DREAMING asks for, and parses,
 # MEMORY alone now.
 
-DREAMING_PROMPT_V1 = """\
+# V2 — B125, 2026-10-03 (R599): SALIENCE's one word is gone (R529 dropped it for the
+# valences); the part rates the memory it writes on the four valences and courage, and
+# re-rates the prior memory blind (R538) with STILL APPLIES. The version is stamped on
+# every rating as `asked` (remember_manager.ASKED_VERSION), so a change of wording here
+# is a new version and a segment boundary in the series, never an edit in place.
+DREAMING_PROMPT_V2 = """\
 You are {part}'s dreaming pass for the circle that just closed ({ot}).
 
 Below: your own identity as the circle sees it (your distillate); your own lines from the
@@ -90,8 +95,7 @@ closed circle — every statement you made and every line another part addressed
 verbatim, in original order, each with the one line said just before it kept for reply
 context; a short shared capsule of what else happened in the room, the same words every
 part reads; your own short_term for it, if you spoke; and — if one exists — the most
-recent memory in your own chain (a note your dreaming pass left for you last time,
-including how charged it was, if you said so).
+recent memory in your own chain (a note your dreaming pass left for you last time).
 
 Write only about what YOU said or experienced. If no short_term for you appears above, you
 did not speak this circle; nothing above is yours to claim in your own voice, however
@@ -109,10 +113,41 @@ about what to hold going into the next one. If a prior memory exists below, eith
 continue it (reference what it said, extend it) or let it stand and write nothing new
 — a memory you choose not to change is not a failure. Keep it under {cap} characters.
 
+HOW A MEMORY IS RATED. Read the memory as your own, not as a judge of the writing, and
+say what is present in it NOW. Four things may be present, several at once, each rated
+for how strongly it is felt:
+
+    warning   something in it pushes you away — an issue of yours is touched
+    call      something in it pulls you toward it — a better option you are drawn to practise
+    pain      something in it hurts
+    pleasure  something in it feels good
+
+Each on exactly one of these five, the number first:
+
+    0     no signal for attention, unnoticed
+    0.25  the signal is noticable and but attention can willfully be redirected
+    0.5   the signal is substantial enough not to be ignored, but it does not override the
+          choice of response
+    0.75  the signal is imperative and it is difficult to function except in relation to it
+    1     the signal overwhelms, commandeering agency
+
+0 is an answer: a memory with no pain in it rates pain 0. Then COURAGE — how you meet what
+is in it NOW, in the present, on exactly one of these five, the number first:
+
+    -1    cowardice — far too reluctant to face the risk
+    -0.5  timidity — too reluctant to face it
+    0     courage — engagement proportionate to the risk
+    0.5   rashness — too willing to incur it
+    1     recklessness — far too willing to incur it
+
+These are your own readings, never shown in a circle and never scored by anyone else. A
+reading that differs from an earlier one is information, not a mistake.
+
 OUTPUT FORMAT, exactly. Section headers, each alone on its own line, at column 0,
 spelled exactly as shown. Print MEMORY even when it is empty — the header and nothing
-under it. Print SALIENCE whenever MEMORY is not empty; omit it entirely (no header at
-all) when MEMORY is empty. Print RESOLUTION only when it applies.
+under it. Print RATINGS whenever MEMORY is not empty; omit it entirely (no header at all)
+when MEMORY is empty. Print RERATE whenever a prior memory appears above; omit it
+otherwise. Print RESOLUTION only when it applies.
 
 MEMORY
     Either one memory as plain prose, or — if you are continuing the prior memory
@@ -127,16 +162,23 @@ MEMORY
     Empty if you are letting the prior memory stand, and CONTINUES on its own
     with nothing after it says the same thing.
 
-SALIENCE
-    Required whenever MEMORY is not empty. Your own sense of how charged this memory
-    is — exactly one word: passing, notable, charged, or resolved. "passing" is
-    ordinary; "notable" is worth a second look later; "charged" is something live and
-    unsettled; "resolved" is a charge that has actually settled. Your own judgment,
-    never a score anyone else assigns.
+RATINGS
+    The memory you just wrote, five lines exactly:
+        warning: <0, 0.25, 0.5, 0.75 or 1>
+        call: <0, 0.25, 0.5, 0.75 or 1>
+        pain: <0, 0.25, 0.5, 0.75 or 1>
+        pleasure: <0, 0.25, 0.5, 0.75 or 1>
+        courage: <-1, -0.5, 0, 0.5 or 1>
+
+RERATE
+    The PRIOR memory shown above, as it reads to you now — the same five lines, and one
+    more:
+        still applies: <yes or no — did the situation it names come back this circle>
+    Your earlier readings of it are not shown; rate it fresh.
 
 RESOLUTION
-    Only if this memory resolves a prior memory you tagged "charged" — a line
-    naming what settled. Leave the section entirely absent otherwise.
+    Only if this memory resolves the prior one — something that held you strongly there
+    has settled — a line naming what settled. Leave the section entirely absent otherwise.
 """
 
 
@@ -251,7 +293,7 @@ def _report_chars(say, who: str, chars: dict) -> None:
 
 def _call(system: str, user: str, max_tokens: int, *,
           kind: str = "dreaming", record: bool = False,
-          part: "str | None" = None):
+          part: "str | None" = None, tuning: "dict | None" = None):
     """One call, its own client — a client per worker costs nothing and
     removes every thread-safety question (R170: the seven run in parallel).
 
@@ -284,7 +326,7 @@ def _call(system: str, user: str, max_tokens: int, *,
     R170 wanted is unchanged — call_once builds one per call unless handed
     one."""
     return LC.stream_call_once(system, user, max_tokens, kind=kind,
-                        record=record, part=part)
+                        record=record, part=part, tuning=tuning)
 
 
 # --------------------------------------------------------------- grounding
@@ -471,10 +513,11 @@ def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
                      "NOT what you wrote in the moment")
         user.append(f"{head}\n{st_text}")
     if prior:
-        sal_note = f" (tagged {prior['salience']})" if prior.get("salience") else ""
-        user.append(f"# The most recent memory in your chain{sal_note}\n"
-                    f"{prior['text']}")
-    system = DREAMING_PROMPT_V1.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
+        # BLIND (R538): the prior memory goes in with NO earlier value — not its legacy tag,
+        # not a rating — because the part re-rates it below, and a shown value anchors the
+        # answer the measurement exists to take fresh.
+        user.append(f"# The most recent memory in your chain\n{prior['text']}")
+    system = DREAMING_PROMPT_V2.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
     user_text = "\n\n".join(user)
     reply = _call(system, user_text, DREAM_MAX_TOKENS,
                   kind="dreaming", record=True, part=part)
@@ -482,8 +525,8 @@ def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
     chars = {"system": system, "user": user_text, "reply": text,
              "blocks": user}
     sections, err = RD.message_sections_read(
-        text, ("MEMORY", "SALIENCE", "RESOLUTION"),
-        optional=frozenset({"SALIENCE", "RESOLUTION"}))
+        text, ("MEMORY", "RATINGS", "RERATE", "RESOLUTION"),
+        optional=frozenset({"RATINGS", "RERATE", "RESOLUTION"}))
     # output_tokens AND stop_reason RIDE EVERY PAYLOAD, 2026-08-21 — the two
     # numbers that told the 2026-08-21_1139 failure apart from a header
     # mismatch, and that the report did not carry at the time.
@@ -521,23 +564,54 @@ def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
                     f"memory TRUNCATED at {len(body):,} chars (was {was:,}; "
                     f"the {RM.RECORD_CAP}-char cap's tolerance is {limit})")
             out["memory"] = body
-            # SALIENCE (DESIGN_V2), 2026-08-22: required whenever MEMORY is
-            # non-empty, but an absent or unparseable answer COERCES rather
-            # than refuses the call (RM.remember_salience_coerce's own rule).
-            sal_raw = sections.get("SALIENCE")
-            out["salience"] = RM.remember_salience_coerce(sal_raw)
-            if sal_raw is None or sal_raw.strip().lower() not in RM.SALIENCE_VALUES:
+            # RATINGS (B125, R599): required whenever MEMORY is non-empty; a missing or
+            # unreadable member is UNRATED — stored as nothing, never as 0 — and noted.
+            ratings, missing = part_ratings_read(sections.get("RATINGS"))
+            out["ratings"] = ratings
+            if missing:
                 out["suspect"].append(
-                    f"SALIENCE absent or unparseable ({sal_raw!r}) — "
-                    f"coerced to 'passing'")
+                    f"RATINGS unrated for {', '.join(missing)} — stored as unrated, never 0")
             # RESOLUTION also chains onto the prior memory, same mechanism
-            # as a MEMORY-level "CONTINUES" — either one is sufficient.
+            # as a MEMORY-level "CONTINUES" — either one is sufficient. Checked against
+            # the prior memory's OWN record (never shown to the part): did it hold it?
             resolution = sections.get("RESOLUTION")
             resolved = bool(resolution and resolution.strip())
-            if resolved and prior and prior.get("salience") != "charged":
+            if resolved and prior and not RM.remember_loud_read(prior):
                 out["suspect"].append(
-                    "RESOLUTION claimed but the prior memory in this "
-                    f"chain was not tagged 'charged' (was "
-                    f"{prior.get('salience')!r})")
+                    "RESOLUTION claimed but the prior memory in this chain was not "
+                    "recorded as loud")
             out["continues"] = continues or resolved
+    # RERATE (B125, R538): the prior memory, rated again blind. Its occasion says why it was
+    # asked (R599): continued by this dreaming, let stand (nothing new), or a new thread
+    # beside it. Unrated members stay absent; an unreadable still_applies stays absent.
+    if prior and prior.get("id") and sections.get("RERATE") is not None:
+        rr, rr_missing = part_ratings_read(sections["RERATE"])
+        sa = re.search(r"still\s*applies\s*:\s*(yes|no)\b", sections["RERATE"], re.I)
+        occasion = ("continued" if out.get("continues") else
+                    "new-thread" if out.get("memory") else "let-stand")
+        out["rerate"] = {"memory": prior["id"], "ratings": rr,
+                         "still_applies": sa.group(1).lower() if sa else None,
+                         "occasion": occasion}
+        if rr_missing:
+            out["suspect"].append(
+                f"RERATE unrated for {', '.join(rr_missing)} — stored as unrated, never 0")
+    elif prior and prior.get("id"):
+        out["suspect"].append("RERATE absent — the prior memory was not re-rated this close")
     return out
+
+
+def part_ratings_read(section: "str | None") -> tuple[dict, list[str]]:
+    """A RATINGS or RERATE section's five lines -> ({field: detent}, [unrated fields]).
+    `warning: 0.5` and the like; each value coerced by remember_manager's own coercers, and a
+    member with no readable answer left OUT (unrated), never set to 0."""
+    got: dict = {}
+    for line in (section or "").splitlines():
+        m = re.match(r"\s*(warning|call|pain|pleasure|courage)\s*:\s*(.*)$", line, re.I)
+        if not m:
+            continue
+        key, raw = m.group(1).lower(), m.group(2)
+        val = (RM.remember_courage_coerce(raw) if key == "courage"
+               else RM.remember_arousal_coerce(raw))
+        if val is not None:
+            got[key] = val
+    return got, [f for f in RM.RATING_FIELDS if f not in got]

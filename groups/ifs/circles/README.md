@@ -44,11 +44,11 @@ never by hand, exactly like the transcripts.
 **A fifth file appears here only if you rule on the issue graph from inside
 a circle.** `commands_<OT>.toml` records the `/issue-...` rulings one circle
 made, beside the transcript that occasioned them. In the two-pane interface
-they are typed in the command pane, and all but one are developer verbs:
+they are typed in the command pane, and one of them,
 `/issue-evidence-add`, which attaches a statement to an issue as evidence,
-runs there without `--dev`, so any circle may produce one.
-`coordinator/circle.py` run on its own runs every verb at its `Self>`
-prompt, `--dev` or not.
+runs there in any circle, so any circle may produce one.
+`coordinator/circle.py` run on its own runs every one of them at its
+`Self>` prompt.
 
 **The transcript is the record.** Everything downstream — each part's
 short_term, the close report, the safety net that backfills a lost

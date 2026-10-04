@@ -784,6 +784,18 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # other node — R549 (D128): "not shown but not out of reach". Before the
     # arm below, which indexes the same corpus a query reads.
     RC.recall_issues_shown_set(IP.issue_shown_read(chosen))
+    # AND WHAT EACH PART'S OWN TWO WINDOWS CARRY, so `[recall: mine ...]` leaves exactly those
+    # memories out — the already-sent rule for memory rows, R585 ("yes,
+    # (a)", 2026-10-02): the memories that land in BLOCK 3's settled list and BLOCK 4's tail,
+    # read by the same split, order and cut the assembly above made. Never costs the open: a
+    # part whose set cannot be read keeps nothing out, as before this rule.
+    import part_mid_term_manager as MT
+    for p in parts:
+        try:
+            RC.recall_memories_shown_set(p, RC.recall_memories_shown_read(p, MT.part_mid_term_cutoff_read(p)))
+        except Exception as e:                                  # noqa: BLE001
+            seam.emit("command", f"  [recall: {p}'s carried memories not read ({type(e).__name__}: "
+                                 f"{e}) — none left out of its recall]")
     # AND THE INDEX IS ARMED HERE, ON A BACKGROUND THREAD — R470/B121. It
     # overlaps the capture, the pre-warm and the opening round, all of which are
     # API waits, so the fastembed model load and the first-ever embed of six

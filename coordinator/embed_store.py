@@ -16,8 +16,9 @@ THE CACHE IS DERIVED, NEVER THE RECORD. One NDJSON row per embedded chunk
 a row is missing or its text's sha moved. Deleting a cache costs one
 re-embed, nothing else.
 
-THE MODEL IS FETCHED ONCE, on first use, into fastembed's own local cache
-(~65 MB). After that everything is offline. A missing fastembed, or a
+THE MODEL IS FETCHED ONCE, on first use, into work/embed_model/ (~65 MB;
+MODEL_CACHE, B145 — fastembed's own default was the system temp folder, which
+Windows cleans). After that everything is offline. A missing fastembed, or a
 first use with no network, raises IndexUnavailable with the command that
 fixes it — a missing tool is never a silent pass.
 """
@@ -34,22 +35,45 @@ EMBED_MODEL = "BAAI/bge-small-en-v1.5"
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
 INSTALL_HINT = ".venv/Scripts/python.exe -m pip install fastembed"
 
+# WHERE THE MODEL IS KEPT — B145, 2026-10-03. fastembed's default is the system temp folder,
+# and on 2026-10-02 Windows emptied it: the model files went, the folder stayed, and every
+# local search failed until it was removed by hand. The model lives under this tree's own
+# work/ now, gitignored — derived bytes, one download to recreate, never the record.
+MODEL_CACHE = pathlib.Path(__file__).resolve().parent.parent / "work" / "embed_model"
+
+# B142: the one outbound fetch besides the model calls, said aloud before it starts.
+DOWNLOAD_NOTICE = (f"first use of local search: downloading the embedding model {EMBED_MODEL} "
+                   f"(about 65 MB, once) into work/embed_model/ — it lets parts search their "
+                   f"own record; offline after this. To decline, open with --recall-arm off.")
+
 
 class IndexUnavailable(Exception):
     """The local stack is not usable; the message says what fixes it."""
 
 
-def memory_embedder_read():
+def memory_model_cached_read(cache: "pathlib.Path | None" = None) -> bool:
+    """Is the model already on disk? True when the cache holds a model file — an `.onnx`
+    anywhere under it. A folder whose files were cleaned away (the 2026-10-02 shape) reads
+    as not cached, which is the answer that matters: a download is coming."""
+    d = cache or MODEL_CACHE
+    return d.is_dir() and any(d.rglob("*.onnx"))
+
+
+def memory_embedder_read(cache: "pathlib.Path | None" = None):
     """texts -> list of vectors, through fastembed. Lazy: the import and
-    the model load happen on first search, never at process start."""
+    the model load happen on first search, never at process start. The model is
+    read from (and on first use downloaded into) MODEL_CACHE, or `cache` when a
+    probe names one."""
     try:
         from fastembed import TextEmbedding
     except ImportError as e:
         raise IndexUnavailable(
             f"local semantic search needs fastembed ({e}) — install it: "
             f"{INSTALL_HINT}") from e
+    d = cache or MODEL_CACHE
     try:
-        model = TextEmbedding(model_name=EMBED_MODEL)
+        d.mkdir(parents=True, exist_ok=True)
+        model = TextEmbedding(model_name=EMBED_MODEL, cache_dir=str(d))
     except Exception as e:                                # noqa: BLE001
         raise IndexUnavailable(
             f"the embedding model {EMBED_MODEL} did not load ({e}) — first "

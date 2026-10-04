@@ -225,6 +225,7 @@ def circle_delta_is_silent(statements: int, present: bool, status: str) -> bool:
 def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
     """Paths in the circle commit that circle_commit_paths() would not have
     staged for this OT. Empty means the commit is exactly its own shape."""
+    import remember_ordering_manager as ROM     # the ordering file's name has one home
     out = []
     for p in paths:
         p = p.replace("\\", "/")
@@ -237,7 +238,10 @@ def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
                   and p.endswith((f"/short_term_{ot}.toml", f"/short_term_{ot}.md")))
               or p in (_RP.record_rel("circles/working_sets.toml"), _RP.record_rel("self/proposals.toml"),
                        _RP.record_rel("self/coalesce.toml"),
-                       _RP.record_rel("self/remember.toml")))   # in the close commit since 2026-09-14
+                       _RP.record_rel("self/remember.toml"),    # in the close commit since 2026-09-14
+                       _RP.record_rel(f"self/{ROM.FILE}"))      # Self's orderings, 2026-10-02
+              or (p.startswith(_RP.record_rel("parts") + "/")
+                  and p.endswith(f"/{ROM.FILE}")))
         if not ok:
             out.append(p)
     return out

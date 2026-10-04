@@ -233,8 +233,12 @@ The comment flags a fixed prior defect: the original version split once and cut 
 ```
 {
     Read long_term.md (with settled sections stripped); call
-    part_mid_term_dreams_locate(part); call part_mid_term_dreamt_read(part); read every remember.toml
-    record's text via remember_manager.remember_read(). Concatenate long_term, every
+    part_mid_term_dreams_locate(part); call part_mid_term_dreamt_read(part); read the text of every
+    remember.toml record Self has not SIDELINED, via
+    remember_ordering_manager.remember_ordering_kept_read() — the whole register when no ordering
+    is on file. (Sidelining a memory moves this part's hash once; Self's ORDER does not move it.
+    Ruled, R587: a sidelined memory does not feed the distillate.)
+    Concatenate long_term, every
     dream, every Dreamt section, and (if any exist) the remembered lines
     into one "text" string used identically for both hashing and the
     model call — ensuring the hash and the API call see exactly the

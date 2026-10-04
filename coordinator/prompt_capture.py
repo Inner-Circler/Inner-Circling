@@ -277,8 +277,13 @@ def _remember_expectation(part: str) -> dict:
     at verify time, the same degrade block_items() takes."""
     try:
         import remember_manager as RM
-        es = sorted(RM.remember_read(part), key=lambda r: r.get("date", ""),
-                    reverse=True)
+        # THE KEPT RECORDS: a memory Self sidelined (remember_ordering_manager) is
+        # promised to no block, so it is not what this looks for. Self's ORDER
+        # needs no account here — when every kept record fits, every one is
+        # shown wherever it stands; when they do not, `windowed` skips.
+        import remember_ordering_manager as ROM
+        es = sorted(ROM.remember_ordering_kept_read(part),
+                    key=lambda r: r.get("date", ""), reverse=True)
         if not es:
             return {"records": 0}
         rendered = sum(len("\n- " + str(r.get("text", "")) + "\n") for r in es)

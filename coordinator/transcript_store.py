@@ -700,6 +700,15 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
                           record_dir(ROOT, "self") / "proposals.toml",
                           record_dir(ROOT, "self") / "coalesce.toml",
                           record_dir(ROOT, "self") / "remember.toml") if p.is_file()]
+    # SELF'S ORDERINGS, 2026-10-02 — remember_ordering.toml beside each remember.toml
+    # (remember_ordering_manager.py). The ordering tool writes them BETWEEN circles and runs
+    # no git of its own, so this commit is what files them: the same lifecycle Self's own
+    # remember register has had since it joined this list, and the circle that files an
+    # ordering is the first one whose prompts it shaped. Every one in this group, not only the
+    # parts that wrote — Self may have ordered a part that then sat silent.
+    import remember_ordering_manager as ROM
+    paths += sorted(parts_dir.glob(f"*/{ROM.FILE}"))
+    paths += [p for p in (record_dir(ROOT, "self") / ROM.FILE,) if p.is_file()]
     return paths
 
 

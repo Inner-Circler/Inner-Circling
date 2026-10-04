@@ -72,6 +72,9 @@ sys.path.insert(0, str(_pl.Path(__file__).resolve().parent))
 sys.path.insert(0, str(_pl.Path(__file__).resolve().parent.parent
                        / "memory"))   # the issue-graph code (R203)
 del _pl
+# B141: a missing package names the interpreter, before the first third-party import raises.
+import record_paths as _RPD                                         # noqa: E402
+_RPD.system_dependencies_ensure()
 import identity as ID              # SELF_ID + the display name
 import issue_commands as IC        # /issue-label-update, issue-relationship-add
 import part_roster as R                 # B29: the one roster every reader shares
@@ -635,6 +638,11 @@ def main() -> int:
         gitrepo.system_git_unconfigured_report_reset()
     except ImportError:
         pass
+    # THE FAILURE LIST IS PER CIRCLE, for the same reason. The Ticker kept one
+    # process from 2026-09-30 to 2026-10-01, and the 1153 close reported the
+    # 2242 circle's synthesis failure — repaired the night before — as "THIS
+    # CIRCLE". In place, never reassigned: seam's own note on why.
+    FAILURES.clear()
     _roster_refresh()
     ap = argparse.ArgumentParser(description="Inner Circling circle — local coordinator")
     ap.add_argument("--live", action="store_true",

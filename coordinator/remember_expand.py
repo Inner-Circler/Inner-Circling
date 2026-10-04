@@ -52,6 +52,7 @@ import time
 
 import seam
 import remember_manager as RM
+import remember_ordering_manager as ROM
 import part_roster as R
 import transcript_store as TS
 from record_paths import ROOT, record_dir
@@ -253,8 +254,12 @@ def remember_pack_build_from(records: list[dict], part_tag: str, topic: str,
 
 def remember_pack_build(part: str, topic: str, labels: list[str],
                exclude_ot: str) -> tuple[str, list]:
+    """The pack is built from the memories Self has not sidelined (remember_ordering_manager): a
+    sidelined memory is carried in no prompt block, and this pack is BLOCK 4's. (A part's own
+    [recall: ...] still reaches it — that is the part's act, not a block.)"""
     tag = dict(R.ROSTER).get(part, part)
-    return remember_pack_build_from(RM.remember_read(part), tag, topic, labels, exclude_ot)
+    return remember_pack_build_from(ROM.remember_ordering_kept_read(part), tag, topic, labels,
+                                    exclude_ot)
 
 
 # ------------------------------------------------------------------- apply

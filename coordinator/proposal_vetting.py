@@ -162,6 +162,33 @@ def _offer_fill(cmd: dict, row: dict) -> str:
     return ""
 
 
+def _proposer_fill(cmd: dict, row: dict) -> None:
+    """R592/R591: who REPORTED the evidence, or PROPOSED the action — the row's first
+    source, as a part key ("Judge" -> "judge", "Self" -> "self"). Self's own rows say self,
+    which issue_commands reads as the default; nothing else on the command moves."""
+    src = (row.get("sources") or ["Self"])[0]
+    import part_roster as _PR
+    key = "self" if src == "Self" else _PR.DIR_BY_TAG_ALL.get(src, src.lower())
+    if cmd.get("verb") == "issue-evidence-add":
+        cmd["reported_by"] = key
+    elif cmd.get("verb") in ("issue-action-add", "issue-action-update"):
+        cmd["by"] = key
+
+
+def _part_quote_fill(cmd: dict, row: dict) -> None:
+    """A PART's proposed issue-relationship-add carries its proof in the row's
+    `quote` — words the part said, verbatim in the transcript. The comment
+    inside its bracket is not: the room strips a part's bracket, so the
+    transcript never holds it, and issue_commands' fallback (comment, else the
+    command line) — right for a ruling Self TYPED, whose line the coordinator
+    wrote — made an attested edge the gate refuses as "quote not verbatim".
+    Found 2026-10-01: P-11, the Idealist's n0033 leads-to n0015, the first
+    part-proposed edge ever approved. Self's own rows are left as they were."""
+    if (cmd.get("verb") == "issue-relationship-add" and row.get("quote")
+            and "Self" not in row.get("sources", [])):
+        cmd["quote"] = row["quote"]
+
+
 def _proposed_on_file(cmd: dict, graph: dict) -> dict | None:
     """The edge an issue-relationship-add names, when it sits on its source
     node as PROPOSED — R530 — else None. The same match issue_precheck()'s
@@ -188,7 +215,7 @@ def _promote_command(cmd: dict, edge: dict) -> dict:
     return {"verb": "issue-relationship-update", "node": cmd["node"],
             "type": cmd["type"], "target": cmd["target"], "value": "attested",
             "comment": cmd.get("comment", ""), "line": cmd.get("line", ""),
-            "circle": cmd["circle"],
+            "quote": cmd.get("quote", ""), "circle": cmd["circle"],
             "why": (f"Promoted from proposed: Self approved the add (R530). It "
                     f"had been proposed{since}, asked of {asked}; its basis: {was}")}
 
@@ -246,6 +273,8 @@ def _propose_approve(row: dict) -> tuple[bool, str]:
         # directory — the isolation test_proposal_manager' fixtures (placeholder
         # circle values, everything mocked) exist to keep.
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
+        _part_quote_fill(cmd, row)
+        _proposer_fill(cmd, row)
         if why := _offer_fill(cmd, row):
             return False, f"not applied — {why} (stays pending)"
         graph = issue_graph_now_read()
@@ -405,6 +434,7 @@ def _propose_validate(row: dict) -> str:
     if shape["shape"] in ("issue-relationship-add", "issue_command"):
         import proposal_manager as PR
         cmd = dict(shape["parsed"], circle=PR.circle_ref(row.get("circle", "")))
+        _part_quote_fill(cmd, row)
         if why := _offer_fill(cmd, row):
             return f"would fail — {why}"
         graph = issue_graph_now_read()

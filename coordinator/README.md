@@ -103,6 +103,12 @@ synchronously, inside every completing live `/close`, via
   a reader authorising a paid live run was told otherwise. The Rollback recipe
   below was short by the same two files.
 
+  One record file beside those registers is written by NO circle:
+  `parts/<name>/remember_ordering.toml` and `self/remember_ordering.toml`, Self's
+  ordering of that register's memories and the ones Self sidelined. The ordering tool
+  (`ui/remember_ordering.py`) writes it between circles; a circle READS it when its
+  blocks are assembled at the open, and its close commit files it.
+
 Identity files are opened read-only in both modes.
 
 ---
@@ -252,7 +258,7 @@ Then:
 - **Cache is working.** In the usage report, `hit rate` should be **≥ 85%**
   after two or three rounds. If it is near 0%, the prefix is changing between
   calls — stop and investigate rather than running a full circle.
-- **Pre-warm.** `warmed <part>` lines are printed ONLY under `--dev`
+- **Pre-warm.** `warmed <part>` lines are printed ONLY in developer mode
   (`llm_client.py`'s emit sits inside `if CS.dev_mode:`), so a plain live run
   shows none — check `work/prompts/<OT>/` instead. The FIRST part in the
   shuffle writes the shared B1+B2 as well as its own B3, so it lands around
@@ -592,6 +598,11 @@ circle's date added — or `git diff` them, since both are tracked. **This recip
 said "Nothing else was touched" until 2026-09-09, which was wrong in exactly
 these two places.**
 
+**A `remember_ordering.toml` in this circle's commit is not this circle's
+writing.** The ordering tool wrote it before the circle opened and the close
+only filed it. Leave it: it is Self's ordering of a part's memories, and
+reverting a circle does not undo it.
+
 There is no other path to fall back to — the agent-teams mechanism is retired.
 
 ## The briefing SPLIT — there is no file, and no filter, any more
@@ -704,10 +715,6 @@ it at the user (`#16`).
 --resume OPEN_TIME  reopen an unclosed circle, e.g. --resume
                     2026-08-02_1259; the transcript must round-trip
                     byte-for-byte or the resume is refused. Default: unset.
---dev[=BOOL]        open with dev mode on — DEV-table verbs, the help
-                    hierarchy, and progress lines all answer at this
-                    terminal's Self> prompt. Bare --dev means --dev=true.
-                    Default: off.
 --list-resumable    show circles that have a transcript but no close
                     report, then exit. Default: off.
 --dev-cmd VERB ...  run ONE always-available command directly from the

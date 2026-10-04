@@ -237,6 +237,73 @@ def command_remember_list(rest: str) -> None:
 # (R557). Nothing spells it now.
 
 
+# ------------------------------------------------------------ /memory-edit
+# THE MEMORY TOOL FROM THE COMMAND PANE — R588, 2026-10-03. One verb reaches
+# every door the always-available surface has: circling.py's command pane, the Ticker's (whose
+# bridge hands the same engine the line), and `circle.py --dev-cmd`. The tool is
+# ui/remember_ordering.py (R580); it runs AS ITS OWN PROCESS beside this one —
+# the operator's (a): the tool rebinds its process's group as you click, which inside this
+# process would pull a running circle's record out from under it — and opens the page in the
+# browser itself. Started with --with-parent on a pipe this process holds and never writes, so
+# it stops when this program does; a second /memory-edit while it runs reopens the page.
+#
+# The tool's own stdout is a pipe too, never inherited: under the Ticker this process's stdout
+# IS the relay to the window, and a stray line on it would break the protocol. The first line
+# the tool prints is its address, and that is read here.
+_MEMORY_EDIT: dict = {}            # the tool this process started: {"proc", "url"}
+MEMORY_EDIT_TOOL = "ui/remember_ordering.py"
+
+
+def memory_edit_launch(argv: list, cwd) -> tuple:
+    """Start the tool and return (process, address) — its first printed line is the address.
+    The one thing /memory-edit does that a probe must not: test_dispatch_partition.py stands
+    this in for a fake and asks the verb bare like every other."""
+    import subprocess
+    flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
+    proc = subprocess.Popen(argv, cwd=str(cwd), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                            stderr=subprocess.DEVNULL, text=True, encoding="utf-8",
+                            errors="replace", **flags)
+    line = proc.stdout.readline() if proc.stdout else ""
+    url = line.split(" at ", 1)[1].strip() if " at http" in line else ""
+    return proc, url
+
+
+def command_memory_edit(rest: str) -> None:
+    """/memory-edit — the memory tool, in the browser, on the active group's Self record."""
+    import sys
+    import webbrowser
+    from record_paths import ROOT, group_read
+    if rest.strip():
+        seam.emit("command", "  usage: /memory-edit — it takes no argument; the page has the group and part selects")
+        return
+    tool = ROOT / MEMORY_EDIT_TOOL
+    if not tool.is_file():
+        seam.emit("command", f"  the memory tool is not installed here ({MEMORY_EDIT_TOOL} is missing)")
+        return
+    at = f"{group_read()}/self"
+    proc = _MEMORY_EDIT.get("proc")
+    if proc is not None and proc.poll() is None and _MEMORY_EDIT.get("url"):
+        url = _MEMORY_EDIT["url"].split("#", 1)[0] + f"#{at}"
+        try:
+            webbrowser.open(url)
+        except Exception:                                        # noqa: BLE001
+            pass
+        seam.emit("command", f"  the memory tool is already running — opened again at {url}")
+        return
+    try:
+        proc, url = memory_edit_launch([sys.executable, str(tool), "--with-parent", "--at", at], ROOT)
+    except Exception as e:                                       # noqa: BLE001
+        seam.emit("command", f"  the memory tool could not be started ({type(e).__name__}: {e})")
+        return
+    if not url:
+        seam.emit("command", "  the memory tool started but did not say its address — it may have stopped; "
+                             "start it by hand from a terminal to see why")
+        return
+    _MEMORY_EDIT.update(proc=proc, url=url)
+    seam.emit("command", f"  the memory tool is open in your browser at {url} — it stops when this program "
+                         f"does; a saved ordering applies from the next circle")
+
+
 class _NoCircleGuard:
     """The write guard a no-circle /remember uses: Self's own register, the
     real tree, and no open time — which is what makes the one-per-circle
@@ -1543,6 +1610,11 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # step and no live/sandbox split to make. (/recall arrived here
         # too, through the synonym table, until 2026-09-11.)
         command_remember_list(rest_text)
+    elif head == "/memory-edit":
+        # THE MEMORY TOOL, as its own process (R588). Writes
+        # nothing here and nothing reaches the room; the tool's own file is
+        # read by the next circle's open.
+        command_memory_edit(rest_text)
     elif head == "/remember":
         # WRITES Self's own register — the command-pane twin of the
         # [remember: ...] annotation, 2026-08-21. No transcript step: a
@@ -1620,6 +1692,8 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         command_issue_apply(rest_text.split())
     elif head == "/issue-list":
         command_issue_list(rest_text)
+    elif head == "/issue-action-list":
+        command_issue_action_list(rest_text)
     elif head in ("/issue-status", "/issue-status-update"):
         # THE PROPERTY CONSTRUCT, R261. A bare property READS; `= <value>`
         # WRITES; and `<object>-<property>-update <id> <value>` is the same
@@ -1674,15 +1748,66 @@ def command_issue_list(rest: str = "") -> None:
             seam.emit("command", "  no issues on file")
             return
         n_live = sum(1 for d in docs if d.get("status") == "live")
-        seam.emit("command", f"\n  {len(docs)} issue(s), {n_live} live")
+        # R591/R592: OCCURRENCES (circles with present evidence) and AGING (circles since
+        # the last mention), counted here and stored nowhere; a live issue aged to the
+        # issue_aging_look setting is listed below for Self to look at — never closed.
+        closed = S_.issue_circles_closed_read()
+        counts = {d["id"]: S_.issue_counts_read(d, closed) for d in docs}
+        seam.emit("command", f"\n  {len(docs)} issue(s), {n_live} live"
+                             f"     occ = circles it appeared in · age = circles since"
+                             f" last mentioned")
         for i, d in enumerate(docs, start=1):
-            prefix = f"  {i:>3}  {d['id']}  "
+            c = counts[d["id"]]
+            age = "-" if c["aging"] is None else c["aging"]
+            prefix = f"  {i:>3}  {d['id']}  occ {c['occurrences']:>2}  age {age:>2}  "
             label = d.get("label") or "(no label)"
             seam.emit("command", prefix + label[:max(10, HELP_WIDTH - len(prefix))])
+        look = [d for d in docs if d.get("status") == "live"
+                and (counts[d["id"]]["aging"] or 0) >= S_.AGING_LOOK]
+        if look:
+            seam.emit("command", f"\n  to look at — live, unmentioned for {S_.AGING_LOOK} "
+                                 f"circle(s) or more: easing, or being avoided?")
+            for d in look:
+                seam.emit("command", f"    {d['id']}  age {counts[d['id']]['aging']}  "
+                                     f"{(d.get('label') or '')[:HELP_WIDTH - 20]}")
         seam.emit("command", "\n" + SS.register_list_footer(len(docs), "/issue-list"))
 
     _list_or_record(rest, "/issue-list", listing,
                     lambda n: SS.register_record_show(docs, n, S_.ORDER, verb="/issue-list"))
+
+
+def command_issue_action_list(rest: str = "") -> None:
+    """`/issue-action-list [nNNNN]` — R591, 2026-10-03. Bare: every issue that carries
+    actions, each practice as it stands. With an id: that issue's practices, each with how
+    it has changed — an update appends, so the earlier wordings are still on file and are
+    shown, newest first, under the current one."""
+    nid = rest.strip()
+    docs = sorted((S_.issue_read(f) for f in S_.issue_nodes_read()), key=lambda d: d["id"])
+    if nid:
+        docs = [d for d in docs if d["id"] == nid]
+        if not docs:
+            seam.emit("command", f"  no issue {nid} — /issue-list shows them")
+            return
+    shown = 0
+    for d in docs:
+        acts = S_.issue_actions_read(d)
+        if not acts:
+            if nid:
+                seam.emit("command", f"  {d['id']} has no actions yet — "
+                                     f'/issue-action-add {d["id"]} "practice"')
+            continue
+        shown += 1
+        seam.emit("command", f"\n  {d['id']}  {(d.get('label') or '')[:HELP_WIDTH - 10]}")
+        for n, rows in acts.items():
+            cur = rows[-1]
+            seam.emit("command", f"    {n}. {cur['practice']}")
+            seam.emit("command", f"       {cur['by']}, {cur['source']}, {cur['dated']}"
+                                 + (f" — {cur['why']}" if cur.get("why") else ""))
+            if nid:
+                for old in reversed(rows[:-1]):
+                    seam.emit("command", f"       was ({old['dated']}): {old['practice']}")
+    if not nid and not shown:
+        seam.emit("command", '  no issue carries an action yet — /issue-action-add nNNNN "practice"')
 
 
 def command_issue_status_all() -> None:

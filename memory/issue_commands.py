@@ -215,7 +215,55 @@ HEADS: dict[str, str] = {
     "/issue-relationship-add": "issue-relationship-add",
     "/issue-evidence-add": "issue-evidence-add",
     "/issue-relationship-status": "issue-relationship-update",
+    # R591, 2026-10-03: an issue's ACTIONS, evolving practices. Ruling forms like the rest —
+    # recorded to the transcript, applied at close, proposable by a part.
+    "/issue-action-add": "issue-action-add",
+    "/issue-action-update": "issue-action-update",
 }
+
+ACTION_ADD_USAGE = 'usage: /issue-action-add nNNNN "practice" ["why"]'
+ACTION_UPDATE_USAGE = 'usage: /issue-action-update nNNNN <action#> "practice" ["why"]'
+# R592: a trailing `absent` on /issue-evidence-add marks evidence AGAINST — the issue was
+# expected at the cited statement and did not appear.
+ABSENT = "absent"
+# R597: a part's bracket may name another member and their words.
+SHOWN_BY = "shown-by"
+SHOWN_BY_FORM = '[proposed: /issue-evidence-add nNNNN "why" shown-by <Tag> "their words"]'
+
+
+def _parse_action(verb: str, args: list[str], circle: str,
+                  line: str) -> tuple[dict | None, str]:
+    """`/issue-action-add nNNNN "practice" ["why"]` and
+    `/issue-action-update nNNNN <action#> "practice" ["why"]` (R591). An update names the
+    practice by its number within the node — `/issue-action-list nNNNN` shows them."""
+    usage = ACTION_ADD_USAGE if verb == "issue-action-add" else ACTION_UPDATE_USAGE
+    if not args:
+        return None, usage
+    node = args[0]
+    if not NODE_RE.match(node):
+        return None, f"{node} is not an issue id (nNNNN)"
+    rest = args[1:]
+    n = None
+    if verb == "issue-action-update":
+        if not rest:
+            return None, usage
+        try:
+            n = int(rest[0])
+        except ValueError:
+            return None, f"{rest[0]!r} is not an action number — {usage}"
+        if n < 1:
+            return None, "an action number is 1 or greater"
+        rest = rest[1:]
+    if not rest or not rest[0].strip():
+        return None, f"the practice is required — {usage}"
+    if len(rest) > 2:
+        at = len(args) - len(rest)
+        return None, _too_many_why(args, at + 2, at, "practice", line, usage)
+    cmd = {"verb": verb, "node": node, "practice": rest[0],
+           "why": rest[1] if len(rest) > 1 else "", "circle": circle, "line": line.strip()}
+    if n is not None:
+        cmd["n"] = n
+    return cmd, ""
 
 
 def issue_command_parse(line: str, circle: str, *,
@@ -246,6 +294,14 @@ def issue_command_parse(line: str, circle: str, *,
 
     if verb == "issue-relationship-update":
         return _parse_update_relation(args, circle, line)
+
+    if verb in ("issue-action-add", "issue-action-update"):
+        return _parse_action(verb, args, circle, line)
+
+    # R592: a trailing `absent` marks evidence against, in either form.
+    absent = verb == "issue-evidence-add" and len(args) > 1 and args[-1] == ABSENT
+    if absent:
+        args = args[:-1]
 
     if verb == "issue-label-update":
         if len(args) < 2:
@@ -296,12 +352,23 @@ def issue_command_parse(line: str, circle: str, *,
                           f"statement it rides in: {form}")
         if len(args) < 2 or not args[1].strip():
             return None, f"why is required — {form}"
-        if len(args) > 2:
+        # R597: `shown-by <Tag> "their words"` names another member
+        # and the words of theirs being offered; propose_lifecycle looks for them,
+        # exactly, in that member's own statements earlier in the circle.
+        shown = {}
+        if len(args) > 2 and args[2] == SHOWN_BY:
+            if len(args) < 5 or not args[3].strip() or not args[4].strip():
+                return None, f"shown-by names the member and their words — {SHOWN_BY_FORM}"
+            shown = {"shown_by": args[3], "words": args[4]}
+            if len(args) > 5:
+                return None, _too_many_why(args, 5, 4, "their words", line, SHOWN_BY_FORM)
+        elif len(args) > 2:
             return None, _too_many_why(args, 2, 1, "why", line, form)
         # part/quote/source are NOT set here: propose_lifecycle reads them off the
-        # statement this bracket rides in, and the proposal row carries them to vetting.
-        return {"verb": verb, "node": args[0], "why": args[1],
-                "circle": circle, "line": line.strip()}, ""
+        # statement this bracket rides in — or, with shown-by, off the named member's —
+        # and the proposal row carries them to vetting.
+        return {"verb": verb, "node": args[0], "why": args[1], "absent": absent,
+                **shown, "circle": circle, "line": line.strip()}, ""
 
     if verb == "issue-evidence-add":
         if len(args) < 2:
@@ -326,7 +393,7 @@ def issue_command_parse(line: str, circle: str, *,
         # against the live transcript right after this call, and adds
         # them to this same dict before issue_precheck()/issue_command_apply() ever see it.
         return {"verb": verb, "node": node, "stmt": stmt, "why": args[2],
-                "circle": circle, "line": line.strip()}, ""
+                "absent": absent, "circle": circle, "line": line.strip()}, ""
 
     return None, f"unknown issue verb {verb!r}"
 
@@ -382,8 +449,22 @@ def issue_precheck(cmd: dict, graph: dict[str, dict]) -> str:
         if node["status"] != "live":
             return f"{cmd['node']} is `{node['status']}`, not live"
         if any(e.get("quote") == cmd["quote"]
+               and bool(e.get("absent")) == bool(cmd.get("absent"))
                for e in node.get("evidence", [])):
-            return "that statement is already attached as evidence to this issue"
+            return ("that statement is already attached as evidence "
+                    + ("against " if cmd.get("absent") else "") + "this issue")
+    if cmd["verb"] in ("issue-action-add", "issue-action-update"):
+        node = graph[cmd["node"]]
+        if node["status"] != "live":
+            return f"{cmd['node']} is `{node['status']}`, not live"
+        have = {a.get("n") for a in node.get("actions", [])}
+        if cmd["verb"] == "issue-action-update":
+            if cmd["n"] not in have:
+                return (f"{cmd['node']} has no action {cmd['n']} — "
+                        f"/issue-action-list {cmd['node']} shows its actions")
+            cur = [a for a in node.get("actions", []) if a.get("n") == cmd["n"]][-1]
+            if cur.get("practice") == cmd["practice"]:
+                return "that is already the practice"
     if cmd["verb"] == "issue-relationship-update":
         e = next((x for x in graph[cmd["node"]].get("edges", [])
                   if x.get("type") == cmd["type"]
@@ -403,7 +484,13 @@ def issue_describe(cmd: dict) -> str:
     if cmd["verb"] == "issue-evidence-add":
         q = cmd["quote"]
         q = q if len(q) <= 40 else q[:40] + "..."
-        return f'{cmd["node"]} evidence <- {cmd["part"]}: "{q}"'
+        kind = "evidence against (absent)" if cmd.get("absent") else "evidence"
+        return f'{cmd["node"]} {kind} <- {cmd["part"]}: "{q}"'
+    if cmd["verb"] in ("issue-action-add", "issue-action-update"):
+        p = cmd["practice"]
+        p = p if len(p) <= 50 else p[:50] + "..."
+        which = f"action {cmd['n']}" if cmd.get("n") else "new action"
+        return f'{cmd["node"]} {which} <- "{p}"'
     if cmd["verb"] == "issue-relationship-update":
         return (f'{cmd["node"]} --{cmd["type"]}--> {cmd["target"]} '
                 f'status -> {cmd["value"]}')
@@ -429,7 +516,7 @@ def issue_dump(cmds: list[dict], circle: str) -> str:
         out.append("[[command]]")
         for k in ("verb", "node", "label", "type", "target", "value",
                   "comment", "line", "stmt", "part", "quote", "why",
-                  "source"):
+                  "source", "n", "practice", "absent", "reported_by", "by"):
             if c.get(k):
                 out.append(f'{k} = {_q(str(c[k]))}')
         out.append("")
@@ -437,13 +524,36 @@ def issue_dump(cmds: list[dict], circle: str) -> str:
 
 
 # --------------------------------------------------------------- applying
+def _flag(v) -> bool:
+    """A flag as the record round-trips it: issue_dump() writes every value as a string, so
+    a command re-applied from its commands_<OT>.toml carries `"True"` where the live one
+    carried True."""
+    return v is True or str(v).lower() == "true"
+
+
+def _by(cmd: dict, key: str) -> str:
+    """Who reported or ruled it — `self` for a line Self typed, the proposing part for a
+    part's bracket (proposal_vetting fills `key` from the row's first source)."""
+    return str(cmd.get(key) or "self")
+
+
 def _history(cmd: dict, today: str) -> str:
     if cmd["verb"] == "issue-evidence-add":
         q = cmd["quote"]
         q = q if len(q) <= 60 else q[:60] + "..."
-        return (f'- **{today}** — Evidence added by Self in '
+        kind = "Evidence against (absent) added" if _flag(cmd.get("absent")) else "Evidence added"
+        by = _by(cmd, "reported_by")
+        who = "Self" if by == "self" else f"Self, reported by {by},"
+        return (f'- **{today}** — {kind} by {who} in '
                 f'`{cmd["circle"]}`, from {cmd["part"]}: "{q}". '
                 f'Why: {cmd["why"]}')
+    if cmd["verb"] in ("issue-action-add", "issue-action-update"):
+        did = "updated" if cmd["verb"] == "issue-action-update" else "added"
+        by = _by(cmd, "by")
+        who = "Self" if by == "self" else f"Self, proposed by {by}"
+        return (f'- **{today}** — Action {cmd["n"]} {did} by {who} in '
+                f'`{cmd["circle"]}`: "{cmd["practice"]}".'
+                + (f' Why: {cmd["why"]}' if cmd.get("why") else ""))
     if cmd["verb"] == "issue-relationship-update":
         return (f'- **{today}** — Relation `{cmd["type"]}` -> {cmd["target"]} '
                 f'status set to **{cmd["value"]}** by Self in '
@@ -475,13 +585,32 @@ def issue_command_apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None
         # call — by circle.py for a typed one, by propose_lifecycle for a part's
         # offer (see module docstring) — this function never touches a
         # transcript, only the cmd dict it was handed.
-        doc.setdefault("evidence", []).append({
-            "part": cmd["part"], "source": cmd["source"],
-            "quote": cmd["quote"], "why": cmd["why"]})
+        row = {"part": cmd["part"], "source": cmd["source"],
+               "quote": cmd["quote"], "why": cmd["why"]}
+        # R592: who REPORTED it, when not the one who showed it — and whether it is
+        # evidence AGAINST. Both left off when they say nothing, so a plain row is
+        # byte-identical to one written before R592.
+        if _by(cmd, "reported_by") != cmd["part"]:
+            row["reported_by"] = _by(cmd, "reported_by")
+        absent = _flag(cmd.get("absent"))
+        if absent:
+            row["absent"] = True
+        doc.setdefault("evidence", []).append(row)
         hb = list(doc.get("held_by", []))
-        if cmd["part"] not in hb:
+        if not absent and cmd["part"] not in hb:      # an absent row makes no holder
             hb.append(cmd["part"])
         doc["held_by"] = hb
+    elif cmd["verb"] in ("issue-action-add", "issue-action-update"):
+        # R591: append-only. An add takes the next number; an update appends a row with
+        # the same number, and the latest row of a number is the practice as it stands.
+        acts = doc.setdefault("actions", [])
+        if cmd["verb"] == "issue-action-add":
+            cmd["n"] = max((a["n"] for a in acts), default=0) + 1
+        row = {"n": int(cmd["n"]), "practice": cmd["practice"]}
+        if cmd.get("why"):
+            row["why"] = cmd["why"]
+        row.update(by=_by(cmd, "by"), source=cmd["circle"], dated=today)
+        acts.append(row)
     elif cmd["verb"] == "issue-relationship-update":
         # issue_precheck() already found exactly this edge and confirmed the
         # value differs from its current status — re-finding it here
@@ -501,19 +630,23 @@ def issue_command_apply_one(cmd: dict, issues: pathlib.Path, today: str) -> None
             # below); what they replace — who was asked, on what basis —
             # arrives in `why`, and so in the history line.
             e["basis"] = f"Ruled by Self in the room, {cmd['circle']}."
-            e["quote"] = cmd.get("comment") or cmd.get("line") or ""
+            e["quote"] = (cmd.get("quote") or cmd.get("comment")
+                          or cmd.get("line") or "")
             e["dated"] = today
             e.pop("ask", None)
     else:
         # The quote is the COMMENT if he gave one, else the whole command
         # line. Either is verbatim in the transcript, because the coordinator
         # wrote both — the comment is a substring of the line it sits in.
+        # A PART's proposed add arrives with `quote` set instead — its own
+        # words, since its bracket never reaches the transcript
+        # (proposal_vetting._part_quote_fill, 2026-10-01).
         # .get, not [ ]: issue_dump() omits empty fields and the __main__ TOML
         # loader restores no defaults, so a comment-less ruling re-applied
         # from its commands_<ot>.toml arrives with no `comment` key at all
         # — bare indexing broke the documented sandbox-promotion path for
         # every such ruling (2026-08-18 review, tier 2 #16).
-        quote = cmd.get("comment") or cmd.get("line") or ""
+        quote = cmd.get("quote") or cmd.get("comment") or cmd.get("line") or ""
         doc.setdefault("edges", []).append({
             "type": cmd["type"], "target": cmd["target"],
             "status": "attested", "dated": today,

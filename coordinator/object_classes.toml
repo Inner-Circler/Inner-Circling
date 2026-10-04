@@ -76,8 +76,9 @@ re-verified against that transcript on each run of the gate.
 [[class]]
 name = "part"
 description = '''
-The roster — who is in the circle. A part is a directory under parts/ with
-its own identity; `part.toml`'s presence is what makes it one.
+The roster — who is in the circle. Each group member (a "part", in the IFS
+group, and in these verbs' names) is a directory under parts/ with its own
+identity; `part.toml`'s presence is what makes it one.
 '''
 
 [[class]]
@@ -90,16 +91,16 @@ questions, recorded in its `part.toml` and rendered into its prompt.
 [[class]]
 name = "group"
 description = '''
-A named, reusable roster — a list of existing part directory names,
-invoked by circle.py --group <name> instead of --parts. Deleting a group
-removes only the name, never its member parts.
+A named, reusable roster of group members — a list of existing member
+directory names, invoked by circle.py --group <name> instead of --parts.
+Deleting a group removes only the name, never its members.
 '''
 
 [[class]]
 name = "practice"
 description = '''
 How the CIRCLE behaves — the practices you have ruled in, projected into
-every part's shared prompt block.
+every group member's shared prompt block.
 '''
 
 [[class]]
@@ -119,7 +120,7 @@ shared block will carry.
 [[class]]
 name = "propose"
 description = '''
-What the parts have proposed and you have not yet ruled on. Staged, never
+What the group members have proposed and you have not yet ruled on. Staged, never
 applied until you rule.
 '''
 
@@ -127,14 +128,27 @@ applied until you rule.
 name = "remember"
 description = '''
 Your own private record. A verb by spelling and a noun by use — `remember
-<text>` writes one, and the register is yours alone; a part's own is
+<text>` writes one, and the register is yours alone; a member's own is
 private to it and never reachable from here.
+'''
+
+# ADDED 2026-10-03 (R588). The class exists so /memory-edit is
+# reachable by browsing, as the settings class was for its verbs. "memory" and
+# not "remember" because the operator asked for a noun lead and for the broad
+# word: the tool is for every part's memories and Self's own, and may grow
+# from order and sidelining to salience and annotation.
+[[class]]
+name = "memory"
+description = '''
+Every group member's memories, and your own, as the memory tool shows them in your
+browser: which are carried into a member's prompt, in what order, and which are
+sidelined. The tool opens with `memory-edit`; nothing here is typed at cmd>.
 '''
 
 [[class]]
 name = "prompt"
 description = '''
-What a part is actually sent — the assembled system prompt, block by block.
+What a group member is actually sent — the assembled system prompt, block by block.
 '''
 
 # ADDED 2026-08-28 (R379). The class exists so the three
@@ -168,7 +182,7 @@ running waits for the next one to open, and says so when you make it.
 name = "redact-alias"
 description = '''
 A name, place or org you have chosen to hide in the CIRCLE pane's redacted
-view — never a part's own name, which this cannot touch. `add`/`update`
+view — never a member's own name, which this cannot touch. `add`/`update`
 take a canonical label and optional extra forms in quotes; `list`/`delete`
 number the same way every other register here does.
 '''
@@ -190,7 +204,7 @@ detected again.
 name = "observation"
 description = '''
 What SYNTHESIS noticed about the CIRCLE as a whole, addressed to you and
-never projected into any part's prompt — the one place in this project
+never projected into any member's prompt — the one place in this project
 explicitly meant to hold personal material. `add` writes your own entry
 directly; `continue` adds a new one onto a prior entry without touching
 it; `retire` hides one from the everyday list without removing it;

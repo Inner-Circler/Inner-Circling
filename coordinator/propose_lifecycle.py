@@ -313,10 +313,34 @@ def proposal_collect(transcript: list[dict]) -> list[dict]:
                 continue          # R255 — superseded by this part's later one
             p = {"index": i, "display": e["display"], "text": e["text"], **rec}
             if _is_offer(rec):
-                p.update(part=e["speaker"], statement=e["text"],
-                         quote=_own_quote(transcript, i, rec["span"]))
+                shown = rec["cmd_shape"]["parsed"].get("shown_by")
+                if shown:
+                    p.update(_shown_by_resolve(transcript, i, shown,
+                                               rec["cmd_shape"]["parsed"]["words"]))
+                else:
+                    p.update(part=e["speaker"], statement=e["text"],
+                             quote=_own_quote(transcript, i, rec["span"]))
             out.append(p)
     return out
+
+
+def _shown_by_resolve(transcript: list[dict], i: int, tag: str, words: str) -> dict:
+    """R597: another member's words, offered by the part at statement `i`.
+    Looked for EXACTLY in that member's own statements before `i` in this circle — that
+    member's only, never the room. Found, the offer carries that member as `part` (SHOWN BY)
+    and the words as its quote; the offering part is REPORTED BY, from the row's sources.
+    Not found, the offer carries the reason and is staged refused: nothing is attached."""
+    import part_roster as _PR
+    key = "self" if tag.lower() == "self" else _PR.DIR_BY_TAG_ALL.get(
+        tag, _PR.DIR_BY_TAG_ALL.get(tag.title(), tag.lower()))
+    hit = next((e for e in transcript[:i]
+                if e.get("speaker") == key and not e.get("cmd") and words in e.get("text", "")),
+               None)
+    if hit is None:
+        return {"part": key, "statement": "", "quote": "",
+                "refused_why": f"{tag} said no such words earlier in this circle — the words "
+                               f"must be theirs, exactly"}
+    return {"part": key, "statement": hit["text"], "quote": words}
 
 
 def proposal_coalesce(transcript: list[dict],
@@ -391,8 +415,8 @@ def proposal_coalesce(transcript: list[dict],
             row = {"kind": "command", "text": p["text"].strip(),
                    "sources": [p["display"]], "part": p["part"], "quote": p["quote"]}
             if not p["quote"]:
-                row["refused"] = ("its statement is only the bracket — there are "
-                                  "no words to attach")
+                row["refused"] = p.get("refused_why") or (
+                    "its statement is only the bracket — there are no words to attach")
             offers.append(row)
             continue
         arg = p["text"].strip()

@@ -23,6 +23,9 @@ clarity, courage, connectedness — speak from it.
              | "/issue-label-update " <id> " " '"' <name> '"' [ " " '"' <why> '"' ]
              | "/issue-add " <label> [ " " <description> [ " " <absence> ] ]
              | "/issue-evidence-add " <id> " " '"' <why> '"'
+                   [ " shown-by " <part> " " '"' <their words> '"' ] [ " absent" ]
+             | "/issue-action-add " <id> " " '"' <practice> '"' [ " " '"' <why> '"' ]
+             | "/issue-action-update " <id> " " <n> " " '"' <practice> '"' [ " " '"' <why> '"' ]
              | "/practice-add " <text>
              | "/better-option-add " <text>
 <!-- slot: proposed_exemplars -->
@@ -41,6 +44,9 @@ clarity, courage, connectedness — speak from it.
     I held the offer back again just now, before it was said.
     [proposed: /issue-evidence-add n0035 "it happened here, in the room"]
 
+    [proposed: /issue-action-add n0035 "say the offer out loud before
+    deciding whether it is welcome"]
+
 <!-- slot: proposed_notes -->
 - `/practice-add` is how the CIRCLE behaves, and reaches every part.
 - `/better-option-add` is a move available to Self, for Self alone to carry
@@ -56,10 +62,22 @@ clarity, courage, connectedness — speak from it.
   all three it opens live; with the name alone it waits as a lead until Self
   completes it.
 - `/issue-evidence-add` asks Self to attach THIS statement — your words around
-  the bracket — to an issue as evidence, and says why. It names no other
-  statement and can offer only your own words. If another part said what you
-  want attached, agree with them or say it again yourself, in the statement
-  that carries the bracket.
+  the bracket — to an issue as evidence, and says why. When it is another
+  part's words that show the issue, say so in the room and name them:
+  `shown-by <Part> "their words"`, their words exactly as they said them
+  earlier in this circle — "I hear the Child's 'I will just be quiet then'
+  as the old verdict. What do you think?" Self reads the exchange and rules;
+  words that part did not say are refused. Add ` absent` after the why when the issue was
+  EXPECTED here and did not appear — that is evidence too, and often the
+  clearest sign a practice is taking hold.
+- Watch for an issue on the list being expressed again, and for a behavior
+  no issue names yet — something that may not serve Self and is not tracked.
+  The first is `/issue-evidence-add`; the second is `/issue-add`.
+- `/issue-action-add` records what is being TRIED when an issue appears — a
+  practice, not a result; it will change as it is learned.
+  `/issue-action-update` revises practice <n> of that issue — the numbers
+  are the ones under "Being practised" on the issue; the earlier wording is
+  kept.
 - You can read the live `BP-` entries in your prompt: those for every part,
   and the better options for Self, in the Circle identity block, under "Best
   practices" and "Better options (for Self)"; any addressed to you alone in

@@ -555,8 +555,12 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                     what.append("memory"
                                 + (f" ({pay['salience']})" if pay.get("salience")
                                    else "")
+                                + (f" (rated {len(pay['ratings'])}/5)"
+                                   if pay.get("ratings") is not None else "")
                                 + (" (continues)" if pay.get("continues")
                                    else ""))
+                if pay.get("rerate"):
+                    what.append(f"re-rated its prior memory ({pay['rerate']['occasion']})")
                 for s in pay.get("truncated", []):
                     say(f"  {pay['part']}: TRUNCATED — {s}")
                 for s in pay.get("suspect", []):
@@ -612,11 +616,21 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
                 doc, rec = RM.remember_dreamt_render(
                     _load_or(RM._real_path(part), {RM.TABLE: []}),
                     pay["memory"], ot, pay.get("continues", False),
-                    salience=pay.get("salience"))
+                    salience=pay.get("salience"), ratings=pay.get("ratings"))
                 _stage_toml(tx, _RP.record_rel(f"parts/{part}/remember.toml"), doc,
                             RM.TABLE, RM.ORDER)
                 if RM.remember_chain_qualifies(doc, rec):
                     lt_candidates.append((part, rec))
+            # B125: the prior memory's blind re-rate, its own register beside remember.toml.
+            # Staged only when the part gave at least one rating or a still-applies answer —
+            # a re-rate that says nothing is not a row.
+            rr = pay.get("rerate")
+            if rr and (rr["ratings"] or rr["still_applies"]):
+                rdoc, _rrec = RM.remember_rerate_render(
+                    _load_or(RM.remember_rerate_path_read(part), {}),
+                    rr["memory"], ot, rr["ratings"], rr["still_applies"], rr["occasion"])
+                _stage_toml(tx, _RP.record_rel(f"parts/{part}/rerate.toml"), rdoc,
+                            RM.RERATE_TABLE, RM.RERATE_ORDER)
             # part_relationships.toml: NOT staged, 2026-08-22 — see
             # inter_circle's own module docstring, "part_relationships IS
             # INERT." DREAMING no longer produces a rel_doc at all.

@@ -38,6 +38,55 @@ import pathlib
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent                      # this tree's own root, e.g. <checkout>/
+
+# B141, 2026-10-03 — A MISSING PACKAGE NAMES THE INTERPRETER, NOT A TRACEBACK. On the
+# 2026-09-15 macOS install the packages were installed into .venv and the program was run with
+# another Python, and what the person saw was a bare ModuleNotFoundError naming `tomli_w` —
+# the first third-party import reached (issue_commands -> issue_schema), never the cause. The
+# operator: *"A missing dependency upon a successful .venv populate is almost certainly not
+# invoking the correct python."* So each entry point asks this, before its own imports, and
+# prints the answer instead of a traceback. find_spec only — nothing is imported here, and this
+# module stays stdlib-only. fastembed is optional at runtime (a missing one is answered where
+# search runs), so it is not asked about.
+import sys as _sys
+RUNTIME_PACKAGES = (("anthropic", "anthropic"), ("dotenv", "python-dotenv"),
+                    ("tomli_w", "tomli-w"))
+
+
+def system_dependencies_missing_render() -> str:
+    """"" when every runtime package imports in THIS interpreter; otherwise what to tell
+    the person — which packages, the interpreter that is running, the .venv one, and the two
+    commands that fix it, spelled for the platform."""
+    import importlib.util
+    need = list(RUNTIME_PACKAGES)
+    if _sys.version_info < (3, 11):
+        need.append(("tomli", "tomli"))
+    missing = [pip for mod, pip in need if importlib.util.find_spec(mod) is None]
+    if not missing:
+        return ""
+    win = _sys.platform.startswith("win")
+    venv = ROOT / ".venv" / ("Scripts/python.exe" if win else "bin/python")
+    here = pathlib.Path(_sys.executable)
+    same = venv.is_file() and here.resolve() == venv.resolve()
+    lines = [f"  This Python is missing packages Inner Circling needs: {', '.join(missing)}.",
+             f"    running:   {here}",
+             f"    .venv:     {venv}" + ("" if venv.is_file() else "   (not found)")]
+    if venv.is_file() and not same:
+        lines += ["  The packages are most likely installed in .venv and this is a different "
+                  "Python.", "  Run the program with the .venv one:",
+                  f'    "{venv}" {pathlib.Path(_sys.argv[0]).as_posix() if _sys.argv[0] else "..."}']
+    lines += ["  Or install them into the Python that is running:",
+              f'    "{here}" -m pip install -r "{ROOT / "requirements.txt"}"']
+    return "\n".join(lines)
+
+
+def system_dependencies_ensure() -> None:
+    """The entry points' one line: print the answer and stop, rather than let the first
+    third-party import raise. Exit 2 — the run never started."""
+    msg = system_dependencies_missing_render()
+    if msg:
+        print(msg, file=_sys.stderr)
+        raise SystemExit(2)
 SANDBOX = ROOT / "work" / "sandbox"     # moved from coordinator/sandbox, R176, 2026-08-15
 # THE DIRECTORIES HOLDING RUNNING CODE — the one home, and every scope that needs it derives
 # from here: system_lint_verify.SCOPE, file_line_endings_verify.SCOPE_DIRS, the hook's own lint

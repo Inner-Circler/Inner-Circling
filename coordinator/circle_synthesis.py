@@ -41,6 +41,7 @@ import part_roster as R                                             # noqa: E402
 import LLM_response_disassembler as RD                         # noqa: E402
 import setting_manager as SET                                         # noqa: E402
 import part_dreaming as PD                                     # noqa: E402  _call, _report_chars
+import llm_client as LC                                        # noqa: E402  the effort step-down
 from record_paths import ROOT, record_dir                             # noqa: E402
 
 # NOTABLE+ — MEMORY_DESIGN.md's own "MEASURED... directional but thin, n=1 passing-tier row"
@@ -225,7 +226,11 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
     for p in payloads:
         if p.get("memory"):
             dreams.append(f"[{R.TAG_BY_DIR[p['part']]}] {p['memory']}")
-            if p.get("salience") in CJ_SALIENCE_TIERS:
+            # B125: a payload carrying the legacy word is read as before; a RATED one feeds
+            # the journal unless it is QUIET — "every stage but unnoticed", the exact
+            # translation of notable-and-up (docs/MEMORY_DESIGN.md, CIRCLE-WIDE).
+            if (p.get("salience") in CJ_SALIENCE_TIERS if p.get("salience")
+                    else not RM.remember_quiet_read(p.get("ratings") or {})):
                 # labeled by PART_DIR, not the display tag dreams uses above — this is
                 # the exact string CIRCLE JOURNAL PROVENANCE must echo back as a tag,
                 # and a bare part_dir is what circle_journal_manager's own provenance
@@ -273,12 +278,34 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
     body = "\n\n".join(user)
     # RECORDED WITH NO PART (R412): the synthesis speaks for the circle, and
     # its turn file is named by kind — Per_turn_synthesis_<time>_<seq>.json.
-    reply = PD._call(system, body, SYNTH_MAX_TOKENS, kind="synthesis",
-                  record=True)
-    text, usage, stop_reason = reply.text, reply.usage, reply.raw_stop
-    PD._report_chars(say, "synthesis", {"system": system, "user": body,
+    #
+    # UNPARSEABLE -> RETRY, TWICE (the operator, 2026-09-30: "add the automatic
+    # retry. If that fails, retry again, downgrading effort one step *just for
+    # that retry*."). Circle 2026-09-30_2242 spent 11,999 of 12,000 tokens
+    # thinking and returned no text; the same request, re-run, took 5,539. One
+    # call's thinking cannot be predicted, so the cap stays and a retry absorbs
+    # the rare long one. The third attempt lowers effort on the wire only — the
+    # setting does not move, and the ceiling is unchanged.
+    step_down = LC.stream_tuning_step_down()
+    attempts = (("synthesis", None), ("synthesis retry", None),
+                ("synthesis retry, effort "
+                 + (step_down or {}).get("effort", "unchanged (none lower)"),
+                 step_down))
+    usage = err = stop_reason = None
+    for i, (label, tuning) in enumerate(attempts):
+        if i:
+            say(f"  synthesis unparseable ({err}; stop {stop_reason}) — "
+                f"retrying: {label}")
+        reply = PD._call(system, body, SYNTH_MAX_TOKENS, kind="synthesis",
+                      record=True, tuning=tuning)
+        text, stop_reason = reply.text, reply.raw_stop
+        usage = (reply.usage if usage is None
+                 else RD.message_usage_merge(usage, reply.usage))
+        PD._report_chars(say, label, {"system": system, "user": body,
                                      "reply": text, "blocks": user})
-    sections, err = RD.message_sections_read(text, SYN_HEADERS)
+        sections, err = RD.message_sections_read(text, SYN_HEADERS)
+        if sections is not None:
+            break
 
     # ONE INSISTENT RE-ASK ON A CAP BREACH (R192: "ask the LLM again and
     # insist"). Only when the overshoot would actually be REFUSED — an answer

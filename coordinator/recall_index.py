@@ -22,9 +22,14 @@ mid-circle writes, inside an ordinary statement:
 THE ALREADY-SENT RULE (the operator, 2026-08-30): *"if a part is already
 being given a prompt segment, don't return it in search."* What recall
 serves is the INVISIBLE record. So `mine` excludes mid_term (Block 3 IS
-it); `issues` excludes exactly the nodes this circle's Block 2 gives a
-heading, and reaches every other — an open issue the circle did not bring
-in, a lead, the settled/declined/retired history (R549,
+it) and, since R585 (2026-10-02, "yes, (a)"), the
+memories the part's own two windows CARRY this circle — the ones that land
+in BLOCK 3's settled list and BLOCK 4's tail at the open, which circle_open
+hands over per part (recall_memories_shown_set()); a memory carried but cut
+from a window is not in the prompt and still comes back, and a sidelined
+one always does. `issues` excludes exactly the nodes this circle's Block 2
+gives a heading, and reaches every other — an open issue the circle did
+not bring in, a lead, the settled/declined/retired history (R549,
 D128: *"not shown but not out of reach"*; circle_open hands over the shown
 set, recall_issues_shown_set()); and there is NO practices scope
 at all — broadcast rows (All parts AND Self) are in every Block 1, a
@@ -138,8 +143,18 @@ MAX_EXCERPTS = 3
 # THE BUDGET IS TIER A's, SHARED ON PURPOSE: remember_expand's EXPAND_CAP
 # (1200 chars) was sized as what one recall delivery may put in front of a
 # part, and this reply is the same delivery through a different door — one
-# fact, one owner (system_unique_home_verify's rule; the 4000-pair lesson). The
-# per-excerpt window derives from it rather than declaring its own number.
+# fact, one owner (system_unique_home_verify's rule; the 4000-pair lesson).
+#
+# FILLED FROM THE BEST MATCH DOWN — the operator, 2026-10-02 (R586):
+# "Perhaps if recall returned up to 1200 characters, with as much of each
+# record of the best match(es) as will fit in the 1200?" So the first hit gets
+# as much of its record as the budget holds, whole when it fits; what is left
+# goes to the next, up to MAX_EXCERPTS. That is R402's own "whole chunks for
+# semantic", which the even three-way split (400 each, the first 400 of every
+# record) never delivered: a part's own memory runs 1,100-3,200 characters, so
+# a hit handed back a quarter of it (work/ablations/2026-10-02/RECALL_BY_DREAMT.md).
+# EXCERPT_CHARS is that even share, kept as the floor a KWIC window is centred in
+# when no room is given and as the studies' point of comparison; it caps nothing.
 from remember_expand import EXPAND_CAP as TOTAL_CHARS  # noqa: E402
 EXCERPT_CHARS = TOTAL_CHARS // MAX_EXCERPTS
 CACHE_DIR = P.ROOT / "work" / "recall_index"
@@ -318,6 +333,13 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
                 doc = tomllib.loads(f.read_text(encoding="utf-8"))
             except Exception:                             # noqa: BLE001
                 continue
+            # A memory Self SIDELINED (remember_ordering.toml beside this
+            # file) IS in the corpus. It is carried in no prompt block —
+            # that is what sidelined means — and this corpus is the record a
+            # part's blocks do not carry, the already-sent rule's own point;
+            # the operator's reading, 2026-10-02: the part's own words leave
+            # the block and stay within reach of its [recall: ...]. The
+            # row's index — its id here — is its position in the FILE.
             for i, row in enumerate(doc.get(table, [])):
                 body = str(row.get(field, "")).strip()
                 if body:
@@ -380,12 +402,13 @@ def recall_records_read(scope: str, part: str, root: pathlib.Path) -> list:
 
 
 # ------------------------------------------------------------- the search
-def _kwic(text: str, needle_norm: str) -> str:
-    """A window centered on the first normalized match, the match marked."""
+def _kwic(text: str, needle_norm: str, width: int = EXCERPT_CHARS) -> str:
+    """A window of about `width` characters centred on the first normalized match, the match
+    marked; the whole record when it is shorter than that."""
     pos = _norm(text).find(needle_norm)
     if pos < 0:
-        return text[:EXCERPT_CHARS]
-    half = (EXCERPT_CHARS - len(needle_norm)) // 2
+        return text[:width]
+    half = max(0, width - len(needle_norm)) // 2
     lo, hi = max(0, pos - half), min(len(text), pos + len(needle_norm) + half)
     window = text[lo:hi]
     pre = "..." if lo > 0 else ""
@@ -412,6 +435,32 @@ def _provenance(r: dict) -> str:
     return " · ".join(b for b in bits if b)
 
 
+def _excerpts(hits: list) -> list:
+    """The reply's numbered excerpts from the ranked hits — (rank_key, needle, record) triples,
+    best first. FILLED FROM THE BEST MATCH DOWN (R586): each hit takes as much of
+    its record as the TOTAL_CHARS budget still holds — whole when it fits, else the first of it
+    with "..." marking the cut; an exact hit's KWIC window widens to that room. At most
+    MAX_EXCERPTS, fewer when the budget is spent."""
+    lines, total = [], 0
+    for _key, needle, r in hits[:MAX_EXCERPTS]:
+        room = TOTAL_CHARS - total
+        if room <= 0:
+            break
+        text = r["text"]
+        if needle:
+            ex = _kwic(text, _norm(needle), max(0, room - 10))     # "..." either side, << >> marks
+        elif len(text) <= room:
+            ex = text
+        else:
+            ex = text[:max(0, room - 3)] + "..."
+        if not ex:
+            break
+        total += len(ex)
+        score = f"  ({r['score']:.2f})" if "score" in r else ""
+        lines.append(f"{len(lines) + 1}. [{_provenance(r)}]{score}\n{ex}")
+    return lines
+
+
 def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
             embedder=None) -> str:
     """One query, one private reply text. Raises nothing on a sound stack;
@@ -420,6 +469,12 @@ def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
     recs: list = []
     for s in q["scopes"]:
         recs += recall_records_read(s, part, root)
+    # The already-sent rule for memory rows (R585): a memory this part's
+    # windows carry this circle is left out before anything ranks, so it neither takes a slot
+    # nor a share of the budget. Applied only where circle_open handed a set over.
+    carried = _SHOWN_MEMORIES.get(part)
+    if carried:
+        recs = [r for r in recs if r["id"] not in carried]
     hits: list = []                     # (rank_key, excerpt_kind, record)
     seen: set = set()
 
@@ -458,17 +513,7 @@ def recall_execute(part: str, q: dict, root: pathlib.Path | None = None,
                 take(r, (2, -r["score"]), None)
 
     hits.sort(key=lambda h: h[0])
-    lines, total = [], 0
-    for _key, needle, r in hits[:MAX_EXCERPTS]:
-        ex = (_kwic(r["text"], _norm(needle)) if needle
-              else r["text"][:EXCERPT_CHARS])
-        if total + len(ex) > TOTAL_CHARS:
-            ex = ex[:max(0, TOTAL_CHARS - total)]
-        if not ex:
-            break
-        total += len(ex)
-        score = f"  ({r['score']:.2f})" if "score" in r else ""
-        lines.append(f"{len(lines) + 1}. [{_provenance(r)}]{score}\n{ex}")
+    lines = _excerpts(hits)
 
     head = "query understood: scope=" + ",".join(q["scopes"])
     if q["exact"]:
@@ -500,6 +545,35 @@ def recall_issues_shown_set(ids) -> None:
     None puts back the history-only filter; recall_clear() does that too."""
     global _SHOWN
     _SHOWN = None if ids is None else set(ids)
+
+
+# The memory chunks each part's own two windows CARRY this circle — {part: {"remember:<i>", ...}},
+# the file index being this corpus's own id for a memory — handed over at open
+# (R585); a part with no entry has nothing left out. Cleared with the rest.
+_SHOWN_MEMORIES: dict = {}
+
+
+def recall_memories_shown_set(part: str, ids) -> None:
+    """At circle open, after recall_clear(): the chunk ids of the memories `part`'s BLOCK 3 and
+    BLOCK 4 windows carry this circle, which `mine` then leaves out — the already-sent rule,
+    applied to memory rows ("yes, (a)", 2026-10-02). None forgets the part's set."""
+    if ids is None:
+        _SHOWN_MEMORIES.pop(part, None)
+    else:
+        _SHOWN_MEMORIES[part] = set(ids)
+
+
+def recall_memories_shown_read(part: str, cutoff: "str | None") -> set:
+    """The chunk ids of the memories `part`'s two windows carry at an open with this `cutoff` —
+    the same split, order and budget cut the assembly makes, asked of
+    remember_prompt_projection.remember_window_read(): a row that LANDS, by its place in the
+    file. Carried-but-cut and sidelined memories are not in it."""
+    import remember_manager as RM
+    import remember_ordering_manager as ROM
+    import remember_prompt_projection as RPP
+    landing = {row["key"] for row in RPP.remember_window_read(part, cutoff)["rows"] if row["lands"]}
+    keys = ROM.remember_ordering_keys_read(RM.remember_read(part))
+    return {f"remember:{i}" for i, k in enumerate(keys) if k in landing}
 
 # THE INDEX ARM'S OWN STATE (B121, R470). Reentrant because the arm holds the
 # lock while asking for the embedder, which takes it too — one lock, so the
@@ -584,6 +658,10 @@ def recall_index_arm_start(parts: list, root: pathlib.Path | None = None, *,
                   f"{time.monotonic() - t0:.1f}s"
                   + (f"; not armed:{failed}]" if failed else "]"))
 
+    # B142: the first live open downloads the model; say so before the thread starts, on the
+    # main thread, so the notice precedes the progress display rather than racing it.
+    if not ES.memory_model_cached_read():
+        seam.emit("command", f"  [{ES.DOWNLOAD_NOTICE}]")
     _ARM_THREAD = threading.Thread(target=_build, name="recall-index-arm",
                                    daemon=True)
     _ARM_THREAD.start()
@@ -621,6 +699,7 @@ def recall_clear() -> None:
     if t is not None and t.is_alive():
         t.join(5.0)
     _ARM_THREAD, _ARM_REPORT, _SHOWN = None, None, None
+    _SHOWN_MEMORIES.clear()
     with _INDEX_LOCK:
         _EMBEDDER = None
     _PENDING.clear()

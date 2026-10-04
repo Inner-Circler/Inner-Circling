@@ -24,8 +24,8 @@ follows `root = true` (a root's status is live) — and
 `memory/issue_gate.py` refuses a file whose name and fields disagree — so
 renaming a file does not change its status, it breaks the node. Change a
 status with `memory/issue_status.py` (`coordinator/docs/issue_status.md`),
-or with `/issue-status nNNNN = <value>` inside a circle, a developer verb
-in the two-pane interface: either one writes the field, the rename and a
+or with `/issue-status nNNNN = <value>` typed at the `Self>` prompt of
+`coordinator/circle.py` run on its own: either one writes the field, the rename and a
 history line as one act. The `n####` inside never changes.
 
 **No nodes ship, on purpose, and your ids will be your own.**
@@ -33,9 +33,9 @@ Node ids are allocated in your graph, counting up from the first. They
 do not
 correspond to anyone else's — an id in someone else's notes means
 nothing here. The first node is asked for at your first live open — the
-initialization dialog — and after that one is added by `/issue-add` at
-the cmd> prompt (a developer verb in the two-pane interface), or by a
-part's `[proposed: /issue-add ...]` that you approve at a close.
+initialization dialog — and after that one is added by `/issue-add`
+typed at the `Self>` prompt of `coordinator/circle.py` run on its own, or
+by a part's `[proposed: /issue-add ...]` that you approve at a close.
 
 `issue_model.md` beside this file is not a node and does not go: it is the
 prologue every circle's BLOCK 2 (circle_objectives) is built on, and a circle refuses to open

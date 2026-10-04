@@ -52,7 +52,8 @@ which no format can verify for you:
                   its sense, and EDGE_TYPES has not carried it since.
     EVIDENCE      a live node cites something. Ruled 2026-07-29: "I prefer not
                   to record possible issues."
-    AGREEMENT     `held_by` and the evidence sections name the same parts.
+    AGREEMENT     `held_by` and the PRESENT evidence rows name the same parts; an
+                  ABSENT row (R592) makes no holder.
 """
 
 from __future__ import annotations
@@ -310,10 +311,14 @@ def main() -> int:
                 fails.append(f"{p.name}: cites missing {e['source']} "
                              f"(looked in {src.parent.name}/)")
                 continue
-            if q in seen:
+            # Keyed with the ABSENT flag (R592): one statement may be cited once as
+            # where the issue appeared and once as where it was expected and did not
+            # — two different claims. The same claim twice is still refused.
+            key = (q, bool(e.get("absent")))
+            if key in seen:
                 fails.append(f"{p.name}: the same quote is attached twice: "
                              f"{q[:50]}...")
-            seen.add(q)
+            seen.add(key)
             txt = text_of(src)
             span_who = None
             i = txt.find(q)
@@ -379,7 +384,10 @@ def main() -> int:
                              f"in {e['source']}: nothing was adopted")
 
         # ---- held_by agrees with the evidence -------------------------------
-        held, gave = set(doc.get("held_by", [])), {e["part"] for e in ev}
+        # PRESENT rows only (R592): an ABSENT row says the issue did NOT appear in
+        # that member's statement, which makes no one a holder.
+        held = set(doc.get("held_by", []))
+        gave = {e["part"] for e in ev if not e.get("absent")}
         if held - gave:
             fails.append(f"{p.name}: in held_by but no evidence: "
                          f"{sorted(held - gave)}")

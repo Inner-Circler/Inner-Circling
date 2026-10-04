@@ -197,7 +197,9 @@ _PROPOSE_FORMS: dict[str, str] = {
     "/issue-relationship-add": '/issue-relationship-add nNNNN <type> nMMMM ["comment"]',
     "/issue-label-update": '/issue-label-update nNNNN "new name" ["why"]',
     "/issue-add": '/issue-add "label" ["description" ["absence"]]',
-    "/issue-evidence-add": '/issue-evidence-add nNNNN "why"',
+    "/issue-evidence-add": '/issue-evidence-add nNNNN "why" [shown-by <Tag> "their words"] [absent]',
+    "/issue-action-add": '/issue-action-add nNNNN "practice" ["why"]',       # R591
+    "/issue-action-update": '/issue-action-update nNNNN <action#> "practice" ["why"]',
     "/practice-add": "/practice-add <text>",
     "/better-option-add": "/better-option-add <text>",
 }

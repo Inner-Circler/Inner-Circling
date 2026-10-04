@@ -22,6 +22,16 @@ them (the ROOT the suites DO rebind is read inside remember_read(), which is the
     remember_settled_project / remember_tail_project      the same split at part_mid_term_manager.part_mid_term_cutoff_read(part)
     remember_settled_render / remember_tail_render          (text, note) — what prompt_build's Block 3 / Block 4 call
     remember_rank(part)                  the salience/chain-depth order part_mid_term_manager.part_mid_term_refresh() reads
+    remember_window_read(part, cutoff)   every memory with its target block and whether it lands — the
+                                        ordering tool's estimate, cut by the same _fit() the two windows use
+
+SELF'S ORDERING IS RESPECTED HERE (2026-10-02). remember_ordering_manager.py holds, per entity, the
+memories Self has ordered and the ones Self sidelined. _arrange() is the one place that order is applied,
+for both windows, remember_rank() and remember_window_read() alike: a sidelined memory is left out; a
+memory the ordering does not name is unsorted and goes first, newest first under the bounded salience
+reorder; the ordered ones follow, most kept first — the list top-down, read until the budget is spent,
+never reversed. With no ordering on file _arrange() returns exactly the salience order this module has
+always cut its windows from.
 """
 
 from __future__ import annotations
@@ -36,6 +46,39 @@ from remember_manager import remember_read                          # noqa: E402
 import remember_manager as RM                                       # noqa: E402  RM.BUDGET, RM.SALIENCE_K,
 # RM.SALIENCE_WEIGHT read at use — a setting-owned constant is never from-imported (a copy the
 # settings refresh at the fold cannot reach; 2026-09-14)
+import remember_ordering_manager as ROM                             # noqa: E402  Self's ordering
+
+
+# ------------------------------------------------------------ Self's ordering
+def _load(part: str) -> tuple[list[dict], dict[int, str], dict]:
+    """ONE read of the register and of Self's ordering of it: the records in file order, each
+    record's ordering key by the record's own identity, and the ordering. Every function below
+    arranges the SAME list objects it read here — a second remember_read() would hand back new
+    dicts the key map does not know."""
+    records = remember_read(part)
+    keys = {id(r): k for r, k in zip(records, ROM.remember_ordering_keys_read(records))}
+    return records, keys, ROM.remember_ordering_read(part)
+
+
+def _arrange(es: list[dict], keys: dict[int, str], ordering: dict,
+             depths: dict[str, int]) -> list[dict]:
+    """`es` — one window's records, newest first — in the order that window is cut from.
+
+    A SIDELINED memory is left out. An UNSORTED one (the ordering does not name it: it was written
+    after the last save) goes first, newest first under the bounded salience reorder — the rule
+    that applied to every record before an ordering existed. The ORDERED ones follow, most kept
+    first, exactly as Self left them: salience does not move a memory Self has placed.
+
+    NO ORDERING ON FILE IS THE OLD ORDER, by construction and not by a branch: nothing is
+    sidelined, nothing is ordered, every record is unsorted, and this returns
+    _salience_order(es, depths)."""
+    sidelined = ordering.get("sidelined") or {}
+    rank = {k: i for i, k in enumerate(ordering.get("order") or [])}
+    kept = [r for r in es if keys.get(id(r)) not in sidelined]
+    unsorted = [r for r in kept if keys.get(id(r)) not in rank]
+    ordered = sorted((r for r in kept if keys.get(id(r)) in rank),
+                     key=lambda r: rank[keys[id(r)]])
+    return _salience_order(unsorted, depths) + ordered
 
 # ----------------------------------------------------------------- projection
 # HEAD_NONE (an explicit "## What you have chosen to remember / *Nothing
@@ -77,15 +120,18 @@ def remember_project(part: str) -> tuple[str, dict]:
     day's topic or focus issues re-enters BLOCK 4 quoted above its minting
     circle's excerpt, trial arm permitting. The standing view this
     function renders is unchanged either way."""
-    es = sorted(remember_read(part), key=lambda r: r.get("date", ""), reverse=True)
+    records, keys, ordering = _load(part)
+    es = sorted(records, key=lambda r: r.get("date", ""), reverse=True)
     if not es:
         return "", {"part": part, "total": 0, "shown": 0, "omitted": 0,
                     "chars": 0}
     # BOUNDED salience/chain-depth reorder (DESIGN_V2, 2026-08-22) — a
     # no-op on any record without a salience tag, so this is byte-identical
-    # to before on every register that predates the extension.
-    es = _salience_order(es, _chain_depths(es))
-    body, shown, used = _window(es)      # the ONE budget window (tier 5 #43)
+    # to before on every register that predates the extension. Self's
+    # ordering, when there is one, is applied in the same place: _arrange().
+    # `es` stays the whole list, so a sidelined memory counts as on file and
+    # as omitted — the header's two words for exactly what it is.
+    body, shown, used = _window(_arrange(es, keys, ordering, _chain_depths(es)))
     omitted = len(es) - shown
     head = (f"## What you have chosen to remember\n\n"
             f"*{len(es)} on file, {shown} shown here within your "
@@ -180,9 +226,54 @@ def remember_rank(part: str) -> list[dict]:
     by salience/chain-depth — part_mid_term_manager.part_mid_term_derive()'s DESIGN_V2 input (step 8:
     "the score-ranked record order"). Not used by remember_project()'s own budget
     window's SOURCE list (that stays entries(part) — this is a separate,
-    read-only view for the mid_term derivation call)."""
-    es = sorted(remember_read(part), key=lambda r: r.get("date", ""), reverse=True)
-    return _salience_order(es, _chain_depths(remember_read(part)))
+    read-only view for the mid_term derivation call).
+
+    Self's ordering applies here as it does to the windows (_arrange): a sidelined
+    memory is not in the list, and an ordered one stands where Self placed it."""
+    records, keys, ordering = _load(part)
+    es = sorted(records, key=lambda r: r.get("date", ""), reverse=True)
+    return _arrange(es, keys, ordering, _chain_depths(records))
+
+
+def _line(r: dict) -> str:
+    """One memory as its window renders it."""
+    # TAGGED WITH THE CIRCLE IT WAS WRITTEN IN — R<OT>:, the operator's
+    # own spelling, 2026-08-27. The register has stamped `circle` on
+    # every record since the field was added; until now the projection
+    # threw it away, so a part received an undated list and could not
+    # tell a memory written last night from one written in June.
+    #
+    # THE Coordinator STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
+    # the OT reaches no block and no message of its view — verified
+    # 2026-08-27 against prompt_messages_render() and a rendered prompt — so a
+    # part-authored tag could only ever be guessed. Stamping also covers
+    # the 25 records already on file, which no instruction could.
+    #
+    # THE TEXT IS UNTOUCHED, which is the point: the tag is a prefix
+    # OUTSIDE `r['text']`, so what a part gets back is still its own
+    # words byte-for-byte. An absent or blank `circle` renders bare
+    # rather than as `R: ` — no record has one today, and a degrade is
+    # cheaper than a migration.
+    ot = str(r.get("circle") or "").strip()
+    tag = f"R{ot}: " if ot else ""
+    return f"\n- {tag}{r['text']}\n"
+
+
+def _fit(es: list[dict]) -> list[tuple[dict, str]]:
+    """The records of `es` that fit BUDGET, in order, each with the text it renders as. ONE
+    definition of "fits the budget" for the windows and for the ordering tool's estimate
+    (remember_window_read), so the estimate cannot drift from what a prompt carries.
+
+    `break`, not `continue`, at the budget edge — see _window()."""
+    out: list[tuple[dict, str]] = []
+    used = 0
+    for r in es:
+        block = _line(r)
+        if used + len(block) > RM.BUDGET:
+            break
+        out.append((r, block))
+        used += len(block)
+    return out
 
 
 def _window(es: list[dict]) -> tuple[str, int, int]:
@@ -202,45 +293,21 @@ def _window(es: list[dict]) -> tuple[str, int, int]:
     out of view" — recency is the priority lever, so the window ends at
     the first record that does not fit. Measured before changing:
     2026-08-19, no part's register comes near BUDGET, so no live
-    projection changes a byte."""
-    lines, used, shown = [], 0, 0
-    for r in es:
-        # TAGGED WITH THE CIRCLE IT WAS WRITTEN IN — R<OT>:, the operator's
-        # own spelling, 2026-08-27. The register has stamped `circle` on
-        # every record since the field was added; until now the projection
-        # threw it away, so a part received an undated list and could not
-        # tell a memory written last night from one written in June.
-        #
-        # THE Coordinator STAMPS IT; A PART NEVER TYPES ONE. A part cannot:
-        # the OT reaches no block and no message of its view — verified
-        # 2026-08-27 against prompt_messages_render() and a rendered prompt — so a
-        # part-authored tag could only ever be guessed. Stamping also covers
-        # the 25 records already on file, which no instruction could.
-        #
-        # THE TEXT IS UNTOUCHED, which is the point: the tag is a prefix
-        # OUTSIDE `r['text']`, so what a part gets back is still its own
-        # words byte-for-byte. An absent or blank `circle` renders bare
-        # rather than as `R: ` — no record has one today, and a degrade is
-        # cheaper than a migration.
-        ot = str(r.get("circle") or "").strip()
-        tag = f"R{ot}: " if ot else ""
-        block = f"\n- {tag}{r['text']}\n"
-        if used + len(block) > RM.BUDGET:
-            break
-        lines.append(block)
-        used += len(block)
-        shown += 1
-    return "".join(lines), shown, used
+    projection changes a byte.
+
+    The loop itself is _fit(), and one memory's rendering is _line()."""
+    fit = _fit(es)
+    return "".join(b for _r, b in fit), len(fit), sum(len(b) for _r, b in fit)
 
 
-def _split(part: str, cutoff: str | None) -> tuple[list[dict], list[dict]]:
-    """This part's remember records, newest-first, split at `cutoff` — a
+def _split_records(records: list[dict], cutoff: str | None) -> tuple[list[dict], list[dict]]:
+    """`records`, newest-first, split at `cutoff` — a
     'YYYY-MM-DDTHH:MM:SS' UTC prefix, part_mid_term_manager.part_mid_term_cutoff_read()'s own
     format. A record strictly BEFORE `cutoff` is SETTLED; everything else
     (including a same-second write — see refresh_cutoff()'s docstring) is
     the TAIL. `cutoff=None` puts everything in the tail — nothing has been
     distilled yet, so nothing can be called settled."""
-    es = sorted(remember_read(part), key=lambda r: r.get("date", ""), reverse=True)
+    es = sorted(records, key=lambda r: r.get("date", ""), reverse=True)
     if cutoff is None:
         return [], es
     settled = [r for r in es if r.get("date", "")[:19] < cutoff]
@@ -248,20 +315,25 @@ def _split(part: str, cutoff: str | None) -> tuple[list[dict], list[dict]]:
     return settled, tail
 
 
+def _split(part: str, cutoff: str | None) -> tuple[list[dict], list[dict]]:
+    """This part's remember records, split at `cutoff` — _split_records() over one read."""
+    return _split_records(remember_read(part), cutoff)
+
+
 def remember_settled_project(part: str, cutoff: str | None) -> tuple[str, dict]:
     """BLOCK 3's mechanical remember window (B44) — everything on file as
     of this part's last mid_term refresh, budgeted and rendered exactly as
     remember_project() always has, never routed through mid_term's own LLM
     derivation."""
-    settled, _tail = _split(part, cutoff)
+    records, keys, ordering = _load(part)
+    settled, _tail = _split_records(records, cutoff)
     if not settled:
         return "", {"part": part, "total": 0, "shown": 0, "omitted": 0,
                     "chars": 0}
     # Chain depth is computed over the WHOLE register (ancestry can cross
     # the settled/tail boundary), the bounded reorder only over this window
-    # (DESIGN_V2, 2026-08-22).
-    settled = _salience_order(settled, _chain_depths(remember_read(part)))
-    body, shown, used = _window(settled)
+    # (DESIGN_V2, 2026-08-22) — and Self's ordering with it (_arrange).
+    body, shown, used = _window(_arrange(settled, keys, ordering, _chain_depths(records)))
     omitted = len(settled) - shown
     head = (f"## What you have chosen to remember\n\n"
             f"*{len(settled)} on file as of your last identity refresh, "
@@ -281,12 +353,12 @@ def remember_tail_project(part: str, cutoff: str | None) -> tuple[str, dict]:
     never been derived sees exactly what BLOCK 4 always showed it."""
     if cutoff is None:
         return remember_project(part)
-    _settled, tail = _split(part, cutoff)
+    records, keys, ordering = _load(part)
+    _settled, tail = _split_records(records, cutoff)
     if not tail:
         return "", {"part": part, "total": 0, "shown": 0, "omitted": 0,
                     "chars": 0}
-    tail = _salience_order(tail, _chain_depths(remember_read(part)))
-    body, shown, used = _window(tail)
+    body, shown, used = _window(_arrange(tail, keys, ordering, _chain_depths(records)))
     omitted = len(tail) - shown
     head = (f"## Remembered since your last identity refresh\n\n"
             f"*{len(tail)} written this circle so far, {shown} shown here "
@@ -315,6 +387,56 @@ def remember_tail_render(part: str, cutoff: str | None) -> tuple[str, str]:
     if st.get("omitted"):
         note += f" · {st['omitted']} omitted"
     return text, note
+
+
+# ------------------------------------------------------- the tool's estimate
+def remember_window_read(part: str, cutoff: str | None,
+                         ordering: "dict | None" = None) -> dict:
+    """Every memory `part` has on file, in the order the ordering tool lists them, each with the
+    BLOCK it is bound for and whether it lands there — what ui/remember_ordering.py shows as
+    "expected to land in the prompt".
+
+    AN ESTIMATE OF THE NEXT OPEN, MADE BY THE CODE THAT OPENS IT: the same split at `cutoff`
+    (BLOCK 3 before it, BLOCK 4 from it on; everything BLOCK 4 when it is None), the same
+    _arrange() and the same _fit() the two windows call. An estimate because a circle closing
+    before that open adds memories ahead of these and moves the cutoff.
+
+    `ordering` is a WORKING ordering in remember_ordering_read()'s shape — the tool's list
+    before it is saved — judged in place of the one on file. Nothing here writes.
+
+    Returns {cutoff, budget, blocks: {3: {total, shown, omitted, chars}, 4: {...}}, rows}. A row
+    is {key, record, block, chars, sorted, sidelined, lands}: `chars` what the memory costs its
+    window, `sorted` whether the ordering names it, `sidelined` when Self sidelined it or None,
+    `lands` True, False (cut), or None for a sidelined memory. Rows run unsorted first — BLOCK 4's
+    then BLOCK 3's, each as its window arranges them — then the ordered, most kept first."""
+    records, keys, saved = _load(part)
+    ordering = saved if ordering is None else ordering
+    rank = {k: i for i, k in enumerate(ordering.get("order") or [])}
+    sidelined = ordering.get("sidelined") or {}
+    depths = _chain_depths(records)
+    settled, tail = _split_records(records, cutoff)
+    rows: dict[str, dict] = {}
+    blocks: dict[int, dict] = {}
+    unsorted: list[str] = []
+    for number, es in ((4, tail), (3, settled)):
+        arranged = _arrange(es, keys, ordering, depths)
+        fit = _fit(arranged)
+        landed = {id(r) for r, _b in fit}
+        blocks[number] = {"total": len(es), "shown": len(fit), "omitted": len(es) - len(fit),
+                          "chars": sum(len(b) for _r, b in fit)}
+        for r in es:
+            k = keys[id(r)]
+            rows[k] = {"key": k, "record": r, "block": number, "chars": len(_line(r)),
+                       "sorted": k in rank, "sidelined": sidelined.get(k),
+                       "lands": None if k in sidelined else id(r) in landed}
+        unsorted += [keys[id(r)] for r in arranged if keys[id(r)] not in rank]
+    ordered = sorted((k for k in rows if k in rank), key=lambda k: rank[k])
+    placed = set(unsorted) | set(ordered)
+    # A sidelined memory the ordering does not place (a hand-made file can say so; the tool's
+    # own save always places it) is still a row — last, where the least kept stand.
+    stray = [k for k in rows if k not in placed]
+    return {"cutoff": cutoff, "budget": RM.BUDGET, "blocks": blocks,
+            "rows": [rows[k] for k in unsorted + ordered + stray]}
 
 
 def main() -> int:

@@ -3982,6 +3982,14 @@ def main() -> int:
         return 0
     if "--selftest" in argv:
         return self_test()
+    # B141: a missing package is answered HERE, in the terminal, before the window opens —
+    # circle.py's own check would run inside the engine's thread, where a SystemExit ends the
+    # thread silently and leaves the window waiting.
+    sys.path.insert(0, str(COORD_DIR))
+    import record_paths as _RPD
+    if missing := _RPD.system_dependencies_missing_render():
+        print("\n" + missing + "\n", file=sys.stderr)
+        return 2
     # ARMED HERE AND NOWHERE ELSE — R342 (D64 a). The module
     # default is off, so the selftest above and every imported use render
     # plain bytes; only a real interactive run gains color, and both

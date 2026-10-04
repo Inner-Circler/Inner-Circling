@@ -38,9 +38,9 @@ need. Only you can add a part; a part cannot ask for one. A part that has
 done its work is retired, never deleted: `/part-retire` takes it out of
 every circle, prompt and search and keeps its record whole — the system
 respects records and history. Its name stays its own, and its past words
-stay in the transcripts, marked retired. Retiring is a developer verb:
-open the circle with `--dev` to use `/part-retire`, where `/part-add`
-needs no such thing.
+stay in the transcripts, marked retired. `/part-retire` is typed at the
+`Self>` prompt of `coordinator/circle.py` run on its own; `/part-add`
+works in either window.
 
 ## Goals
 

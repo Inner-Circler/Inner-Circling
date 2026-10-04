@@ -281,8 +281,8 @@ def alias_delete(n: int) -> tuple[bool, str]:
 def alias_forms_expand(row: dict) -> list[str]:
     """Every surface form one alias redacts, longest first: its curated `forms`, plus the short
     and long names derived from its canonical — `anon::expand_forms` from the original design's
-    own anonymization engine, itself a chat anonymizer's token expansion. `"Kiss (kissmy.spicoli)"` -> the whole label, `Kiss`, `kissmy.spicoli`, `kissmy`,
-    `spicoli`; a PERSON's canonical also splits on whitespace (`"Alice Smith"` -> `Alice`,
+    own anonymization engine, itself a chat anonymizer's token expansion. `"Robin (sherwood.archer)"` -> the whole label, `Robin`, `sherwood.archer`, `sherwood`,
+    `archer`; a PERSON's canonical also splits on whitespace (`"Alice Smith"` -> `Alice`,
     `Smith`). Other kinds keep the whole label — splitting an org into its common words invites
     false positives. A derived word shorter than two characters is dropped. Nothing is written:
     the register keeps what the operator curated, and the expansion is recomputed at read."""

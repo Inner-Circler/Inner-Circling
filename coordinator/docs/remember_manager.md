@@ -142,6 +142,8 @@ It stops rather than skipping. Skipping an over-budget newer record to go on ren
 ### remember_project(part)
 The whole register as the part sees it: sorted newest first, reordered within bounds by salience and chain depth, windowed to the budget, under a header stating what is on file, what is shown, what is omitted and how much of the budget is spent.
 
+Where Self has saved an ORDERING for the part (`remember_ordering_manager.py`, written by the ordering tool `ui/remember_ordering.py`), that is the order every window is cut in: the memories Self sidelined are left out, the ones written since the last save go first under the rule above, and the ordered ones follow as Self left them, top-down, never reversed. `remember_prompt_projection._arrange()` is the one place it is applied; with no ordering on file it changes nothing. The header counts a sidelined memory as on file and as omitted; a part's own `[recall: mine ...]` still finds it.
+
 ### _split(part, cutoff)
 Splits the records at the part's last identity refresh: strictly earlier is settled, everything else — including a same-second write — is the tail. With no cutoff at all, everything is tail: nothing has been distilled yet, so nothing can be called settled.
 

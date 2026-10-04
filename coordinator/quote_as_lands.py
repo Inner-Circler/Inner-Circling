@@ -70,6 +70,10 @@ WRONG mint is what the rules below are shaped to prevent.
                        this cites.
     THIS CIRCLE        `transcript` is the live circle's own, and
                        nothing else is consulted.
+    GROWN              the quoted span is a seed: the record is the
+                       whole stretch of the statement Self reproduced
+                       around it, cut from the PART's words
+                       (lands_expand; the operator, 2026-10-01).
 
 CURLY AND STRAIGHT QUOTES FOLD TOGETHER, and that is load-bearing rather
 than tidy: a part's statement arrives from the model, which types “ ” and
@@ -145,31 +149,98 @@ def lands_fold(s: str) -> str:
 
 def lands_spans_read(text: str) -> list[str]:
     """Every quoted span in `text`, in the order typed, verbatim (NOT
-    folded — the record quotes what Self actually typed). Spans shorter
-    than MIN_QUOTE_WORDS words are dropped here rather than at match
-    time, so the threshold is applied in exactly one place.
+    folded). Spans shorter than MIN_QUOTE_WORDS words are dropped here
+    rather than at match time, so the threshold is applied in exactly one
+    place.
 
-    A QUOTE INSIDE THE QUOTE. QUOTE_RE pairs quotes innermost-first, so a
-    line carrying "Rags before Chisel ... the room's own "felt before
-    mechanism" practice" yields the head and the tail as two spans and the
-    whole as none. Where a line holds four or more double quotes the span
-    from its FIRST quote to its LAST is offered as well (the operator,
-    2026-09-14: a quote mark within the full segment would break the pair
-    around it, he was concerned). Offering is safe: lands_detect() mints only a span found in
-    exactly one prior statement, once per statement, so a candidate that
-    was never a quote costs nothing."""
+    A span is a SEED, not the record: lands_detect() grows a seed that
+    names one statement outward over everything Self reproduced from it
+    (lands_expand), so a quote inside the quote — "Rags before Chisel ...
+    the room's own "felt before mechanism" practice", or a part's own line
+    pasted whole with its quotes in it — is recovered from whichever pair
+    of marks lands inside it."""
     out = []
     for m in QUOTE_RE.finditer(text):
         span = (m.group(1) or m.group(2) or "").strip()
         if len(lands_fold(span).split()) >= MIN_QUOTE_WORDS and span not in out:
             out.append(span)
-    for line in text.split("\n"):
-        marks = [i for i, ch in enumerate(line) if ch in _DOUBLE_QUOTES]
-        if len(marks) >= 4:
-            whole = line[marks[0] + 1:marks[-1]].strip()
-            if len(lands_fold(whole).split()) >= MIN_QUOTE_WORDS and whole not in out:
-                out.append(whole)
     return out
+
+
+def _fold_map(s: str) -> tuple[str, list[int]]:
+    """lands_fold() character by character, keeping for each folded
+    character the index of the raw one it came from, so a match found in
+    the folded form can be cut out of the raw text. Whitespace collapses as
+    lands_fold's does; ends are kept (find() tolerates them)."""
+    chars, where = [], []
+    for i, ch in enumerate(s):
+        for a, b in _FOLD.items():
+            ch = ch.replace(a, b)
+        for c in ch.casefold():
+            if c.isspace():
+                if chars and chars[-1] == " ":
+                    continue
+                c = " "
+            chars.append(c)
+            where.append(i)
+    return "".join(chars), where
+
+
+def lands_expand(said: str, statement: str, span: str) -> str:
+    """The longest stretch of `statement` that Self reproduced around `span`,
+    in the PART's own words — the operator, 2026-10-01: he pasted the
+    Idealist's whole sentence, Don't let "will it be enough, out there"
+    reach back and unmake "was it enough, in here.", and the record kept
+    only its first quoted piece.
+
+    From where the seed sits in both texts, step backward and then forward
+    while the folded characters agree, then drop a part-word at either edge.
+    The result is cut from `statement`, never from what Self typed: every
+    word recorded is one the part said, and Self's own wrapping quotes
+    cannot ride in. Falls back to `span` when the seed cannot be placed."""
+    fs, ws = _fold_map(said)
+    fp, wp = _fold_map(statement)
+    seed = lands_fold(span)
+    a, b = fs.find(seed), fp.find(seed)
+    if not seed or a < 0 or b < 0:
+        return span
+    n = len(seed)
+    while a > 0 and b > 0 and fs[a - 1] == fp[b - 1]:
+        a, b, n = a - 1, b - 1, n + 1
+    while a + n < len(fs) and b + n < len(fp) and fs[a + n] == fp[b + n]:
+        n += 1
+    # A cut inside a word on EITHER side — the two texts agree on the
+    # letters, but one of them carries the word on past the stop — loses
+    # that part-word.
+    if fp[b].isalnum() and ((a > 0 and fs[a - 1].isalnum())
+                            or (b > 0 and fp[b - 1].isalnum())):
+        k = fp.find(" ", b, b + n)
+        if k < 0:
+            return span
+        a, n, b = a + (k + 1 - b), n - (k + 1 - b), k + 1
+    if n and fp[b + n - 1].isalnum() and (
+            (a + n < len(fs) and fs[a + n].isalnum())
+            or (b + n < len(fp) and fp[b + n].isalnum())):
+        k = fp.rfind(" ", b, b + n)
+        if k < 0:
+            return span
+        n = k - b
+    while n and fp[b] == " ":
+        b, n = b + 1, n - 1
+    while n and fp[b + n - 1] == " ":
+        n -= 1
+    if len(fp[b:b + n].split()) < MIN_QUOTE_WORDS:
+        return span
+    lo, hi = wp[b], wp[b + n - 1] + 1
+    # The fold drops quote marks, so a run can stop one short of the mark
+    # that closes (or opens) a quote inside it. Take the adjacent one back
+    # while the slice holds an odd number of them.
+    odd = lambda: sum(statement[lo:hi].count(q) for q in _DOUBLE_QUOTES) % 2
+    while odd() and hi < len(statement) and statement[hi] in _DOUBLE_QUOTES:
+        hi += 1
+    while odd() and lo > 0 and statement[lo - 1] in _DOUBLE_QUOTES:
+        lo -= 1
+    return statement[lo:hi]
 
 
 def lands_text(n: int, display: str, span: str) -> str:
@@ -191,7 +262,8 @@ def _part_statements(transcript: list[dict]) -> list[tuple[int, dict]]:
 
 def lands_detect(transcript: list[dict], text: str) -> list[dict]:
     """Every attributable quote in ONE Self statement, as
-    {"n", "display", "span"} — R155's rule, whole. `transcript` must
+    {"n", "display", "span"} — R155's rule, whole. `span` is the passage
+    lands_expand() grew from the quoted seed, in the part's own words. `transcript` must
     hold only PRIOR statements: circle.py calls this before appending
     Self's own, which is also what keeps the numbering stable (the list
     is append-only, so a number, once printed, never moves).
@@ -203,17 +275,20 @@ def lands_detect(transcript: list[dict], text: str) -> list[dict]:
     stay quiet."""
     prior = _part_statements(transcript)
     folded = [(n, e, lands_fold(e["text"])) for n, e in prior]
-    out, seen = [], set()
+    out, by_n = [], {}
     for span in lands_spans_read(text):
         f = lands_fold(span)
         hits = [(n, e) for n, e, ft in folded if f in ft]
         if len(hits) != 1:
             continue                       # zero, or ambiguous — neither
         n, e = hits[0]
-        if n in seen:
-            continue                       # two spans, one statement
-        seen.add(n)
-        out.append({"n": n, "display": e["display"], "span": span})
+        grown = lands_expand(text, e["text"], span)
+        if n in by_n:                      # two spans, one statement: one
+            if len(grown) > len(by_n[n]["span"]):   # hit, the longest passage
+                by_n[n]["span"] = grown
+            continue
+        by_n[n] = {"n": n, "display": e["display"], "span": grown}
+        out.append(by_n[n])
     return out
 
 

@@ -400,8 +400,13 @@ def part_mid_term_sources_read(part: str) -> dict:
     # [remember: ...] or a DREAMING record — flips this hash, which is the
     # staleness trigger that makes phase 2's refresh step re-derive
     # exactly the parts that moved.
-    import remember_manager as RM
-    mem = [r.get("text", "") for r in RM.remember_read(part)]
+    # A memory Self SIDELINED (remember_ordering_manager) is not a source: it is
+    # carried in no prompt block, and the distillate is BLOCK 3 — ruled so,
+    # R587 ("(a) per recommendation.", 2026-10-02). With no
+    # ordering on file this is the whole register, as before. Sidelining one
+    # flips this part's hash once, so the next refresh re-derives without it.
+    import remember_ordering_manager as ROM
+    mem = [r.get("text", "") for r in ROM.remember_ordering_kept_read(part)]
     return {
         "long_term": lt,
         "dreams": dt,

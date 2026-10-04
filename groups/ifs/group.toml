@@ -28,6 +28,8 @@ proposed_commands = [
     "issue-label-update",
     "issue-add",
     "issue-evidence-add",
+    "issue-action-add",
+    "issue-action-update",
     "practice-add",
     "better-option-add",
 ]

@@ -147,6 +147,13 @@ def stream_ceiling_read(base: int, dry: bool = False) -> int:
     scale = _impl(dry).ceiling_scale(TUNING)
     return base if scale == 1.0 else max(1, int(round(base * scale)))
 
+
+def stream_tuning_step_down() -> "dict | None":
+    """The setting's tuning with effort one step lower, for a single retry's
+    `tuning=` — None when the provider has no lower step. The setting itself
+    never moves."""
+    return PROVIDER_IMPL.tuning_step_down(TUNING)
+
 # The short_term record's four canonical sections — the dry provider returns
 # them as its canned short_term, and circle_close.py's short_term_collect() checks
 # a real response carries all four.
@@ -516,7 +523,8 @@ def _retry_free(client):
 
 
 def stream_call_once(system, user: str, max_tokens: int, *, kind: str,
-              client=None, record: bool = False, part: str | None = None):
+              client=None, record: bool = False, part: str | None = None,
+              tuning: dict | None = None):
     """One non-circle model call. Returns the Reply, burst
     (LLM_response_disassembler.Reply) — it returned (text, usage,
     stop_reason) until 2026-09-02, and every caller re-shaped that tuple.
@@ -540,7 +548,12 @@ def stream_call_once(system, user: str, max_tokens: int, *, kind: str,
     the refresh, None for the two circle-wide calls, whose file the log then
     names by kind. Recorded only while a turn log is open — a live circle's,
     or the one circle_process() opens for a hand re-run — so a rehearsal, a
-    dry run and `mid_term --refresh` by hand record nothing, as before."""
+    dry run and `mid_term --refresh` by hand record nothing, as before.
+
+    `tuning` REPLACES THE SETTING'S TUNING ON THE WIRE FOR THIS ONE CALL —
+    synthesis's last retry lowers effort a step (stream_tuning_step_down).
+    The ceiling stays the one the setting gives: the override buys less
+    thinking, not less room."""
     # A TEST'S FAKE NAMES ITSELF; A REAL CLIENT DOES NOT. Both suites that
     # inject one set `self.model = "fake"` explicitly, and the SDK's client
     # carries no `model` attribute at all — so `or MODEL` resolves a real
@@ -552,7 +565,7 @@ def stream_call_once(system, user: str, max_tokens: int, *, kind: str,
     model = getattr(client, "model", None) or MODEL
     req = PROVIDER_IMPL.request(model, stream_ceiling_read(max_tokens), system,
                                 [{"role": "user", "content": user}])
-    req.update(PROVIDER_IMPL.wire_tuning(TUNING))
+    req.update(PROVIDER_IMPL.wire_tuning(TUNING if tuning is None else tuning))
     try:
         resp = stream_backoff_wrap(
             kind, lambda: PROVIDER_IMPL.send(_retry_free(client), req))

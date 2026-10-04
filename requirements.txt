@@ -4,7 +4,7 @@ tomli==2.2.1; python_version < "3.11"
 tomli-w==1.2.0
 # fastembed serves a part's [recall: ...] search of its own past
 # (coordinator/recall_index.py via coordinator/embed_store.py). Its first
-# use fetches an embedding model (~65 MB) into fastembed's own local cache,
+# use fetches an embedding model (~65 MB) into work/embed_model/,
 # once; everything after is offline. Without it, a recall replies with the
 # install command instead of results -- nothing crashes.
 fastembed==0.8.0

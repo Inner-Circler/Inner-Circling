@@ -392,9 +392,10 @@ in, and `fastembed`, which serves a part's
 them, `tomli`, because that version has no `tomllib` of its own to read TOML
 with; on 3.11 and newer it is correctly skipped. **A circle makes no network call
 except to the model provider, with one exception you can see coming:** your
-first live circle fetches `fastembed`'s embedding model (~65 MB) into a
-local cache, once, in the background while the parts warm up; after that
-it is offline. Nothing else
+first live circle fetches `fastembed`'s embedding model (~65 MB) into
+`work/embed_model/`, once, in the background while the parts warm up, and
+says so in the command pane before it starts; after that it is offline. To
+decline it, open the circle with `--recall-arm off`. Nothing else
 is fetched, then or later.
 
 Every command in this file begins with the interpreter INSIDE `.venv`, for
@@ -953,6 +954,13 @@ prompt hands it back whenever you ask -- nothing brings it back
 on its own. You can manage such memories -- type `help remember`
 at the cmd> prompt.
 
+Each part's memories can be read, put in order and partly set
+aside between circles: type `/memory-edit` at the cmd> prompt and
+the memory tool opens in your browser. It shows which memories each
+part carries into its next circle, lets you sideline some (they are
+kept, and the part's own search still finds them), and shows how the
+part rated each one, beside a rating of your own if you add one.
+
 **About proposals**
 
 When circling reveals something important — like another issue, a
@@ -972,7 +980,12 @@ the command pane has no statement to offer. To attach one yourself,
 type `/issue-evidence-add nNNNN <stmt#> "why"` at cmd> during the
 circle — `/issue-evidence-list` numbers the circle's statements. It
 is recorded as your words, not sent to the parts, and applied at
-close.  Proposals are "staged";
+close. Add `absent` at the end when the issue was expected in that
+statement and did not show — evidence the other way. What is being
+tried when an issue shows is an action: a part may propose one, and at
+the `Self>` prompt of `coordinator/circle.py` run on its own you can type
+`/issue-action-add nNNNN "practice"`, revise it with
+`/issue-action-update`, and list them with `/issue-action-list`.  Proposals are "staged";
 at the end of the circle you are asked if you approve of any
 proposals. You can approve (the proposal affects the system,
 opening an issue or adding a practice, etc.), deny (the proposal
@@ -1081,9 +1094,9 @@ only when a prompt is assembled. **A part
 is never created without Self's explicit agreement**, and that rule is in
 the rulebook every part reads.
 
-`/part-retire` is the other door, and it is not a delete. It is a
-developer verb: open the circle with `--dev` to use it, where
-`/part-add` needs no such thing. **The system
+`/part-retire` is the other door, and it is not a delete. It is
+typed at the `Self>` prompt of `coordinator/circle.py` run on its own,
+where `/part-add` works in either window. **The system
 respects records and history:** no command removes a part's record. A
 retired part leaves every circle, prompt and search from then on; its
 folder stays exactly where it is, its name stays its own, and what it

@@ -24,7 +24,9 @@ design.
 
 **What it reaches past.** `remember_prompt_projection` shows a part a RECENCY window of its register, so
 an evicted memory returns only when newer ones age past it. This is a second axis, not a second lever on
-that door: candidates are the FULL register, deliberately, and the selection is topic-conditional,
+that door: candidates are the FULL register, deliberately — less the memories Self has sidelined
+(`remember_ordering_manager`), which are carried in no block; this pack is BLOCK 4's, while the
+part's own `[recall: ...]` still reaches them — and the selection is topic-conditional,
 per-circle and expiring. Because the pack QUOTES the seed beside its excerpt, all three visibility cases
 — settled in BLOCK 3, tail in BLOCK 4, or out of view entirely — are served uniformly with no special
 casing. The consequence for the circle is named in the design and is close to the point of the work: an unresolved
@@ -117,7 +119,8 @@ delivers nor logs.
 ## DEPENDENCIES
 
 `seam` (the command channel, for `remember_expand_apply()`'s one-line summary and its failure notice);
-`remember_manager` as `RM` for `remember_read()` and `SALIENCE_WEIGHT`; `part_roster` as `R` for
+`remember_manager` as `RM` for `SALIENCE_WEIGHT`; `remember_ordering_manager` as `ROM` for
+`remember_ordering_kept_read()`, the register less what Self sidelined; `part_roster` as `R` for
 `ROSTER`; `transcript_store` as `TS` for `circle_transcript_parse()`; `record_paths` for `ROOT` and
 `record_dir()`. `memory/issue_schema` is imported function-locally inside `remember_labels_read()`, after
 putting `memory/` on `sys.path` — the same hop `circle.py` makes. Standard library: `json`, `re`, `time`,
@@ -127,9 +130,12 @@ and `argparse` in `__main__`. No third-party packages.
 
 READ:
 
-    parts/<part>/remember.toml       every record on file, through remember_manager.remember_read().
+    parts/<part>/remember.toml       every record on file that Self has not sidelined, through
+                                     remember_ordering_manager.remember_ordering_kept_read().
                                      Only roster parts are ever passed, so that module's "self" path
                                      rule — self/remember.toml — is never reached from here.
+    parts/<part>/remember_ordering.toml   Self's ordering of that register, read for its
+                                     sidelinings only. Absent is nothing sidelined.
     issues/*.toml                    only when focus ids are given, through memory/issue_schema — the
                                      one reader. A node that cannot be found or loaded contributes
                                      nothing rather than raising.

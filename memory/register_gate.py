@@ -338,7 +338,19 @@ def _mem_order() -> tuple[str, ...]:
         import remember_manager as _RM
         return _RM.ORDER
     except Exception:
-        return ("id", "date", "circle", "text", "chain", "class", "salience")
+        return ("id", "date", "circle", "text", "chain", "class", "salience",
+                "warning", "call", "pain", "pleasure", "courage", "asked")
+
+
+def _rr_order() -> tuple[str, ...]:
+    """remember_manager.RERATE_ORDER, imported rather than duplicated — _mem_order()'s rule.
+    The fallback is a copy, read only when that import fails."""
+    try:
+        import remember_manager as _RM
+        return _RM.RERATE_ORDER
+    except Exception:
+        return ("id", "date", "circle", "memory", "warning", "call", "pain", "pleasure",
+                "courage", "still_applies", "occasion", "asked")
 
 
 def _so_order() -> tuple[str, ...]:
@@ -386,6 +398,15 @@ REGISTERS: dict[str, dict] = {
         "order": _mem_order(),
         "id_prefix": "MEM-", "cap": _mem_cap(), "per_run_max": 1,
         "preamble": False, "chain": True,
+    },
+    # THE RE-RATE REGISTER — B125, 2026-10-03. Beside each remember.toml, its own file because
+    # the serialiser renders one table per file. Append-only, one row per part per close (the
+    # prior memory dreaming shows; the blind draw is not built). No text, so no cap.
+    "parts/*/rerate.toml": {
+        "table": "rerate",
+        "order": _rr_order(),
+        "id_prefix": "RR-", "cap": None, "per_run_max": 1,
+        "preamble": False,
     },
     # "parts/*/part_relationships.toml" RETIRED 2026-08-22 — the register,
     # its module (coordinator/part_relationships.py) and the seven files are

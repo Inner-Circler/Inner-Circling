@@ -10,6 +10,11 @@ In-circle, the commands this module parses are typed as:
 
     /issue-label-update  nNNNN "new name" ["comment"]
     /issue-relationship-add  nNNNN <type> nMMMM ["comment"]
+    /issue-evidence-add  nNNNN <stmt#> "why" [absent]
+    /issue-action-add  nNNNN "practice" ["why"]
+    /issue-action-update  nNNNN <action#> "practice" ["why"]
+
+**ACTIONS AND ABSENT EVIDENCE (R591, R592, 2026-10-03).** The two action verbs are ruling forms like the rest — recorded to the transcript, applied at close, proposable by a part. `issue-action-add` takes the node's next action number; `issue-action-update` appends a row under an existing number, so the earlier wording is kept and the latest row is the practice as it stands. A trailing `absent` on `issue-evidence-add` (typed or in a part's bracket) records evidence AGAINST — the issue was expected at that statement and did not appear; such a row never adds its part to `held_by`. Who reported the evidence (`reported_by`) and who added the action (`by`) default to Self; `proposal_vetting._proposer_fill()` sets them to the proposing part when Self approves a part's bracket. `issue_dump()` writes every value as a string, so `_flag()` reads `absent` back from a re-applied record.
 
 As a library it is imported by `circle.py` (for `issue_command_parse()`/`issue_precheck()`/`issue_describe()` during a live circle), by `commands.py` (for `/issue-add`'s body via `issue_add()`, and for the `/issue-apply` verb, which shells out to this file's own CLI), by `annotations.py` (for `issue_command_parse()` — `issue-relationship-add`'s one grammar, R202), by `proposal_vetting.py` (for `issue_precheck()`/`issue_command_apply()` when a command-shaped proposal is approved), and by `help_system.py` (for `issue_edges_read()`, the issue read-outs' renderer).
 

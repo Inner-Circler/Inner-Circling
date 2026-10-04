@@ -74,7 +74,7 @@ def _alias_lookup() -> tuple[re.Pattern | None, dict]:
         words = sorted(form_to_row, key=len, reverse=True)
         alt = "|".join(re.escape(w) for w in words)
         # Lookarounds, not \b: a form may start or end in a non-word character — the whole
-        # `Kiss (kissmy.spicoli)` ends in `)`, where \b would demand a word character follow.
+        # `Robin (sherwood.archer)` ends in `)`, where \b would demand a word character follow.
         pattern = re.compile(rf"(?<!\w)(?:{alt})(?!\w)", re.IGNORECASE)
     _alias_cache.update(mtime=mtime, re=pattern, form_to_row=form_to_row)
     return pattern, form_to_row

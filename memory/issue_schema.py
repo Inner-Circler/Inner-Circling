@@ -141,7 +141,19 @@ REQUIRED = ("id", "label", "status", "opened", "description", "absence",
 # rulings/R429.toml.
 OPTIONAL = ("label_ruled", "aliases", "adopted", "root", "description_history",
             "memo", "memo_original", "proposals", "edges", "edges_note",
-            "evidence")
+            "evidence", "actions")
+
+# R591 (2026-10-03): an issue's ACTIONS — what is being tried when it appears, an
+# EVOLVING PRACTICE, not a result. `n` numbers the practice within its node and never
+# moves; an update APPENDS a row with the same `n`, so nothing is overwritten and the
+# latest row of each `n` is the practice as it stands. `why` is optional.
+ACTION_KEYS = ("n", "practice", "why", "by", "source", "dated")
+# R592: an evidence row's `part` is who EXHIBITED the behavior (the speaker the gate
+# attributes). `reported_by` is who reported it when that is someone else, and `absent`
+# marks evidence AGAINST — expected at the cited statement, did not appear. Both
+# optional, so every row written before R592 reads as it always did.
+EVIDENCE_KEYS = ("part", "source", "quote", "why", "adopted_from", "reported_by",
+                 "absent")
 
 # M1, ruled 2026-08-04. A circle produces REQUESTS as well as claims, and the
 # system had a kind for every claim and none for a request. A deferred question
@@ -267,7 +279,7 @@ def issue_dumps(doc: dict) -> str:
     for row in doc.get("proposals", []):
         out += "\n" + tomli_w.dumps({"proposals": [row]},
                                     multiline_strings=True)
-    for name in ("edges", "evidence"):
+    for name in ("edges", "evidence", "actions"):
         for row in doc.get(name, []):
             # `quote` is NEVER wrapped. It is a verbatim artifact checked
             # character-for-character against a transcript, and re-flowing it
@@ -350,7 +362,11 @@ def issue_render(doc: dict) -> str:
         for e in doc["evidence"]:
             if e["part"] != part:
                 continue
-            L += [f"- {e['source']}", f"  > {issue_unwrap(e['quote'])}"]
+            L += [f"- {e['source']}" + (" — ABSENT: expected here, did not appear"
+                                        if e.get("absent") else ""),
+                  f"  > {issue_unwrap(e['quote'])}"]
+            if e.get("reported_by") and e["reported_by"] != e["part"]:
+                L.append(f"  Reported by: {e['reported_by']}")
             # Said aloud in the rendered view, not only in the TOML: a reader
             # of `### self` is otherwise looking at a part's words with no
             # sign of it. RULED 2026-08-18.
@@ -364,6 +380,18 @@ def issue_render(doc: dict) -> str:
     # pre-existing, and invisible because nothing but a human at a terminal
     # calls this path. issue_dumps() (line ~199) is the emitter that DID follow the
     # change; this is the read-side view catching up.
+    # Only when there are any: a node without actions renders as it always has.
+    if doc.get("actions"):
+        L += ["## Actions", ""]
+    for n, rows in issue_actions_read(doc).items():
+        cur = rows[-1]
+        L += [f"- **{n}** {issue_unwrap(cur['practice'])} — {cur['by']}, "
+              f"{cur['source']} ({cur['dated']})"]
+        if cur.get("why"):
+            L.append(f"  Why: {issue_unwrap(cur['why'])}")
+        for old in reversed(rows[:-1]):
+            L.append(f"  was ({old['dated']}): {issue_unwrap(old['practice'])}")
+        L.append("")
     L += ["## Proposals", ""]
     for pr in doc.get("proposals", []):
         rel = (f" — proposes `{pr['type']}` [[{pr['target']}]]"
@@ -381,6 +409,64 @@ def issue_render(doc: dict) -> str:
     if doc.get("memo_original"):
         L += ["## Memo — original", "", doc["memo_original"], ""]
     return "\n".join(L)
+
+
+# ------------------------------------------------------------------ the counts
+# R591 (2026-10-03): OCCURRENCES and AGING are COUNTED AT READ, NEVER STORED. Nothing
+# here grades — each is a count over rows already on file and the transcripts beside them.
+
+_OT_RE = re.compile(r"^circle_(\d{4}-\d{2}-\d{2}_\d{4})$")
+
+# R592: an issue whose AGING has reached this many circles is LISTED for Self to look at —
+# it is either easing or being avoided, and the count cannot tell which. Never closed,
+# settled or retired by the program on that count. Thirty circles — about two months at a
+# circle every two days — since R598: the issues are patterns of decades,
+# and the theory of what quiet means is still sparse in data. Claude's arithmetic, a setting.
+import setting_manager as _SET                                      # noqa: E402
+AGING_LOOK = _SET.setting_value_read("issue_aging_look", 30)
+
+
+def issue_actions_read(doc: dict) -> dict[int, list[dict]]:
+    """A node's actions by number, each a list of its rows oldest first — the last row
+    is the practice as it stands (R591: an update appends, nothing is overwritten)."""
+    out: dict[int, list[dict]] = {}
+    for a in doc.get("actions", []):
+        out.setdefault(a["n"], []).append(a)
+    return dict(sorted(out.items()))
+
+
+def issue_circles_closed_read(circles: "pathlib.Path | None" = None) -> list[str]:
+    """The group's circles, as open times, oldest first — every transcript except the
+    newest one while it has no close report (it may still be running). A transcript with
+    a later one beside it cannot still be open, so an older circle with no close report
+    (they predate the reports) still counts."""
+    d = circles or CIRCLES
+    ots = sorted(p.stem[len("circle_"):] for p in d.glob("circle_*.md")) if d.is_dir() else []
+    if ots and not (ROOT / "work" / "logs" / f"close_{ots[-1]}.json").is_file():
+        ots = ots[:-1]
+    return ots
+
+
+def issue_counts_read(doc: dict, closed: "list[str] | None" = None) -> dict:
+    """OCCURRENCES — distinct circles among the PRESENT evidence rows, with the span — and
+    AGING — closed circles after the latest MENTION, where a mention is any evidence row
+    (present or absent) and any action row. With no mention at all, aging runs from the
+    circle the issue was opened in; None when even that is not a circle.
+
+    `closed` is issue_circles_closed_read()'s answer, passed in so a caller counting every
+    node reads the transcript directory once."""
+    closed = issue_circles_closed_read() if closed is None else closed
+    present = sorted({m.group(1) for e in doc.get("evidence", [])
+                      if not e.get("absent") and (m := _OT_RE.match(e.get("source", "")))})
+    mentions = [m.group(1) for r in doc.get("evidence", []) + doc.get("actions", [])
+                if (m := _OT_RE.match(r.get("source", "")))]
+    if not mentions and (m := _OT_RE.match(str(doc.get("opened", "")))):
+        mentions = [m.group(1)]
+    last = max(mentions) if mentions else None
+    return {"occurrences": len(present),
+            "first": present[0] if present else None,
+            "last": present[-1] if present else None,
+            "aging": (sum(1 for ot in closed if ot > last) if last else None)}
 
 
 def issue_verify(doc: dict, p: pathlib.Path) -> list[str]:
@@ -444,6 +530,36 @@ def issue_verify(doc: dict, p: pathlib.Path) -> list[str]:
         if e["adopted_from"] == "self":
             f.append(f"{p.name}: `adopted_from = \"self\"` claims Self adopted "
                      f"his own words")
+    # R592: the evidence row's key set is closed, and `absent` is a flag, true or absent.
+    for e in doc.get("evidence", []):
+        bad = set(e) - set(EVIDENCE_KEYS)
+        if bad:
+            f.append(f"{p.name}: evidence row has unknown key(s) {sorted(bad)}")
+        if "absent" in e and e["absent"] is not True:
+            f.append(f"{p.name}: evidence `absent` must be true or left out, "
+                     f"not {e['absent']!r}")
+    # R591: an action row is a closed shape; `n` is a positive whole number, and a
+    # node's rows for one `n` are its history, oldest first, so dates never go back.
+    last_dated: dict[int, str] = {}
+    for a in doc.get("actions", []):
+        bad = set(a) - set(ACTION_KEYS)
+        if bad:
+            f.append(f"{p.name}: action row has unknown key(s) {sorted(bad)}")
+        for k in ("n", "practice", "by", "source", "dated"):
+            if not a.get(k):
+                f.append(f"{p.name}: action row has no `{k}`")
+        n = a.get("n")
+        if not isinstance(n, int) or isinstance(n, bool) or n < 1:
+            f.append(f"{p.name}: action `n` must be a whole number from 1, not {n!r}")
+            continue
+        if str(a.get("dated", "")) < last_dated.get(n, ""):
+            f.append(f"{p.name}: action {n} has a row dated before the one above it — "
+                     f"an action's rows are its history, oldest first")
+        last_dated[n] = str(a.get("dated", ""))
+    ns = sorted({a["n"] for a in doc.get("actions", []) if isinstance(a.get("n"), int)})
+    if ns and ns != list(range(1, len(ns) + 1)):
+        f.append(f"{p.name}: action numbers {ns} skip — a practice is numbered "
+                 f"1, 2, 3 ... in the order it was added")
     for e in doc.get("edges", []):
         if e.get("type") not in EDGE_TYPES:
             f.append(f"{p.name}: unknown issue-relationship type {e.get('type')!r}")

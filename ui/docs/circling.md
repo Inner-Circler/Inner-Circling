@@ -153,12 +153,6 @@ A bare run opens a circle. Every option below except `--selftest`, `--no-color` 
                     Default: off — color is used whenever the terminal
                     supports it and the NO_COLOR environment variable is
                     unset.
-    --dev[=true|false]
-                    open with dev mode ON — forwarded to circle.py's own --dev.
-                    Turns on the DEV-table verbs, the help hierarchy, and the
-                    coalesce / pre-warm / opening-round progress lines.
-                    Default: off. Hidden from --help here as it is in
-                    circle.py's; the manual is where it is documented.
     --help, -h      the full list.
 
 ## A NOTE ON THE NAME

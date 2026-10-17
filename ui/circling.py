@@ -3904,8 +3904,8 @@ HELP_TEXT = """usage: python ui/circling.py [--help | --selftest | [OPTIONS...]]
   --group <name>
                open on a NAMED group (groups/<name>/group.toml) instead of
                --parts — a deliberately different roster, not a reduced
-               one. Mutually exclusive with --parts. Default: the default
-               group.
+               one. With --parts, a reduced roster of that group's own
+               members. Default: the default group.
 
   --recall-arm off|delivered|withheld
                whether a part may search its own past record — a local

@@ -745,6 +745,10 @@ macOS / Linux:
 .venv/bin/python coordinator/circle_audit.py --git-setup
 ```
 
+It also turns off git's automatic storage tidy-up for this repository, so a
+circle's save never stops to repack history; the audit (`circle_audit.py`)
+runs that tidy-up when it is due, and `--git-tidy` runs it now.
+
 It installs the pre-commit battery, and says so: the gates that ship —
 the corruption sweep, the issue gate, the self-check, the practices check,
 the projection — run whenever a commit touches the record (the line-endings
@@ -960,6 +964,12 @@ the memory tool opens in your browser. It shows which memories each
 part carries into its next circle, lets you sideline some (they are
 kept, and the part's own search still finds them), and shows how the
 part rated each one, beside a rating of your own if you add one.
+`/issue-graph` at the same prompt opens your issue graph -- the
+issues as a picture and a table -- in the same tool. A third page,
+Initialization, edits a group's own settings and the texts it is
+born with (what an issue is, who Self is, each part's account of
+itself, its best practices), answers a part's first-run questions,
+and adds or retires a part. Each page links to the others.
 
 **About proposals**
 
@@ -1153,7 +1163,8 @@ exists because a specific thing failed quietly, and the docstring is
 where that reason lives. If a comment seems to be arguing with itself, it
 is usually recording a decision that was made twice.
 
-Man pages for many of the modules are under `coordinator/docs/`. Read
+Man pages for many of the modules are under each code directory's own
+`docs/` folder: `coordinator/docs/`, `memory/docs/`, `ui/docs/`. Read
 the man page before the module; it is where a module's *why* lives.
 
 ## Technical things that can bite

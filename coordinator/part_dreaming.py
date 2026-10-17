@@ -8,16 +8,16 @@ one). inter_circle.py keeps the DRIVER (circle_process: the marker, the capture,
 calls in parallel, the transaction, the commit, the diagnostic); this module is what one
 part's pass IS. Every function below is the verbatim body it had there; only the file moved.
 
-    DREAMING_PROMPT_V2   the pass's prompt — versioned code, never a payload
+    DREAMING_PROMPT_V3   the pass's prompt — versioned code, never a payload
     DREAM_MAX_TOKENS     its cap (settings-overridable)
     _call                the one call every pass makes, through the transport; circle_synthesis
                          and the driver's diagnostic read it here (PD._call), and the probes
                          rebind it here
     _report_chars        the dev-mode footprint line every call reports through
-    circle_capsule_build   ONE call per circle (never per part) — the shared room capsule
-                         part_dream()'s prompt reads beside a part's own lines (R451, D86 a,
-                         2026-09-04: the per-part Dreaming input; docs/MEMORY_DESIGN.md)
-    part_dream            the pass: a PAYLOAD, writes nothing
+    part_dream            the pass: a PAYLOAD, writes nothing. Its input is the part's OWN
+                         material only — distillate, own lines, short_term, prior memory
+                         (R607, 2026-10-09: the shared room capsule
+                         R451 kept beside the own lines is gone; docs/MEMORY_DESIGN.md)
     part_dream_grounding_check   B91 (2026-09-04): is the MEMORY grounded in this part's own
                          material? SUSPECT notes, never a refusal, never a content change
 
@@ -87,14 +87,16 @@ DREAM_GROUNDING_MIN_OVERLAP = SET.setting_value_read("dream_grounding_min_overla
 # re-rates the prior memory blind (R538) with STILL APPLIES. The version is stamped on
 # every rating as `asked` (remember_manager.ASKED_VERSION), so a change of wording here
 # is a new version and a segment boundary in the series, never an edit in place.
-DREAMING_PROMPT_V2 = """\
+# V3 — R607, 2026-10-09: the shared room capsule left the input, and
+# with it the clause below that announced it. The part reads its OWN material and nothing of
+# the rest of the room; the rating questions are unchanged.
+DREAMING_PROMPT_V3 = """\
 You are {part}'s dreaming pass for the circle that just closed ({ot}).
 
 Below: your own identity as the circle sees it (your distillate); your own lines from the
 closed circle — every statement you made and every line another part addressed to you,
 verbatim, in original order, each with the one line said just before it kept for reply
-context; a short shared capsule of what else happened in the room, the same words every
-part reads; your own short_term for it, if you spoke; and — if one exists — the most
+context; your own short_term for it, if you spoke; and — if one exists — the most
 recent memory in your own chain (a note your dreaming pass left for you last time).
 
 Write only about what YOU said or experienced. If no short_term for you appears above, you
@@ -188,52 +190,12 @@ RESOLUTION
 # _usage_dict here was a second copy of llm_client's, with a different
 # answer (ints only vs. the whole model_dump()); the disassembler keeps both
 # under names that say which is which.
-# --------------------------------------------------------- the room capsule
-# ONE model call per circle, never per part (R451, D86 a, 2026-09-04) — every
-# part reads the SAME capsule text; a difference between two parts' dreams
-# can never be traced to a different capsule, because there is only one.
-CAPSULE_CAP = SET.setting_value_read("dream_capsule_cap", 1200)   # chars, the shared paragraph
-# The ceiling: "an unwarranted initial size awaiting data regarding the actual use" (ruled
-# R564, 2026-09-12) — the per-turn capsule captures are that data.
-CAPSULE_MAX_TOKENS = SET.setting_value_read("dream_capsule_max_tokens", 1500)
-
-ROOM_CAPSULE_PROMPT_V1 = """\
-Below is the full transcript of one circle that just closed. Write ONE short paragraph, at
-most {cap} characters, giving a plain, high-level account of what happened in the room:
-what was discussed, what shifted, what stayed unresolved.
-
-Every part reads this SAME paragraph as its only view of the room beyond its own lines and
-what was said to it — write it so a part who did not see who said what can still follow the
-shape of the circle, without repeating any one part's words verbatim and without singling
-any one part out.
-
-OUTPUT FORMAT, exactly. One section header, alone on its own line, at column 0:
-
-CAPSULE
-    Your paragraph, plain prose, under {cap} characters.
-"""
-
-
-def circle_capsule_build(ot: str, transcript: str, say=lambda _s: None) -> str:
-    """The shared room capsule part_dream()'s prompt reads beside a part's own lines. Called
-    ONCE by the driver, before the seven parallel part_dream() calls — never inside the pool,
-    or seven capsules would race to be "the" one every part reads.
-
-    BEST-EFFORT, by design: this is peripheral awareness, not identity material (the design's
-    own words), so a failure here degrades to an empty capsule and a `say()` note rather than
-    failing the whole dreaming pass over it."""
-    system = ROOM_CAPSULE_PROMPT_V1.format(cap=CAPSULE_CAP)
-    try:
-        reply = _call(system, f"# Transcript of circle {ot}\n{transcript}",
-                      CAPSULE_MAX_TOKENS, kind="capsule", record=True)
-        sections, err = RD.message_sections_read(reply.text, ("CAPSULE",))
-        if sections is None:
-            say(f"  capsule: unparseable ({err}) — dreaming proceeds without one")
-            return ""
-        return sections["CAPSULE"].strip()
-    except Exception as e:                                            # noqa: BLE001
-        say(f"  capsule: call failed ({e}) — dreaming proceeds without one")
-        return ""
+# THE ROOM CAPSULE IS GONE — R607, 2026-10-09. R451 (D86 a) kept one
+# shared paragraph about the rest of the room beside each part's own lines; measured over the
+# fourteen live closes that carried one (work/ablations/2026-10-09_capsule_leak/), parts wrote
+# other parts' thoughts in the capsule's words. Its one call per close, its two settings and the
+# `capsule` turn kind's writer went with it; the kind stays in turn_contract.toml so the captures
+# on file still verify.
 
 
 def _block_stats(blocks: list[str]) -> list[tuple[str, int]]:
@@ -473,25 +435,22 @@ def part_dream_grounding_check(part: str, memory: str, st_text: "str | None",
 
 
 # ---------------------------------------------------------------- dreaming
-def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
+def part_dream(part: str, ot: str, transcript: str) -> dict:
     """ONE part's dreaming pass — returns a PAYLOAD, writes nothing.
     A silent part (no short_term, maybe no statements) still dreams: the
     designed outcome for it is an unchanged document and an empty MEMORY,
     which is legal and non-SUSPECT.
 
-    `capsule` IS THE SHARED ROOM CAPSULE (R451, D86 a, 2026-09-04) —
-    circle_capsule_build()'s one-per-circle text, identical for every part;
-    the driver computes it once and passes it in. Defaults to "" so a direct
-    call (a suite, a hand re-run before a capsule exists) still runs: an
-    empty capsule renders as an empty section, never a refusal."""
+    THE INPUT IS THE PART'S OWN MATERIAL AND NOTHING OF THE REST OF THE ROOM
+    (R607, 2026-10-09): its distillate, its own lines
+    from the transcript, its short_term if it spoke, and its last memory."""
     tag = R.TAG_BY_DIR[part]
     distillate, _why = MT.part_mid_term_block_render(part)
     st_path = STM.short_term_locate(record_dir(ROOT, "parts") / part, ot)
     prior = RM.remember_newest_dreamt_read(part)
     own = _own_lines(part, transcript, with_context=True)
     user = [f"# Your identity distillate\n{distillate or '(none on file)'}",
-            f"# Your own lines from circle {ot}\n{own or '(you have none this circle)'}",
-            f"# What else happened in the room\n{capsule or '(no capsule this run)'}"]
+            f"# Your own lines from circle {ot}\n{own or '(you have none this circle)'}"]
     st_text: "str | None" = None          # None = no short_term = did not speak (B91)
     if st_path is not None:
         # WHAT THE PART SEES DOES NOT CHANGE WITH THE FORMAT (B96, R434): a
@@ -517,7 +476,7 @@ def part_dream(part: str, ot: str, transcript: str, capsule: str = "") -> dict:
         # not a rating — because the part re-rates it below, and a shown value anchors the
         # answer the measurement exists to take fresh.
         user.append(f"# The most recent memory in your chain\n{prior['text']}")
-    system = DREAMING_PROMPT_V2.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
+    system = DREAMING_PROMPT_V3.format(part=tag, ot=ot, cap=RM.RECORD_CAP)
     user_text = "\n\n".join(user)
     reply = _call(system, user_text, DREAM_MAX_TOKENS,
                   kind="dreaming", record=True, part=part)

@@ -260,7 +260,7 @@ def circle_synthesise(ot: str, transcript: str, payloads: list[dict],
             + (f"{prior_cj['id']} ({prior_cj['circle']}): {prior_cj['text']}"
                if prior_cj else "(none — this is the first)"),
             "# The previous observation in your own chain\n"
-            + ((f"{prior_obs['id']} ({prior_obs['circle']}"
+            + ((f"{prior_obs['id']} ({prior_obs.get('circle', 'day-scoped')}"
                 + (f", {prior_obs['salience']}"
                    if prior_obs.get("salience") else "")
                 + f"): {prior_obs['text']}")

@@ -143,6 +143,12 @@ def _doc() -> dict:
     return _JC.doc()
 
 
+def circle_journal_empty_render() -> str:
+    """The bytes of an empty register, for a new group's circles/circle_journal.toml
+    (group_manager's scaffold): exactly what _doc() reads when the file is absent."""
+    return _JC.empty_render(ORDER)
+
+
 def circle_journal_read() -> list[dict]:
     return _JC.read()
 

@@ -153,8 +153,8 @@ def part_precheck(name: str, tag: str, identity: str) -> str:
         return f"{tag.strip()!r} is Self's name — a part cannot share it"
     if not name or not NAME_RE.match(name) or name in R.SKIP_DIRS:
         return (f"no usable directory name derives from {tag.strip()!r} — "
-                f"give one (letters, digits, underscore, starting with a "
-                f"letter)")
+                f"give one (lowercase letters, digits, underscore, starting "
+                f"with a letter)")
     if (R.PARTS_DIR / name).exists():
         return f"parts/{name}/ already exists"
     if len(roster) + 1 > MAX_MEMBERS - 1:      # 9 = 8 parts + lead
@@ -336,39 +336,25 @@ def part_retire_marker_render(part_toml: str, why: str, today: str) -> str:
             f"retired_why = \"{why_q}\"\n")
 
 
-def part_retire(n_text: str) -> None:
-    """/part-retire <n> — B140 (R559-R561, 2026-09-12); /part-delete until then, which removed
-    parts/<d>/ whole. THE RECORD STAYS: long_term, mid_term, every short_term the close reports
-    hash, remember, dreams. What changes is the marker — part.toml is renamed retired.toml with
-    the date and a reason appended — so the roster knows the part and never seats it, its Tag
-    stays taken, and its old lines still parse. The part's recall cache (derived, never the
-    record) is deleted; a retired part is never armed again, so nothing rebuilds it.
-
-    Confirmation is TYPING THE DIRECTORY NAME, then the part comes off the group's `roles` and
-    `initialization` (D127), the marker is renamed, and both are COMMITTED together. Refused
-    for the group's RESERVED roles, and while a circle may be open (circle_state fails closed).
-    Reversal is by hand — rename retired.toml back AND put the name back on the group's
-    `roles` (R548 made the list deliberate) — and there is no verb for it (R561)."""
-    hit = register_row_nth_read(part_rows_read(), n_text)
-    if hit is None:
-        seam.emit("command", f"  no part #{n_text.strip() or '?'} — "
-                             f"/part-list shows them")
-        return
-    d, t = hit
+def part_retire_refusal_read(d: str) -> "tuple[str, str]":
+    """(refusal, plan) for retiring parts/<d>/ now: refusal is "" when the retire may go ahead,
+    else the one line why not; plan is the dependency plan's own text, "" when there is nothing
+    to name. Read only. The checks part_retire() makes before it asks, in its order — shared with
+    the initialization form's Retire (ui/initialization_form.py), so the two doors refuse alike."""
+    tag = dict(R.part_scan()[0]).get(d)
+    if tag is None:
+        return f"no seated part {d!r} in this group", ""
     if d in part_reserved_read():
         import record_paths as _RP
-        seam.emit("command", f"  {t} is a RESERVED role of this group "
-                             f"(groups/{_RP.group_read()}/group.toml) — never retired")
-        return
+        return (f"{tag} is a RESERVED role of this group (groups/{_RP.group_read()}/group.toml) "
+                f"— never retired"), ""
     try:
         import circle_state
         open_now = bool(circle_state.circle_open_read())
     except Exception:                                           # noqa: BLE001
         open_now = True                                          # fails closed
     if open_now:
-        seam.emit("command", "  a circle may be open — close it first: a "
-                             "live round reading a retired part is a crash")
-        return
+        return "a circle may be open — close it first: a live round reading a retired part is a crash", ""
     # WHAT LEANS ON THIS PART — R570, 2026-09-15. Today only PRESERVED and
     # HANDLED dependents exist (its quotes, the practices addressed to it, the group's roles),
     # so the retire keeps its own contract and names them first. A plan that must remove
@@ -378,42 +364,32 @@ def part_retire(n_text: str) -> None:
         import dependency_manager as DM
         dplan = DM.dependency_plan("part", d)
     except Exception:                                           # noqa: BLE001
-        DM, dplan = None, None
-    if dplan is not None and DM.dependency_plan_is_blocked(dplan):
-        seam.emit("command", DM.dependency_plan_render(dplan))
-        seam.emit("command", f"  {t} is not retired — what must be removed first is named above.")
-        return
-    if dplan is not None and (dplan["preserve"] or dplan["handled"]):
-        seam.emit("command", DM.dependency_plan_render(dplan))
-    files = [f for f in sorted((R.PARTS_DIR / d).rglob("*")) if f.is_file()]
-    seam.emit("command", f"\n  retiring {t} keeps parts/{d}/ and its {len(files)} file(s) — "
-                         f"the system respects records and history. From now on:")
-    seam.emit("command", "    it attends no circle, reaches no prompt, and none of its own record "
-                         "is ever searched;\n    its past statements stay in the circles' "
-                         "transcripts, marked retired;\n    its name stays taken — no new part "
-                         "may use it;\n    to bring it back, rename parts/"
-                         f"{d}/{R.RETIRED_MARKER} to {R.MARKER} AND put \"{d}\" back on roles in "
-                         f"{_descriptor_shown()}, both by hand (no command does it).")
-    ans = PC.stream_timed_read(seam.read_line, f"  type the directory name ({d}) to retire: ",
-                         channel="command").strip()
-    if ans != d:
-        seam.emit("command", "  cancelled — nothing changed.")
-        return
-    why = PC.stream_timed_read(seam.read_line, "  why (one line, may be blank): ",
-                               channel="command").strip()
+        return "", ""
+    if DM.dependency_plan_is_blocked(dplan):
+        return f"{tag} is not retired — what must be removed first is named with it", \
+            DM.dependency_plan_render(dplan)
+    if dplan["preserve"] or dplan["handled"]:
+        return "", DM.dependency_plan_render(dplan)
+    return "", ""
+
+
+def part_retire_apply(d: str, why: str) -> "tuple[str, list[pathlib.Path]]":
+    """Retire parts/<d>/ — no question asked here; the caller has its confirmation. Off the
+    group's `roles` and `initialization` first (D127), then part.toml renamed retired.toml with
+    the date and `why` appended, then the part's recall cache deleted. Returns (the line saying
+    so, the paths to commit); the caller commits them. Raises ValueError, nothing changed, when
+    a guard refuses or the group's list cannot be edited."""
     refused = part_write_refused(R.PARTS_DIR / d)       # the same guard part_add() has
     if refused:
-        seam.emit("command", f"  cancelled — {refused}")
-        return
+        raise ValueError(refused)
+    tag = dict(R.part_scan()[0]).get(d, d)
     # OFF THE GROUP'S LIST FIRST (D127): a role left on `roles` with no seat makes every plain
     # open refuse ("unknown part"), so a list that cannot be edited stops the retire here.
     try:
         desc = _group_roles_edit(drop=d)
     except Exception as e:                                      # noqa: BLE001
-        seam.emit("command", f"  cancelled — nothing changed: {t} could not be taken off the "
-                             f"group's list ({e}). Take \"{d}\" off roles in "
-                             f"{_descriptor_shown()}, then retire again.")
-        return
+        raise ValueError(f"nothing changed: {tag} could not be taken off the group's list ({e}). "
+                         f"Take \"{d}\" off roles in {_descriptor_shown()}, then retire again.") from e
     import datetime
     from atomic_write import record_atomic_write
     marker = R.PARTS_DIR / d / R.MARKER
@@ -437,12 +413,63 @@ def part_retire(n_text: str) -> None:
     # between here and there without an open circle. (A record_paths.group_set() HERE would
     # rebind to the real tree under a probe that pointed R.PARTS_DIR elsewhere — measured
     # 2026-09-12, when it wrote a probe's part into the default group's tree.)
-    seam.emit("command", f"  {t} is retired — parts/{d}/{R.MARKER} is now {R.RETIRED_MARKER}"
-                         + (", and it is off the group's list." if desc else "."))
+    return (f"{tag} is retired — parts/{d}/{R.MARKER} is now {R.RETIRED_MARKER}"
+            + (", and it is off the group's list." if desc else "."),
+            [marker, retired] + ([desc] if desc else []))
+
+
+def part_retire(n_text: str) -> None:
+    """/part-retire <n> — B140 (R559-R561, 2026-09-12); /part-delete until then, which removed
+    parts/<d>/ whole. THE RECORD STAYS: long_term, mid_term, every short_term the close reports
+    hash, remember, dreams. What changes is the marker — part.toml is renamed retired.toml with
+    the date and a reason appended — so the roster knows the part and never seats it, its Tag
+    stays taken, and its old lines still parse. The part's recall cache (derived, never the
+    record) is deleted; a retired part is never armed again, so nothing rebuilds it.
+
+    Confirmation is TYPING THE DIRECTORY NAME, then the part comes off the group's `roles` and
+    `initialization` (D127), the marker is renamed, and both are COMMITTED together. Refused
+    for the group's RESERVED roles, and while a circle may be open (circle_state fails closed).
+    Reversal is by hand — rename retired.toml back AND put the name back on the group's
+    `roles` (R548 made the list deliberate) — and there is no verb for it (R561). The checks
+    are part_retire_refusal_read()'s and the act part_retire_apply()'s, which the
+    initialization form's Retire shares."""
+    hit = register_row_nth_read(part_rows_read(), n_text)
+    if hit is None:
+        seam.emit("command", f"  no part #{n_text.strip() or '?'} — "
+                             f"/part-list shows them")
+        return
+    d, t = hit
+    why_not, plan = part_retire_refusal_read(d)
+    if plan:
+        seam.emit("command", plan)
+    if why_not:
+        seam.emit("command", f"  {why_not}")
+        return
+    files = [f for f in sorted((R.PARTS_DIR / d).rglob("*")) if f.is_file()]
+    seam.emit("command", f"\n  retiring {t} keeps parts/{d}/ and its {len(files)} file(s) — "
+                         f"the system respects records and history. From now on:")
+    seam.emit("command", "    it attends no circle, reaches no prompt, and none of its own record "
+                         "is ever searched;\n    its past statements stay in the circles' "
+                         "transcripts, marked retired;\n    its name stays taken — no new part "
+                         "may use it;\n    to bring it back, rename parts/"
+                         f"{d}/{R.RETIRED_MARKER} to {R.MARKER} AND put \"{d}\" back on roles in "
+                         f"{_descriptor_shown()}, both by hand (no command does it).")
+    ans = PC.stream_timed_read(seam.read_line, f"  type the directory name ({d}) to retire: ",
+                         channel="command").strip()
+    if ans != d:
+        seam.emit("command", "  cancelled — nothing changed.")
+        return
+    why = PC.stream_timed_read(seam.read_line, "  why (one line, may be blank): ",
+                               channel="command").strip()
+    try:
+        said, paths = part_retire_apply(d, why)
+    except ValueError as e:
+        seam.emit("command", f"  cancelled — {e}")
+        return
+    seam.emit("command", f"  {said}")
     try:
         import gitrepo as G
-        G.system_git_paths_commit([marker, retired] + ([desc] if desc else []),
-                       f"part-retire: {d}",
+        G.system_git_paths_commit(paths, f"part-retire: {d}",
                        lambda kind, msg: seam.emit("command", f"  {msg}"))
     except Exception as e:                                      # noqa: BLE001
         seam.emit("command", f"  (the retirement is not committed — {e}; "

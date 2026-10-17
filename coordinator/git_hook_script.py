@@ -63,7 +63,7 @@ from gitrepo import GitError, system_git_run
 # that touches this file, compare the template's mark against
 # .git/hooks/pre-commit's, and bump if the BODIES differ even when the
 # marks agree.
-HOOK_MARK = "# inner-circling pre-commit v201"
+HOOK_MARK = "# inner-circling pre-commit v205"
 HOOK_FAMILY = "# inner-circling pre-commit v"
 PRE_COMMIT = f'''#!/bin/sh
 {HOOK_MARK}
@@ -175,18 +175,69 @@ advise() {{
 # nothing normalises it away. Three files were converted wholesale on
 # 2026-08-07 and every other check passed.
 run coordinator/file_line_endings_verify.py --staged
+
+# A GROUP'S RECORD IS CHECKED BY ITS OWN GROUP'S GATES, AND ONLY THE DEFAULT GROUP'S RECORD
+# REACHES THE REST. Most checks below read the record of the DEFAULT group -- the group
+# record_paths binds when no --group is given -- so a path under ANOTHER group's folder
+# cannot change their answer. $SCOPED is $FILES without those paths; an arm whose checks
+# read only the default group matches "$SCOPED", and an arm whose checks read every group
+# (a layer, a descriptor, the grammar, the shipped surface) keeps "$FILES".
+#
+# IT FAILS CLOSED. No default group found, or a commit that changes WHICH group is the
+# default (a `default = true` line added or removed in any group.toml), and $SCOPED is
+# $FILES whole -- every arm fires as if each group were the default.
+# test_hook_gate.py executes this block in a temp repository.
+GROUPS_TOUCHED=$(printf '%s\n' "$FILES" | grep '^groups/[^/][^/]*/' | cut -d/ -f2 | sort -u)
+DEFAULT_GROUP=""
+for gdesc in groups/*/group.toml; do
+    if [ -f "$gdesc" ] && grep -q '^default[ ]*=[ ]*true' "$gdesc"; then
+        DEFAULT_GROUP="${{gdesc#groups/}}"; DEFAULT_GROUP="${{DEFAULT_GROUP%/group.toml}}"
+    fi
+done
+SCOPED="$FILES"
+if [ -n "$DEFAULT_GROUP" ] && ! git diff --cached -U0 -- 'groups/*/group.toml' 2>/dev/null \
+        | grep -q '^[-+]default[ ]*=[ ]*true'; then
+    SCOPED=$(printf '%s\n' "$FILES" | grep -v '^groups/' || true
+             printf '%s\n' "$FILES" | grep "^groups/$DEFAULT_GROUP/" || true)
+fi
+IC_PATHS=""
+IC_IDENTITY=""
+IC_BAND=""
+
+# EACH TOUCHED GROUP'S OWN TREE, and only those. The corruption gate sweeps every group's
+# tree in one pass and also reports a folder with no descriptor, which is a property of
+# groups/ as a whole.
 case "$FILES" in *groups/*)
-    NOTE="  pre-commit: a group's record touched — every group's tree is checked"
+    NOTE="  pre-commit: a group's record touched — that group's tree is checked"
     run memory/record_verify.py
-    for gdir in groups/*/; do
-        gname="${{gdir#groups/}}"; gname="${{gname%/}}"
-        [ -d "$gdir/parts" ] || continue
-        run coordinator/circle_audit.py --selftest --group "$gname"
-        [ -d "$gdir/issues" ] && run memory/issue_gate.py "$gdir/issues"
+    for gname in $GROUPS_TOUCHED; do
+        gdir="groups/$gname"
+        if [ -d "$gdir/parts" ]; then
+            run coordinator/circle_audit.py --selftest --group "$gname"
+        fi
+        if [ -d "$gdir/parts" ] && [ -d "$gdir/issues" ]; then
+            run memory/issue_gate.py "$gdir/issues"
+        fi
+        if [ -f "$gdir/group.toml" ]; then
+            run coordinator/group_record_verify.py --group "$gname"
+        fi
     done
 esac
 
-case "$FILES" in *issues/*|*coordinator/tests/test_issue_gate.py*\
+# A GROUP'S RECORD COMPLETENESS, over every group, when what decides it moves: the survey and
+# the fill (group_manager.py), the verifier, or an owner whose empty render it writes.
+case "$FILES" in *coordinator/group_manager.py*|*coordinator/group_record_verify.py*\
+|*coordinator/practice_manager.py*|*coordinator/proposal_manager.py*|*coordinator/topic_manager.py*\
+|*coordinator/proposal_group_manager.py*|*coordinator/redaction_manager.py*\
+|*coordinator/remember_manager.py*|*coordinator/working_set_manager.py*|*coordinator/JOURNAL_CLASS.py*\
+|*coordinator/circle_history_manager.py*|*coordinator/circle_journal_manager.py*\
+|*coordinator/circle_observation_manager.py*|*coordinator/tests/test_group_manager.py*)
+    NOTE="  pre-commit: a group's record completeness — its survey, fill or a register's empty render"
+    run coordinator/group_record_verify.py
+    run coordinator/tests/test_group_manager.py
+esac
+
+case "$SCOPED" in *issues/*|*coordinator/tests/test_issue_gate.py*\
 |*memory/issue_gate.py*|*memory/issue_schema.py*)
     NOTE="  pre-commit: issues/ or its gate/schema touched"
     run memory/issue_gate.py
@@ -219,15 +270,17 @@ esac
 # hook. The two blocks below are the whole reason this is spelled out.
 IC_RECORD=""
 IC_CODE=""
-case "$FILES" in *parts/*|*self/*|*circles/*.toml*)
+case "$SCOPED" in *parts/*|*self/*|*circles/*.toml*)
     IC_RECORD=1
 esac
 
 # THE CODE SUITES. Module paths only -- the three record patterns (*parts/*,
 # *self/*, *circles/*.toml*) live in the case above. `*packaging/scaffold/groups/*`
 # covers a scaffold edit under parts/, circles/ or issues/, which those three
-# patterns used to be what reached test_scaffold_delegates.py for.
-case "$FILES" in *groups/*/group.toml*\
+# patterns used to be what reached test_scaffold_delegates.py for. "$SCOPED": the descriptor
+# and the layer named here are the DEFAULT group's -- the one these suites read and the one
+# the scaffold delegates -- so another group's never starts this battery.
+case "$SCOPED" in *groups/*/group.toml*\
 |*coordinator/practice_manager.py*|*coordinator/practice_verify.py*|*coordinator/circle.py*\
 |*coordinator/command_surface.py*|*coordinator/llm_client.py*\
 |*coordinator/tests/test_command_policy.py*|*coordinator/tests/test_issue_status_write.py*\
@@ -290,10 +343,10 @@ esac
 # exactly as often as the single case fired before the split.
 if [ -n "$IC_RECORD" ]; then
     NOTE="  pre-commit: the record, or code that reads it, was touched"
-    # THE TRIGGER NAMES EVERY GROUP'S LAYER (groups/*/process_*.md) AS WELL AS
-    # process_core.md, because test_annotation_exemplars.py reads the COMPOSED
-    # rulebook -- the [proposed:] exemplars live in a group's layer, so the file
-    # that holds the counted exemplars must fire the suite that counts them.
+    # THE TRIGGER NAMES THE DEFAULT GROUP'S LAYER (groups/*/process_*.md, through
+    # $SCOPED) AS WELL AS process_core.md, because test_annotation_exemplars.py reads
+    # the COMPOSED rulebook -- the [proposed:] exemplars live in that group's layer, so
+    # the file that holds the counted exemplars must fire the suite that counts them.
     run coordinator/circle_audit.py --selftest
     run coordinator/practice_verify.py
     run coordinator/logbook_ruling_verify.py
@@ -431,7 +484,7 @@ case "$FILES" in *NEXT.md*|*coordinator/logbook_next_verify.py*\
     run coordinator/tests/test_logbook_next_verify.py
 esac
 
-case "$FILES" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*groups/*/process_*.md*|*coordinator/prompt_build.py*|*coordinator/group_context.py*|*coordinator/group_attention.py*|*self/best_practices.toml*|*parts/*)
+case "$SCOPED" in *coordinator/block_overlap_verify.py*|*coordinator/tests/test_block_overlap_verify.py*|*coordinator/process_core.md*|*groups/*/process_*.md*|*coordinator/prompt_build.py*|*coordinator/group_context.py*|*coordinator/group_attention.py*|*self/best_practices.toml*|*parts/*)
     NOTE="  pre-commit: a prompt block source or its overlap checker touched"
     # Through the venv, not bare `python`: this checker imports circle.py,
     # which imports anthropic, and the hook's `python` is the system 3.10
@@ -469,7 +522,7 @@ case "$FILES" in *docs/BNF.md*|*work/tools/bnf_conformance.py*|*work/tools/bnf_k
 |*coordinator/ruling_manager.py*|*coordinator/setting_manager.py*|*coordinator/short_term_manager.py*\
 |*coordinator/stream_redaction.py*|*coordinator/topic_manager.py*|*coordinator/working_set_manager.py*\
 |*memory/TRANSACTION_CLASS.py*|*memory/issue_gate.py*|*memory/issue_schema.py*|*memory/issue_status.py*\
-|*ui/circling.py*|*ui/ticker/bridge.py*)
+|*ui/circling.py*|*ui/initialization_form.py*|*ui/ticker/bridge.py*)
     NOTE="  pre-commit: docs/BNF.md, its conformance harness, or code the harness checks touched"
     # The harness checks the CODE against the grammar, so this arm names every production file
     # it reads as well as the grammar and the harness itself. test_hook_template.py parses the
@@ -916,7 +969,20 @@ case "$FILES" in *ui/remember_ordering.py*|*ui/remember_ordering.html*\
     run ui/tests/test_remember_ordering.py
 esac
 
-case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_part_roster.py*)
+# THE INITIALIZATION FORMS -- the page a person fills a group's descriptor and a part's record on,
+# served by the ordering tool. Fired by the forms, their page and their suite, by the server that
+# routes them, AND by the four coordinator modules every save writes through: a change to any of
+# them is a change to what a form may write. The suite builds its own temp record and reads
+# nothing under groups/; its --browser half is NOT run here, as the ordering tool's is not.
+case "$FILES" in *ui/initialization_form.py*|*ui/initialization_form.html*\
+|*ui/tests/test_initialization_form.py*|*ui/remember_ordering.py*\
+|*coordinator/group_manager.py*|*coordinator/part_roster.py*|*coordinator/initialization.py*\
+|*coordinator/part_add.py*)
+    NOTE="  pre-commit: the initialization forms, their page, or a module they write through touched"
+    run ui/tests/test_initialization_form.py
+esac
+
+case "$SCOPED" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_part_roster.py*)
     NOTE="  pre-commit: the roster is read from the tree, so the tree can lie"
     # A missing or malformed part.toml shrinks the roster, and a part outside
     # the roster is ABSENT from the circle rather than faulty -- downstream,
@@ -929,17 +995,28 @@ case "$FILES" in *parts/*|*coordinator/part_roster.py*|*coordinator/tests/test_p
     run coordinator/tests/test_part_roster.py
 esac
 
-case "$FILES" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*coordinator/parts_prompt_projection.py*|*parts/*)
+case "$SCOPED" in *coordinator/identity.py*|*coordinator/tests/test_identity.py*|*coordinator/prompt_build.py*|*coordinator/parts_prompt_projection.py*|*parts/*)
+    IC_IDENTITY=1
+esac
+
+# ANY GROUP'S DESCRIPTOR. test_identity.py reads a second group's [identity] by name, and
+# test_record_paths.py asserts exactly one group is marked the default across all of them.
+case "$FILES" in *groups/*/group.toml*)
+    IC_IDENTITY=1
+    IC_PATHS=1
+esac
+
+if [ -n "$IC_IDENTITY" ]; then
     NOTE="  pre-commit: who Self is, or what a part's recorded context renders to"
     run coordinator/tests/test_identity.py
-esac
+fi
 
 case "$FILES" in *coordinator/part_add.py*|*coordinator/tests/test_part_add.py*)
     NOTE="  pre-commit: the part-lifecycle register touched"
     run coordinator/tests/test_part_add.py
 esac
 
-case "$FILES" in *coordinator/initialization.py*|*coordinator/initialization.toml*|*coordinator/tests/test_initialization.py*|*coordinator/commands.py*|*coordinator/command_surface.py*|*parts/*)
+case "$SCOPED" in *coordinator/initialization.py*|*coordinator/initialization.toml*|*coordinator/tests/test_initialization.py*|*coordinator/commands.py*|*coordinator/command_surface.py*|*parts/*)
     NOTE="  pre-commit: the first-run dialogs, their validator, their verb"
     # PART_CONTEXT_DIALOG and /part-context-update: the ruled validator
     # (data_type/data_max/unique_in, empty always valid, echo-and-loop on
@@ -1023,12 +1100,13 @@ case "$FILES" in *test_*.py*)
     run coordinator/tests/test_hook_template.py
 esac
 
-case "$FILES" in *coordinator/gitrepo.py*|*coordinator/git_hook_script.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*|*coordinator/tests/test_hook_gate.py*)
+case "$FILES" in *coordinator/gitrepo.py*|*coordinator/git_hook_script.py*|*coordinator/tests/test_gitrepo_unstage.py*|*coordinator/tests/test_remote_classify.py*|*coordinator/tests/test_hook_template.py*|*coordinator/tests/test_hook_gate.py*|*coordinator/tests/test_git_tidy.py*)
     NOTE="  pre-commit: the hook's own module touched"
     run coordinator/tests/test_hook_template.py
     run coordinator/tests/test_gitrepo_unstage.py
     run coordinator/tests/test_remote_classify.py
     run coordinator/tests/test_hook_gate.py
+    run coordinator/tests/test_git_tidy.py
 esac
 
 case "$FILES" in *packaging/sanitize.py*|*packaging/package.py*|*packaging/ignore.txt*)
@@ -1036,7 +1114,7 @@ case "$FILES" in *packaging/sanitize.py*|*packaging/package.py*|*packaging/ignor
     run coordinator/tests/test_hook_template.py
 esac
 
-case "$FILES" in *coordinator/instrument_manager.py*|*self/instruments.toml*|*coordinator/tests/test_instrument_manager.py*)
+case "$SCOPED" in *coordinator/instrument_manager.py*|*self/instruments.toml*|*coordinator/tests/test_instrument_manager.py*)
     NOTE="  pre-commit: the instruments register or its reader touched"
     # self/instruments.toml is in the trigger for the reason close_contract.toml
     # and turn_contract.toml are in theirs -- it is DATA a human edits, and
@@ -1054,7 +1132,7 @@ case "$FILES" in *coordinator/circling_verify.py*|*coordinator/circling_contract
     run coordinator/tests/test_circling_verify.py
 esac
 
-case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
+case "$SCOPED" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guard.py*|*coordinator/circle_state.py*|*coordinator/tests/test_circle_state.py*|*coordinator/circle_close_verify.py*|*coordinator/tests/test_circle_close_verify.py*|*coordinator/close_contract.toml*|*coordinator/tests/test_close_postcondition.py*|*coordinator/transcript_store.py*\
 |*coordinator/record_paths.py*|*coordinator/tests/test_record_paths.py*|*coordinator/part_roster.py*\
 |*coordinator/circle_close.py*|*coordinator/circle_open.py*|*coordinator/circle.py*\
 |*coordinator/group_manager.py*|*ui/tests/test_circle_engine_band.py*|*coordinator/short_term_manager.py*|*groups/*)
@@ -1066,13 +1144,29 @@ case "$FILES" in *coordinator/write_guard.py*|*coordinator/tests/test_write_guar
     # (audit-register 2026-09-11 #4). group_manager.py is here because that
     # suite opens a dry-run circle on a group /group-add scaffolded (2026-09-11)
     # and proves the default group's tree byte-identical after it.
-    run coordinator/tests/test_record_paths.py
-    run ui/tests/test_circle_engine_band.py
+    IC_PATHS=1
+    IC_BAND=1
     run coordinator/tests/test_write_guard.py
     run coordinator/tests/test_circle_state.py
     run coordinator/tests/test_circle_close_verify.py
     run coordinator/tests/test_close_postcondition.py
 esac
+
+# THE BAND'S OWN TREE fires the suite that opens a dry-run circle on it -- that suite reads
+# the band's descriptor, layer and parts, and no other group's but the default's.
+case "$FILES" in *groups/band/*)
+    IC_BAND=1
+esac
+
+if [ -n "$IC_PATHS" ]; then
+    NOTE="  pre-commit: a group's descriptor, or a record-safety module, touched"
+    run coordinator/tests/test_record_paths.py
+fi
+
+if [ -n "$IC_BAND" ]; then
+    NOTE="  pre-commit: the band's tree, or a record-safety module, touched"
+    run ui/tests/test_circle_engine_band.py
+fi
 
 case "$FILES" in *coordinator/circle_open_verify.py*|*coordinator/open_contract.toml*|*coordinator/tests/test_circle_open_verify.py*\
 |*coordinator/circle_open.py*|*coordinator/prompt_capture.py*|*coordinator/working_set_manager.py*|*coordinator/transcript_store.py*\

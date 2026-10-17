@@ -60,6 +60,8 @@ PLAIN: dict[str, str] = {
         "The copy of the instructions shipped with the program didn't match the program.",
     "coordinator/practice_verify.py":
         "One of your saved practices didn't read back the way it was written.",
+    "coordinator/group_record_verify.py":
+        "A group is missing one of the files every group starts with.",
     "memory/record_verify.py":
         "A file the program needs looks damaged.",
     "coordinator/file_line_endings_verify.py":

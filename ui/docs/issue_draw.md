@@ -23,6 +23,11 @@ see NOTES.
 above at every LIVE `/close`, immediately after the vetting checkpoint and
 before short_terms are collected. See NOTES, *Run at a close*.
 
+**And to open the picture, type `/issue-graph`** at a command prompt (2026-10-03). The memory
+tool (`ui/remember_ordering.py`, `ui/docs/remember_ordering.md`) runs the same third form and
+serves the page at `/issue-graph?group=<name>`, with a link back to the memory page set into
+its header after `<header><h1>Issue graph</h1>` — so keep that heading as it is.
+
 ## DESCRIPTION
 `issue_draw.py` turns the issue graph into a picture: a large SVG laid out with a deterministic Fruchterman-Reingold force-directed algorithm, wrapped in a self-contained HTML page (the SVG inlined, so the page opens from disk with no network dependency) that also lists every node in a side table and supports click-to-highlight selection between the graph and the table.
 

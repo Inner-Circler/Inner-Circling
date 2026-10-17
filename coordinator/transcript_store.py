@@ -701,14 +701,31 @@ def circle_commit_paths(ot: str, written: list[str]) -> list[pathlib.Path]:
                           record_dir(ROOT, "self") / "coalesce.toml",
                           record_dir(ROOT, "self") / "remember.toml") if p.is_file()]
     # SELF'S ORDERINGS, 2026-10-02 — remember_ordering.toml beside each remember.toml
-    # (remember_ordering_manager.py). The ordering tool writes them BETWEEN circles and runs
-    # no git of its own, so this commit is what files them: the same lifecycle Self's own
-    # remember register has had since it joined this list, and the circle that files an
-    # ordering is the first one whose prompts it shaped. Every one in this group, not only the
-    # parts that wrote — Self may have ordered a part that then sat silent.
+    # (remember_ordering_manager.py) — AND SELF'S RATINGS, 2026-10-08 — parts/<p>/self_rating.toml
+    # (remember_manager.py, B149). The memory tool writes both between circles and files each
+    # save itself where git is here; this commit files whatever a save could not (no git, a
+    # refused commit, a hand edit), because a close never leaves the record unfiled (the
+    # operator, 2026-10-08). Every one in this group, not only the parts that wrote — Self may have
+    # ordered or rated a part that then sat silent.
     import remember_ordering_manager as ROM
+    import remember_manager as RM
     paths += sorted(parts_dir.glob(f"*/{ROM.FILE}"))
     paths += [p for p in (record_dir(ROOT, "self") / ROM.FILE,) if p.is_file()]
+    paths += sorted(parts_dir.glob(f"*/{RM.SELF_RATING_FILE}"))
+    # THE ISSUE GRAPH AND THE PRACTICE REGISTER, 2026-10-09 (the operator, D144: "go as
+    # recommended"). A /issue-* ruling made in the circle is applied at the close
+    # (issue_commands.issue_command_apply, before the vetting and this commit) and writes
+    # issues/*.toml — and an issue_status change RENAMES the node's file, so the DIRECTORY is
+    # what is staged, not a glob of what exists: `git add -- <dir>` carries the new name, the
+    # gone one and the regenerated INDEX.md alike. A practice ruled in at the close writes
+    # self/best_practices.toml the same way. Both were ruled out of this commit until then,
+    # and every such close left the graph changed and unfiled; a hand edit made to either
+    # before the close rides in with it, which the ruling accepts. Staging an unchanged
+    # directory is a no-op, as for every register above.
+    issues_dir = record_dir(ROOT, "issues")
+    if issues_dir.is_dir():
+        paths.append(issues_dir)
+    paths += [p for p in (record_dir(ROOT, "self") / "best_practices.toml",) if p.is_file()]
     return paths
 
 

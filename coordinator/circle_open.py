@@ -267,6 +267,26 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # and lose them. This is the first point in the open where a surface
     # certainly exists.
     SET.setting_corrections_flush(lambda t: emit("command", t))
+    # THE FIXTURE PIN IS NEVER SILENT: a variable left set in a shell would otherwise open a
+    # group other than the one group.toml names as the default.
+    import record_paths as _RPIN
+    if _RPIN.group_fixture_pin_read():
+        emit("command", f"\n  !! {_RPIN.FIXTURE_GROUP_ENV}={_RPIN.group_fixture_pin_read()} is "
+                        f"set — the default group is pinned to it, whatever group.toml says")
+    # THE GROUP'S RECORD, COMPLETE OR SAID TO BE NOT (2026-10-16): a missing register is named
+    # with the command that writes it, a stub with whose it is to write. Reports, never refuses —
+    # every reader tolerates the absence; it is the gates at the close's commit that do not.
+    import group_manager as _GM
+    _missing, _stubs = _GM.group_record_survey(_RPIN.group_read())
+    if _missing:
+        # The fill is a development tool that never ships, so the line names it without a path a
+        # bundle could not resolve (packaging/shipped_references.py).
+        emit("command", f"\n  !! groups/{_RPIN.group_read()}/ lacks {', '.join(_missing)} — every "
+                        f"reader runs without them, but the close's commit may be refused until "
+                        f"the group record check writes them (its --fill, in the source tree)")
+    if _stubs:
+        emit("command", f"\n  note: still the stub /group-add wrote, yours to write: "
+                        f"{', '.join(_stubs)}")
 
     # LABEL AND RESULT ARE ONE emit() CALL, for both checks below — never two
     # joined by end=" "/flush=True. The dual-pane adapter (ui/circling.py
@@ -712,6 +732,10 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                 break
             for line in _topic_suggestions():
                 emit("circle", line)
+        # ONE LINE. A pasted topic can carry newlines, and the transcript's
+        # header `# Circle — {topic} — {ot}` must stay one line to parse
+        # (circle 2026-10-13_2137's did not, and command suggestions failed on it).
+        topic = " ".join(topic.split())
         # MINT -> CHECK -> WRITE, with nothing between them that can block.
         # An input() in this sequence would rebuild the window it closes: the
         # check would describe the tree as it was before someone went to make

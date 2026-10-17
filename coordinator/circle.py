@@ -672,7 +672,8 @@ def main() -> int:
                          "groups/<name>/group.toml) instead of --parts — a "
                          "deliberately different roster, not a reduced one, "
                          "so the REDUCED LIVE ROSTER warning below does not "
-                         "fire for it. Mutually exclusive with --parts.")
+                         "fire for it. With --parts, a reduced roster of that "
+                         "group's own members.")
     ap.add_argument("--recall-arm", default="delivered",
                     choices=["off", "delivered", "withheld"],
                     # docs/MEMORY_DESIGN.md and R460 (2026-09-06, which closed the
@@ -896,10 +897,7 @@ def main() -> int:
 
 
     used_group = args.group is not None
-    if used_group and args.parts != ",".join(DEFAULT_PARTS):
-        emit("command", "--group and --parts were both given — use one, not "
-                        "both.")
-        return 2
+    parts_given = args.parts != ",".join(DEFAULT_PARTS)
     # A BARE OPEN NEEDS A DEFAULT GROUP — R468, B120 stage 4 (2026-09-07): one installed group,
     # or one whose group.toml says `default = true`; otherwise --group is required and this is
     # the one sentence that says so. No literal group name is depended on.
@@ -918,11 +916,23 @@ def main() -> int:
                             f"exists")
             return 2
         parts = resolved
+        # --parts WITH --group is a Consult of that group (the operator, 2026-10-15: the Ticker's
+        # parts toggles follow the chosen group) — its members only. It was refused outright
+        # ("use one, not both") until then.
+        if parts_given:
+            parts = [p.strip() for p in args.parts.split(",") if p.strip()]
+            stray = [p for p in parts if p not in resolved]
+            if stray:
+                emit("command", f"--parts names {', '.join(stray)} — not in group "
+                                f"{args.group!r} ({', '.join(resolved)})")
+                return 2
         # THE GROUP'S TREE — R467, B117 stage 3 (2026-09-07): a circle opened on a group reads
         # and writes that group's RECORD, groups/<name>/. group_set() rebinds record_paths'
         # constants and runs every follower (roster's tables, in place), so PART_TAGS and
         # record_dir() below already answer for this group. Before anything reads the record.
-        if args.group != _RP.DEFAULT_GROUP:
+        # Against the BOUND group, not the import-time default: a process that runs main()
+        # more than once (circling.py, the Ticker) may still be bound to the last circle's.
+        if args.group != _RP.group_read():
             _RP.group_set(args.group)
     else:
         parts = [p.strip() for p in args.parts.split(",") if p.strip()]
@@ -949,13 +959,13 @@ def main() -> int:
     # a part who was present and chose silence. It gets no dream entry and no
     # relationship update. It learns of the circle only indirectly, through
     # whatever the issue graph's state has become by the next circle it attends.
-    missing_roster = [p for p in DEFAULT_PARTS if p not in parts]
+    missing_roster = [p for p in (resolved if used_group else DEFAULT_PARTS) if p not in parts]
     # A NAMED GROUP IS DELIBERATE, NEVER "REDUCED" — the warning below exists
     # to catch an ACCIDENTALLY partial --parts roster in a live default-group circle;
     # a --group whose roster cuts someone or a genuinely different roster (an
     # engineering group, say) chose its own membership on purpose and gets no
-    # scare, per docs/CIRCLE_TYPES_DESIGN.md.
-    if args.live and missing_roster and not used_group:
+    # scare, per docs/CIRCLE_TYPES_DESIGN.md. A --group narrowed by --parts is reduced, like any.
+    if args.live and missing_roster and (not used_group or parts_given):
         emit("command", "\n  !! REDUCED LIVE ROSTER")
         emit("command", f"     absent: {', '.join(PART_TAGS[p] for p in missing_roster)}")
         emit("command", "     These parts will not be present, will write no short_term, and")
@@ -1777,6 +1787,21 @@ def main() -> int:
             fail("inter-circle processing (dreaming/synthesis) did not complete — the "
                  "circle itself is filed; see work/logs/"
                  f"dream_error_{ot}.json and re-run by hand")
+        # A CLOSE NEVER LEAVES STATE IN UNTRACKED OR UNCOMMITTED FILES (the operator, 2026-10-08:
+        # "Either mark files for .gitignore or commit them"). The last act of a live close
+        # is to look: anything under this group's tree that neither of the two commits
+        # filed and .gitignore does not cover is named here, as a failure, because the next
+        # close would carry it as someone else's. No exception since 2026-10-09 (D144): the
+        # close's commit carries the issue graph its own rulings wrote and the practice
+        # register too. Silent where git cannot answer.
+        import gitrepo as _GU
+        tree = _RP.group_rel(_RP.group_read())
+        tree = f"{tree}/" if tree else ""
+        left = _GU.system_git_unfiled_read(tree)
+        if left:
+            fail(f"the close left {len(left)} file(s) under {tree} neither committed nor "
+                 f"ignored — a close never leaves state unfiled: commit them, or add them "
+                 f"to .gitignore:\n      " + "\n      ".join(left))
     else:
         emit("command", "  (sandbox mode: verifier not run — it reads the live tree)")
         circle_sandbox_commit(ot)

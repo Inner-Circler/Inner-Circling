@@ -142,14 +142,27 @@ _MAP_PREAMBLE = (
     "IS the PII this exists to hide (packaging/runtime_only.txt).")
 
 
-def _alias_doc() -> dict:
-    if ALIAS_PATH.is_file():
-        return SS.register_read(ALIAS_PATH)
+def _alias_empty() -> dict:
+    """The alias register's absent-file shape — one copy, read by _alias_doc() and
+    redaction_empty_render()."""
     doc: dict = {"register": "redaction", "doc": {"preamble": _ALIAS_PREAMBLE},
                 ALIAS_TABLE: []}
     for k in ALIAS_KINDS:
         doc[f"next_{k}"] = 1
     return doc
+
+
+def _alias_doc() -> dict:
+    if ALIAS_PATH.is_file():
+        return SS.register_read(ALIAS_PATH)
+    return _alias_empty()
+
+
+def redaction_empty_render() -> str:
+    """The bytes of an empty alias register, for a new group's self/redaction.toml
+    (group_manager's scaffold): exactly what _alias_doc() reads when the file is absent. The
+    reverse map is never seeded — its rows are the raw identifiers a redacted view hides."""
+    return SS.register_dumps(_alias_empty(), ALIAS_TABLE, ALIAS_ORDER)
 
 
 def _alias_save(doc: dict) -> None:

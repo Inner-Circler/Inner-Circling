@@ -148,8 +148,21 @@ def _load() -> dict:
     p = proposal_group_locate()
     if p.is_file():
         return SS.register_read(p)
+    return _empty()
+
+
+def _empty() -> dict:
+    """The register's absent-file shape — one copy, read by _load() and
+    proposal_group_empty_render()."""
     return {"register": "coalesce", "next_id": 1, "hash": "", "derived": "",
             "note": "", TABLE: []}
+
+
+def proposal_group_empty_render() -> str:
+    """The bytes of an empty register, for a new group's self/coalesce.toml (group_manager's
+    scaffold): exactly what _load() reads when the file is absent."""
+    import REGISTER_CLASS as SS
+    return SS.register_dumps(_empty(), TABLE, ORDER)
 
 
 def _save(doc: dict) -> None:

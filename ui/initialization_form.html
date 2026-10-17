@@ -1,0 +1,1134 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Initialization</title>
+<!--
+  initialization_form.html — the forms page ui/remember_ordering.py serves at /initialization, beside
+  the memory page and the issue graph. One file, nothing loaded from the network. The server
+  substitutes the token below; every /api call carries it back. The page checks each field as it
+  is left so a person sees a fault where it is; the server checks everything again at a save and
+  its refusal is the one that counts (ui/initialization_form.py).
+
+  THE KEYS. Tab and Shift+Tab move through the form's fields and buttons in a cycle. Enter keeps
+  the entry and moves to the next field (Shift+Enter is a new line in a text box); a field that is
+  not valid keeps the focus. Space ticks a box. Alt+Up / Alt+Down move a first-run role. Escape is
+  Cancel, Ctrl+S is Save. Alt+G and Alt+P change form.
+-->
+<style>
+:root {
+  color-scheme: light dark;
+  --bg: #f4f5f8; --panel: #ffffff; --ink: #1b2230; --muted: #5d6877; --faint: #8a94a3;
+  --line: #dfe3ea; --line-strong: #c6ccd6; --chip: #eef0f5;
+  --accent: #3d5bd9; --accent-soft: #e9edfd; --accent-ink: #ffffff;
+  --good: #23803a; --good-soft: #e3f4e7; --warn: #a8690b; --warn-soft: #fbf0d9;
+  --bad: #c0302b; --bad-soft: #fde8e6; --shadow: 0 1px 2px rgba(20, 28, 45, .06), 0 4px 14px rgba(20, 28, 45, .05);
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #11151b; --panel: #1a2029; --ink: #e7ebf1; --muted: #9aa5b4; --faint: #6f7a89;
+    --line: #2a323e; --line-strong: #3a4553; --chip: #242c37;
+    --accent: #8aa4ff; --accent-soft: #232d4d; --accent-ink: #0d1220;
+    --good: #6fd685; --good-soft: #1b3324; --warn: #f0b955; --warn-soft: #3a2e17;
+    --bad: #ff8a80; --bad-soft: #3d1f1d; --shadow: 0 1px 2px rgba(0, 0, 0, .3), 0 6px 18px rgba(0, 0, 0, .25);
+  }
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 15px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+button, select, input, textarea { font: inherit; color: inherit; }
+.wrap { max-width: 880px; margin: 0 auto; padding: 0 20px; }
+
+/* ---------------------------------------------------------------- the head */
+header.top {
+  position: sticky; top: 0; z-index: 20; background: color-mix(in srgb, var(--bg) 88%, transparent);
+  backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px); border-bottom: 1px solid var(--line);
+}
+.bar { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 0 10px; }
+.bar h1 { font-size: 17px; font-weight: 650; margin: 0 6px 0 0; letter-spacing: -.01em; }
+.tabs { display: inline-flex; background: var(--chip); border-radius: 10px; padding: 3px; }
+.tabs button { border: 0; background: transparent; padding: 6px 14px; border-radius: 8px; font-size: 13.5px; font-weight: 600; color: var(--muted); cursor: pointer; }
+.tabs button[aria-pressed="true"] { background: var(--panel); color: var(--ink); box-shadow: var(--shadow); }
+.hint kbd { font: 11px ui-monospace, Consolas, monospace; color: var(--faint); border: 1px solid var(--line); border-radius: 4px; padding: 0 4px; }
+.right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+a.btn { text-decoration: none; }
+.btn {
+  border: 1px solid var(--line-strong); background: var(--panel); border-radius: 9px; padding: 7px 14px; font-size: 14px;
+  font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; color: var(--ink);
+}
+.btn:hover:not(:disabled) { border-color: var(--accent); }
+.btn:disabled { opacity: .42; cursor: default; }
+.btn.primary { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); min-width: 92px; justify-content: center; }
+.btn.primary:hover:not(:disabled) { filter: brightness(1.07); }
+.btn.small { padding: 2px 8px; font-size: 12px; border-radius: 7px; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* ---------------------------------------------------------------- the form */
+main.wrap { padding-top: 18px; padding-bottom: 110px; }
+.lede { color: var(--muted); font-size: 14px; margin: 0 0 14px; }
+fieldset {
+  border: 1px solid var(--line); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow);
+  margin: 0 0 14px; padding: 6px 18px 16px; min-width: 0;
+}
+fieldset:disabled { opacity: .6; }
+legend { font-size: 12px; font-weight: 700; letter-spacing: .05em; text-transform: uppercase; color: var(--muted); padding: 0 6px; }
+.explain { font-size: 13.5px; color: var(--muted); margin: 0 0 10px; }
+.grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 18px; }
+.grid .wide { grid-column: 1 / -1; }
+@media (max-width: 640px) { .grid { grid-template-columns: 1fr; } .wrap { padding: 0 16px; } }
+.f { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.f > label, .f > .label { font-size: 13.5px; font-weight: 600; }
+.f .req { color: var(--bad); margin-left: 2px; }
+input[type="text"], select, textarea {
+  width: 100%; background: var(--panel); border: 1px solid var(--line-strong); border-radius: 9px; padding: 8px 11px; font-size: 14.5px;
+}
+textarea { resize: vertical; min-height: 70px; line-height: 1.45; }
+input:disabled, select:disabled, textarea:disabled, input[readonly], textarea[readonly] { background: var(--chip); color: var(--muted); }
+input:disabled, select:disabled, textarea:disabled { cursor: not-allowed; }
+.f.invalid input[type="text"], .f.invalid select, .f.invalid textarea { border-color: var(--bad); }
+.f.invalid .boxes, .f.invalid .order { outline: 1px solid var(--bad); outline-offset: 4px; border-radius: 6px; }
+.hint { font-size: 12.5px; color: var(--faint); }
+.err { font-size: 12.5px; color: var(--bad); font-weight: 550; }
+.err:empty { display: none; }
+.advice { font-size: 13px; background: var(--warn-soft); border: 1px solid color-mix(in srgb, var(--warn) 45%, var(--line)); border-radius: 9px; padding: 8px 11px; white-space: pre-line; }
+.advice:empty { display: none; }
+.boxes { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px 14px; padding: 2px 0; }
+.box { display: flex; align-items: center; gap: 8px; font-size: 14px; cursor: pointer; min-width: 0; }
+.box small { color: var(--faint); }
+.box.off { color: var(--faint); cursor: not-allowed; }
+input[type="checkbox"] { width: 17px; height: 17px; accent-color: var(--accent); margin: 0; flex: none; cursor: inherit; }
+.order { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.order li { display: flex; align-items: center; gap: 10px; border: 1px solid var(--line); border-radius: 9px; padding: 5px 10px; }
+.order li.on { border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent-soft) 60%, var(--panel)); }
+.order .n { font: 600 12px ui-monospace, Consolas, monospace; color: var(--accent); min-width: 18px; text-align: right; }
+.order .n:empty::before { content: "–"; color: var(--faint); }
+.order .grow { flex: 1; min-width: 0; }
+.badge { display: inline-block; font-size: 11px; font-weight: 650; letter-spacing: .02em; border-radius: 6px; padding: 0 6px; margin-left: 6px; vertical-align: 1px; }
+.badge.quiet { background: var(--chip); color: var(--muted); }
+.badge.key { background: var(--accent-soft); color: var(--accent); }
+.badge.stub { background: var(--warn-soft); color: var(--warn); }
+details.told { border: 1px solid var(--line); border-radius: 9px; padding: 6px 12px; margin: 0 0 8px; }
+details.told > summary { cursor: pointer; font-size: 14px; font-weight: 600; padding: 2px 0; }
+details.told > summary code { font-weight: 400; color: var(--faint); font-size: 12.5px; margin-left: 6px; }
+details.told[open] > summary { margin-bottom: 8px; }
+details.told .f { margin: 0 0 10px; }
+.practices { margin: 0 0 12px; padding: 0 0 0 18px; font-size: 14px; }
+.practices li { margin: 0 0 4px; }
+.practices:empty { display: none; }
+.notice { border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 10px 14px; margin: 0 0 14px; font-size: 14px; }
+.notice.bad { border-color: color-mix(in srgb, var(--bad) 55%, var(--line)); background: var(--bad-soft); }
+.notice.info { background: var(--accent-soft); border-color: color-mix(in srgb, var(--accent) 35%, var(--line)); }
+.notice:empty { display: none; }
+.btn.danger { color: var(--bad); }
+.btn.danger:hover:not(:disabled) { border-color: var(--bad); }
+pre.plan { font: 12.5px ui-monospace, Consolas, monospace; white-space: pre-wrap; background: var(--chip); border-radius: 9px; padding: 8px 11px; margin: 0 0 12px; }
+.q { padding: 10px 0; border-top: 1px solid var(--line); }
+.q:first-child { border-top: 0; }
+code { font: 13px ui-monospace, Consolas, monospace; }
+
+/* ---------------------------------------------------------------- the foot */
+.actions {
+  position: fixed; left: 0; right: 0; bottom: 0; z-index: 20; border-top: 1px solid var(--line);
+  background: color-mix(in srgb, var(--bg) 90%, transparent); backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+}
+.actions .wrap { display: flex; align-items: center; gap: 12px; padding-top: 11px; padding-bottom: 11px; }
+.status { font-size: 13.5px; color: var(--muted); display: flex; align-items: center; gap: 8px; min-width: 0; flex: 1; }
+.status span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--faint); flex: none; }
+.status.saved .dot { background: var(--good); } .status.dirty .dot { background: var(--warn); }
+.status.busy .dot { background: var(--accent); } .status.error .dot { background: var(--bad); }
+.status.error { color: var(--bad); }
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="wrap bar">
+    <h1>Initialization</h1>
+    <div class="tabs" role="group" aria-label="Which form">
+      <button type="button" id="tab-group" aria-pressed="true" title="Alt+G">Group</button>
+      <button type="button" id="tab-part" aria-pressed="false" title="Alt+P">Part</button>
+    </div>
+    <div class="right">
+      <a class="btn" id="to-memory" href="/">Memory tool</a>
+      <a class="btn" id="to-graph" href="/issue-graph" target="_blank" rel="noopener">Issue graph</a>
+    </div>
+  </div>
+</header>
+
+<main class="wrap">
+  <div class="notice bad" id="load-error" role="alert"></div>
+
+  <!-- ============================================================ the GROUP form -->
+  <form id="group-form" novalidate autocomplete="off" aria-labelledby="tab-group">
+    <p class="lede">A group's descriptor, <code>groups/&lt;name&gt;/group.toml</code>: who sits in it, what is
+      protected, whose first-run questions come first, and the words its rulebook uses. Saving changes only
+      what you changed; the file's own comments stay as they are.</p>
+
+    <fieldset>
+      <legend>Group</legend>
+      <div class="grid">
+        <div class="f" data-field="group">
+          <label for="g-group">Group</label>
+          <select id="g-group"></select>
+          <span class="hint">Choose a group to edit, or a new one.</span>
+        </div>
+        <div class="f" data-field="name">
+          <label for="g-name">Name<span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="g-name" maxlength="40" spellcheck="false" aria-describedby="g-name-h g-name-e">
+          <span class="hint" id="g-name-h">Lowercase letters, digits, _ or -, starting with a letter. Fixed once
+            made — it is what <code>--group</code> opens.</span>
+          <span class="err" id="g-name-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="display">
+          <label for="g-display">Display name<span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="g-display" maxlength="60" aria-describedby="g-display-e">
+          <span class="err" id="g-display-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="default">
+          <span class="label">Default</span>
+          <label class="box" id="g-default-box"><input type="checkbox" id="g-default" aria-describedby="g-default-h g-default-e">
+            The group a bare open runs</label>
+          <span class="hint" id="g-default-h"></span>
+          <span class="err" id="g-default-e" role="alert"></span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Roles</legend>
+      <p class="explain" id="g-roles-x">The parts who sit in this group's circles.</p>
+      <div class="f" data-field="roles">
+        <div class="boxes" id="g-roles" role="group" aria-labelledby="g-roles-x" aria-describedby="g-roles-h g-roles-e"></div>
+        <input type="text" id="g-roles-new" spellcheck="false" hidden aria-labelledby="g-roles-x" aria-describedby="g-roles-h g-roles-e"
+               placeholder="lyricist, orchestrator, drummer">
+        <span class="hint" id="g-roles-h"></span>
+        <span class="err" id="g-roles-e" role="alert"></span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Protection and first run</legend>
+      <div class="grid">
+        <div class="f" data-field="reserved">
+          <span class="label" id="g-reserved-l">Reserved roles</span>
+          <div class="boxes" id="g-reserved" role="group" aria-labelledby="g-reserved-l" aria-describedby="g-reserved-h g-reserved-e"></div>
+          <span class="hint" id="g-reserved-h">Retiring one of these is refused. Only a ticked role can be reserved.</span>
+          <span class="err" id="g-reserved-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="initialization">
+          <span class="label" id="g-init-l">First-run order</span>
+          <ol class="order" id="g-init" aria-labelledby="g-init-l" aria-describedby="g-init-h g-init-e"></ol>
+          <span class="hint" id="g-init-h">Whose first-run questions are asked first, in this order; the rest follow
+            in roster order. <kbd>Alt</kbd>+<kbd>↑</kbd>/<kbd>↓</kbd> moves the focused role.</span>
+          <span class="err" id="g-init-e" role="alert"></span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Rulebook and words</legend>
+      <div class="grid">
+        <div class="f wide" data-field="layer">
+          <label for="g-layer">Layer file</label>
+          <input type="text" id="g-layer" list="g-layers" spellcheck="false" aria-describedby="g-layer-h g-layer-e"
+                 placeholder="groups/band/process_band.md">
+          <datalist id="g-layers"></datalist>
+          <span class="hint" id="g-layer-h">This group's own rulebook, a path from the tree's top. Empty: the
+            universal rulebook alone.</span>
+          <span class="err" id="g-layer-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="member">
+          <label for="g-member">Word for one member</label>
+          <input type="text" id="g-member" maxlength="60" spellcheck="false" placeholder="role" aria-describedby="g-member-e">
+          <span class="err" id="g-member-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="members">
+          <label for="g-members">Word for many</label>
+          <input type="text" id="g-members" maxlength="60" spellcheck="false" placeholder="roles" aria-describedby="g-members-h g-members-e">
+          <span class="hint" id="g-members-h">Both words, or neither — the group then says “role”.</span>
+          <span class="err" id="g-members-e" role="alert"></span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Proposals</legend>
+      <div class="f" data-field="proposed_commands">
+        <span class="label" id="g-prop-l">Commands this group's parts may propose</span>
+        <div class="boxes" id="g-prop" role="group" aria-labelledby="g-prop-l" aria-describedby="g-prop-e"></div>
+        <span class="err" id="g-prop-e" role="alert"></span>
+      </div>
+    </fieldset>
+
+    <fieldset>
+      <legend>Console name</legend>
+      <p class="explain">Which part's answer names the console — the name Self is called by.</p>
+      <div class="grid">
+        <div class="f" data-field="identity.role">
+          <label for="g-id-role">Part</label>
+          <select id="g-id-role" aria-describedby="g-id-role-h g-id-role-e"></select>
+          <span class="hint" id="g-id-role-h"></span>
+          <span class="err" id="g-id-role-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="identity.key">
+          <label for="g-id-key">Its question</label>
+          <select id="g-id-key" aria-describedby="g-id-key-e"></select>
+          <span class="err" id="g-id-key-e" role="alert"></span>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset id="g-told" hidden>
+      <legend>What the group is told</legend>
+      <p class="explain">What every circle on this group opens with: what an issue is, who Self is, and each
+        part's own account of itself. A new group holds a placeholder in each, marked <span class="badge stub">placeholder</span>
+        — replace it with your own words. The headings stay; only the text under them changes.
+        <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line.</p>
+      <div id="g-texts"></div>
+    </fieldset>
+
+    <fieldset id="g-practices-f" hidden>
+      <legend>Best practices</legend>
+      <p class="explain">How this group's circles behave — every part reads the ones for all parts, Self's are how
+        you move, and a part's own reaches that part alone.</p>
+      <ul class="practices" id="g-practices"></ul>
+      <div class="grid">
+        <div class="f wide" data-field="practice_new">
+          <label for="g-practice-new">Add a practice</label>
+          <textarea id="g-practice-new" rows="2" aria-describedby="g-practice-new-h g-practice-new-e"></textarea>
+          <span class="hint" id="g-practice-new-h">One practice, a sentence or two. It joins the list when you Save.</span>
+          <span class="err" id="g-practice-new-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="practice_addressee">
+          <label for="g-practice-to">For</label>
+          <select id="g-practice-to" aria-describedby="g-practice-to-e"></select>
+          <span class="err" id="g-practice-to-e" role="alert"></span>
+        </div>
+      </div>
+    </fieldset>
+  </form>
+
+  <!-- ============================================================ the PART form -->
+  <form id="part-form" novalidate autocomplete="off" aria-labelledby="tab-part" hidden>
+    <p class="lede">A part's record, <code>parts/&lt;name&gt;/part.toml</code>: who it is, and what it wants to
+      know about you. Every answer may be left empty.</p>
+    <div class="notice info" id="p-privacy">These answers are yours. They stay on this machine except inside the
+      requests that carry a part's prompt to the model.</div>
+    <div class="notice bad" id="p-problems" role="alert"></div>
+
+    <fieldset>
+      <legend>Part</legend>
+      <div class="grid">
+        <div class="f" data-field="pgroup">
+          <label for="p-group">Group</label>
+          <select id="p-group"></select>
+        </div>
+        <div class="f" data-field="part">
+          <label for="p-part">Part</label>
+          <select id="p-part"></select>
+          <span class="hint">Choose a part to answer for, or a new one.</span>
+        </div>
+        <div class="f" data-field="tag">
+          <label for="p-tag">Name (Tag)<span class="req" aria-hidden="true">*</span></label>
+          <input type="text" id="p-tag" maxlength="40" aria-describedby="p-tag-h p-tag-e">
+          <span class="hint" id="p-tag-h"></span>
+          <span class="err" id="p-tag-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="dir">
+          <label for="p-dir">Folder</label>
+          <input type="text" id="p-dir" readonly tabindex="-1" aria-describedby="p-dir-h">
+          <span class="hint" id="p-dir-h">Made from the name.</span>
+        </div>
+        <div class="f wide" data-field="identity" id="p-identity-f">
+          <label for="p-identity">How you describe this part<span class="req" aria-hidden="true">*</span></label>
+          <textarea id="p-identity" rows="3" aria-describedby="p-identity-h p-identity-e"></textarea>
+          <span class="hint" id="p-identity-h">At most 40 words — its first memory of itself. <kbd>Shift</kbd>+<kbd>Enter</kbd> for a new line.</span>
+          <span class="err" id="p-identity-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="alt_tags" id="p-alt-f">
+          <label for="p-alt">Earlier names</label>
+          <input type="text" id="p-alt" readonly tabindex="-1">
+        </div>
+        <div class="f wide" data-field="identity_tail" id="p-tail-f">
+          <label for="p-tail">Identity tail</label>
+          <textarea id="p-tail" readonly tabindex="-1" rows="3"></textarea>
+        </div>
+      </div>
+    </fieldset>
+
+    <fieldset id="p-context">
+      <legend id="p-purpose">What this part asks</legend>
+      <p class="explain" id="p-context-x"></p>
+      <div id="p-questions"></div>
+    </fieldset>
+
+    <fieldset id="p-retire">
+      <legend>Retire</legend>
+      <p class="explain">Retiring keeps this part's folder and every file in it<span id="p-retire-n"></span>. It
+        attends no circle from then on and is not shown when a circle opens on the group; its name stays taken,
+        and its past statements stay in the transcripts, marked retired. A part's name never changes — retiring
+        is how a part leaves. Bringing it back is done by hand.</p>
+      <div class="notice bad" id="p-retire-refusal" role="alert"></div>
+      <pre class="plan" id="p-retire-plan" hidden></pre>
+      <div class="grid">
+        <div class="f" data-field="retire-why">
+          <label for="p-retire-why">Why (one line, may be left empty)</label>
+          <input type="text" id="p-retire-why" maxlength="200" aria-describedby="p-retire-why-e">
+          <span class="err" id="p-retire-why-e" role="alert"></span>
+        </div>
+        <div class="f" data-field="retire-confirm">
+          <label for="p-retire-confirm" id="p-retire-confirm-l">Type the folder name to retire</label>
+          <input type="text" id="p-retire-confirm" spellcheck="false" autocomplete="off" aria-describedby="p-retire-confirm-e">
+          <span class="err" id="p-retire-confirm-e" role="alert"></span>
+        </div>
+      </div>
+      <p><button type="button" class="btn danger" id="p-retire-go" disabled>Retire this part</button></p>
+    </fieldset>
+  </form>
+</main>
+
+<div class="actions">
+  <div class="wrap">
+    <div class="status" id="status" role="status" aria-live="polite"><i class="dot"></i><span id="status-text">Loading…</span></div>
+    <button type="button" class="btn" id="cancel" disabled title="Escape">Cancel</button>
+    <button type="button" class="btn primary" id="save" disabled title="Ctrl+S">Save</button>
+  </div>
+</div>
+
+<script>
+"use strict";
+const TOKEN = "%%ORDERING_TOKEN%%";
+const NEW = "\u0001new";                     // the select value that means "a new one"
+const $ = (id) => document.getElementById(id);
+const S = { form: "group", group: "", part: "", busy: false, loaded: undefined, blocked: false, keepStatus: false };
+
+// ------------------------------------------------------------------ talking to the server
+async function api(method, path, body) {
+  const o = { method, headers: { "X-Ordering-Token": TOKEN } };
+  if (body !== undefined) { o.headers["Content-Type"] = "application/json"; o.body = JSON.stringify(body); }
+  const r = await fetch(path, o);
+  let data = {};
+  try { data = await r.json(); } catch (_) { /* not JSON */ }
+  if (!r.ok) { const e = new Error(data.error || ("HTTP " + r.status)); e.errors = data.errors || {}; throw e; }
+  return data;
+}
+function status(kind, text) {
+  $("status").className = "status " + (kind || "");
+  $("status-text").textContent = text;
+  $("status-text").title = text;
+}
+function opt(value, text, selected) {
+  const o = document.createElement("option");
+  o.value = value; o.textContent = text; if (selected) o.selected = true;
+  return o;
+}
+function esc(s) { return String(s).replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c])); }
+
+// ------------------------------------------------------------------ field errors
+function fieldOf(el) { return el && el.closest(".f"); }
+function setErr(f, msg) {
+  if (!f) return;
+  f.classList.toggle("invalid", !!msg);
+  const e = f.querySelector(".err");
+  if (e) e.textContent = msg || "";
+  f.querySelectorAll("input,select,textarea").forEach((i) => i.setAttribute("aria-invalid", msg ? "true" : "false"));
+}
+function clearErrs(form) { form.querySelectorAll(".f").forEach((f) => setErr(f, "")); }
+function fieldByKey(form, key) { return form.querySelector(`.f[data-field="${CSS.escape(key)}"]`); }
+
+// ------------------------------------------------------------------ the keyboard
+// THE CYCLE: every enabled, visible field of the form showing, then Cancel and Save, then round
+// again. A disabled field is not in it — it cannot be changed, so it is not a stop.
+function focusables(form) {
+  const all = [...form.querySelectorAll("input,select,textarea,button")].concat([$("cancel"), $("save")]);
+  return all.filter((el) => !el.disabled && el.tabIndex !== -1 && !el.hidden
+    && el.offsetParent !== null && !el.closest("[hidden]") && !el.closest("fieldset:disabled"));
+}
+function step(form, from, dir) {
+  const list = focusables(form);
+  if (!list.length) return;
+  let i = list.indexOf(from);
+  i = i < 0 ? (dir > 0 ? 0 : list.length - 1) : (i + dir + list.length) % list.length;
+  list[i].focus();
+  if (list[i].type === "text" && !list[i].readOnly) list[i].select();
+}
+function activeForm() { return S.form === "group" ? $("group-form") : $("part-form"); }
+
+document.addEventListener("keydown", (ev) => {
+  const form = activeForm();
+  const t = ev.target;
+  const inForm = form.contains(t) || t === $("save") || t === $("cancel");
+  if ((ev.ctrlKey || ev.metaKey) && (ev.key === "s" || ev.key === "S")) { ev.preventDefault(); if (!$("save").disabled) $("save").click(); return; }
+  if (ev.altKey && (ev.key === "g" || ev.key === "G")) { ev.preventDefault(); formSwitch("group"); return; }
+  if (ev.altKey && (ev.key === "p" || ev.key === "P")) { ev.preventDefault(); formSwitch("part"); return; }
+  if (ev.key === "Escape") { if (!$("cancel").disabled) { ev.preventDefault(); $("cancel").click(); } return; }
+  if (ev.key === "Tab") {
+    if (!inForm && t !== document.body) return;             // the header keeps the browser's order
+    ev.preventDefault();
+    step(form, inForm ? t : null, ev.shiftKey ? -1 : 1);
+    return;
+  }
+  if (ev.key === "Enter" && inForm) {
+    if (t.tagName === "BUTTON") return;                      // a button does what it says
+    if (t.tagName === "TEXTAREA" && ev.shiftKey) return;     // a new line
+    ev.preventDefault();
+    if (fieldCheck(t)) step(form, t, 1);                     // kept, and on to the next
+  }
+});
+
+// ------------------------------------------------------------------ dirty, and the two buttons
+function snapshot() { return JSON.stringify(S.form === "group" ? groupCollect() : partCollect()); }
+function isDirty() { return S.loaded !== undefined && snapshot() !== S.loaded; }
+function refresh() {
+  const dirty = isDirty();
+  const bad = !!activeForm().querySelector(".f.invalid:not(#p-retire .f)");
+  $("save").disabled = S.busy || !dirty || bad || S.blocked;
+  $("cancel").disabled = S.busy || !dirty;
+  if (S.busy || S.keepStatus) return dirty;
+  if (dirty) status(bad ? "error" : "dirty", bad ? "A field needs correcting before Save." : "Unsaved changes.");
+  else if (/dirty|error/.test($("status").className)) status("", "No changes.");
+  return dirty;
+}
+function discardOk() { return !isDirty() || confirm("Discard the changes on this form?"); }
+
+$("cancel").addEventListener("click", () => {
+  if (!isDirty() || !confirm("Discard the changes on this form?")) return;
+  if (S.form === "group") groupLoad(G && G.new ? "" : S.group); else partLoad(S.group, P && P.new ? NEW : S.part);
+});
+$("save").addEventListener("click", () => (S.form === "group" ? groupSave() : partSave()));
+
+function formShow(which) {
+  S.form = which;
+  $("tab-group").setAttribute("aria-pressed", String(which === "group"));
+  $("tab-part").setAttribute("aria-pressed", String(which === "part"));
+  $("group-form").hidden = which !== "group";
+  $("part-form").hidden = which !== "part";
+}
+function formSwitch(which) {
+  if (which === S.form || !discardOk()) return;
+  S.loaded = undefined;
+  formShow(which);
+  if (which === "group") groupLoad(S.group, true); else partLoad(S.group, "", true);
+}
+$("tab-group").addEventListener("click", () => formSwitch("group"));
+$("tab-part").addEventListener("click", () => formSwitch("part"));
+$("to-graph").addEventListener("click", (e) => { e.currentTarget.href = "/issue-graph?group=" + encodeURIComponent(S.group || ""); });
+$("to-memory").addEventListener("click", (e) => {
+  if (!discardOk()) { e.preventDefault(); return; }
+  S.loaded = undefined;
+  e.currentTarget.href = "/#" + encodeURIComponent(S.group || "") + "/self";
+});
+window.addEventListener("beforeunload", (e) => { if (isDirty()) { e.preventDefault(); e.returnValue = ""; } });
+
+function hashWrite() {
+  const h = S.form === "group" ? `#group/${S.group || ""}` : `#part/${S.group || ""}/${S.part || ""}`;
+  if (location.hash !== h) history.replaceState(null, "", h);
+}
+
+// ------------------------------------------------------------------ one field's check
+const NAME_RE = /^[a-z][a-z0-9_-]*$/;
+const ROLE_RE = /^[a-z][a-z0-9_]*$/;
+const BAD_LABEL = /[\[\]"\r\n]/;
+function fieldCheck(el) {
+  const f = fieldOf(el);
+  if (!f) return true;
+  const msg = S.form === "group" ? groupFieldFault(f.dataset.field) : partFieldFault(f.dataset.field);
+  setErr(f, msg);
+  refresh();
+  return !msg;
+}
+
+// ================================================================== THE GROUP FORM
+let G = null;            // the last read: {group, new, record, parts, layers, proposable, ...}
+
+function rolesNow() {
+  if (G && G.new) return $("g-roles-new").value.split(",").map((s) => s.trim()).filter(Boolean);
+  return [...$("g-roles").querySelectorAll("input:checked")].map((i) => i.value);
+}
+function initOrderNow() {
+  return [...$("g-init").querySelectorAll("li")].filter((li) => li.querySelector("input").checked).map((li) => li.dataset.role);
+}
+function groupCollect() {
+  if (!G) return {};
+  return {
+    name: $("g-name").value.trim(), display: $("g-display").value.trim(), default: $("g-default").checked,
+    roles: rolesNow(),
+    reserved: [...$("g-reserved").querySelectorAll("input:checked")].map((i) => i.value),
+    initialization: initOrderNow(),
+    layer: $("g-layer").value.trim(), member: $("g-member").value.trim(), members: $("g-members").value.trim(),
+    proposed_commands: [...$("g-prop").querySelectorAll("input:checked")].map((i) => i.value),
+    identity: { role: $("g-id-role").value, key: $("g-id-key").value },
+    texts: textsCollect(),
+    practice_new: { title: $("g-practice-new").value.trim(), addressee: $("g-practice-to").value },
+  };
+}
+
+// ---- what the group is told (B151): the stub files, each a textarea per section, and practices
+function textsCollect() {
+  const out = {};
+  ((G && G.texts) || []).forEach((row, i) => {
+    if (row.problem) return;
+    if ("text" in row) out[row.path] = $(`g-text-${i}`).value;
+    else out[row.path] = row.sections.map((s, j) => ({ heading: s.heading, body: $(`g-text-${i}-${j}`).value }));
+  });
+  return out;
+}
+function textFault(key) {
+  const f = fieldByKey($("group-form"), key);
+  const ta = f && f.querySelector("textarea");
+  if (!ta) return "";
+  const v = ta.value;
+  if (!v.trim()) return "Write something here — an empty text is refused.";
+  if (key.includes("#") && v.split("\n").some((l) => /^##(\s|$)/.test(l))) return "A line may not start with ## — the section headings are fixed.";
+  return "";
+}
+function textsRender(rows) {
+  const box = $("g-texts");
+  box.replaceChildren();
+  rows.forEach((row, i) => {
+    const d = document.createElement("details");
+    d.className = "told f";
+    d.dataset.field = "texts." + row.path;
+    d.open = !!row.stub;
+    d.innerHTML = `<summary>${esc(row.title)}${row.stub ? '<span class="badge stub">placeholder</span>' : ""}<code>${esc(row.path)}</code></summary><span class="err" role="alert"></span>`;
+    if (row.problem) {
+      const n = document.createElement("div");
+      n.className = "notice bad"; n.textContent = row.problem; d.append(n);
+    } else if ("text" in row) {
+      d.append(textField(`g-text-${i}`, "texts." + row.path, "The whole file", row.text));
+    } else {
+      row.sections.forEach((s, j) => d.append(textField(`g-text-${i}-${j}`, `texts.${row.path}#${s.heading}`, s.heading, s.body)));
+    }
+    box.append(d);
+  });
+}
+function textField(id, key, label, value) {
+  const f = document.createElement("div");
+  f.className = "f"; f.dataset.field = key;
+  const rows = Math.min(18, Math.max(3, value.split("\n").length + 1));
+  f.innerHTML = `<label for="${id}">${esc(label)}</label><textarea id="${id}" rows="${rows}" spellcheck="true" aria-describedby="${id}-e"></textarea><span class="err" id="${id}-e" role="alert"></span>`;
+  f.querySelector("textarea").value = value;
+  return f;
+}
+function practicesRender(data) {
+  $("g-practices").replaceChildren(...(data.practices || []).map((p) => {
+    const li = document.createElement("li");
+    li.innerHTML = `${esc(p.title)}<span class="badge quiet">${esc(p.addressee)}</span>${p.pending ? '<span class="badge stub">awaiting Self</span>' : ""}`;
+    return li;
+  }));
+  $("g-practice-new").value = "";
+  $("g-practice-to").replaceChildren(...(data.addressees || []).map((a) => opt(a, a, a === "All parts")));
+}
+["g-texts", "g-practice-new", "g-practice-to"].forEach((id) => $(id).addEventListener("input", (ev) => {
+  const f = fieldOf(ev.target);
+  if (f && f.classList.contains("invalid")) setErr(f, groupFieldFault(f.dataset.field));
+  refresh();
+}));
+$("g-texts").addEventListener("focusout", (ev) => { if (!S.busy && G && ev.target.tagName === "TEXTAREA") fieldCheck(ev.target); });
+
+function groupFieldFault(key) {
+  const r = groupCollect();
+  switch (key) {
+    case "name":
+      if (!G.new) return "";
+      if (!r.name) return "The group needs a name.";
+      if (!NAME_RE.test(r.name)) return "Lowercase letters, digits, _ or -, starting with a letter.";
+      if (G.groups.some((g) => g.name === r.name)) return `“${r.name}” is already a group.`;
+      return "";
+    case "display":
+      if (!r.display) return "The group needs a display name.";
+      if (BAD_LABEL.test(r.display)) return "No square brackets, quotes or line breaks.";
+      return "";
+    case "roles": {
+      if (!r.roles.length) return "A group needs at least one role.";
+      if (r.roles.length > G.roles_max) return `At most ${G.roles_max} roles.`;
+      if (G.new) {
+        const bad = r.roles.filter((x) => !ROLE_RE.test(x));
+        if (bad.length) return `Not a usable role name: ${bad.join(", ")} — lowercase letters, digits, _, starting with a letter.`;
+        const seen = new Set();
+        const dup = r.roles.filter((x) => seen.has(x) || !seen.add(x));
+        if (dup.length) return `Listed twice: ${[...new Set(dup)].join(", ")}.`;
+      }
+      return "";
+    }
+    case "member": case "members": {
+      const w = key === "member" ? r.member : r.members;
+      if (w && (BAD_LABEL.test(w) || /\s/.test(w))) return "One word — no spaces, brackets or quotes.";
+      if (key === "members" && !!r.member !== !!r.members) return "Give both words, or neither.";
+      return "";
+    }
+    case "layer":
+      if (r.layer && (/^([a-zA-Z]:|[\\/])/.test(r.layer) || r.layer.split(/[\\/]/).includes(".."))) return "A path from the tree's top, like groups/band/process_band.md.";
+      if (r.layer && !/\.md$/i.test(r.layer)) return "The layer is a .md file.";
+      return "";
+    case "identity.key":
+      return !!r.identity.role !== !!r.identity.key ? "Choose its question too — or no part." : "";
+    case "practice_new":
+      return r.practice_new.title.length > 600 ? `${r.practice_new.title.length} characters; at most 600.` : "";
+    default:
+      return key.startsWith("texts.") ? textFault(key) : "";
+  }
+}
+function groupFormCheck() {
+  ["name", "display", "roles", "member", "members", "layer", "identity.key", "practice_new"].forEach((k) => setErr(fieldByKey($("group-form"), k), groupFieldFault(k)));
+  $("g-texts").querySelectorAll("div.f").forEach((f) => setErr(f, groupFieldFault(f.dataset.field)));
+}
+
+// ---- the dependent controls: reserved, first-run order and console name follow the roles
+function boxRow(container, value, label, sub, checked, enabled, onchange) {
+  const lab = document.createElement("label");
+  lab.className = "box" + (enabled ? "" : " off");
+  const i = document.createElement("input");
+  i.type = "checkbox"; i.value = value; i.checked = checked; i.disabled = !enabled;
+  i.addEventListener("change", onchange);
+  lab.append(i, document.createTextNode(" " + label));
+  if (sub) { const s = document.createElement("small"); s.textContent = sub; lab.append(" ", s); }
+  container.append(lab);
+  return i;
+}
+function tagOf(role) { const p = G.parts.find((x) => x.name === role); return p ? p.tag : role; }
+
+function groupDependentsRender(keep) {
+  const roles = rolesNow();
+  const on = new Set(roles);
+  const allRoles = G.new ? [...new Set(roles)] : G.parts.map((p) => p.name);
+  // reserved — only a ticked role may be reserved
+  const resNow = keep ? keep.reserved : [...$("g-reserved").querySelectorAll("input:checked")].map((i) => i.value);
+  $("g-reserved").replaceChildren();
+  allRoles.forEach((r) => boxRow($("g-reserved"), r, tagOf(r), G.new ? "" : r, on.has(r) && resNow.includes(r), on.has(r), groupChanged));
+  if (!allRoles.length) $("g-reserved").textContent = "No roles yet.";
+  // first-run order — the order is kept; a newly ticked role goes last
+  const ordered = keep ? keep.initialization : initOrderNow();
+  const shown = [...$("g-init").querySelectorAll("li")].map((li) => li.dataset.role);
+  const seq = ordered.filter((r) => allRoles.includes(r))
+    .concat(shown.filter((r) => allRoles.includes(r) && !ordered.includes(r)))
+    .concat(allRoles.filter((r) => !ordered.includes(r) && !shown.includes(r)));
+  const list = $("g-init");
+  list.replaceChildren();
+  seq.forEach((r) => {
+    const li = document.createElement("li");
+    li.dataset.role = r;
+    const n = document.createElement("span"); n.className = "n";
+    const lab = document.createElement("label"); lab.className = "box grow" + (on.has(r) ? "" : " off");
+    const i = document.createElement("input"); i.type = "checkbox"; i.value = r;
+    i.checked = on.has(r) && ordered.includes(r); i.disabled = !on.has(r);
+    i.addEventListener("change", () => { initRenumber(); groupChanged(); });
+    i.addEventListener("keydown", (ev) => {
+      if (!ev.altKey || (ev.key !== "ArrowUp" && ev.key !== "ArrowDown")) return;
+      ev.preventDefault(); initMove(li, ev.key === "ArrowUp" ? -1 : 1); i.focus();
+    });
+    lab.append(i, document.createTextNode(" " + tagOf(r)));
+    const up = document.createElement("button"); up.type = "button"; up.className = "btn small"; up.tabIndex = -1;
+    up.textContent = "↑"; up.title = "Earlier (Alt+↑)"; up.setAttribute("aria-label", `Move ${tagOf(r)} earlier`);
+    const dn = up.cloneNode(); dn.textContent = "↓"; dn.title = "Later (Alt+↓)"; dn.setAttribute("aria-label", `Move ${tagOf(r)} later`);
+    up.addEventListener("click", () => initMove(li, -1)); dn.addEventListener("click", () => initMove(li, 1));
+    up.disabled = dn.disabled = !on.has(r);
+    li.append(n, lab, up, dn);
+    list.append(li);
+  });
+  if (!seq.length) list.textContent = "No roles yet.";
+  initRenumber();
+  // console name — a ticked part that asks at least one question
+  const idNow = keep ? keep.identity : { role: $("g-id-role").value, key: $("g-id-key").value };
+  const askers = G.parts.filter((p) => on.has(p.name) && p.questions.length);
+  const sel = $("g-id-role");
+  sel.replaceChildren(opt("", "— none —", !idNow.role));
+  askers.forEach((p) => sel.append(opt(p.name, `${p.tag} (${p.name})`, p.name === idNow.role)));
+  sel.disabled = !askers.length;
+  $("g-id-role-h").textContent = askers.length ? "Only a ticked part that asks questions can name the console."
+    : (G.new ? "A new group's parts ask nothing yet; set this once one does." : "No ticked part asks a question.");
+  if (!askers.some((p) => p.name === idNow.role)) sel.value = "";
+  groupKeyRender(sel.value ? idNow.key : "");
+}
+function groupKeyRender(keyNow) {
+  const role = $("g-id-role").value;
+  const p = G.parts.find((x) => x.name === role);
+  const sel = $("g-id-key");
+  sel.replaceChildren(opt("", role ? "— choose —" : "— choose a part first —", !keyNow));
+  (p ? p.questions : []).forEach((k) => sel.append(opt(k, k, k === keyNow)));
+  sel.disabled = !p;
+}
+function initRenumber() {
+  let n = 0;
+  $("g-init").querySelectorAll("li").forEach((li) => {
+    const on = li.querySelector("input").checked;
+    li.classList.toggle("on", on);
+    li.querySelector(".n").textContent = on ? String(++n) : "";
+  });
+}
+function initMove(li, dir) {
+  const sib = dir < 0 ? li.previousElementSibling : li.nextElementSibling;
+  if (!sib) return;
+  if (dir < 0) sib.before(li); else sib.after(li);
+  initRenumber(); groupChanged();
+}
+function groupChanged() { groupFormCheck(); refresh(); }
+
+$("g-roles-new").addEventListener("input", () => { groupDependentsRender(); groupChanged(); });
+$("g-id-role").addEventListener("change", () => { groupKeyRender(""); groupChanged(); });
+["g-name", "g-display", "g-layer", "g-member", "g-members", "g-id-key", "g-default"].forEach((id) =>
+  $(id).addEventListener(id === "g-default" || id === "g-id-key" ? "change" : "input", () => {
+    const f = fieldOf($(id));
+    if (f && f.classList.contains("invalid")) setErr(f, groupFieldFault(f.dataset.field));
+    if (id === "g-id-key") setErr(f, groupFieldFault("identity.key"));
+    refresh();
+  }));
+["g-name", "g-display", "g-layer", "g-member", "g-members", "g-roles-new"].forEach((id) =>
+  $(id).addEventListener("blur", () => { if (!S.busy && G) fieldCheck($(id)); }));
+$("g-group").addEventListener("change", (ev) => {
+  const v = ev.target.value;
+  if (!discardOk()) { ev.target.value = G.new ? NEW : G.group; return; }
+  groupLoad(v === NEW ? "" : v, true);
+});
+
+function groupRender(data) {
+  G = data;
+  const r = data.record;
+  const sel = $("g-group");
+  sel.replaceChildren();
+  data.groups.forEach((g) => sel.append(opt(g.name, `${g.display} (${g.name})`, g.name === data.group)));
+  sel.append(opt(NEW, "New group…", data.new));
+  $("g-name").value = r.name; $("g-name").disabled = !data.new;
+  $("g-display").value = r.display;
+  $("g-default").checked = r.default;
+  // ONE DEFAULT, MOVED AND NEVER CLEARED: the default group's box is ticked and fixed; any other
+  // group's may be ticked, and saving it makes the old default not one.
+  const isDefault = !data.new && r.default;
+  $("g-default").disabled = isDefault;
+  $("g-default-box").classList.toggle("off", isDefault);
+  $("g-default-h").textContent = isDefault ? "This is the default group. It moves when another group is made the default."
+    : (data.default_now ? `Tick to make this the default — ${data.default_now} then stops being it.`
+                        : "No group is the default now; tick to make this one it.");
+  // roles: an existing group ticks among its parts; a new one names them
+  $("g-roles").hidden = data.new; $("g-roles-new").hidden = !data.new;
+  $("g-roles").replaceChildren();
+  $("g-init").replaceChildren();
+  if (!data.new) {
+    data.parts.forEach((p) => boxRow($("g-roles"), p.name, p.tag, p.name, r.roles.includes(p.name), true,
+      () => { groupDependentsRender(); groupChanged(); }));
+    const gone = r.roles.filter((x) => !data.parts.some((p) => p.name === x));
+    $("g-roles-h").textContent = (gone.length ? `On file but not a part any more: ${gone.join(", ")}. ` : "")
+      + `At most ${data.roles_max}. A new part is added on the Part form.`;
+    if (!data.parts.length) $("g-roles").textContent = "This group has no parts.";
+  } else {
+    $("g-roles-new").value = r.roles.join(", ");
+    $("g-roles-h").textContent = `Role names, separated by commas — each becomes a part with a stub record for you to write. At most ${data.roles_max}.`;
+  }
+  $("g-layer").value = r.layer;
+  $("g-layers").replaceChildren(...data.layers.map((l) => opt(l, l)));
+  $("g-member").value = r.member; $("g-members").value = r.members;
+  $("g-prop").replaceChildren();
+  data.proposable.forEach((c) => boxRow($("g-prop"), c, "/" + c, "", r.proposed_commands.includes(c), true, groupChanged));
+  groupDependentsRender({ reserved: r.reserved, initialization: r.initialization, identity: r.identity });
+  // what the group is told: an existing group only — a new one is born with the placeholders
+  $("g-told").hidden = data.new; $("g-practices-f").hidden = data.new;
+  textsRender(data.new ? [] : (data.texts || []));
+  practicesRender(data.new ? {} : data);
+  clearErrs($("group-form"));
+  S.loaded = snapshot();
+  S.blocked = false;
+  refresh();
+}
+
+async function groupLoad(name, focus) {
+  S.busy = true; status("busy", "Loading…"); refresh();
+  try {
+    const data = await api("GET", "/api/group-initialization?group=" + encodeURIComponent(name || ""));
+    if (!data.new) S.group = data.group;
+    $("load-error").textContent = "";
+    S.busy = false;
+    groupRender(data);
+    status("", data.new ? "A new group — name it, list its roles, Save." : `Editing ${data.record.display}.`);
+    hashWrite();
+    if (focus) step($("group-form"), $("g-group"), 1);
+  } catch (e) {
+    S.busy = false; $("load-error").textContent = e.message; status("error", e.message);
+  }
+}
+
+async function groupSave() {
+  groupFormCheck();
+  if ($("group-form").querySelector(".f.invalid")) { refresh(); focusFirstInvalid($("group-form")); return; }
+  S.busy = true; refresh(); status("busy", "Saving…");
+  try {
+    const out = await api("POST", "/api/group-initialization", { group: G.new ? "" : G.group, new: G.new, record: groupCollect() });
+    S.busy = false;
+    S.group = out.group;
+    await groupLoad(out.group);
+    savedSay(out);
+  } catch (e) {
+    S.busy = false; serverErrors($("group-form"), e); refresh();
+  }
+}
+
+// ================================================================== THE PART FORM
+let P = null;            // the last read: {group, part, new, record, parts, problems}
+
+function partCollect() {
+  if (!P) return {};
+  if (P.new) return { tag: $("p-tag").value.trim(), identity: $("p-identity").value.trim() };
+  const answers = {};
+  $("p-questions").querySelectorAll("[data-key]").forEach((el) => { answers[el.dataset.key] = el.value.trim(); });
+  return { answers };
+}
+function dirFromTag(tag) { return tag.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, ""); }
+
+function questionOf(key) { return P.record.questions.find((q) => q.key === key); }
+function partFieldFault(key) {
+  if (key === "tag") {
+    if (!P.new) return "";
+    const t = $("p-tag").value.trim();
+    if (!t) return "The part needs a name.";
+    if (/[\[\]\r\n]/.test(t)) return "No square brackets or line breaks — they mean something to the circle.";
+    if (!/^[a-z]/.test(dirFromTag(t))) return "The name needs to start with a letter.";
+    if (P.parts.some((p) => p.tag.toLowerCase() === t.toLowerCase())) return `“${t}” is already a part's name.`;
+    if (P.parts.some((p) => p.name === dirFromTag(t))) return `A part already has the folder ${dirFromTag(t)}.`;
+    return "";
+  }
+  if (key === "retire-why") return /[\r\n]/.test($("p-retire-why").value) ? "One line." : "";
+  if (key === "retire-confirm") {
+    const v = $("p-retire-confirm").value.trim();
+    return v && v !== P.part ? `Type ${P.part} exactly.` : "";
+  }
+  if (key === "identity") {
+    if (!P.new) return "";
+    const w = $("p-identity").value.trim().split(/\s+/).filter(Boolean).length;
+    if (!w) return "A description is needed — it is the part's first memory of itself.";
+    if (w > 40) return `${w} words; at most 40.`;
+    return "";
+  }
+  const q = questionOf(key);
+  if (!q) return "";
+  const el = $("p-questions").querySelector(`[data-key="${CSS.escape(key)}"]`);
+  const v = el.value.trim();
+  adviceShow(q, v);
+  if (v === "") return "";                                   // empty is always valid
+  if (q.values) return q.values.some((x) => x.toLowerCase() === v.toLowerCase()) ? "" : "One of: " + q.values.join(", ") + ".";
+  if (q.data_type === "NUMERIC_STRING") {
+    if (!/^-?\d+$/.test(v)) return "A whole number, numerals only.";
+    const n = parseInt(v, 10), lo = q.minimum != null ? q.minimum : 0;
+    const hi = q.maximum != null ? q.maximum : q.data_max;
+    if (n < lo) return `Too small — at least ${lo}.`;
+    if (hi != null && n > hi) return `Too large — at most ${hi}.`;
+    return "";
+  }
+  if (q.data_max && v.length > q.data_max) return `${v.length} characters; at most ${q.data_max}.`;
+  if (/[\[\]]/.test(v)) return "No square brackets — they mean something to the circle.";
+  return "";
+}
+function adviceShow(q, v) {
+  const box = $("p-questions").querySelector(`[data-advice="${CSS.escape(q.key)}"]`);
+  if (!box) return;
+  const over = q.advisory_maximum != null && /^-?\d+$/.test(v) && parseInt(v, 10) > q.advisory_maximum;
+  box.textContent = over ? (q.advisory_note || "") : "";
+}
+
+function questionRender(q, answer, n, total) {
+  const wrap = document.createElement("div");
+  wrap.className = "f q"; wrap.dataset.field = q.key;
+  const id = "q-" + q.key;
+  const lab = document.createElement("label");
+  lab.htmlFor = id;
+  lab.innerHTML = `<span class="hint">${n}/${total}</span> ${esc(q.ask)}${/[?.!]$/.test(q.ask) ? "" : "?"}`;
+  if (!q.render) lab.insertAdjacentHTML("beforeend", ' <span class="badge quiet" title="Kept in the file; no prompt carries it">never reaches a prompt</span>');
+  if (q.unique_in === "part_tags") lab.insertAdjacentHTML("beforeend", ' <span class="badge key" title="Must differ from every part&#39;s name">names you</span>');
+  let el;
+  if (q.values && q.values.length) {
+    el = document.createElement("select");
+    el.append(opt("", "— no answer —", !answer));
+    q.values.forEach((v) => el.append(opt(v, v, v.toLowerCase() === answer.toLowerCase())));
+  } else {
+    el = document.createElement("input");
+    el.type = "text"; el.value = answer;
+    if (q.data_type === "NUMERIC_STRING") el.inputMode = "numeric";
+    else if (q.data_max) el.maxLength = q.data_max;
+  }
+  el.id = id; el.dataset.key = q.key;
+  el.setAttribute("aria-describedby", `${id}-h ${id}-e ${id}-a`);
+  const hint = document.createElement("span"); hint.className = "hint"; hint.id = id + "-h";
+  if (q.values) hint.textContent = "Choose one, or leave it empty.";
+  else if (q.data_type === "NUMERIC_STRING") {
+    const lo = q.minimum != null ? q.minimum : 0, hi = q.maximum != null ? q.maximum : q.data_max;
+    hint.textContent = `A whole number${hi != null ? `, ${lo} to ${hi}` : `, at least ${lo}`}.`;
+  } else hint.textContent = `Up to ${q.data_max} characters.`;
+  const err = document.createElement("span"); err.className = "err"; err.id = id + "-e"; err.setAttribute("role", "alert");
+  const adv = document.createElement("div"); adv.className = "advice"; adv.id = id + "-a"; adv.dataset.advice = q.key;
+  el.addEventListener(el.tagName === "SELECT" ? "change" : "input", () => {
+    const f = fieldOf(el);
+    if (f.classList.contains("invalid")) setErr(f, partFieldFault(q.key)); else adviceShow(q, el.value.trim());
+    refresh();
+  });
+  el.addEventListener("blur", () => { if (!S.busy && P) fieldCheck(el); });
+  wrap.append(lab, el, hint, err, adv);
+  return wrap;
+}
+
+function partRender(data, groups) {
+  P = data;
+  const r = data.record;
+  $("p-group").replaceChildren(...groups.map((g) => opt(g.name, `${g.display} (${g.name})`, g.name === data.group)));
+  const ps = $("p-part");
+  ps.replaceChildren(...data.parts.map((p) => opt(p.name, `${p.tag} (${p.name})`, p.name === data.part)));
+  ps.append(opt(NEW, "New part…", data.new));
+  $("p-tag").value = r.tag; $("p-tag").disabled = !data.new;
+  $("p-tag-h").textContent = data.new ? "What the circle calls it — it never changes once made. No square brackets."
+    : "A part's name never changes: every transcript names it so. To let a part go, retire it below.";
+  $("p-dir").value = data.new ? dirFromTag(r.tag) : r.name;
+  $("p-identity-f").hidden = !data.new; $("p-identity").value = r.identity || "";
+  $("p-alt-f").hidden = data.new || !r.alt_tags.length; $("p-alt").value = r.alt_tags.join(", ");
+  $("p-tail-f").hidden = data.new || !r.identity_tail; $("p-tail").value = r.identity_tail;
+  $("p-privacy").hidden = data.new;
+  $("p-problems").textContent = data.problems.length
+    ? "This part's questions cannot be answered here until its part.toml is repaired by hand: " + data.problems[0] : "";
+  // retire — open unless the part is reserved, a circle may be open, or something must go first;
+  // the button waits for the folder's name typed back
+  const ret = data.retire || null;
+  $("p-retire").hidden = data.new || !ret;
+  if (ret) {
+    $("p-retire").disabled = !!ret.refusal;
+    $("p-retire-refusal").textContent = ret.refusal ? "Not now: " + ret.refusal + "." : "";
+    $("p-retire-plan").hidden = !ret.plan; $("p-retire-plan").textContent = ret.plan || "";
+    $("p-retire-n").textContent = ` (${ret.files} file${ret.files === 1 ? "" : "s"})`;
+    $("p-retire-confirm-l").textContent = `Type the folder name, ${data.part}, to retire it`;
+    $("p-retire-why").value = ""; $("p-retire-confirm").value = "";
+    retireRefresh();
+  }
+  const qs = $("p-questions");
+  qs.replaceChildren();
+  const ctx = $("p-context");
+  ctx.hidden = data.new;
+  ctx.disabled = !!data.problems.length;
+  $("p-purpose").textContent = r.purpose || "What this part asks";
+  if (!data.new) {
+    $("p-context-x").textContent = r.questions.length
+      ? "Each answer reaches this part's prompt from the next circle, except those marked never to."
+      : (data.problems.length ? "" : "This part asks nothing about you; its questions would be declared in its part.toml.");
+    r.questions.forEach((q, i) => qs.append(questionRender(q, r.answers[q.key] || "", i + 1, r.questions.length)));
+  }
+  clearErrs($("part-form"));
+  S.loaded = snapshot();
+  S.blocked = !data.new && (!!data.problems.length || !r.questions.length);
+  refresh();
+}
+$("p-tag").addEventListener("input", () => {
+  $("p-dir").value = dirFromTag($("p-tag").value);
+  const f = fieldOf($("p-tag")); if (f.classList.contains("invalid")) setErr(f, partFieldFault("tag"));
+  refresh();
+});
+$("p-identity").addEventListener("input", () => {
+  const f = fieldOf($("p-identity")); if (f.classList.contains("invalid")) setErr(f, partFieldFault("identity"));
+  refresh();
+});
+$("p-tag").addEventListener("blur", () => { if (!S.busy && P) fieldCheck($("p-tag")); });
+function retireRefresh() {
+  const ok = P && !P.new && P.retire && !P.retire.refusal && $("p-retire-confirm").value.trim() === P.part && !S.busy;
+  $("p-retire-go").disabled = !ok;
+}
+$("p-retire-confirm").addEventListener("input", () => { setErr(fieldOf($("p-retire-confirm")), ""); retireRefresh(); });
+$("p-retire-go").addEventListener("click", async () => {
+  if ($("p-retire-go").disabled) return;
+  if (isDirty() && !confirm("Retiring reloads the form, and the unsaved answers on it are discarded. Go on?")) return;
+  S.busy = true; retireRefresh(); refresh(); status("busy", "Retiring…");
+  try {
+    const out = await api("POST", "/api/part-retire", { group: P.group, part: P.part,
+      confirm: $("p-retire-confirm").value.trim(), why: $("p-retire-why").value.trim() });
+    S.busy = false; S.loaded = undefined;
+    await partLoad(P.group, "");
+    savedSay(out);
+  } catch (e) {
+    S.busy = false; serverErrors($("part-form"), e); retireRefresh(); refresh();
+  }
+});
+$("p-identity").addEventListener("blur", () => { if (!S.busy && P) fieldCheck($("p-identity")); });
+$("p-group").addEventListener("change", (ev) => {
+  if (!discardOk()) { ev.target.value = P.group; return; }
+  partLoad(ev.target.value, "", true);
+});
+$("p-part").addEventListener("change", (ev) => {
+  const v = ev.target.value;
+  if (!discardOk()) { ev.target.value = P.new ? NEW : P.part; return; }
+  partLoad(P.group, v, true);
+});
+
+async function partLoad(group, part, focus) {
+  S.busy = true; status("busy", "Loading…"); refresh();
+  try {
+    const groups = await api("GET", "/api/groups");
+    if (!group || !groups.some((g) => g.name === group)) group = groups[0] ? groups[0].name : "";
+    let want = part === NEW ? "" : part;
+    if (part !== NEW && !want) {
+      const peek = await api("GET", "/api/part-initialization?group=" + encodeURIComponent(group) + "&part=");
+      want = peek.parts.length ? peek.parts[0].name : "";
+    }
+    const data = await api("GET", "/api/part-initialization?group=" + encodeURIComponent(group) + "&part=" + encodeURIComponent(want));
+    S.group = data.group; S.part = data.part;
+    $("load-error").textContent = "";
+    S.busy = false;
+    partRender(data, groups);
+    status("", data.new ? "A new part — name it, describe it, Save." : `Answering for ${data.record.tag}.`);
+    hashWrite();
+    if (focus) step($("part-form"), $("p-part"), 1);
+  } catch (e) {
+    S.busy = false; $("load-error").textContent = e.message; status("error", e.message);
+  }
+}
+
+async function partSave() {
+  const form = $("part-form");
+  form.querySelectorAll(".f[data-field]").forEach((f) => { if (!f.closest("#p-retire")) setErr(f, partFieldFault(f.dataset.field)); });
+  if (form.querySelector(".f.invalid:not(#p-retire .f)")) { refresh(); focusFirstInvalid(form); return; }
+  S.busy = true; refresh(); status("busy", "Saving…");
+  try {
+    const out = await api("POST", "/api/part-initialization", { group: P.group, part: P.new ? "" : P.part, ...partCollect() });
+    S.busy = false;
+    await partLoad(P.group, out.part);
+    Object.entries(out.advice || {}).forEach(([k, v]) => {
+      const b = $("p-questions").querySelector(`[data-advice="${CSS.escape(k)}"]`); if (b) b.textContent = v;
+    });
+    savedSay(out);
+  } catch (e) {
+    S.busy = false; serverErrors(form, e); refresh();
+  }
+}
+
+// ------------------------------------------------------------------ shared: after a save
+function savedSay(out) {
+  let text = out.message || "Saved.";
+  if (out.filed === true) text += " Filed in git.";
+  else if (out.filed === false) text += " Written, not filed in git" + (out.note ? ` (${out.note})` : "") + " — the next close files it.";
+  status("saved", text);
+}
+function serverErrors(form, e) {
+  let placed = false;
+  Object.entries(e.errors || {}).forEach(([k, msg]) => { const f = fieldByKey(form, k); if (f) { setErr(f, msg); placed = true; } });
+  status("error", e.message);
+  if (placed) focusFirstInvalid(form);
+}
+function focusFirstInvalid(form) {
+  const f = form.querySelector(".f.invalid");
+  if (!f) return;
+  for (let d = f.closest("details"); d; d = d.parentElement.closest("details")) d.open = true;
+  const el = [...f.querySelectorAll("input,select,textarea")].find((x) => !x.disabled && !x.hidden && x.tabIndex !== -1);
+  f.scrollIntoView({ block: "center" });
+  if (el) el.focus();
+}
+
+// ------------------------------------------------------------------ the start
+(function start() {
+  const m = /^#(group|part)\/([^/]*)(?:\/([^/]*))?$/.exec(location.hash || "");
+  const which = m ? m[1] : "group";
+  const group = m ? decodeURIComponent(m[2] || "") : "";
+  const part = m && m[3] ? decodeURIComponent(m[3]) : "";
+  formShow(which);
+  if (which === "part") { partLoad(group, part, true); return; }
+  api("GET", "/api/groups").then((gs) => groupLoad(gs.some((g) => g.name === group) ? group : (gs[0] ? gs[0].name : ""), true))
+    .catch((e) => { $("load-error").textContent = e.message; status("error", e.message); });
+})();
+</script>
+</body>
+</html>

@@ -20,11 +20,9 @@ Per_turn_<part>_<time>_<seq>.json  one per API request sent on that
                                    from the transcript when its own
                                    was lost
 Per_turn_<kind>_<time>_<seq>.json  the /close-time calls that speak for
-                                   the whole circle: `synthesis`,
-                                   `coalesce`, and `capsule` — the
-                                   room summary dreaming reads. These
-                                   have no part, so the KIND fills
-                                   that slot.
+                                   the whole circle: `synthesis` and
+                                   `coalesce`. These have no part, so
+                                   the KIND fills that slot.
 manifest.json
 ```
 

@@ -698,8 +698,8 @@ it at the user (`#16`).
                     groups/<name>/group.toml — R468) instead of --parts — a deliberately
                     different roster, not a reduced one, so the REDUCED
                     LIVE ROSTER warning above does not fire for it.
-                    Mutually exclusive with --parts (landed `6fe45f4`,
-                    2026-09-02). Default: unset.
+                    With --parts, a reduced roster of that group's own
+                    members, and the warning does fire. Default: unset.
 --recall-arm ARM    tier A recall (remember_expand.py, docs/MEMORY_DESIGN.md):
                     expand topic-matched seeds into each part's BLOCK 4,
                     and let a part run `[recall: ...]` against its own

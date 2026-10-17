@@ -139,12 +139,31 @@ def _group_names_read() -> list[str]:
                   if p.is_dir() and (p / GROUP_MARKER).is_file())
 
 
+# THE FIXTURE PIN (2026-10-16). Most suites are written against ONE group's live record — its
+# parts, its issue nodes, its command list — and read it as "the default group". When the operator
+# makes another group the default, those suites would test the wrong record, so each one pins the
+# group it was written against by setting this variable before anything imports this module. It
+# crosses into the processes a suite spawns (circle.py), which is why it is a variable and not a
+# call. Honoured only when it names a present group; circle open says so out loud whenever it is.
+FIXTURE_GROUP_ENV = "INNER_CIRCLING_FIXTURE_GROUP"
+
+
+def group_fixture_pin_read() -> "str | None":
+    """The group a test suite pinned with FIXTURE_GROUP_ENV, if it names a present group."""
+    import os
+    name = os.environ.get(FIXTURE_GROUP_ENV, "").strip()
+    return name if name and name in _group_names_read() else None
+
+
 def group_default_read() -> "str | None":
     """THE GROUP A BARE OPEN RUNS — R468, B120 stage 4 (2026-09-07), the rule that replaced the
     default group's literal name: exactly one group installed -> it; several -> the one whose group.toml says
     `default = true`, if exactly one does; otherwise None, and circle.py asks for --group. A
     bundle carrying only a band is a working install; a bundle carrying no group is not."""
     names = _group_names_read()
+    pinned = group_fixture_pin_read()
+    if pinned:
+        return pinned
     if len(names) == 1:
         return names[0]
     defaults = [n for n in names if group_descriptor_read(n).get("default") is True]

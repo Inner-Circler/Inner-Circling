@@ -204,6 +204,7 @@ def circle_audit_git_setup(run: Run, name: str | None, email: str | None) -> int
     # 2026-08-09 — false. See gitrepo.system_git_remote_classify.
     log("ok", "no remote can take this material off the machine")
     G.system_git_config_ensure(log, name, email)
+    G.system_git_remote_config_ensure(log)      # the backup's own tidy-up, off (R603)
     G.system_git_attributes_ensure(log)
     # A commit is running — it has said which. Stop here, as R537 asks: the
     # untrack below would meet the same index lock, and a re-run finishes the rest.
@@ -226,6 +227,24 @@ def circle_audit_git_setup(run: Run, name: str | None, email: str | None) -> int
         print("  Automated runs only ever commit their own output paths.")
         print("\n    git add -A && git commit -m \"baseline\"")
     return 1 if run.failures else 0
+
+
+def circle_audit_git_tidy_run(run: Run, force: bool = False) -> int:
+    """THE TIDY-UP STEP (R603, 2026-10-07): git's own repack, run here and never inside a
+    close's commit. The default sequence runs it after the open reports, and it does
+    nothing until loose objects reach git's own limit; `--git-tidy` runs it now. A tree with
+    no git says so and moves on — the audit's other phases do not depend on it."""
+    circle_audit_hr_render("git tidy-up")
+    if not G.system_git_is_available() or not G.system_git_is_repo():
+        run.ok("no git here — nothing to tidy")
+        return 0
+    level = {"ok": run.ok, "did": run.ok, "note": run.ok, "warn": run.warn,
+             "fail": run.fail}
+
+    def log(kind, msg):
+        level[kind](msg)
+
+    return 0 if G.system_git_tidy_run(log, force=force) else 1
 
 
 def circle_audit_git_verify(run: Run, may_commit: bool) -> None:
@@ -1026,6 +1045,10 @@ def main() -> int:
     ap.add_argument("--git-email", default=None,
                     help="git user.email for --git-setup. Default: "
                          f"${G.ENV_GIT_EMAIL}, then git's own config.")
+    ap.add_argument("--git-tidy", action="store_true",
+                    help="run git's tidy-up (git gc) now and exit. The default sequence "
+                         f"runs it only once loose objects reach {G.GC_LOOSE_LIMIT}; a "
+                         "close never runs it.")
     ap.add_argument("--dry-run", action="store_true",
                     help="with --backfill: report what would be generated (and an "
                          "estimated cost) without calling the model")
@@ -1070,7 +1093,7 @@ def main() -> int:
         tee = Tee(ROOT / "work" / "logs"
                   / f"circle_audit_{started:%Y-%m-%d_%H%M}.log")
         sys.stdout = tee
-    print(f"circle audit — phases 0-2, 6 — {started:%Y-%m-%d %H:%M}")
+    print(f"circle audit — phases 0-2, git tidy-up, 6 — {started:%Y-%m-%d %H:%M}")
     print(f"project: {ROOT}")
 
     for action in ("status", "finish", "rollback"):
@@ -1079,6 +1102,9 @@ def main() -> int:
 
     if args.git_setup:
         return circle_audit_git_setup(run, args.git_name, args.git_email)
+
+    if args.git_tidy:
+        return circle_audit_git_tidy_run(run, force=True)
 
     if args.selftest:
         circle_audit_validate_run(run, None)
@@ -1136,6 +1162,8 @@ def main() -> int:
         unprocessed = circle_audit_survey_run(run)
         circle_audit_reconcile_run(run, unprocessed)
         circle_audit_open_report_read(run)
+        if not args.no_git:
+            circle_audit_git_tidy_run(run)
 
         if args.backfill:
             tx = T.Transaction(ROOT, f"{started:%Y-%m-%d_%H%M}")

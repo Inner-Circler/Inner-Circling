@@ -54,7 +54,11 @@ parts/<role>/long_term.md (a stub identity the
 operator rewrites) then parts/<role>/part.toml; issues/issue_model.md (a stub prologue — BLOCK 2
 fails closed without it); self/self.md seeded with the two headings synthesis holds a SELF
 replacement to (circle_synthesis.py; an absent file reads as no headings, so the refusal would fire
-at every live close); circles/README.md so git keeps the folder; then group.toml. A crash midway
+at every live close); circles/README.md so git keeps the folder; the ten EMPTY REGISTERS under
+self/ and circles/, each rendered by its owner (2026-10-16 — the gates over them refused a group
+born without them); then group.toml. group_record_survey() names what a group lacks and what is
+still a stub; group_record_fill() writes what it lacks; group_record_verify.py runs both over
+every group. A crash midway
 leaves a folder with a record and no descriptor — a stray memory/record_verify.py REPORTS, never a
 group with a hole; running the verb again finishes it, since a role that already exists is left
 alone and still counts. Every role is re-scanned (part_roster.part_scan(), fresh) before the
@@ -299,8 +303,8 @@ def _members_precheck(roles: list[str], name: str, *, must_exist: bool = True) -
         from part_add import NAME_RE as PART_NAME_RE
         bad = [m for m in unknown if not PART_NAME_RE.match(m) or m in R.SKIP_DIRS]
         if bad:
-            return (f"not a usable directory name for a role (letters, digits, underscore, "
-                    f"starting with a letter): {', '.join(bad)}")
+            return (f"not a usable directory name for a role (lowercase letters, digits, "
+                    f"underscore, starting with a letter): {', '.join(bad)}")
         try:
             import identity as ID
             reserved = {ID.user_name_read().lower(), ID.DEFAULT_NAME.lower(), ID.SELF_ID.lower()}
@@ -363,6 +367,11 @@ not count as an issue for this group.
 """
 _SELF_PLACEHOLDER = ("(not yet written — /group-add made this file; the operator writes who Self "
                      "is for this group here)")
+# The shipped seed (packaging/scaffold/groups/<g>/self/self.md) is a placeholder too: guidance in
+# each section, not an account of anyone. Its sections' opening words, which a recipient's own
+# writing — by hand, on the initialization form, or by synthesis — replaces.
+_SELF_SHIPPED_MARKS = ("Who Self is *for this installation*.",
+                       "Whatever context helps synthesis keep the account of Self true.")
 _SELF_STUB = f"""# Self — System Overview
 Last updated: never — no code sets this line; synthesis replaces the whole file
 when a circle moves the account of Self, and whatever it writes here stands
@@ -390,7 +399,6 @@ def _record_scaffold(name: str, roles: list[str]) -> list[str]:
     files, each only if absent. Returns what was written, tree-relative, in order."""
     from atomic_write import record_atomic_write
     from part_add import part_long_term_seed_render
-    tree = _RP.group_tree(name)
     base = _parts_base(name)
     live = {d for d, _t in R.part_scan(base)[0]} if base.is_dir() else set()
     wrote: list[str] = []
@@ -410,16 +418,259 @@ def _record_scaffold(name: str, roles: list[str]) -> list[str]:
                             "from the role, yours to edit.\n\n"
                             f'tag = "{tag}"\n\nalt_tags = []\n')
         wrote.append(f"parts/{role}/")
-    for rel, text in (("issues/issue_model.md", _ISSUE_MODEL_STUB.format(name=name)),
-                      ("self/self.md", _SELF_STUB),
-                      ("circles/README.md", _CIRCLES_README.format(name=name))):
+    return wrote + group_record_fill(name)
+
+
+def _group_register_renders() -> "list[tuple[str, object]]":
+    """THE EMPTY REGISTERS A GROUP IS BORN WITH (2026-10-16): tree-relative path, and the OWNER's
+    renderer of the bytes its own reader builds when the file is absent — so the format has one
+    copy, and it is the owner's. packaging/scaffold/groups/<g>/ ships the same ten. Every reader
+    tolerates an absent file; the gates over them do not all (practice_verify refused the comedy
+    group's first close for want of self/best_practices.toml), so a group carries every one."""
+    import circle_history_manager as CHM
+    import circle_journal_manager as CJM
+    import circle_observation_manager as COM
+    import practice_manager as PM
+    import proposal_group_manager as PGM
+    import proposal_manager as PRM
+    import redaction_manager as RDM
+    import remember_manager as RMM
+    import topic_manager as TM
+    import working_set_manager as WSM
+    return [("self/best_practices.toml", PM.practice_empty_render),
+            ("self/coalesce.toml", PGM.proposal_group_empty_render),
+            ("self/proposals.toml", PRM.proposal_empty_render),
+            ("self/redaction.toml", RDM.redaction_empty_render),
+            ("self/remember.toml", RMM.remember_empty_render),
+            ("self/topics.toml", TM.topic_empty_render),
+            ("circles/circle_history.toml", CHM.circle_history_empty_render),
+            ("circles/circle_journal.toml", CJM.circle_journal_empty_render),
+            ("circles/circle_observation_log.toml", COM.circle_observation_empty_render),
+            ("circles/working_sets.toml", WSM.working_set_empty_render)]
+
+
+def _group_stub_texts(name: str) -> "list[tuple[str, str]]":
+    """The three stub files a group is born with — the operator's to rewrite."""
+    return [("issues/issue_model.md", _ISSUE_MODEL_STUB.format(name=name)),
+            ("self/self.md", _SELF_STUB),
+            ("circles/README.md", _CIRCLES_README.format(name=name))]
+
+
+def group_record_survey(name: str) -> "tuple[list[str], list[str]]":
+    """WHAT THE GROUP'S RECORD LACKS, AND WHAT IS STILL A STUB (2026-10-16). Returns (missing,
+    placeholders), tree-relative. MISSING is a file a group depends on and does not have — the ten
+    empty registers, issues/issue_model.md and self/self.md; group_record_fill() writes each.
+    PLACEHOLDERS are files still holding the stub /group-add wrote — advice only, never a failure:
+    the group runs on them, and the operator is told what is theirs to write."""
+    tree = _RP.group_tree(name)
+    needed = [rel for rel, _r in _group_register_renders()] + ["issues/issue_model.md", "self/self.md"]
+    missing = [rel for rel in needed if not (tree / rel).is_file()]
+
+    def text(rel: str) -> str:
+        p = tree / rel
+        return p.read_text(encoding="utf-8") if p.is_file() else ""
+    placeholders: list[str] = []
+    if text("issues/issue_model.md") == _ISSUE_MODEL_STUB.format(name=name):
+        placeholders.append("issues/issue_model.md")
+    if any(m in text("self/self.md") for m in (_SELF_PLACEHOLDER,) + _SELF_SHIPPED_MARKS):
+        placeholders.append("self/self.md")
+    for role in _RP.group_descriptor_read(name).get("roles", []):
+        if _ROLE_IDENTITY.format(name=name) in text(f"parts/{role}/long_term.md"):
+            placeholders.append(f"parts/{role}/long_term.md")
+    return missing, placeholders
+
+
+def group_record_fill(name: str) -> list[str]:
+    """Write every file group_record_survey() would call missing — each empty register as its
+    owner renders it, each stub as /group-add writes it — and circles/README.md; never touch a file
+    that exists. Returns what was written, tree-relative, in order."""
+    from atomic_write import record_atomic_write
+    tree = _RP.group_tree(name)
+    wrote: list[str] = []
+    for rel, make in ([(r, (lambda t=t: t)) for r, t in _group_stub_texts(name)]
+                      + _group_register_renders()):
         p = tree / rel
         if p.is_file():
             continue
         p.parent.mkdir(parents=True, exist_ok=True)
-        record_atomic_write(p, text)
+        record_atomic_write(p, make())
         wrote.append(rel)
     return wrote
+
+
+# THE STUBS, WRITTEN BY THE OPERATOR THROUGH A FORM (B151, 2026-10-16). The three files a group is
+# born holding a stub — issues/issue_model.md, self/self.md, each role's long_term.md — read for the
+# initialization form and written back from it, compliant by construction: issue_model.md whole,
+# the other two SECTION BY SECTION, so a heading can neither go nor arrive (synthesis holds self.md
+# to its heading set; long_term.md's `## required end` and everything below it are history, kept
+# byte for byte). A body may not open a line with `## `, so no edit makes a section heading.
+_TEXT_MAX = 20_000                          # one field — the server's own body limit is the floor
+
+
+def _record_sections_cut(text: str, end: str = "") -> "tuple[str, list[list[str]], str]":
+    """(head, [[heading, raw chunk]], tail): the text before the first `## ` line, each `## `
+    section whole (its heading line included), and — when `end` is given — that heading's line and
+    everything after it, never a section. "".join of the three is the text, byte for byte."""
+    lines = text.splitlines(keepends=True)
+    stop = next((i for i, ln in enumerate(lines) if end and ln.rstrip("\r\n") == end), len(lines))
+    head, secs = [], []
+    for ln in lines[:stop]:
+        if ln.startswith("## "):
+            secs.append([ln[3:].strip(), ln])
+        elif secs:
+            secs[-1][1] += ln
+        else:
+            head.append(ln)
+    return "".join(head), secs, "".join(lines[stop:])
+
+
+def _record_section_body(chunk: str) -> str:
+    return chunk.split("\n", 1)[1].strip("\n") if "\n" in chunk else ""
+
+
+def _group_text_files(name: str) -> "list[tuple[str, str, str]]":
+    """(tree-relative path, shape, display) for every file the form edits: issue_model.md whole,
+    self.md by section, each role's long_term.md by section above `## required end`."""
+    from record_model import IDENTITY_END
+    roster = dict(R.part_scan(_parts_base(name))[0]) if _parts_base(name).is_dir() else {}
+    out = [("issues/issue_model.md", "", "What an issue is, for this group"),
+           ("self/self.md", "sections", "Who Self is")]
+    for role in _RP.group_descriptor_read(name).get("roles", []):
+        if role in roster:
+            out.append((f"parts/{role}/long_term.md", IDENTITY_END, roster[role]))
+    return out
+
+
+def group_record_text_read(name: str) -> list[dict]:
+    """The stub files of group `name` as the initialization form shows them, one row each:
+    {path, title, stub, text} for issue_model.md, {path, title, stub, sections: [{heading, body}]}
+    for self.md and each role's long_term.md. `stub` is group_record_survey()'s own verdict. A file
+    that is absent, or has a heading twice, is shown with `problem` and no editor."""
+    tree = _RP.group_tree(name)
+    _missing, stubs = group_record_survey(name)
+    rows = []
+    for rel, shape, title in _group_text_files(name):
+        row: dict = {"path": rel, "title": title, "stub": rel in stubs}
+        p = tree / rel
+        if not p.is_file():
+            row["problem"] = f"{rel} is missing — group_record_verify.py --fill writes it"
+        elif not shape:
+            row["text"] = p.read_text(encoding="utf-8")
+        else:
+            _h, secs, _t = _record_sections_cut(p.read_text(encoding="utf-8"),
+                                                "" if shape == "sections" else shape)
+            heads = [h for h, _c in secs]
+            if len(set(heads)) != len(heads) or not heads:
+                row["problem"] = (f"{rel} has {'a heading twice' if heads else 'no ## heading'} — "
+                                  f"edit it by hand")
+            else:
+                row["sections"] = [{"heading": h, "body": _record_section_body(c)} for h, c in secs]
+        rows.append(row)
+    return rows
+
+
+def _record_body_fault(body: str) -> str:
+    if not body.strip():
+        return "write something here — an empty section is refused"
+    if len(body) > _TEXT_MAX:
+        return f"{len(body):,} characters; at most {_TEXT_MAX:,}"
+    if "\r" in body or "\x00" in body:
+        return "a carriage return or NUL is not allowed"
+    if any(re.match(r"##(\s|$)", ln) for ln in body.split("\n")):
+        return "a line may not start with ## — the section headings are fixed"
+    return ""
+
+
+def group_record_text_render(name: str, edits: dict) -> "tuple[list[tuple[str, str]], dict]":
+    """The files `edits` would write, CHECKED, and nothing written: ([(rel, text)] for every file
+    that changes, {field: why} for every refusal). `edits` is {rel: text} for issue_model.md and
+    {rel: [{heading, body}]} for a sectioned file, its headings exactly those on file and in order.
+    A field is `rel` for a whole file, `rel#heading` for a section.
+
+    Each result is held to the rules the record already keeps: record_model.record_file_verify (not
+    empty, one closing newline, no stray script character), self.md to synthesis's heading set
+    (record_headed_compare), long_term.md to its `## required end` boundary with the history below it
+    unchanged — so what the form writes always passes the gates over it."""
+    import record_model as RM
+    tree = _RP.group_tree(name)
+    files = {rel: shape for rel, shape, _t in _group_text_files(name)}
+    errors: dict[str, str] = {}
+    out: list[tuple[str, str]] = []
+    if not isinstance(edits, dict):
+        return [], {"texts": "`texts` must be an object"}
+    for rel, want in edits.items():
+        if rel not in files:
+            errors[rel] = "not a file this form edits"
+            continue
+        p = tree / rel
+        if not p.is_file():
+            errors[rel] = f"{rel} is missing — nothing to edit"
+            continue
+        old = p.read_text(encoding="utf-8")
+        shape = files[rel]
+        if not shape:
+            if not isinstance(want, str):
+                errors[rel] = "the text must be a string"
+                continue
+            body = want.strip("\n")
+            why = ("write something here — BLOCK 2 opens with this file" if not body.strip()
+                   else _record_body_fault(body) if "\r" in body or "\x00" in body
+                   or len(body) > _TEXT_MAX else "")       # its own headings are its author's
+            if why:
+                errors[rel] = why
+                continue
+            new = body + "\n"
+        else:
+            head, secs, tail = _record_sections_cut(old, "" if shape == "sections" else shape)
+            if (not isinstance(want, list)
+                    or [str((s or {}).get("heading", "")) for s in want] != [h for h, _c in secs]):
+                errors[rel] = f"{rel}'s headings changed since the page read it — reload"
+                continue
+            parts = [head]
+            bad = False
+            for i, (s, (h, chunk)) in enumerate(zip(want, secs)):
+                body = str(s.get("body", "")).strip("\n")
+                if body == _record_section_body(chunk):
+                    parts.append(chunk)
+                    continue
+                why = _record_body_fault(body)
+                if why:
+                    errors[f"{rel}#{h}"] = why
+                    bad = True
+                    continue
+                last = i == len(secs) - 1 and not tail
+                parts.append(f"## {h}\n\n{body}\n" + ("" if last else "\n"))
+            if bad:
+                continue
+            new = "".join(parts) + tail
+        if new == old:
+            continue
+        _t, found = RM.record_file_verify(rel, new.encode("utf-8"))
+        if shape == "sections":
+            found += RM.record_headed_compare(rel, old, new)
+        elif shape:
+            lt = RM.LongTerm(new)
+            if lt.preamble is None or not new.endswith(tail):
+                found.append(RM._f("FAIL", "BOUNDARY", rel, f"'{shape}' or what follows it moved"))
+        fails = [f.message for f in found if f.level == "FAIL"]
+        if fails:
+            errors[rel] = "; ".join(fails)
+            continue
+        out.append((rel, new))
+    return out, errors
+
+
+def group_record_text_write(name: str, edits: dict) -> list[pathlib.Path]:
+    """Write what group_record_text_render() returns, every file or none: ValueError carrying the
+    {field: why} refusals when any. Returns the paths written."""
+    from atomic_write import record_atomic_write
+    files, errors = group_record_text_render(name, edits)
+    if errors:
+        raise ValueError(errors)
+    tree = _RP.group_tree(name)
+    for rel, text in files:
+        record_atomic_write(tree / rel, text)
+    return [tree / rel for rel, _t in files]
 
 
 def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[bool, str]:
@@ -448,7 +699,9 @@ def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[
         return False, (f"the record is written but not the descriptor ({e}) — groups/{name}/ "
                        f"is a stray record_verify reports until /group-add \"{name}\" runs again")
     parts_made = [w for w in wrote if w.startswith("parts/")]
-    stubs = [w for w in wrote if not w.startswith("parts/")]
+    registers = {rel for rel, _r in _group_register_renders()}
+    stubs = [w for w in wrote if not w.startswith("parts/") and w not in registers]
+    empties = [w for w in wrote if w in registers]
     lines = [f"{name!r} is added ({len(roles)} role(s)) — circle.py --group {name}"]
     if parts_made:
         lines.append(f"  scaffolded {len(parts_made)} part(s) under groups/{name}/parts/ "
@@ -460,6 +713,9 @@ def group_add(name: str, roles: list[str], layer: "str | None" = None) -> tuple[
     if stubs:
         lines.append(f"  stub files: {', '.join(stubs)} — the operator writes them; the folders "
                      f"issues/, self/ and circles/ are the group's record")
+    if empties:
+        lines.append(f"  {len(empties)} empty register(s) under self/ and circles/ — circles fill "
+                     f"them; the stubs above are yours to write")
     if not layer:
         lines.append(f"  no layer given: the group runs on the universal rulebook alone, with "
                      f"\"role\" for its members, until group.toml names a layer file")
@@ -556,3 +812,140 @@ def group_resolve(name: str) -> "list[str] | None":
     if not doc:
         return None
     return list(doc.get("roles", []))
+
+
+_DEFAULT_LINE = re.compile(r"^default = (true|false)[ \t]*$", re.M)
+
+
+def group_default_write(name: str) -> list[pathlib.Path]:
+    """Make `name` THE DEFAULT GROUP — `default = true` in its group.toml, `false` in every other
+    that says true (the operator, 2026-10-15: changing the group in the Ticker "set[s] the default
+    on the target group"). Returns the files written, which the caller files in git; [] when
+    `name` was already the one default. Raises ValueError for a name that is not a group.
+
+    THE ONE LINE, NOT THE DOCUMENT. group_descriptor_write() re-renders the whole file from ORDER,
+    and the default group's group.toml carries a comment block mid-file it would drop; so only
+    the `default = ...` line changes, the rest byte for byte, and the result must parse to the
+    same document with `default` alone moved. A file with no such line gains one under `display`
+    when it must say true; one that must say false and has none already does (absent is false)."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:                                 # py < 3.11
+        import tomli as tomllib                                 # type: ignore
+    from atomic_write import record_atomic_write
+    names = _RP.group_present_read()
+    if name not in names:
+        raise ValueError(f"no group named {name!r}")
+    plan: list[tuple[pathlib.Path, str]] = []
+    for n in names:
+        want = n == name
+        p = _RP.group_descriptor_locate(n)
+        text = p.read_text(encoding="utf-8")
+        doc = tomllib.loads(text)
+        if (doc.get("default") is True) == want:
+            continue
+        line = f"default = {'true' if want else 'false'}"
+        if _DEFAULT_LINE.search(text):
+            new = _DEFAULT_LINE.sub(line, text, count=1)
+        else:
+            new, k = re.subn(r"^(display = .*)$", rf"\1\n{line}", text, count=1, flags=re.M)
+            if not k:
+                raise ValueError(f"{p}: no `display` line to set `default` under")
+        back = tomllib.loads(new)
+        if back.get("default") is not want or {**back, "default": None} != {**doc, "default": None}:
+            raise ValueError(f"{p}: setting `default` would change more than `default`")
+        plan.append((p, new))
+    for p, new in plan:             # every file checked before any is written
+        record_atomic_write(p, new)
+    return [p for p, _new in plan]
+
+
+def _descriptor_line_render(k: str, v) -> str:
+    """One root key in the form group_descriptor_dumps() writes it."""
+    if isinstance(v, bool):
+        return f"{k} = {str(v).lower()}"
+    if isinstance(v, list):
+        return _list_render(k, v)
+    return f"{k} = {_lit(v)}"
+
+
+def _descriptor_key_re(k: str) -> "re.Pattern[str]":
+    """A root key's whole entry — a one-line scalar, or a list however many lines it spans."""
+    return re.compile(rf"^{re.escape(k)} = (?:\[[^\]]*\]|[^\n]*)[ \t]*(?:\n|\Z)", re.M)
+
+
+def group_descriptor_edit(name: str, want: dict) -> "pathlib.Path | None":
+    """Make groups/<name>/group.toml say `want`, changing ONLY the keys that differ — each in
+    place, in the form group_descriptor_dumps() gives it — so every other line, its comments
+    included, keeps its bytes. group_roles_edit()'s rule, for every key: the default group's
+    file carries a comment block mid-file that group_descriptor_write()'s re-render would drop
+    (the reason group_default_write() edits one line, 2026-10-15). The initialization form's
+    save (ui/initialization_form.py) is the caller.
+
+    A key `want` holds and the file lacks goes in after the nearest key before it in ORDER; a key
+    the file holds and `want` lacks is taken out, its line or list; `[identity]`'s `role` and
+    `key` are set in their table, which is added at the end or removed whole. `default` is not
+    this function's to move — group_default_write() moves THE default across files.
+
+    Returns the path when it was rewritten, None when nothing differs. Raises ValueError, writing
+    nothing, when the edit does not parse back to exactly `want`."""
+    try:
+        import tomllib
+    except ModuleNotFoundError:                                 # py < 3.11
+        import tomli as tomllib                                 # type: ignore
+    from atomic_write import record_atomic_write
+    p = _RP.group_descriptor_locate(name)
+    text = p.read_text(encoding="utf-8")
+    doc = tomllib.loads(text)
+    if doc == want:
+        return None
+    for k in set(doc) | set(want):
+        if k not in ORDER and doc.get(k) != want.get(k):
+            raise ValueError(f"group.toml key {k!r} is not one this module writes")
+    head = re.search(r"^\[identity\][ \t]*$", text, re.M)
+    root, table = (text[:head.start()], text[head.start():]) if head else (text, "")
+    if root and not root.endswith("\n"):
+        root += "\n"
+    for k in ORDER:
+        if k == "identity" or ((k in want) == (k in doc) and want.get(k) == doc.get(k)):
+            continue
+        pat = _descriptor_key_re(k)
+        hits = list(pat.finditer(root))
+        if len(hits) > 1:
+            raise ValueError(f"{p.name}: `{k}` is written more than once")
+        line = _descriptor_line_render(k, want[k]) + "\n" if k in want else ""
+        if hits:
+            root = root[:hits[0].start()] + line + root[hits[0].end():]
+            continue
+        at = None
+        for prev in reversed(ORDER[:ORDER.index(k)]):
+            m = _descriptor_key_re(prev).search(root)
+            if m:
+                at = m.end()
+                break
+        if at is None:
+            root = root.rstrip("\n") + "\n" + line
+        else:
+            root = root[:at] + line + root[at:]
+    wi, di = want.get("identity") or {}, doc.get("identity") or {}
+    if wi != di:
+        if not wi:
+            table = ""
+            root = root.rstrip("\n") + "\n"
+        elif not table:
+            root = root.rstrip("\n") + "\n\n"
+            table = "[identity]\n" + "".join(f"{k} = {_lit(wi[k])}\n" for k in ("role", "key") if k in wi)
+        else:
+            for k in ("role", "key"):
+                kp = re.compile(rf"^{k} = [^\n]*(?:\n|\Z)", re.M)
+                line = f"{k} = {_lit(wi[k])}\n" if k in wi else ""
+                if kp.search(table):
+                    table = kp.sub(lambda _m, line=line: line, table, count=1)
+                else:
+                    table = table.rstrip("\n") + "\n" + line
+    new = root + table
+    if tomllib.loads(new) != want:
+        raise ValueError(f"{p.name}: the edit does not parse back to the descriptor it meant — "
+                         f"nothing written")
+    record_atomic_write(p, new)
+    return p

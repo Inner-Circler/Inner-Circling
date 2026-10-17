@@ -169,6 +169,15 @@ def system_git_failure_explain(out: str) -> str:
     return "git gave no recognised reason; its last output is below"
 
 
+# HOW LONG ONE GIT CALL MAY TAKE. Ten minutes since R603 (2026-10-07); 120 seconds before.
+# A circle's commit runs the hook's own gates (about a minute on 2026-10-07's two closes), and
+# the close of 2026-10-07_1802 was reported as a crash after its commit had landed because
+# git's automatic tidy-up ran inside the commit for five minutes. That tidy-up is now off in
+# this repository (gc.auto 0, system_git_config_ensure) and the audit runs it; the longer wait
+# is the safety margin for a slow commit of any other kind.
+GIT_TIMEOUT_S = 600
+
+
 def system_git_run(*args: str, check: bool = False, read_only: bool = False) -> tuple[int, str]:
     cmd = ["git"] + (["--no-optional-locks"] if read_only else []) + list(args)
     try:
@@ -183,18 +192,18 @@ def system_git_run(*args: str, check: bool = False, read_only: bool = False) -> 
         # AFTER git has already committed. Degrade instead of crashing.
         p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
                            text=True, encoding="utf-8", errors="replace",
-                           timeout=120)
+                           timeout=GIT_TIMEOUT_S)
     except OSError as e:
         raise GitError(f"git not available: {e}") from e
     except subprocess.TimeoutExpired as e:
         # TimeoutExpired is not an OSError, so until 2026-08-19 it escaped
         # raw through every caller that treats gitrepo as non-fatal — and
         # the v47+ hook runs enough suites that a `git commit` can honestly
-        # exceed 120s on a slow or AV-burdened machine, crashing the whole
-        # close instead of reporting. subprocess has already killed git by
-        # the time this raises; a stale .git/index.lock may remain, which
+        # exceed the budget on a slow or AV-burdened machine, crashing the
+        # whole close instead of reporting. subprocess has already killed git
+        # by the time this raises; a stale .git/index.lock may remain, which
         # the message names because the next command will hit it.
-        raise GitError(f"git {' '.join(args)} exceeded 120s and was killed "
+        raise GitError(f"git {' '.join(args)} exceeded {GIT_TIMEOUT_S}s and was killed "
                        f"— a stale .git/index.lock may be left behind; "
                        f"remove it if the next git command refuses") from e
     out = ((p.stdout or "") + (p.stderr or "")).strip()
@@ -308,6 +317,30 @@ def system_git_is_dirty() -> list[str]:
     return [l for l in out.splitlines() if l.strip()] if rc == 0 else []
 
 
+def system_git_unfiled_read(prefix: str) -> list[str]:
+    """Every path under `prefix` that is neither committed nor ignored — modified, staged or
+    untracked — as ROOT-relative posix strings. A close never leaves state in such a file
+    (the operator, 2026-10-08: "Either mark files for .gitignore or commit them"), and this is how the
+    close's last act checks that it did not. Empty where git cannot answer: no `.git`, no
+    binary, a repository git refuses to read — those trees file nothing, by the same tiers as
+    circle_commit, so there is nothing for them to have left."""
+    if not (ROOT / ".git").exists():
+        return []
+    try:
+        rows = system_git_is_dirty()
+    except GitError:
+        return []
+    out = []
+    for row in rows:
+        path = row[3:].strip()
+        if " -> " in path:                       # a rename: the new name is what sits unfiled
+            path = path.split(" -> ")[-1]
+        path = path.strip('"')
+        if path.startswith(prefix):
+            out.append(path)
+    return out
+
+
 def system_git_head_read() -> str:
     rc, out = system_git_run("rev-parse", "--short", "HEAD", read_only=True)
     return out if rc == 0 else "(no commits)"
@@ -393,7 +426,14 @@ def system_git_config_ensure(log, name: str | None, email: str | None) -> None:
 
     # core.autocrlf false: line-ending conversion breaks every sha256 and
     # byte-identical check in this project. See .gitattributes.
+    # gc.auto 0 (R603, 2026-10-07): git's automatic tidy-up — a repack it runs
+    # INSIDE a commit, in the foreground on Windows — took five minutes in the
+    # close of 2026-10-07_1802 and the close reported a crash after its commit
+    # had landed. A close does only its own commit; circle_audit.py's tidy-up
+    # step runs the repack, when loose objects have gathered, at a moment a
+    # person chose.
     for key, want, src in (("core.autocrlf", "false", "required"),
+                           ("gc.auto", "0", "required"),
                            ("user.name", name, name_src),
                            ("user.email", email, email_src)):
         if want is None:
@@ -417,6 +457,103 @@ def system_git_config_ensure(log, name: str | None, email: str | None) -> None:
             continue
         system_git_run("config", key, want, check=True)
         log("did", f"git config {key} {want}  (from {src})")
+
+
+# GIT'S OWN DEFAULT for gc.auto — the loose-object count at which its automatic tidy-up would
+# have fired. With gc.auto 0 in this repository (R603) nothing fires on its own; the audit's
+# tidy-up step asks this same question at a moment a person chose.
+GC_LOOSE_LIMIT = 6700
+
+
+def system_git_loose_objects_count(path: str | None = None) -> int | None:
+    """How many loose objects a repository holds — the `count:` line of
+    `git count-objects -v`. This tree's by default; `path` asks another (the
+    backup remote's bare repository). None when git cannot say (no repository,
+    no git)."""
+    at = ["-C", path] if path else []
+    try:
+        rc, out = system_git_run(*at, "count-objects", "-v", read_only=True)
+    except GitError:
+        return None
+    if rc != 0:
+        return None
+    for line in out.splitlines():
+        if line.startswith("count:"):
+            try:
+                return int(line.split(":", 1)[1].strip())
+            except ValueError:
+                return None
+    return None
+
+
+def system_git_remote_local_paths_read() -> list[tuple[str, str]]:
+    """(name, path) for every remote that is a repository ON THIS MACHINE — the backup
+    remote, classified by system_git_remote_classify and present on disk. A remote that
+    fails classification is not listed; system_git_remote_refuse() is what refuses it."""
+    out = []
+    for name in system_git_remotes_read():
+        rc, url = system_git_run("remote", "get-url", name, read_only=True)
+        url = url.strip() if rc == 0 else ""
+        ok, _why = system_git_remote_classify(url)
+        if ok and pathlib.Path(url).is_dir():
+            out.append((name, url))
+    return out
+
+
+def system_git_remote_config_ensure(log) -> None:
+    """THE BACKUP REPOSITORY'S OWN TIDY-UP, OFF (R603). A push runs `git gc --auto` at the
+    RECEIVING end too (receive.autogc, default on), inside the same post-commit hook and the
+    same budget a close waits on — so gc.auto 0 in this tree alone would leave the backup
+    disk free to stall a close. Both keys are set in every local remote; the tidy-up step
+    runs the repack there, when due, as it does here."""
+    for name, path in system_git_remote_local_paths_read():
+        for key, want in (("gc.auto", "0"), ("receive.autogc", "false")):
+            rc, have = system_git_run("-C", path, "config", key, read_only=True)
+            if rc == 0 and have.strip() == want:
+                continue
+            system_git_run("-C", path, "config", key, want, check=True)
+            log("did", f"remote {name}: git config {key} {want}  (its tidy-up, off)")
+
+
+def _tidy_one(log, label: str, path: str | None, force: bool) -> bool:
+    n = system_git_loose_objects_count(path)
+    if n is None:
+        log("warn", f"{label}: git could not count its loose objects — no tidy-up run")
+        return False
+    if n < GC_LOOSE_LIMIT and not force:
+        log("ok", f"{label}: {n} loose object(s), under git's own limit of {GC_LOOSE_LIMIT} — "
+                  f"no tidy-up needed (--git-tidy runs one anyway)")
+        return True
+    log("note", f"{label}: {n} loose object(s)"
+                + ("" if force else f" — at or over {GC_LOOSE_LIMIT}")
+                + "; running git gc, which can take minutes on a large record")
+    at = ["-C", path] if path else []
+    try:
+        rc, out = system_git_run(*at, "gc", "--quiet")
+    except GitError as e:
+        log("fail", f"{label}: git gc did not finish: {e}")
+        return False
+    if rc != 0:
+        tail = out.strip().splitlines()[-1] if out.strip() else ""
+        log("fail", f"{label}: git gc refused (exit {rc}): {tail}")
+        return False
+    after = system_git_loose_objects_count(path)
+    log("did", f"{label}: git gc — loose objects {n} -> {after if after is not None else '?'}")
+    return True
+
+
+def system_git_tidy_run(log, force: bool = False) -> bool:
+    """THE TIDY-UP A CLOSE NEVER RUNS (R603, 2026-10-07): `git gc` when loose objects have
+    reached GC_LOOSE_LIMIT, or when `force` asks for it regardless — in this tree, and in
+    every local remote (the backup disk), whose own automatic tidy-up is off too. Reports
+    through `log` and returns True unless git refused or could not be asked somewhere. The
+    close of 2026-10-07_1802 was reported as a crash because git ran this inside the commit,
+    for five minutes, on its own; gc.auto 0 (system_git_config_ensure) stops that, and this
+    is where it moved."""
+    ok = _tidy_one(log, "this tree", None, force)
+    for name, path in system_git_remote_local_paths_read():
+        ok = _tidy_one(log, f"remote {name}", path, force) and ok
+    return ok
 
 
 def system_git_attributes_ensure(log) -> None:

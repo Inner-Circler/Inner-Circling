@@ -49,8 +49,10 @@ so no command here needs naming it.
 Nothing obliges you to add another, and most people never will. If you do,
 `/group-list` shows what exists and `/group-add` creates one — its folder
 with a stub identity and `part.toml` for every role you name, a stub
-`issues/issue_model.md`, a `self/self.md` with its two headings, and the
-`group.toml` last, each stub yours to rewrite — and a circle opened on a
+`issues/issue_model.md`, a `self/self.md` with its two headings, the ten
+empty registers under `self/` and `circles/` that its circles fill, and the
+`group.toml` last, each stub yours to rewrite (the memory tool's
+Initialization page edits them, section by section) — and a circle opened on a
 named group reads and writes only that group's tree — a different roster
 for a different purpose, never a second opinion on the same one.
 

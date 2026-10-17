@@ -275,11 +275,23 @@ ORDER = ("circle", "chosen", "topic")   # WORKING_SET_ORDER until 10d: the regis
                                          # convention docs/BNF.md's <working_set> pins
 
 
+def _working_sets_empty() -> dict:
+    """The register's absent-file shape — one copy, read by _working_sets_doc() and
+    working_set_empty_render()."""
+    return {"register": "working_sets",
+            "doc": {"preamble": WORKING_SETS_PREAMBLE}, "working_set": []}
+
+
 def _working_sets_doc() -> dict:
     if WORKING_SETS.is_file():
         return SS.register_read(WORKING_SETS)
-    return {"register": "working_sets",
-            "doc": {"preamble": WORKING_SETS_PREAMBLE}, "working_set": []}
+    return _working_sets_empty()
+
+
+def working_set_empty_render() -> str:
+    """The bytes of an empty register, for a new group's circles/working_sets.toml
+    (group_manager's scaffold): exactly what _working_sets_doc() reads when the file is absent."""
+    return SS.register_dumps(_working_sets_empty(), "working_set", ORDER)
 
 
 def working_set_entry_read(ot: str) -> "list[dict]":

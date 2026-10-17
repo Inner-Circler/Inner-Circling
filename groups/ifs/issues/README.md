@@ -23,7 +23,7 @@ The prefix follows the node's own `status` field — except `R_`, which
 follows `root = true` (a root's status is live) — and
 `memory/issue_gate.py` refuses a file whose name and fields disagree — so
 renaming a file does not change its status, it breaks the node. Change a
-status with `memory/issue_status.py` (`coordinator/docs/issue_status.md`),
+status with `memory/issue_status.py` (`memory/docs/issue_status.md`),
 or with `/issue-status nNNNN = <value>` typed at the `Self>` prompt of
 `coordinator/circle.py` run on its own: either one writes the field, the rename and a
 history line as one act. The `n####` inside never changes.

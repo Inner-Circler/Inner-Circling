@@ -304,6 +304,50 @@ def command_memory_edit(rest: str) -> None:
                          f"does; a saved ordering applies from the next circle")
 
 
+# ------------------------------------------------------------ /issue-graph
+# THE ISSUE GRAPH FROM THE COMMAND PANE, through the memory tool's own program: it serves the
+# picture ui/issue_draw.py draws, redrawn when the group's issues moved, and each of its two
+# pages links to the other — a browser will not follow a link from a served page to a file on
+# disk, so the picture has to come from the same server. The same process /memory-edit starts,
+# kept in the same handle: whichever verb comes first starts it, and the other reuses it.
+def command_issue_graph(rest: str) -> None:
+    """/issue-graph — the active group's issue graph, in the browser."""
+    import sys
+    import webbrowser
+    from urllib.parse import quote
+    from record_paths import ROOT, group_read
+    if rest.strip():
+        seam.emit("command", "  usage: /issue-graph — it takes no argument; it opens on the active group")
+        return
+    tool = ROOT / MEMORY_EDIT_TOOL
+    if not tool.is_file():
+        seam.emit("command", f"  the issue graph is served by the memory tool, which is not installed here "
+                             f"({MEMORY_EDIT_TOOL} is missing)")
+        return
+    group = group_read()
+    proc = _MEMORY_EDIT.get("proc")
+    if proc is None or proc.poll() is not None or not _MEMORY_EDIT.get("url"):
+        try:
+            proc, url = memory_edit_launch([sys.executable, str(tool), "--with-parent", "--no-browser",
+                                            "--at", f"{group}/self"], ROOT)
+        except Exception as e:                                   # noqa: BLE001
+            seam.emit("command", f"  the issue graph could not be opened — the memory tool did not start "
+                                 f"({type(e).__name__}: {e})")
+            return
+        if not url:
+            seam.emit("command", "  the memory tool started but did not say its address — it may have stopped; "
+                                 "start it by hand from a terminal to see why")
+            return
+        _MEMORY_EDIT.update(proc=proc, url=url)
+    url = _MEMORY_EDIT["url"].split("#", 1)[0].rstrip("/") + f"/issue-graph?group={quote(group)}"
+    try:
+        webbrowser.open(url)
+    except Exception:                                            # noqa: BLE001
+        pass
+    seam.emit("command", f"  the issue graph is open in your browser at {url} — redrawn first if the "
+                         f"issues moved; its page links to the memory tool")
+
+
 class _NoCircleGuard:
     """The write guard a no-circle /remember uses: Self's own register, the
     real tree, and no open time — which is what makes the one-per-circle
@@ -361,14 +405,25 @@ def command_remember(text: str, guard=None) -> None:
 # same reasoning as /remember-list: nothing here is ever spoken, so there
 # is no transcript step and no live/sandbox split (this register has none).
 
-def command_observation_add(text: str) -> None:
-    """/observation-add <text> — Self's own manual entry, `source="self"`."""
+def _observation_circle(guard) -> str | None:
+    """The open LIVE circle an observation typed now is about (the operator,
+    2026-10-15: "tag with the circle"). None with no circle open, and for a
+    dry run — its OT names a sandbox transcript, and this register has no
+    sandbox twin."""
+    if guard is None or not getattr(guard, "live", False):
+        return None
+    return getattr(guard, "ot", "") or None
+
+
+def command_observation_add(text: str, guard=None) -> None:
+    """/observation-add <text> — Self's own manual entry, `source="self"`,
+    tagged with the open live circle if there is one."""
     import circle_observation_manager as CO
     body = " ".join(text.split())
     if not body:
         seam.emit("command", "  usage: /observation-add <text>")
         return
-    rec = CO.circle_observation_manual_add(body)
+    rec = CO.circle_observation_manual_add(body, _observation_circle(guard))
     seam.emit("command", f"  added {rec['id']} — {rec['text'][:56]}"
                          f"{'…' if len(rec['text']) > 56 else ''}")
 
@@ -389,7 +444,7 @@ def command_observation_list(rest: str) -> None:
     seam.emit("command", CO.circle_observation_show(int(a[0]), include_retired=include_all))
 
 
-def command_observation_continue(rest: str) -> None:
+def command_observation_continue(rest: str, guard=None) -> None:
     """/observation-continue <id> <text> — a NEW record chained onto <id>;
     <id>'s own record is never touched."""
     import circle_observation_manager as CO
@@ -399,7 +454,7 @@ def command_observation_continue(rest: str) -> None:
         return
     target, body = parts_[0], " ".join(parts_[1].split())
     try:
-        rec = CO.circle_observation_continue_add(target, body)
+        rec = CO.circle_observation_continue_add(target, body, _observation_circle(guard))
     except ValueError as e:
         seam.emit("command", f"  {e}")
         return
@@ -1615,17 +1670,21 @@ def command_dev_dispatch(head: str, rest_text: str, *, record=None,
         # nothing here and nothing reaches the room; the tool's own file is
         # read by the next circle's open.
         command_memory_edit(rest_text)
+    elif head == "/issue-graph":
+        # THE ISSUE GRAPH, served by the memory tool's process. Reads only;
+        # nothing reaches the room.
+        command_issue_graph(rest_text)
     elif head == "/remember":
         # WRITES Self's own register — the command-pane twin of the
         # [remember: ...] annotation, 2026-08-21. No transcript step: a
         # remember is private by definition (REMEMBER's blast-radius rule).
         command_remember(rest_text, guard=guard)
     elif head == "/observation-add":
-        command_observation_add(rest_text)
+        command_observation_add(rest_text, guard=guard)
     elif head == "/observation-list":
         command_observation_list(rest_text)
     elif head == "/observation-continue":
-        command_observation_continue(rest_text)
+        command_observation_continue(rest_text, guard=guard)
     elif head == "/observation-retire":
         command_observation_retire(rest_text)
     elif head == "/observation-purge":

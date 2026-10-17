@@ -322,21 +322,8 @@ SPEC: tuple[Setting, ...] = (
        why="Claude's reading, not a ruling: the smallest count a memory paraphrasing one of the "
            "part's own sentences clears and a memory of another part's moment usually does not; "
            "it only adds a note to the close report."),
-    # R451, D86 a, 2026-09-04: the shared room capsule's own cap and ceiling — one
-    # model call per circle, never per part.
-    _s("dream_capsule_cap",
-       "How many characters the shared room capsule may run to",
-       "NUMERIC_STRING", 200000, "dev", "next_circle",
-       "coordinator/part_dreaming.py::CAPSULE_CAP", unit="characters",
-       why="One short paragraph, the same words for every part, as each part's whole view of "
-           "the room beyond its own lines; no measurement is recorded beside this number."),
-    _s("dream_capsule_max_tokens",
-       "The ceiling for the one shared room-capsule call per circle",
-       "NUMERIC_STRING", 64000, "dev", "next_circle",
-       "coordinator/part_dreaming.py::CAPSULE_MAX_TOKENS", unit="tokens",
-       why="An unwarranted initial size awaiting data regarding the actual use (ruled, "
-           "R564); the paragraph it pays for is short, but the model's "
-           "thinking counts against the same ceiling."),
+    # dream_capsule_cap and dream_capsule_max_tokens (R451, R564) left with the room capsule —
+    # R607, 2026-10-09.
     _s("synth_max_tokens",
        "The ceiling for the one circle-wide synthesis after a circle",
        "NUMERIC_STRING", 64000, "dev", "next_circle",

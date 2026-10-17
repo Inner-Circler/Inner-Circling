@@ -32,7 +32,8 @@ An issue — id nNNNN, human key: label. `list`/`read` are re-derived live
 from the issue graph on every call, never cached. `/issue-add` opens one:
 its name, what it is, and what its absence looks like — all three make it
 live, fewer a lead. No `delete` — lifecycle is a status
-transition (see /issue-status), not deletion.
+transition (see /issue-status), not deletion. `/issue-graph` opens the
+whole graph as a picture in your browser.
 '''
 
 [[class]]

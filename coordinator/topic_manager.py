@@ -115,11 +115,22 @@ _PREAMBLE = (
     "vetted content only. Closed rows are tombstones, never deleted.")
 
 
+def _empty() -> dict:
+    """The register's absent-file shape — one copy, read by _doc() and topic_empty_render()."""
+    return {"register": "topics", "next_id": 1,
+            "doc": {"preamble": _PREAMBLE}, TABLE: []}
+
+
 def _doc() -> dict:
     if PATH.is_file():
         return SS.register_read(PATH)
-    return {"register": "topics", "next_id": 1,
-            "doc": {"preamble": _PREAMBLE}, TABLE: []}
+    return _empty()
+
+
+def topic_empty_render() -> str:
+    """The bytes of an empty register, for a new group's self/topics.toml (group_manager's
+    scaffold): exactly what _doc() reads when the file is absent."""
+    return SS.register_dumps(_empty(), TABLE, ORDER)
 
 
 def _save(doc: dict) -> None:

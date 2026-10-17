@@ -11,6 +11,7 @@ circle_audit.py — the circle-record audit (renamed from nightly.py 2026-08-19)
     python coordinator/circle_audit.py --snapshot [DIR]
     python coordinator/circle_audit.py --baseline DIR|last [--prune-baselines]
     python coordinator/circle_audit.py --git-setup [--git-name NAME] [--git-email EMAIL]
+    python coordinator/circle_audit.py --git-tidy
     python coordinator/circle_audit.py --backfill [--all-circles] [--dry-run] [--commit] [--no-git]
     python coordinator/circle_audit.py --stage-synthetic [--commit] [--no-git]
     python coordinator/circle_audit.py --commit [--no-git]
@@ -168,13 +169,16 @@ Two mechanisms recur throughout the script and are worth naming up front. First,
     Validate the live tree against this snapshot directory instead of self-checking it. The special value `last`/`latest`/`auto` (case-insensitive) resolves to the newest `work/circle_audit/baseline_*` directory, so a caller need not know the exact timestamp a prior snapshot run chose.
 
 `--validate`
-    Run phases 0, 1, 2, 6 — the default sequence — and nothing else. Given alongside a flag that selects another path (`--snapshot`, `--backfill`, `--stage-synthetic`, `--commit`) it REFUSES, naming the clash, and returns 1 rather than letting the other flag win silently. Honoured 2026-08-27; it was accepted and never read until then, so `--validate --backfill` ran the backfill without a word. (See BUGS.)
+    Run phases 0, 1, 2, the git tidy-up step, 6 — the default sequence — and nothing else. Given alongside a flag that selects another path (`--snapshot`, `--backfill`, `--stage-synthetic`, `--commit`) it REFUSES, naming the clash, and returns 1 rather than letting the other flag win silently. Honoured 2026-08-27; it was accepted and never read until then, so `--validate --backfill` ran the backfill without a word. (See BUGS.)
 
 `--selftest`
     Run phase 6 only, against no baseline, with no lock, no git checks, and no reconcile. Default: off.
 
 `--git-setup`
-    Idempotent git bootstrap: init, config, `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree. It stops with exit 1 while a commit is running — an index lock held, or a hook file open — because a hook rewritten mid-run checks something other than what it began; re-run it when the commit finishes (R537). Default: off.
+    Idempotent git bootstrap: init, config (`core.autocrlf false`, `gc.auto 0` — R603, so git's automatic tidy-up never runs inside a close's commit — and the identity; the backup remote, a repository on this machine, gets `gc.auto 0` and `receive.autogc false` for the same reason, since a push runs the tidy-up at the receiving end), `.gitattributes`, `.gitignore`, un-tracking already-ignored paths. Never adds a remote, never rewrites history, never stages the whole tree. It stops with exit 1 while a commit is running — an index lock held, or a hook file open — because a hook rewritten mid-run checks something other than what it began; re-run it when the commit finishes (R537). Default: off.
+
+`--git-tidy`
+    Run git's tidy-up (`git gc`) now and exit — `gitrepo.system_git_tidy_run(force=True)`. The default sequence runs the same step after the open reports, where it does nothing until loose objects reach git's own limit (`gitrepo.GC_LOOSE_LIMIT`, 6,700) and says so either way; a tree with no git reports that and moves on. R603 (2026-10-07): the close of 2026-10-07_1802 was reported as a crash because git ran this tidy-up inside the commit, for five minutes, on its own. Default: off.
 
 `--git-name NAME`, `--git-email EMAIL`
     Identity to use with `--git-setup`. No default is set at the argparse level deliberately — the underlying `gitrepo.system_git_identity_resolve()` falls back through `$IFS_GIT_NAME`/`$IFS_GIT_EMAIL` (shell or `.env`), then git's own existing `user.name`/`user.email` config, then unset.

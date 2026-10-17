@@ -214,6 +214,15 @@ COMMANDS: tuple[tuple[str, str, str], ...] = (
      "active group's Self record; a second /memory-edit\n"
      "reopens the page. No circle needed, and safe with one\n"
      "open: an ordering applies from the next circle", "command"),
+    # THE ISSUE GRAPH, 2026-10-03: the picture ui/issue_draw.py draws,
+    # served by the memory tool's own program so each page links to the
+    # other. A user verb although it is /issue-*: R288 kept /issue-list,
+    # the other read-only view, on the user table (D142).
+    ("/issue-graph",
+     "open the issue graph in your browser — the active\n"
+     "group's issues as a picture and a table, redrawn\n"
+     "first if they moved. Served by the memory tool;\n"
+     "each page links to the other", "command"),
     # CIRCLE_OBSERVATION CRUD — 2026-09-01, the operator: "first class object with
     # CRUD operations and a help entry." circles/circle_observation_log.toml is
     # SYNTHESIS's own note to Self about the CIRCLE (never about Self, never
@@ -541,7 +550,8 @@ DEV_CMD_HEADS = ("/help", "/practice-add", "/better-option-add",
                  "/topic-list", "/topic-close", "/prompt-show", "/issue-apply",
                  "/issue-list", "/issue-status", "/issue-status-update",
                  "/issue-relationship-list", "/issue-add", "/issue-action-list",
-                 "/remember", "/remember-list", "/memory-edit", "/propose-list",
+                 "/remember", "/remember-list", "/memory-edit", "/issue-graph",
+                 "/propose-list",
                  "/observation-add", "/observation-list",
                  "/observation-continue", "/observation-retire",
                  "/observation-purge",
@@ -599,6 +609,7 @@ USER_SUBSET_COMMANDS: tuple[str, ...] = (
     "/issue-list", "/practice-add", "/practice-list", "/better-option-list",
     "/remember", "/remember-list", "/propose-list", "/propose-add",
     "/memory-edit",                          # the memory tool is Self's own, 2026-10-03
+    "/issue-graph",                          # its other page, 2026-10-03 (D142)
     "/observation-add", "/observation-list", "/observation-continue",
     "/observation-retire", "/observation-purge",          # 2026-09-01
     "/issue-evidence-list", "/issue-evidence-add",        # R533, 2026-09-10

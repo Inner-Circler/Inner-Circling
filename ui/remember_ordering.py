@@ -10,6 +10,10 @@ carry.
                                                     tool starts as its own process beside that
                                                     one, on the active group's Self record, and
                                                     stops when that program does (R588)
+    /issue-graph                                    the same program, from the same doors, opened
+                                                    on its other page: the active group's issue
+                                                    graph, at /issue-graph?group=<name>. Each
+                                                    page links to the other.
 
     --port <n>       the port to serve on. Default: 8765; when that is taken, the next free one.
     --no-browser     print the address and do not open a browser. Default: the browser opens.
@@ -51,11 +55,15 @@ takes an ordering as two lists of keys and asks nothing about what the page show
 the page's rule, defined once there (plan()). SELF IS LISTED AND NOT PROJECTED: no prompt block
 carries Self's own memories, so for Self the page orders and sidelines and shows no cutoff.
 
-IT WRITES ONE KIND OF FILE — remember_ordering.toml, beside the remember.toml it orders — and
-never remember.toml itself. It runs no git: the next live close files every ordering with the
-circle (transcript_store.circle_commit_paths). A save is safe at any time, an open circle
-included; that circle's blocks were assembled when it opened, so the ordering applies from the
-next one.
+IT WRITES TWO KINDS OF FILE — remember_ordering.toml, beside the remember.toml it orders, and
+self_rating.toml, Self's own rating of a part's memory (B149) — and never remember.toml itself.
+EVERY SAVE FILES ITSELF IN GIT (the operator, 2026-10-08: a close never leaves state unfiled, and
+neither does this tool): one pathspec commit of the one file written, through the close's own
+helper, which declines without failing the save where there is no git, no repository or no
+identity. The page says when a save was written but not filed; the next live close files
+whatever a save could not (transcript_store.circle_commit_paths). A save is safe at any time, an
+open circle included; that circle's blocks were assembled when it opened, so the ordering
+applies from the next one.
 
 LOCAL ONLY. Bound to 127.0.0.1. Every /api call must carry the token the served page was given,
 and every request must be addressed to this machine by name (the Host header), so another site
@@ -94,6 +102,7 @@ import remember_manager as RM                            # noqa: E402
 import remember_ordering_manager as ROM                  # noqa: E402
 import remember_prompt_projection as RPP                 # noqa: E402
 import part_mid_term_manager as MT                       # noqa: E402
+import initialization_form as IF                         # noqa: E402  the forms page
 
 if hasattr(sys.stdout, "reconfigure"):
     sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -221,6 +230,43 @@ def remember_ordering_estimate(group: str, part: str, order, sidelined) -> dict:
     return remember_ordering_view_read(group, part, working=working)
 
 
+def remember_ordering_file(path: "pathlib.Path | list[pathlib.Path]", message: str) -> dict:
+    """File what a save wrote in git — one path, or one save's paths as one commit — and say
+    what happened; never fail the save over it.
+
+    A close never leaves the record unfiled, and neither does a save here (the operator, 2026-10-08:
+    "Either mark files for .gitignore or commit them"). The commit is the close's own helper,
+    gitrepo.system_git_paths_commit: only this path, never `add -A`; it warns and declines where
+    there is no git binary, no repository, or no identity yet, and this function turns ANY other
+    failure (a held index.lock while a close is committing, a hook that refuses) into the same
+    answer. The file is written either way; what the next live close files is whatever a save
+    could not (transcript_store.circle_commit_paths).
+
+    Returns {"filed": True | False | None, "note": str}. None: the path is not under this tree
+    (the suite's temporary groups), so there was nothing to file and git was not asked."""
+    inside = []
+    for p in (path if isinstance(path, list) else [path]):
+        try:
+            pathlib.Path(p).resolve().relative_to(ROOT)
+            inside.append(pathlib.Path(p))
+        except ValueError:
+            pass
+    if not inside:
+        return {"filed": None, "note": ""}
+    lines: list[str] = []
+
+    def log(kind: str, msg: str) -> None:
+        if kind in ("warn", "fail", "note"):
+            lines.append(msg)
+    try:
+        import gitrepo as G
+        done = bool(G.system_git_paths_commit(inside, message, log))
+    except Exception as e:                                       # noqa: BLE001
+        done = False
+        lines.append(f"git could not file it ({type(e).__name__}: {e})")
+    return {"filed": done, "note": " ".join(lines)[:600]}
+
+
 def remember_ordering_save(group: str, part: str, order, sidelined, base) -> dict:
     """Write one entity's ordering and return its fresh view, with `dropped`: the keys the
     register did not hold.
@@ -242,6 +288,7 @@ def remember_ordering_save(group: str, part: str, order, sidelined, base) -> dic
         done = ROM.remember_ordering_write(part, order, sidelined)
         view = remember_ordering_view_read(group, part)
         view["dropped"] = done["dropped"]
+        view.update(remember_ordering_file(done["path"], f"memory tool: {part}'s ordering saved"))
         return view
 
 
@@ -276,7 +323,10 @@ def remember_ordering_rate(group: str, part: str, key, ratings, steers) -> dict:
             raise OrderingRefusal(404, f"no memory {key!r} on file for {part}")
         memory = keys[key].get("id") or key
         RM.remember_self_rating_write(part, memory, clean, steers)
-        return {"key": key, "ratings": RM.remember_ratings_by_memory_read(part).get(memory)}
+        out = {"key": key, "ratings": RM.remember_ratings_by_memory_read(part).get(memory)}
+        out.update(remember_ordering_file(RM.remember_self_rating_path_read(part),
+                                          f"memory tool: Self rated a memory of {part}"))
+        return out
 
 
 def remember_ordering_clear(group: str, part: str, base) -> dict:
@@ -291,7 +341,118 @@ def remember_ordering_clear(group: str, part: str, base) -> dict:
             raise OrderingRefusal(409, "this ordering was saved somewhere else since it was "
                                        "loaded here — reload to see it", saved=now["saved"])
         ROM.remember_ordering_clear(part)
-        return remember_ordering_view_read(group, part)
+        view = remember_ordering_view_read(group, part)
+        view.update(remember_ordering_file(ROM.remember_ordering_locate(part),
+                                           f"memory tool: {part}'s ordering cleared"))
+        return view
+
+
+def _esc(s: str) -> str:
+    return s.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+# ------------------------------------------------------------------ the issue graph
+# THE ISSUE GRAPH IS SERVED HERE TOO, so the two pages reach each other: a browser will not
+# follow a link from this server's page to a file on disk, so the picture ui/issue_draw.py
+# writes into work/graph/ is read and handed out by this process, with a link back to the
+# memory page set into its header. /issue-graph starts this program for that page alone.
+#
+# The picture is redrawn first when the group's issues/ moved since it was drawn — the same
+# `--if-stale` run a live close makes, as its own process, so a slow layout never holds _LOCK.
+ISSUE_DRAW = HERE / "issue_draw.py"
+ISSUE_GRAPH_MARK = "<header><h1>Issue graph</h1>"
+_TREE_GROUPS = RP.GROUPS_DIR          # before --groups can rebind it
+
+
+def remember_ordering_issue_graph_read(group: str) -> str:
+    """The issue graph page for `group`, redrawn if its issues moved, with a link back to the
+    memory page on that group's Self. Refused for a --groups copy: issue_draw.py runs as its own
+    process on this tree's own groups, and would draw a copy's issues over the real picture."""
+    import subprocess
+    if pathlib.Path(RP.GROUPS_DIR).resolve() != pathlib.Path(_TREE_GROUPS).resolve():
+        raise OrderingRefusal(409, "the issue graph is drawn for this tree's own groups only — "
+                                   "this run of the tool serves a copy (--groups)")
+    with _LOCK:
+        _bind(group)
+        issues = RP.group_tree(group) / "issues"
+        import issue_draw as ID
+        ID.issue_draw_out_bind(issues)
+        page = pathlib.Path(ID.OUT_HTML)
+    back = (f'<p style="margin:.3rem 0"><a href="/#{group}/self">Memory tool</a> — this '
+            f'group&#39;s memories, and your own</p>')
+    if not issues.is_dir() or not any(p.suffix == ".toml" for p in issues.iterdir()):
+        return (f"<!doctype html><meta charset=utf-8><title>Issue graph</title>{ISSUE_GRAPH_MARK}"
+                f"</header>{back}<p>No issue is on file for this group yet, so there is nothing "
+                f"to draw.</p>")
+    flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
+    # stdin=DEVNULL IS LOAD-BEARING: under --with-parent this process's standard input is a pipe
+    # a thread is blocked reading, and on Windows a child that inherits that handle hangs at
+    # its start, holding the page open for ever (measured 2026-10-03).
+    run = subprocess.run([sys.executable, str(ISSUE_DRAW), f"{issues}/", "--if-stale"],
+                         cwd=str(ROOT), stdin=subprocess.DEVNULL, capture_output=True, text=True,
+                         encoding="utf-8",
+                         errors="replace", **flags)
+    if run.returncode != 0 or not page.is_file():
+        tail = (run.stderr or run.stdout or "").strip().splitlines()[-1:] or ["no output"]
+        raise OrderingRefusal(500, f"the issue graph could not be drawn ({tail[0]})")
+    html = page.read_text(encoding="utf-8")
+    if ISSUE_GRAPH_MARK in html:
+        html = html.replace(ISSUE_GRAPH_MARK, ISSUE_GRAPH_MARK + back, 1)
+    return html
+
+
+# ------------------------------------------------------------------ the initialization forms
+# THE FORMS PAGE IS SERVED HERE TOO (ui/initialization_form.py, its page initialization_form.html):
+# a group's descriptor and a part's record, each one form. The functions there hold no lock and
+# bind no group; these do, as every other call here does, and file what a save wrote in git.
+def _initialization_group_read(group: str) -> dict:
+    with _LOCK:
+        if group:
+            _bind(group)
+        return IF.group_initialization_read(group)
+
+
+def _initialization_group_save(group: str, new, record) -> dict:
+    with _LOCK:
+        if not new:
+            _bind(group)
+        out = IF.group_initialization_save(group, record or {}, new=bool(new))
+        if bool(new):
+            RP.group_set(out["group"])                    # the record modules follow the new group
+        wrote = out.pop("wrote")
+    filed = (remember_ordering_file(wrote, f"group-initialization: {out['group']}")
+             if wrote else {"filed": None, "note": ""})
+    return {**out, **filed}
+
+
+def _initialization_part_read(group: str, part: str) -> dict:
+    with _LOCK:
+        _bind(group)
+        R.part_roster_rebind()
+        return IF.part_initialization_read(group, part)
+
+
+def _initialization_part_save(group: str, part: str, body: dict) -> dict:
+    with _LOCK:
+        _bind(group)
+        R.part_roster_rebind()
+        out = IF.part_initialization_save(group, part, body)
+        if not part:
+            R.part_roster_rebind()                        # the new part joins the roster now
+        wrote = out.pop("wrote")
+    filed = (remember_ordering_file(wrote, f"part-initialization: {group}/{out['part']}")
+             if wrote else {"filed": None, "note": ""})
+    return {**out, **filed}
+
+
+def _initialization_part_retire(group: str, part: str, body: dict) -> dict:
+    with _LOCK:
+        _bind(group)
+        R.part_roster_rebind()
+        out = IF.part_initialization_retire(group, part, body.get("confirm", ""), body.get("why", ""))
+        R.part_roster_rebind()                            # the retired part leaves the roster now
+        wrote = out.pop("wrote")
+    return {**out, **remember_ordering_file(wrote, f"part-retire: {part}")}
 
 
 # ------------------------------------------------------------------ the server
@@ -338,7 +499,7 @@ class OrderingHandler(BaseHTTPRequestHandler):
         """Call `fn` and send what it returns; a refusal carries its own status."""
         try:
             self._json(200, fn())
-        except OrderingRefusal as e:
+        except (OrderingRefusal, IF.InitializationRefusal) as e:
             self._json(e.status, {"error": str(e), **e.extra})
         except Exception as e:                                   # noqa: BLE001
             self._json(500, {"error": f"{type(e).__name__}: {e}"})
@@ -356,6 +517,25 @@ class OrderingHandler(BaseHTTPRequestHandler):
                 return self._send(500, f"the page is missing: {e}".encode("utf-8"),
                                   "text/plain; charset=utf-8")
             return self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+        if url.path == "/initialization":
+            try:
+                page = IF.PAGE.read_text(encoding="utf-8").replace(TOKEN_MARK, self.server.token)
+            except OSError as e:
+                return self._send(500, f"the page is missing: {e}".encode("utf-8"),
+                                  "text/plain; charset=utf-8")
+            return self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
+        if url.path == "/issue-graph":
+            group = q.get("group") or RP.group_default_read()
+            try:
+                page = remember_ordering_issue_graph_read(group)
+            except OrderingRefusal as e:
+                return self._send(e.status, f"<!doctype html><meta charset=utf-8><p>{_esc(str(e))}"
+                                            f"</p><p><a href=\"/\">Memory tool</a></p>".encode("utf-8"),
+                                  "text/html; charset=utf-8")
+            except Exception as e:                               # noqa: BLE001
+                return self._send(500, f"the issue graph failed: {type(e).__name__}: {e}"
+                                  .encode("utf-8"), "text/plain; charset=utf-8")
+            return self._send(200, page.encode("utf-8"), "text/html; charset=utf-8")
         if not url.path.startswith("/api/"):
             return self._json(404, {"error": "no such page"})
         if not self._token_ok():
@@ -365,6 +545,11 @@ class OrderingHandler(BaseHTTPRequestHandler):
             return self._run(remember_ordering_groups_read)
         if url.path == "/api/parts":
             return self._run(lambda: remember_ordering_parts_read(q.get("group", "")))
+        if url.path == "/api/group-initialization":
+            return self._run(lambda: _initialization_group_read(q.get("group", "")))
+        if url.path == "/api/part-initialization":
+            return self._run(lambda: _initialization_part_read(q.get("group", ""),
+                                                               q.get("part", "")))
         if url.path == "/api/memories":
             return self._run(lambda: remember_ordering_view_read(q.get("group", ""),
                                                                  q.get("part", "")))
@@ -411,6 +596,13 @@ class OrderingHandler(BaseHTTPRequestHandler):
                 group, part, body.get("order"), body.get("sidelined"), body.get("base")))
         if path == "/api/clear":
             return self._run(lambda: remember_ordering_clear(group, part, body.get("base")))
+        if path == "/api/group-initialization":
+            return self._run(lambda: _initialization_group_save(group, body.get("new"),
+                                                                body.get("record")))
+        if path == "/api/part-initialization":
+            return self._run(lambda: _initialization_part_save(group, part, body))
+        if path == "/api/part-retire":
+            return self._run(lambda: _initialization_part_retire(group, part, body))
         if path == "/api/rate":
             return self._run(lambda: remember_ordering_rate(
                 group, part, body.get("key"), body.get("ratings"), body.get("steers")))
@@ -492,6 +684,7 @@ def main() -> int:
     url = f"http://127.0.0.1:{server.server_address[1]}/" + (f"#{at}" if at else "")
     print(f"  the ordering tool is at {url}", flush=True)       # the first line: /memory-edit reads it
     print(f"  the record it orders: {RP.GROUPS_DIR}")
+    print(f"  the initialization forms: http://127.0.0.1:{server.server_address[1]}/initialization")
     print("  Ctrl+C here stops it. A saved ordering stays saved." if not a.with_parent
           else "  It stops with the program that started it. A saved ordering stays saved.", flush=True)
     if not a.no_browser:

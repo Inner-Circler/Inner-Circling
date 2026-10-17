@@ -284,7 +284,8 @@ checkout now.
   `coordinator/group_manager.py`, `/group-add`; `/group-update <n>` replaces its roles in place,
   B112) instead of `--parts` — a
   deliberately different roster, not a reduced one, so the
-  reduced-live-roster question above does not fire for it. Mutually exclusive with `--parts`.
+  reduced-live-roster question above does not fire for it. With `--parts`, a reduced roster of
+  that group's own members, and the question does fire.
   Default: unset — the DEFAULT GROUP's roster, which is a rule, not a name (R468, B120 stage 4):
   the one group installed, or the one whose `group.toml` says `default = true`; when neither
   holds (none installed, several unmarked, more than one marked) a bare open prints one sentence

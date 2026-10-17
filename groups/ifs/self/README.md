@@ -71,15 +71,15 @@ redaction_map.toml       the redacted view's reverse map:
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,
-`proposal_manager.py` and `redaction_manager.py` each construct their own
+`proposal_manager.py`, `redaction_manager.py` and `practice_manager.py` each construct their own
 empty shape when their file is absent — a `next_id = 1` counter (four `next_*` counters for
 `redaction_manager.py`) plus an empty table — and each
 delegate here loads to that same document, allowing only a longer `[doc]` preamble ("SHIPPED
-EMPTY ..." prose appended to the builder's own text). Three exceptions, named so nobody "fixes"
+EMPTY ..." prose appended to the builder's own text). Two exceptions, named so nobody "fixes"
 them: `remember_manager.py` builds only `remember = []` when the file is absent — no register
 name, no counter — while its delegate carries both, which its reader neither needs nor minds;
-and `best_practices.toml` and `coalesce.toml` each carry a preamble their builders
-(`practice_manager.py`, `proposal_group_manager.py`) do not construct. The delegates are not
+and `coalesce.toml` carries a preamble its builder (`proposal_group_manager.py`) does not
+construct. The delegates are not
 byte-for-byte what the code would write — some carry a header comment — they are equivalent in
 what a fresh install *reads*. The delegate exists so the file is *there*, valid and loadable,
 rather than conjured on first write.

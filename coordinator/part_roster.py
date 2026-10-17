@@ -409,7 +409,8 @@ def part_context_problems_read(dir_name: str, doc: dict) -> list[str]:
 def part_context_read(dir_name: str, base: pathlib.Path | None = None
                  ) -> dict | None:
     """The part's [context] as declared RIGHT NOW — purpose, questions (each
-    with key/ask/data_type/data_max and render when declared), answers (a
+    with key/ask/data_type, and data_max, its gate's own fields and render
+    when declared), answers (a
     key->string dict over every declared key, "" where unanswered). None
     when the part declares no context, or its file cannot be read or has a
     problem part_context_problems_read() would report — so a caller never sees a
@@ -425,8 +426,14 @@ def part_context_read(dir_name: str, base: pathlib.Path | None = None
         return None
     qs = []
     for q in ctx.get("questions", []):
-        row = {"key": q["key"], "ask": q["ask"],
-               "data_type": q["data_type"], "data_max": q["data_max"]}
+        row = {"key": q["key"], "ask": q["ask"], "data_type": q["data_type"]}
+        # A ONE_OF question declares no data_max (_gate_faults refuses one that does), and every
+        # gate's own fields ride with the row: part_context_value_verify() and the dialog's
+        # advisory read them from it, so a row without them is a check that does not run.
+        for k in ("data_max", "gate", "values", "minimum", "maximum", "advisory_maximum",
+                  "advisory_note"):
+            if k in q:
+                row[k] = q[k]
         if isinstance(q.get("render"), str) and q["render"].strip():
             row["render"] = q["render"]
         if q.get("unique_in"):

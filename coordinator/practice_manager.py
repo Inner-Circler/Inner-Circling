@@ -149,9 +149,30 @@ _RPf.group_follow(_addressees_rebind)
 ID_RE = re.compile(r"^BP-(\d{4,})$")
 
 
+_PREAMBLE = (
+    "\nBEST PRACTICES -- how the CIRCLE behaves and how you move. Routing is by the `addressee` "
+    "field alone; coordinator/practice_manager.py selects the rows (practice_broadcast() for "
+    "BLOCK 1, practice_narrowcast() for the addressed part's BLOCK 3), and is the one reader and "
+    "writer of this file.\n\n**Entries: 0** -- a TALLY, never a cap.")
+
+
+def _empty() -> dict:
+    """The register's absent-file shape — one copy, read by _doc() and practice_empty_render().
+    It CARRIES THE TALLY (2026-10-16): practice_verify fails a file whose header does not state
+    `**Entries: N**`, and _sync_tally() keeps one true but cannot add one — so a register first
+    written from this shape (the comedy group's, by synthesis) failed the gate at its next commit."""
+    return {"register": "best_practices", "next_id": 1, "doc": {"preamble": _PREAMBLE},
+            "practice": []}
+
+
 def _doc() -> dict:
-    return SS.register_read(BP) if BP.is_file() else {
-        "register": "best_practices", "next_id": 1, "practice": []}
+    return SS.register_read(BP) if BP.is_file() else _empty()
+
+
+def practice_empty_render() -> str:
+    """The bytes of an empty register, for a new group's self/best_practices.toml
+    (group_manager's scaffold): exactly what _doc() reads when the file is absent."""
+    return SS.register_dumps(_empty(), "practice", ORDER)
 
 
 def practice_read() -> list[dict]:

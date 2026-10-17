@@ -68,7 +68,7 @@ Stdout, via the `log(status, message)` callback that every `ensure_*` / `system_
 ### `system_git_run(*args, check=False)`
 (`run()` before the B99 re-homing, 2026-09-03. Its six siblings in the next heading were swept then; this one was missed until 2026-09-09 — audit-register 2026-09-09 `#42`.)
     {
-        Invoke `git <args>` in ROOT, capturing combined stdout+stderr, with a 120-second timeout. Raises GitError if git itself is not runnable (OSError), if the 120s timeout expires (subprocess kills git first; the message warns a stale `.git/index.lock` may remain — until 2026-08-19 TimeoutExpired escaped raw through every "non-fatal by design" caller), or if `check=True` and the exit code is nonzero.
+        Invoke `git <args>` in ROOT, capturing combined stdout+stderr, with a timeout of `GIT_TIMEOUT_S` seconds — 600 since R603 (2026-10-07), 120 before: the close of 2026-10-07_1802 was reported as a crash after its commit had landed, because git's automatic tidy-up ran inside the commit for five minutes. Raises GitError if git itself is not runnable (OSError), if the timeout expires (subprocess kills git first; the message warns a stale `.git/index.lock` may remain — until 2026-08-19 TimeoutExpired escaped raw through every "non-fatal by design" caller), or if `check=True` and the exit code is nonzero.
     }
 
 ### `system_git_is_available()`, `system_git_is_repo()`, `system_git_toplevel_read()`,
@@ -113,7 +113,7 @@ This exists because git searches upward for `.git`, so a stray repository at a p
     {
         Resolve identity via system_git_identity_resolve(). For each of user.name/user.email whose source is "unset", log a warning that git will refuse to commit until it's configured.
     }
-    for each of core.autocrlf ("false", required), user.name, user.email:
+    for each of core.autocrlf ("false", required), gc.auto ("0", required — R603: git's automatic tidy-up never runs inside a close's commit; `circle_audit.py --git-tidy`, and the audit's own tidy-up step, run it instead — and `system_git_remote_config_ensure(log)` sets gc.auto 0 and receive.autogc false in every local remote, the backup disk, whose receiving end would otherwise run the same tidy-up inside the post-commit push), user.name, user.email:
     if (the wanted value is None) then { skip it. }
     else if (the current git config already equals the wanted value) then { skip it. }
     else if (it's a user.* key, already has *some* value, and the wanted value came from an explicit flag or environment variable) then {

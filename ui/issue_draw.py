@@ -48,10 +48,11 @@ LAYOUT
     middle and the thin single-circle nodes fall to the rim, which is the shape
     the review actually needs — depth is the thing you cannot see in a list.
 
-    The "all" view is TWO ROWS (the operator, 2026-08-17): communities of more than
-    one member shelf-pack into a top row; single-node communities — nothing
-    in THIS view relates them to anything else — shelf-pack into their own
-    row underneath. A node can still carry edges across the two rows (a
+    The "all" view is CLUSTERS OVER ROWS (the operator, 2026-08-17 and
+    2026-10-15): communities of more than one member pack into a top row
+    scaled to the full width; single-node communities — nothing in THIS view
+    relates them to anything else — sit underneath in rows of at most six,
+    each spread across that width. A node can still carry edges across the rows (a
     retired edge from a top-row live node to a bottom-row non-live one,
     typically); the split is purely about where community detection placed
     a node, never about hiding what connects to what. The "live" view and
@@ -472,10 +473,11 @@ def issue_draw_layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[di
     single-node community carries no relation to anything ELSE IN THE SAME
     VIEW — that's what "ungrouped" means here, not "no edges at all";
     plenty of these singletons have a live<->non-live edge drawn separately
-    below, per-edge, once positions exist. Multi-node communities
-    shelf-pack into a TOP row exactly as before; singletons shelf-pack into
-    their OWN row underneath, positioned after the top row's own height is
-    known. Edges between the two rows are untouched by this split — the
+    below, per-edge, once positions exist. Multi-node communities pack into
+    a TOP row whose spread is scaled up to the picture's full width;
+    singletons go in rows of at most ROW_MAX underneath, each spread across
+    that same width (the operator, 2026-10-15). Edges between the rows are
+    untouched by this split — the
     edge-drawing pass in issue_svg_build() reads every node's position out of the
     same flat `pos` dict this function returns either way, live or
     non-live, top row or bottom, and was never filtered by row or status to
@@ -525,6 +527,7 @@ def issue_draw_layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[di
     # resulting wide strip up to the frame the same way the old 1.7:1
     # target did for a squarer one.
     m, gap = 48, 30
+    ROW_MAX = 6        # ungrouped nodes per row, "all" view (the operator, 2026-10-15)
 
     def _pack_row(row_blocks, y0, presorted=False):
         row_blocks = row_blocks if presorted else sorted(row_blocks, key=lambda b: -b["h"])
@@ -544,118 +547,152 @@ def issue_draw_layout(g: dict, seed: int = 7, two_row: bool = False) -> tuple[di
         # community detection has already run. The operator, 2026-08-17.
         top = [b for b in blocks if len(b["mem"]) > 1]
         bottom = [b for b in blocks if len(b["mem"]) == 1]
-        bottom_y0 = _pack_row(top, m) + gap if top else m
+        by_id = {b["mem"][0]: b for b in bottom}
 
-        # ORDERING THE BOTTOM ROW, the operator 2026-08-17: "minimize edge length
-        # and crossings." `adj` above already includes retired edges —
-        # exactly what connects this row to the rest of the graph (a
-        # singleton with no retired edge has no other edge either, or it
-        # would not be a singleton). The top row is packed and fixed
-        # first; only the bottom row's LEFT-TO-RIGHT ORDER is chosen here.
-        if bottom:
-            top_pos = {}
+        # THE CLUSTERS SPAN THE WHOLE WIDTH, AND THE UNGROUPED NODES SIT IN
+        # ROWS OF AT MOST SIX — the operator, 2026-10-15: "The top clusters
+        # should present all the way across the column, increase their size
+        # to fill the column. Split the row of non-clustered nodes into
+        # multiple rows of nodes of comparable size, max six per row." One
+        # long bottom row used to set the picture's width, leaving the
+        # clusters in its left half. Now the width is the wider of the
+        # clusters' own row and the widest bottom row; the clusters' spread is
+        # scaled up to fill it (their node boxes keep their size, so the
+        # labels stay legible), and every bottom row is spread across it.
+        n_rows = math.ceil(len(bottom) / ROW_MAX) if bottom else 0
+
+        def _top_place(scale):
+            """Pack the top row with each cluster's spread multiplied by
+            `scale`; return (the row's width, its height, every member's
+            centre)."""
+            for b in top:
+                sx = max(p[0] for p in b["base"].values())
+                sy = max(p[1] for p in b["base"].values())
+                b["local"] = {i: [p[0] * scale, p[1] * scale] for i, p in b["base"].items()}
+                b["w"] = sx * scale + b["ew"]
+                b["h"] = sy * scale + b["eh"]
+            if not top:
+                return 0.0, 0.0, {}
+            height = _pack_row(top, m) - m
+            width = max(b["x"] + b["w"] for b in top) - m
+            at = {}
             for b in top:
                 ox = b["x"] + (b["w"] - (max(p[0] for p in b["local"].values()) or 1)) / 2
                 oy = b["y"] + (b["h"] - (max(p[1] for p in b["local"].values()) or 1)) / 2
                 for i in b["mem"]:
-                    top_pos[i] = (b["local"][i][0] + ox, b["local"][i][1] + oy)
-            by_id = {b["mem"][0]: b for b in bottom}
-            bottom_ids = set(by_id)
+                    at[i] = (b["local"][i][0] + ox, b["local"][i][1] + oy)
+            return width, height, at
 
-            # EVERY EDGE THE PICTURE ACTUALLY DRAWS, split into what a
-            # bottom-row reorder can move (touches a bottom node) and what
-            # it cannot (both ends inside the already-packed top row). The
-            # first version of this scored the moving set against itself
-            # only — a real 1-crossing minimum, but over that narrow
-            # subset alone. The operator, 2026-08-17, reading the rendered SVG:
-            # the winning order sent n0015's edges clear across the
-            # canvas, through the top-row clusters and the edges inside
-            # them, none of which the old score ever looked at. Fixed
-            # segments are computed once, since neither endpoint moves.
-            moving_edges, fixed_segs = [], []
-            for nid, n in g.items():
-                for e in n["edges"]:
-                    b = e["to"]
-                    if b not in g:
-                        continue
-                    if nid in bottom_ids or b in bottom_ids:
-                        moving_edges.append((nid, b))
-                    else:
-                        fixed_segs.append((top_pos[nid], top_pos[b]))
+        def _rows_assign(top_pos, width):
+            """Order the ungrouped nodes by where their neighbours sit
+            (barycenter — Sugiyama et al.'s two-layer heuristic) and deal
+            them round-robin into the rows, so every row reads left to right
+            in the same order and row lengths differ by at most one."""
+            bary = {}
+            for nid in by_id:
+                xs = [top_pos[j][0] for j in adj[nid] if j in top_pos]
+                bary[nid] = sum(xs) / len(xs) if xs else m + width / 2
+            order = sorted(by_id, key=lambda i: (bary[i], i))
+            return [[by_id[i] for i in order[r::n_rows]] for r in range(n_rows)]
 
-            def _orient(px, py, qx, qy, rx, ry):
-                v = (qx - px) * (ry - py) - (qy - py) * (rx - px)
-                return 0 if -1e-9 < v < 1e-9 else (1 if v > 0 else -1)
+        def _row_natural(row):
+            return sum(b["w"] for b in row) + gap * (len(row) - 1)
 
-            def _cross(s1, s2):
-                """True line-segment intersection, not an x-interval proxy —
-                the top row's own members don't share one y, so two edges can
-                have overlapping x-spans and never actually cross, or the
-                reverse. Two edges meeting at a shared node are not a
-                crossing."""
-                p1, p2 = s1
-                p3, p4 = s2
-                if p1 in (p3, p4) or p2 in (p3, p4):
-                    return False
-                d1 = _orient(*p3, *p4, *p1)
-                d2 = _orient(*p3, *p4, *p2)
-                d3 = _orient(*p1, *p2, *p3)
-                d4 = _orient(*p1, *p2, *p4)
-                return bool(d1 and d2 and d3 and d4 and d1 != d2 and d3 != d4)
+        def _row_place(row, y, width):
+            """Spread one row across `width`: the slack goes into the gaps,
+            and a row of one sits in the middle."""
+            if len(row) == 1:
+                row[0]["x"], row[0]["y"] = m + (width - row[0]["w"]) / 2, y
+                return
+            step = gap + max(0.0, width - _row_natural(row)) / (len(row) - 1)
+            x = m
+            for b in row:
+                b["x"], b["y"] = x, y
+                x += b["w"] + step
 
-            def _score(order_ids):
-                trial = [by_id[i] for i in order_ids]
-                _pack_row(trial, bottom_y0, presorted=True)
-                xy = dict(top_pos)
+        for b in top:
+            b["base"] = {i: list(p) for i, p in b["local"].items()}
+            b["ew"] = b["w"] - max(p[0] for p in b["local"].values())
+            b["eh"] = b["h"] - max(p[1] for p in b["local"].values())
+        top_w, top_h, top_pos = _top_place(1.0)
+        rows = _rows_assign(top_pos, top_w) if bottom else []
+        width = max([top_w] + [_row_natural(r) for r in rows])
+        spread = sum(max(p[0] for p in b["base"].values()) for b in top)
+        if top and width > top_w and spread > 0:
+            scale = 1 + (width - top_w) / spread
+            top_w, top_h, top_pos = _top_place(scale)
+            rows = _rows_assign(top_pos, top_w)
+            width = max([top_w] + [_row_natural(r) for r in rows])
+
+        # ORDERING WITHIN EACH ROW, the operator 2026-08-17: "minimize edge
+        # length and crossings." Each row of at most six is searched EXACTLY
+        # (6! = 720 orderings) with every other node held where it stands —
+        # crossings ranked first, length only breaking a tie — scored against
+        # EVERY edge the picture draws, the top row's included: 2026-08-17's
+        # first version scored the moving edges only against each other, and
+        # its winner sent n0015's edges clear through the clusters.
+        y = m + top_h + gap if top else m
+        row_y = []
+        for row in rows:
+            row_y.append(y)
+            _row_place(row, y, width)
+            y += max(b["h"] for b in row) + gap
+
+        def _orient(px, py, qx, qy, rx, ry):
+            v = (qx - px) * (ry - py) - (qy - py) * (rx - px)
+            return 0 if -1e-9 < v < 1e-9 else (1 if v > 0 else -1)
+
+        def _cross(s1, s2):
+            """True line-segment intersection, not an x-interval proxy. Two
+            edges meeting at a shared node are not a crossing."""
+            p1, p2 = s1
+            p3, p4 = s2
+            if p1 in (p3, p4) or p2 in (p3, p4):
+                return False
+            d1 = _orient(*p3, *p4, *p1)
+            d2 = _orient(*p3, *p4, *p2)
+            d3 = _orient(*p1, *p2, *p3)
+            d4 = _orient(*p1, *p2, *p4)
+            return bool(d1 and d2 and d3 and d4 and d1 != d2 and d3 != d4)
+
+        edges = [(nid, e["to"]) for nid, n in g.items() for e in n["edges"]
+                 if e["to"] in g]
+
+        def _centres():
+            xy = dict(top_pos)
+            for nid, b in by_id.items():
+                xy[nid] = (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
+            return xy
+
+        for r, row in enumerate(rows):
+            here = {b["mem"][0] for b in row}
+            xy0 = _centres()
+            moving = [(a, c) for a, c in edges if a in here or c in here]
+            fixed = [(xy0[a], xy0[c]) for a, c in edges
+                     if a not in here and c not in here]
+
+            def _score(trial):
+                _row_place(trial, row_y[r], width)
+                xy = dict(xy0)
                 for b in trial:
                     xy[b["mem"][0]] = (b["x"] + b["w"] / 2, b["y"] + b["h"] / 2)
-                segs = [(xy[a], xy[c]) for a, c in moving_edges]
-                total_len = sum(math.hypot(p[0][0] - p[1][0], p[0][1] - p[1][1])
-                                for p in segs)
-                crossings = 0
-                for i in range(len(segs)):
-                    for j in range(i + 1, len(segs)):
-                        if _cross(segs[i], segs[j]):
-                            crossings += 1
-                    for fs in fixed_segs:
-                        if _cross(segs[i], fs):
-                            crossings += 1
-                return crossings, total_len
+                segs = [(xy[a], xy[c]) for a, c in moving]
+                crossings = sum(1 for i in range(len(segs))
+                                for j in range(i + 1, len(segs))
+                                if _cross(segs[i], segs[j]))
+                crossings += sum(1 for s in segs for f in fixed if _cross(s, f))
+                return crossings, sum(math.hypot(p[0] - q[0], p[1] - q[1])
+                                      for p, q in segs)
 
-            ids = sorted(by_id)
-            if len(ids) <= 8:
-                # EXACT. 8! = 40320 orderings, each a cheap re-pack (box
-                # width varies by label length, so the x-SLOTS themselves
-                # move depending on who's in them — a permutation of node
-                # IDENTITIES has to be re-packed per candidate, not just
-                # reassigned to a fixed set of slots). (crossings, length)
-                # ranks crossings first — the sharper visual defect — and
-                # length only breaks a tie. Tried every one and kept the
-                # best; nothing here is a heuristic.
-                best_order, best_score = ids, _score(ids)
-                for perm in itertools.permutations(ids):
-                    s = _score(perm)
-                    if s < best_score:
-                        best_score, best_order = s, perm
-                _score(best_order)   # leaves _pack_row at the winner
-            else:
-                # FALLBACK past 8: exact search is 9! = 362880+ candidates,
-                # too slow for a by-hand tool. Barycenter (Sugiyama et
-                # al.'s standard two-layer crossing heuristic) instead —
-                # each node's target x is the mean x of its neighbors,
-                # re-sorted and re-packed for a few rounds to let
-                # bottom-bottom edges (not just the cross-row ones) settle.
-                _pack_row(bottom, bottom_y0)
-                cx = {i: b["x"] + b["w"] / 2 for i, b in by_id.items()}
-                for _ in range(4):
-                    bary = {}
-                    for nid in by_id:
-                        xs = [top_pos[j][0] if j in top_pos else cx[j]
-                             for j in adj[nid] if j in top_pos or j in cx]
-                        bary[nid] = sum(xs) / len(xs) if xs else cx[nid]
-                    order = sorted(by_id, key=lambda i: (bary[i], i))
-                    _pack_row([by_id[i] for i in order], bottom_y0, presorted=True)
-                    cx = {i: b["x"] + b["w"] / 2 for i, b in by_id.items()}
+            best, best_score = list(row), _score(row)
+            for perm in itertools.permutations(row):
+                s = _score(list(perm))
+                if s < best_score:
+                    best, best_score = list(perm), s
+            rows[r] = best
+            _row_place(best, row_y[r], width)
+        for b in top:
+            del b["base"], b["ew"], b["eh"]
     else:
         _pack_row(blocks, m)
 

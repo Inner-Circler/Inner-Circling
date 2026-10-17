@@ -226,6 +226,8 @@ dialog .acts { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wr
       <button class="btn icon" id="reload" title="Reload: read this part's memories from disk again" aria-label="Reload">
         <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true"><path d="M13.2 8a5.2 5.2 0 1 1-1.6-3.75M13.4 2.2v3.1h-3.1" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
       </button>
+      <a class="btn" id="forms" href="/initialization" title="A group's descriptor, and a part's record, as forms">Initialization</a>
+      <a class="btn" id="graph" href="/issue-graph" target="_blank" rel="noopener" title="Open this group's issue graph in a new tab">Issue graph</a>
       <div class="right">
         <div class="status" id="status" role="status"><span class="dot"></span><span id="statusText">Loading…</span></div>
         <button class="btn primary" id="save" title="Save the list as shown: what is listed is carried, in this order; everything else on file is sidelined (Ctrl+S)">Save</button>
@@ -643,6 +645,7 @@ function rateEditor(it, r) {
         const res = await api("/api/rate", { group: S.group, part: S.part, key: it.key, ratings, steers: steer.value });
         it.ratings = res.ratings; S.rating = null; render();
         setStatus("saved", "Your rating is kept beside the part's — the part's own is unchanged.");
+        if (res.filed === false) notice("warn", `Rated, but not filed in git${res.note ? ": " + res.note : ""}. The next circle's close files it.`);
       } catch (err) { setStatus("error", err.message); }
     } }, "Save rating"));
   return box;
@@ -1023,6 +1026,7 @@ async function save() {
     S.selected.clear(); S.open.clear();
     S.busy = false;
     if (view.dropped && view.dropped.length) notice("warn", `${plural(view.dropped.length, "memory")} named by this page ${view.dropped.length === 1 ? "is" : "are"} no longer in the register and ${view.dropped.length === 1 ? "was" : "were"} left out.`);
+    if (view.filed === false) notice("warn", `Saved, but not filed in git${view.note ? ": " + view.note : ""}. The next circle's close files it.`);
     render();
     estimate();
     loadParts().catch(() => {});
@@ -1059,6 +1063,10 @@ $("#part").addEventListener("change", async e => {
   if (S.busy || !(await mayLeave())) { e.target.value = S.part; return; }
   S.part = e.target.value;
   await loadMemories();
+});
+/* The issue graph is served by this same program; the link follows the group shown. */
+$("#graph").addEventListener("click", e => {
+  e.currentTarget.href = "/issue-graph?group=" + encodeURIComponent(S.group || "");
 });
 $("#reload").addEventListener("click", async () => {
   if (S.busy || !(await mayLeave())) return;

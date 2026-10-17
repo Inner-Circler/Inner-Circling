@@ -558,20 +558,17 @@ def proposal_vet(where: str, live: bool,
     part said.
 
     WRITTEN IMMEDIATELY: each approve/deny calls its own register's
-    SS.register_write() as it happens, one row at a time. Neither
-    self/best_practices.toml nor self/proposals.toml is ever in
-    circle_commit()'s path list — nothing here commits either, at any
-    checkpoint — so a ruling made here is a real, valid file on disk the
-    moment it is made, sitting uncommitted until a human commits it,
-    same as any direct /practice-add. A COMMAND-kind propose IS NOT AN
-    EXCEPTION TO THIS, though its approve_fn may ALSO write issues/*.toml
-    (via issue_commands.issue_command_apply(), for an issue-relationship-add shape) or run some
-    other command's own effect — issues/ is not in circle_commit()'s path
-    list either, the same as every other register here, and neither is a
-    direct-typed `/issue-relationship-add`'s own edge write: a graph ruling
-    has always sat uncommitted after /close, by the same design
-    CLAUDE.md's own close-report description names (transcript,
-    short_terms, close report — never issues/). See _propose_approve().
+    SS.register_write() as it happens, one row at a time. Nothing here
+    commits anything, at either checkpoint — a ruling made here is a real,
+    valid file on disk the moment it is made. What files it is the close's
+    own commit (transcript_store.circle_commit_paths): self/proposals.toml
+    since 2026-08-26, and since 2026-10-09 (D144) self/best_practices.toml
+    and the issues/ directory too, so a COMMAND-kind propose whose
+    approve_fn writes issues/*.toml (issue_commands.issue_command_apply(),
+    for an issue-relationship-add shape) and a direct-typed
+    `/issue-relationship-add`'s own edge write are both filed by the close
+    that made or carried them. A ruling made at checkpoint 2 (the next
+    circle's open) is filed by THAT circle's close. See _propose_approve().
 
     CHECKPOINT 2 HAS A SECOND EFFECT beyond ruling on a proposal: it
     runs BEFORE circle_briefing_build() reads issues/ for the new circle's

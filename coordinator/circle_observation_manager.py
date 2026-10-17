@@ -150,6 +150,12 @@ def _doc() -> dict:
     return _JC.doc()
 
 
+def circle_observation_empty_render() -> str:
+    """The bytes of an empty register, for a new group's circles/circle_observation_log.toml
+    (group_manager's scaffold): exactly what _doc() reads when the file is absent."""
+    return _JC.empty_render(ORDER)
+
+
 def circle_observation_read() -> list[dict]:
     return _JC.read()
 
@@ -204,7 +210,7 @@ def circle_observation_manual_render(doc: dict, text: str,
 
 
 def circle_observation_continue_render(doc: dict, target_id: str,
-                    text: str) -> tuple[dict, dict]:
+                    text: str, circle: str | None = None) -> tuple[dict, dict]:
     """PURE — chains a NEW record onto `target_id` (`/observation-continue`).
     The same CONTINUES shape SYNTHESIS's own `continues=True` uses, but
     Self-authored and naming exactly what it continues rather than
@@ -220,6 +226,8 @@ def circle_observation_continue_render(doc: dict, target_id: str,
     if not any(r.get("id") == target_id for r in doc.get(TABLE, [])):
         raise ValueError(f"{target_id} not found — nothing to continue")
     fields = {"text": text, "source": "self"}
+    if circle:
+        fields["circle"] = circle
     return _JC.new_render(doc, fields, chain=target_id)
 
 
@@ -323,9 +331,10 @@ def circle_observation_manual_add(text: str, circle: str | None = None) -> dict:
     return rec
 
 
-def circle_observation_continue_add(target_id: str, text: str) -> dict:
+def circle_observation_continue_add(target_id: str, text: str,
+                                    circle: str | None = None) -> dict:
     """/observation-continue <id> <text>."""
-    doc, rec = circle_observation_continue_render(_doc(), target_id, text)
+    doc, rec = circle_observation_continue_render(_doc(), target_id, text, circle)
     PATH.parent.mkdir(parents=True, exist_ok=True)
     SS.register_write(PATH, doc, TABLE, ORDER)
     return rec

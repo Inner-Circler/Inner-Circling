@@ -533,9 +533,8 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
         if rc0:
             return rc0
     parts = R.DIR_NAMES
-    with PC.PHASES.span("inter.capsule"):
-        capsule = PD.circle_capsule_build(ot, transcript, say)     # R451, D86 a: ONE call,
-                                                                  # shared by every part below
+    # No room capsule before the pool any more (R607, 2026-10-09):
+    # each part dreams from its own material alone.
     say(f"\ndreaming — {len(parts)} parts, in parallel ({LC.MODEL}):")
     payloads: list[dict] = []
     errors: list[str] = []
@@ -544,7 +543,7 @@ def _process_circle(ot: str, live: bool, confirmed: list[dict] | None,
             say(f"  {p}: started")
         with PC.PHASES.span("inter.dreaming"), \
                 concurrent.futures.ThreadPoolExecutor(len(parts)) as ex:
-            futs = {ex.submit(PD.part_dream, p, ot, transcript, capsule): p for p in parts}
+            futs = {ex.submit(PD.part_dream, p, ot, transcript): p for p in parts}
             for f in concurrent.futures.as_completed(futs):
                 pay = f.result()
                 payloads.append(pay)

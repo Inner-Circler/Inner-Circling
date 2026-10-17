@@ -44,7 +44,9 @@ system = "list"
 part   = "str"
 
 [shape.processing]
-kinds  = ["dreaming", "synthesis", "mid_term", "coalesce", "capsule"]   # capsule: R451/D86 a, 2026-09-04
+kinds  = ["dreaming", "synthesis", "mid_term", "coalesce", "capsule"]   # capsule: retired 2026-10-09
+# (R607); nothing writes one any more, and the kind stays so the
+# captures on file that carry it (fifteen on 2026-10-09) still verify.
 system = "str"
 part   = "str|null"
 messages_exactly = 1

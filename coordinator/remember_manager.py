@@ -206,8 +206,10 @@ COURAGE_DETENTS = ("-1", "-0.5", "0", "0.5", "1")
 COURAGE_WORDS = {"-1": "cowardice", "-0.5": "timidity", "0": "courage",
                  "0.5": "rashness", "1": "recklessness"}
 RATING_FIELDS = VALENCES + ("courage",)
-# The version of the asking that produced a rating — part_dreaming.DREAMING_PROMPT_V2.
-ASKED_VERSION = "dreaming-v2"
+# The version of the asking that produced a rating — part_dreaming.DREAMING_PROMPT_V3. The
+# v2 -> v3 boundary (2026-10-09) is the room capsule leaving the input; the rating questions
+# did not change, the material rated is written from less.
+ASKED_VERSION = "dreaming-v3"
 # LOUD: the one loudness threshold the model uses, placed by the operator's own anchors — at 0.5
 # "the response is still chosen", at 0.75 "it is difficult to function except in relation to
 # it" (R521). Claude's arithmetic until ruled; a setting so it can move.
@@ -405,6 +407,12 @@ def _real_path(part: str) -> pathlib.Path:
 
 def _load(p: pathlib.Path) -> dict:
     return SS.register_read(p) if p.is_file() else {TABLE: []}
+
+
+def remember_empty_render() -> str:
+    """The bytes of an empty register, for a new group's self/remember.toml (group_manager's
+    scaffold): exactly what _load() reads when the file is absent."""
+    return SS.register_dumps({TABLE: []}, TABLE, ORDER)
 
 
 # ------------------------------------------------------------------ register

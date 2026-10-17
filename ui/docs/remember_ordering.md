@@ -11,6 +11,7 @@ puts an entity's memories in order by hand and sidelines the ones no prompt bloc
     python ui/remember_ordering.py --port 8770 --no-browser
     python ui/remember_ordering.py --groups <a copy of groups/>
     /memory-edit                                   from the command pane, or circle.py --dev-cmd
+    /issue-graph                                   the same, opened on the issue graph page
 
 `--port <n>`: the port the page is served on. Default: 8765; when that port is taken, the next
 free one after it, and after twenty tries one the system picks. The address is printed either way.
@@ -39,6 +40,32 @@ from under — with `--with-parent` on a pipe it holds, and `--at <group>/self` 
 the program is on, and reports the address; the tool stops when that program does. A second
 `/memory-edit` while it runs reopens the page. The tool's own output goes to the verb, never to
 the terminal or the Ticker's window.
+
+**The issue graph: `/issue-graph`** (2026-10-03). The same tool serves a second page,
+`/issue-graph?group=<name>`: the picture `ui/issue_draw.py` writes into `work/graph/`
+(`ui/docs/issue_draw.md`), redrawn first — the same `--if-stale` run a live close makes — when
+the group's issues moved since it was drawn, with a link back to the memory page set into its
+header. The memory page's **Issue graph** button opens it for the group shown. A browser will
+not follow a link from a served page to a file on disk, which is why the picture is served here
+rather than opened from `work/graph/`. The verb reaches the same doors as `/memory-edit` and the
+same process: whichever comes first starts the tool (`/issue-graph` with `--no-browser`, since
+it opens the graph page itself), and the other reuses it. A tool started with `--groups` (a
+copy) refuses the graph page: the drawing runs on this tree's own groups, and would draw the
+copy's issues over the real picture.
+
+**The initialization forms: `/initialization`** (2026-10-15). A third page, its own module and
+page — `ui/initialization_form.py` and `ui/initialization_form.html` — with two forms: a GROUP's
+descriptor (`#group/<group>`: every key of `group.toml`, or a new group; and, for an existing
+group, the files it was born holding stubs for — the issue model, Self, each role's account of
+itself, section by section under fixed headings — and its best practices, B151) and a PART's record
+(`#part/<group>/<part>`: its Tag, earlier Tags and identity tail shown, one field per question its
+`[context]` declares, or a new part; or the part RETIRED — kept, never seated again — by
+`/part-retire`'s own checks and act, its folder name typed back). Every field is labelled and checked as it is left; Tab
+cycles the fields and the two buttons, Enter keeps an entry and moves on; Cancel puts the form
+back, Save writes it — through `group_manager`, `part_roster.part_context_write()`,
+`group_manager.group_add()` and `part_add.part_add()`, never a writer of its own — and files it
+in git. The memory page's **Initialization** button opens it; each form links back. No verb
+starts it yet: `/memory-edit` then the button, or the address the tool prints.
 
 ## DESCRIPTION
 
@@ -108,10 +135,14 @@ switch is hiding and what a save would do.
 says so, and the next save writes the current shape.
 
 **What a save writes.** One file, `remember_ordering.toml`, beside the `remember.toml` it orders
-(`coordinator/remember_ordering_manager.py`). `remember.toml` is never written. The tool runs no
-git: the next live close files every ordering with the circle. A save is safe at any time, an
-open circle included — that circle's blocks were assembled when it opened, so the ordering applies
-from the next one; the page says so when a circle may be open.
+(`coordinator/remember_ordering_manager.py`); a rating writes `self_rating.toml` beside it.
+`remember.toml` is never written. **Every save files itself in git** (the operator, 2026-10-08): one
+commit of the one file written, through the same helper a close uses. Where there is no git, no
+repository or no identity, the save still lands and the page says it was not filed; the next live
+close files it then. A save is safe at any time, an open circle included — that circle's blocks
+were assembled when it opened, so the ordering applies from the next one; the page says so when
+a circle may be open. A save made while a close is committing may find git busy; the save is
+written, the page says so, and that close files it.
 
 **A save made somewhere else is not overwritten.** The page sends the `saved` stamp it loaded. If
 the file on disk carries another — a second window saved since — the save is refused and the page
@@ -224,6 +255,12 @@ Prints three lines to the terminal at start — the address, the record, how to 
     POST /api/save          remember_ordering_save(group, part, order, sidelined, base)
     POST /api/clear         remember_ordering_clear(group, part, base)
     POST /api/rate          remember_ordering_rate(group, part, key, ratings, steers)   (B149)
+    GET  /initialization    the forms page, with this run's token in it
+    GET  /api/group-initialization    initialization_form.group_initialization_read(group)
+    POST /api/group-initialization    initialization_form.group_initialization_save(group, record, new)
+    GET  /api/part-initialization     initialization_form.part_initialization_read(group, part)
+    POST /api/part-initialization     initialization_form.part_initialization_save(group, part, body)
+    POST /api/part-retire             initialization_form.part_initialization_retire(group, part, confirm, why)
 
 The server takes an ordering as two lists of keys — the carried, in order, and the sidelined — and
 asks nothing about what the page showed. "Save is what you see" is the page's rule, defined once

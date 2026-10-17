@@ -112,7 +112,7 @@ Related pages:
 
     coordinator/docs/circle.md          the circle itself, in full
     coordinator/docs/circle_state.md    is a circle open right now?
-    coordinator/docs/record_verify.md the check that runs before a circle opens
+    memory/docs/record_verify.md        the check that runs before a circle opens
     coordinator/docs/circle_close_verify.md    what happens at close, and how it is verified
     coordinator/docs/part_mid_term_manager.md        how a part's sense of itself is distilled
 
@@ -128,9 +128,9 @@ A bare run opens a circle. Every option below except `--selftest`, `--no-color` 
                     which parts to seat. A reduced roster is for testing —
                     the parts left out are absent and stay unaware of the
                     circle. Default: every member of the default group.
-    --group <name>  open on a named group instead of --parts — a different
-                    roster, not a reduced one. Mutually exclusive with
-                    --parts. Default: the default group.
+    --group <name>  open on a named group — a different roster, not a
+                    reduced one. With --parts, a reduced roster of that
+                    group's own members. Default: the default group.
     --recall-arm off|delivered|withheld
                     whether a part may search its own past record, a local
                     index read that costs no model call. `off` answers a

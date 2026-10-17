@@ -100,8 +100,17 @@ class JournalClass:
         path = self.path_fn()
         if path.is_file():
             return SS.register_read(path)
+        return self.empty()
+
+    def empty(self) -> dict:
+        """The empty shape every register in this project opens with — what doc() reads when
+        the file is absent, and what a new group's scaffold writes (empty_render())."""
         return {"register": self.register, "next_id": 1,
                 "doc": {"preamble": self.preamble}, self.table: []}
+
+    def empty_render(self, order: tuple) -> str:
+        """The bytes of empty(), rendered as the register's own file in its owner's ORDER."""
+        return SS.register_dumps(self.empty(), self.table, order)
 
     def read(self) -> list[dict]:
         """Every row on file, unordered — the one reader."""

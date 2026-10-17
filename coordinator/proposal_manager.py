@@ -141,9 +141,19 @@ def _now() -> str:
         timespec="seconds")
 
 
+def _empty() -> dict:
+    """The register's absent-file shape — one copy, read by _doc() and proposal_empty_render()."""
+    return {"register": "proposals", "next_id": 1, "proposal": []}
+
+
 def _doc() -> dict:
-    return SS.register_read(PROPOSALS) if PROPOSALS.is_file() else {
-        "register": "proposals", "next_id": 1, "proposal": []}
+    return SS.register_read(PROPOSALS) if PROPOSALS.is_file() else _empty()
+
+
+def proposal_empty_render() -> str:
+    """The bytes of an empty register, for a new group's self/proposals.toml (group_manager's
+    scaffold): exactly what _doc() reads when the file is absent."""
+    return SS.register_dumps(_empty(), "proposal", ORDER)
 
 
 # The shared PROPOSE-class base (docs/HELP_DESIGN.md §6, built

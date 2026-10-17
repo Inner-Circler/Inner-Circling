@@ -202,9 +202,14 @@ def _cites(row: dict, ot: str) -> bool:
 _DREAM_SELF_REL = (
     "circles/circle_history.toml", "circles/circle_observation_log.toml",
     "circles/circle_journal.toml",
-    "self/topics.toml", "self/best_practices.toml", "self/self.md")
+    "self/topics.toml", "self/best_practices.toml", "self/self.md",
+    # 2026-09-28 (audit-register 2026-09-27 #1): command suggestions run after the gate and
+    # the file joins the dream commit when a row was staged. It is in the circle commit too.
+    "self/proposals.toml")
 DREAM_SELF_FILES = tuple(_RP.record_rel(f) for f in _DREAM_SELF_REL)
-DREAM_PART_FILES = ("remember.toml", "mid_term.md")
+# rerate.toml: B125 (R599) — dreaming's blind re-rate of the prior memory, its own register
+# beside remember.toml, staged by inter_circle when the part rated or answered.
+DREAM_PART_FILES = ("remember.toml", "mid_term.md", "rerate.toml")
 
 
 @_RP.group_follow
@@ -241,7 +246,11 @@ def circle_delta_paths_classify(paths: list[str], ot: str) -> list[str]:
                        _RP.record_rel("self/remember.toml"),    # in the close commit since 2026-09-14
                        _RP.record_rel(f"self/{ROM.FILE}"))      # Self's orderings, 2026-10-02
               or (p.startswith(_RP.record_rel("parts") + "/")
-                  and p.endswith(f"/{ROM.FILE}")))
+                  and p.endswith((f"/{ROM.FILE}", "/self_rating.toml")))
+              # 2026-10-09 (D144): the issue graph the close's own rulings wrote — staged as
+              # its directory, so any file under it — and the practice register.
+              or p.startswith(_RP.record_rel("issues") + "/")
+              or p == _RP.record_rel("self/best_practices.toml"))
         if not ok:
             out.append(p)
     return out

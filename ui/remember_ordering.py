@@ -387,7 +387,10 @@ def remember_ordering_issue_graph_read(group: str) -> str:
     flags = {"creationflags": subprocess.CREATE_NO_WINDOW} if hasattr(subprocess, "CREATE_NO_WINDOW") else {}
     # stdin=DEVNULL IS LOAD-BEARING: under --with-parent this process's standard input is a pipe
     # a thread is blocked reading, and on Windows a child that inherits that handle hangs at
-    # its start, holding the page open for ever (measured 2026-10-03).
+    # its start, holding the page open for ever (measured 2026-10-03). The same holds for every
+    # git child a save's filing step spawns — gitrepo.system_git_run() gives them the same null
+    # stdin since 2026-10-17 (R610), after the initialization form sat at
+    # "Saving…" for ten minutes on `git rev-parse`.
     run = subprocess.run([sys.executable, str(ISSUE_DRAW), f"{issues}/", "--if-stale"],
                          cwd=str(ROOT), stdin=subprocess.DEVNULL, capture_output=True, text=True,
                          encoding="utf-8",

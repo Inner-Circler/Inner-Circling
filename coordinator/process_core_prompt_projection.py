@@ -187,6 +187,26 @@ def circle_identity_slots_read(layer_text: str) -> dict[str, str]:
     return slots
 
 
+def circle_identity_slot_spans_read(layer_text: str) -> dict[str, tuple[int, int]]:
+    """Where each slot's body sits in `layer_text`: {name: (start, end)}, character offsets of the
+    bytes between that mark line and the next mark line or the end — the same reading as
+    circle_identity_slots_read(), for a writer that must replace one slot's body and leave every
+    other byte as it was: group_manager.group_layer_teaching_write() (2026-10-17)."""
+    spans: dict[str, tuple[int, int]] = {}
+    cur: "str | None" = None
+    start = pos = 0
+    for ln in layer_text.splitlines(keepends=True):
+        name = _mark_name(ln, SLOT_MARK)
+        if name is not None:
+            if cur is not None:
+                spans[cur] = (start, pos)
+            cur, start = name, pos + len(ln)
+        pos += len(ln)
+    if cur is not None:
+        spans[cur] = (start, pos)
+    return spans
+
+
 def circle_identity_marks_read(universal_text: str) -> list[str]:
     """The slot names the universal layer carries, in file order. Read by
     test_process_core_layers.py alone — the assembler fills slots without

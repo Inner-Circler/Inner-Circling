@@ -344,10 +344,19 @@ def part_retire_refusal_read(d: str) -> "tuple[str, str]":
     tag = dict(R.part_scan()[0]).get(d)
     if tag is None:
         return f"no seated part {d!r} in this group", ""
+    import record_paths as _RP
     if d in part_reserved_read():
-        import record_paths as _RP
         return (f"{tag} is a RESERVED role of this group (groups/{_RP.group_read()}/group.toml) "
                 f"— never retired"), ""
+    # THE CONSOLE'S HOME ROLE (2026-10-17, the editors review): the descriptor's `[identity]`
+    # names the part whose answer is the name Self is called by. Retiring it would leave the
+    # descriptor naming a role no longer on `roles` — the group form then refuses every save
+    # until a hand edit — and the console falling back to $USER_NAME. Name another first.
+    ident = _RP.group_descriptor_read(_RP.group_read()).get("identity") or {}
+    if d == str(ident.get("role", "") or "").strip():
+        return (f"{tag} names the console — groups/{_RP.group_read()}/group.toml [identity]. "
+                f"Choose another part's question under Console name in the group form first, "
+                f"then retire it"), ""
     try:
         import circle_state
         open_now = bool(circle_state.circle_open_read())

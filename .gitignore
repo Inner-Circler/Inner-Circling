@@ -203,7 +203,9 @@ ui/ticker/src-tauri/target/
 ui/ticker/src-tauri/gen/
 
 # tier A recall trial logs (remember_expand.py) — per-circle JSON, lab
-# trial data; the record is the transcript, this is instrumentation.
+# trial data; the record is the transcript, this is instrumentation. A dry
+# run's twin, work/sandbox/recall_trial/, is under work/sandbox/* above
+# (2026-10-17).
 work/recall_trial/
 
 # the Entries semantic index's cache (ticking_index.py, R400) — derived,

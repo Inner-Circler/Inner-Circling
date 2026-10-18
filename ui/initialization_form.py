@@ -316,13 +316,14 @@ def group_initialization_save(name: str, rec: dict, *, new: bool) -> dict:
     for k, v in on_file.items():            # a key this form does not know stays as it is
         if k not in GM.ORDER:
             doc[k] = v
+    taught: list = []           # (layer path, note) when proposed_commands moved (2026-10-17)
     try:
-        p = GM.group_descriptor_edit(name, doc)
+        p = GM.group_descriptor_edit(name, doc, report=taught)
     except ValueError as e:
         raise InitializationRefusal(409, f"group.toml could not be edited in place ({e}) — "
                                          f"nothing written") from e
     moved = GM.group_default_write(name) if make_default else []
-    wrote = ([p] if p else []) + [m for m in moved if m != p]
+    wrote = ([p] if p else []) + [lp for lp, _n in taught if lp] + [m for m in moved if m != p]
     told = GM.group_record_text_write(name, rec.get("texts") or {}) if texts else []
     added = ""
     if practice:
@@ -338,6 +339,7 @@ def group_initialization_save(name: str, rec: dict, *, new: bool) -> dict:
             "message": f"{name!r} is saved" + (" and is the default group now" if moved else "")
                        + (f" — {len(texts)} text(s) written" if texts else "")
                        + (f" — practice {added}" if added else "")
+                       + "".join(f" — {n}" for _lp, n in taught if n)
                        + " — it applies from the next circle on the group"}
 
 

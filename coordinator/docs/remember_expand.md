@@ -37,7 +37,9 @@ BLOCK 4 only, the uncached per-part tail. A pack is never cached and never survi
 
 **READ-ONLY, WITH ONE NAMED EXCEPTION.** Nothing here touches a register, a transcript, or a part file.
 The one write is the TRIAL LOG, `work/recall_trial/recall_<OT>.json`, one file per circle while the arm
-is on — coordinator-written like a close report, gitignored, never shipped. The dry report below writes
+is on — coordinator-written like a close report, gitignored, never shipped. A dry run's lands in
+`work/sandbox/recall_trial/` instead, beside the sandbox's own open and close reports (2026-10-17,
+R609), so suite runs leave nothing in the live trial data. The dry report below writes
 nothing at all.
 
 **NOTHING HERE MAY COST AN OPEN.** Every failure degrades rather than raising: a seed whose minting
@@ -152,6 +154,8 @@ WRITTEN:
                                          per part the matched-record rows, the pack's size, whether it
                                          was delivered, and the pack text. Written only by
                                          remember_expand_apply(), only with the arm on, LF newlines.
+    work/sandbox/recall_trial/recall_<OT>.json
+                                         the same file for a DRY RUN (`live=False`), 2026-10-17.
                                          Gitignored; never shipped.
 
 ## NETWORK ACCESS

@@ -686,6 +686,21 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
                                         f"({n} file(s)).")
                 except Exception as e:                       # noqa: BLE001
                     emit("command", f"     prompt capture NOT removed — {e}")
+            # NO TRACE INCLUDES WHAT THE OPEN WROTE BESIDE THE TRANSCRIPT (2026-10-17,
+            # R609): the recall trial log, written at the pre-fetch BEFORE the
+            # capture, and the open report, written by the verifier once the open completed.
+            # Both survived every discard until now — 398 of 422 trial logs on disk had no
+            # transcript anywhere. Each by its exact OT, from the path's one home; never a glob.
+            import remember_expand as _REX
+            import circle_open_verify as _COV
+            for leftover in (_REX.remember_trial_log_path(ot, args.live),
+                             _COV.circle_open_report_path(ot, args.live)):
+                try:
+                    if leftover.is_file():
+                        leftover.unlink()
+                        emit("command", f"     {leftover.name} removed.")
+                except OSError as e:
+                    emit("command", f"     {leftover.name} NOT removed — {e}")
 
     resumed = None
     if args.resume:
@@ -796,7 +811,7 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # retired (2026-09-09); prompt_build.py stays the one EXECUTOR of the four
     # assemblers, and this is the finalize step that runs after them, not an
     # assembly.
-    part_attention_finalize(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm)
+    part_attention_finalize(sysblocks, parts, topic, chosen, ot, arm=args.recall_arm, live=args.live)
     # PART-INITIATED RECALL (recall_index.py, R402) arms from the same
     # flag, and clears here because CircleEngine runs this main() inside a
     # long-lived UI process — module state must not survive one circle

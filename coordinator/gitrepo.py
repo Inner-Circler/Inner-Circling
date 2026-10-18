@@ -190,7 +190,16 @@ def system_git_run(*args: str, check: bool = False, read_only: bool = False) -> 
         # reader thread, which silently turns p.stdout/p.stderr into None
         # (Lib/subprocess.py: `stdout = stdout[0] if stdout else None`) —
         # AFTER git has already committed. Degrade instead of crashing.
-        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True,
+        #
+        # stdin=DEVNULL IS LOAD-BEARING (2026-10-17, R610). The ordering tool runs
+        # under --with-parent with its standard input a pipe a thread is blocked reading, and on
+        # Windows a git child that inherits that handle hangs at its start — for the whole of
+        # GIT_TIMEOUT_S, then on as an orphaned git.exe. ui/remember_ordering.py gave its
+        # issue_draw child a null stdin for exactly this on 2026-10-03; every save that files
+        # itself in git (2026-10-08) came through here and did not have it, so the initialization
+        # form sat at "Saving…" for ten minutes. No git call this program makes reads standard
+        # input: a commit takes -m or -F, never an editor.
+        p = subprocess.run(cmd, cwd=str(ROOT), capture_output=True, stdin=subprocess.DEVNULL,
                            text=True, encoding="utf-8", errors="replace",
                            timeout=GIT_TIMEOUT_S)
     except OSError as e:

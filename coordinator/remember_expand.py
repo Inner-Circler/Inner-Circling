@@ -13,7 +13,11 @@ takes an ARM and writes a trial log.
 READ-ONLY, WITH ONE NAMED EXCEPTION. Nothing here touches a register, a
 transcript, or a part file. The one write is the TRIAL LOG —
 work/recall_trial/recall_<OT>.json, one file per circle while the arm is on,
-coordinator-written like a close report, gitignored, never shipped.
+coordinator-written like a close report, gitignored, never shipped. A DRY
+RUN'S goes to work/sandbox/recall_trial/ instead, beside the sandbox's own
+open and close reports (R176's shape) — ruled 2026-10-17 (R609),
+when 398 of the 422 trial logs on disk belonged to suite runs and dry runs,
+none of them a circle the trial measures.
 
 NOTHING HERE MAY COST AN OPEN. Every failure degrades: a seed whose minting
 transcript is missing, unparseable, or without a close report contributes
@@ -47,6 +51,7 @@ construction rather than by a probe checking it.
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 import time
 
@@ -55,7 +60,7 @@ import remember_manager as RM
 import remember_ordering_manager as ROM
 import part_roster as R
 import transcript_store as TS
-from record_paths import ROOT, record_dir
+from record_paths import ROOT, SANDBOX, record_dir
 
 # The part-facing heading (the operator's default, accepted 2026-08-29 with
 # the module name). Part-facing prose: theirs to reword.
@@ -262,16 +267,26 @@ def remember_pack_build(part: str, topic: str, labels: list[str],
                                     exclude_ot)
 
 
+def remember_trial_log_path(ot: str, live: bool) -> pathlib.Path:
+    """THE ONE HOME of the trial log's path: work/recall_trial/recall_<OT>.json for a live circle,
+    work/sandbox/recall_trial/ for a dry run (2026-10-17). The writer below and circle_open's
+    no-trace discard — a run that dies before its first statement removes what its open wrote —
+    both read it from here, so the two cannot name different files."""
+    return (ROOT / "work" if live else SANDBOX) / "recall_trial" / f"recall_{ot}.json"
+
+
 # ------------------------------------------------------------------- apply
 def remember_expand_apply(parts: list[str], topic: str, chosen: "list[str] | None",
-          ot: str, arm: "str | None" = None) -> dict[str, str]:
+          ot: str, arm: "str | None" = None, live: bool = True) -> dict[str, str]:
     """The one call site (role_attention.part_attention_finalize(), after the topic is
     known and before the capture/pre-warm). Returns {part: pack_text} for
     every part whose pack should actually reach BLOCK 4 this circle — the
     caller writes it; this module never sees the prompt structure at all.
     `arm` comes from circle.py's --recall-arm; anything unrecognized is
-    OFF. NEVER RAISES — every failure degrades to an empty dict, same
-    guarantee as before the write moved out of here."""
+    OFF. `live` decides where the trial log lands — work/recall_trial/ for a
+    live circle, work/sandbox/recall_trial/ for a dry run (2026-10-17). NEVER
+    RAISES — every failure degrades to an empty dict, same guarantee as
+    before the write moved out of here."""
     delivered: dict[str, str] = {}
     try:
         arm = arm if arm in ARMS else "off"
@@ -292,10 +307,9 @@ def remember_expand_apply(parts: list[str], topic: str, chosen: "list[str] | Non
                 total += len(pack)
                 if is_delivered:
                     delivered[p] = pack
-        out = ROOT / "work" / "recall_trial"
-        out.mkdir(parents=True, exist_ok=True)
-        with open(out / f"recall_{ot}.json", "w", encoding="utf-8",
-                  newline="") as f:
+        out = remember_trial_log_path(ot, live)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        with open(out, "w", encoding="utf-8", newline="") as f:
             json.dump(record, f, ensure_ascii=False, indent=1)
         seam.emit("command", f"  recall: arm={arm} — packs for {packed}/"
                              f"{len(parts)} part(s), {total} chars")

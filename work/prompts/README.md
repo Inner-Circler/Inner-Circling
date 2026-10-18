@@ -40,7 +40,6 @@ embeds the part's own identity file verbatim, and a turn file carries the
 part's reply plus a summary of what the model
 reasoned. Treat this directory exactly as you treat `groups/<group>/parts/`.
 
-The reasoning summary is captured only while the `record_thinking`
-setting is on, which it is by default. The rest of the capture is not
-optional — it is the
+The reasoning summary is captured with every reply. The rest of the
+capture is not optional either — it is the
 record of exactly what each part was sent.

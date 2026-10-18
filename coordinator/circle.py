@@ -317,8 +317,12 @@ def circle_prompt_read() -> str:
 
 
 def _default_parts_read() -> list[str]:
+    """The BOUND group's roles — record_paths.group_read(), which _roster_refresh() points at the
+    group whose descriptor says `default = true` at every bare open (2026-10-17); until then this
+    read the import-time default, so a default moved in the group form reached a process that had
+    already started only at its restart."""
     import group_manager as _GA
-    members = _GA.group_resolve(_GA.DEFAULT_GROUP)
+    members = _GA.group_resolve(_RP.group_read())
     return list(members) if members else list(R.DIR_NAMES)
 
 
@@ -337,11 +341,24 @@ def _roster_refresh() -> None:
     that points registers at scratch files before running main() — ui/tests/circle_test.py —
     must keep them, or its writes land in the real record. So parts/ is scanned, and the group
     re-bound only when what the scan finds differs from the tables this process holds.
-    DEFAULT_PARTS, a read of group.toml with no side effect, is read every time."""
+    DEFAULT_PARTS, a read of group.toml with no side effect, is read every time.
+
+    AND THE DEFAULT GROUP, FOR A BARE OPEN (2026-10-17, the editors review): the group whose
+    descriptor says `default = true` is read from disk now and bound when it is not the one this
+    process holds — the group form and the Ticker's own group verb move it between circles, and a
+    process that started on another kept opening there. An open that names --group binds its own
+    below and is left alone, as is a probe whose bound group IS the default (the fixture pin).
+    The console name's home role follows the descriptor's `[identity]` the same way, every open,
+    rebind or not: identity.self_home_refresh()."""
     global DEFAULT_PARTS
+    if not any(a == "--group" or a.startswith("--group=") for a in sys.argv[1:]):
+        wanted = _RP.group_default_read()
+        if wanted and wanted != _RP.group_read():
+            _RP.group_set(wanted)
     roster, alt, tails, _probs = R.part_scan()
     if (roster, alt, tails) != (R.ROSTER, R.ALT_TAGS, R.IDENTITY_TAILS):
         _RP.group_set(_RP.group_read())
+    ID.self_home_refresh()
     DEFAULT_PARTS = _default_parts_read()
 
 
@@ -799,7 +816,7 @@ def main() -> int:
                             f"/group-list (or group_manager.group_rows_read()) shows what "
                             f"exists")
             return 2
-        if args.group != _RP.DEFAULT_GROUP:
+        if args.group != _RP.group_read():       # against the BOUND group, as the open below does
             _RP.group_set(args.group)
 
     if args.list_resumable:

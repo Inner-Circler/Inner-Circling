@@ -131,6 +131,15 @@ _RP.group_follow(_home_rebind)
 _home_rebind()
 
 
+def self_home_refresh() -> None:
+    """Read the bound group's `[identity]` again — circle._roster_refresh() calls this at every
+    open (2026-10-17, the editors review). group_set() runs the same rebind, but an open whose
+    group and roster did not move runs no group_set(), and the group form can move `[identity]`'s
+    role or key between two circles of one process; the console name of the next circle must be
+    the descriptor's, not the one read at import."""
+    _home_rebind()
+
+
 def self_consumed_keys_read() -> tuple:
     """The context answers THE MECHANISM READS — 2026-08-28, and the answer to
     a question the audience rule left open.

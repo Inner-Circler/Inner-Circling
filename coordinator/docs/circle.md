@@ -54,9 +54,13 @@ source of truth for both (R221).
 
 ## MAIN
 ```
-    _roster_refresh(): re-bind the group and run every follower, then DEFAULT_PARTS again — the
-    roster as it is NOW, so a part /part-add wrote since the process started is in this circle
-    (R548; circling.py runs main() more than once)
+    _roster_refresh(): for an open that names no --group, read which group's descriptor says
+    `default = true` NOW and bind it when it is not the bound one (2026-10-17: the group form and
+    the Ticker's group verb move the default between circles of one process); re-bind the group
+    and run every follower when the parts/ scan moved; read the bound group's `[identity]` again
+    (identity.self_home_refresh(), the console name's home role); then DEFAULT_PARTS again — the
+    bound group's roles as they are NOW, so a part /part-add wrote since the process started is in
+    this circle (R548; circling.py runs main() more than once)
     parse the command line (see COMMAND-LINE ARGUMENTS)
 if (the hidden developer switch is given) then { command_surface.dev_mode = True }   (R286)
 if (--list-resumable) then { return circle_resumable_list() }

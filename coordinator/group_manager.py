@@ -332,6 +332,117 @@ def group_layer_read(name: str) -> "str | None":
     return str(layer).strip() or None if layer else None
 
 
+# THE LAYER FOLLOWS THE DESCRIPTOR — 2026-10-17, R611. The operator:
+# *"when commands are (dis)allowed, the associated teaching needs to be (removed)added in its group
+# context prompt."* A group's layer teaches its proposable verbs in three slots; the writer below keeps them
+# saying exactly what the descriptor's `proposed_commands` says, and test_proposable_surfaces holds
+# the two together at every commit.
+TEACHING_SLOTS = ("proposed_commands", "proposed_exemplars", "proposed_notes")
+
+
+def _teaching_verb_of(text: str) -> "str | None":
+    """The first proposable verb a paragraph or bullet names, or None when it names none."""
+    import command_surface as CSF
+    for m in re.finditer(r"/[a-z][a-z0-9-]*", text):
+        if m.group(0) in CSF.PROPOSE_SUBSET_COMMANDS:
+            return m.group(0)
+    return None
+
+
+def _teaching_bullets_split(body: str) -> tuple[str, list[str]]:
+    """A notes slot's body as (the lines before its first bullet, the bullets): a bullet opens with
+    `- ` at the margin and runs until the next one does."""
+    head: list[str] = []
+    bullets: list[str] = []
+    for ln in body.splitlines(keepends=True):
+        if ln.startswith("- "):
+            bullets.append(ln)
+        elif bullets:
+            bullets[-1] += ln
+        else:
+            head.append(ln)
+    # each bullet ends with exactly one newline: the slot's own closing blank line belongs to the
+    # render, not to the last bullet, or every pass would add one more
+    return "".join(head), [b.rstrip("\n") + "\n" for b in bullets]
+
+
+def group_layer_teaching_write(name: str, verbs: list,
+                               root: "pathlib.Path | None" = None) -> "tuple[pathlib.Path | None, str]":
+    """Make the group's layer teach exactly `verbs` — the `<command>` production, an exemplar and a
+    note per verb, in its three proposal slots — and say what moved. Called by
+    group_descriptor_edit() when a save moves `proposed_commands`.
+
+    A verb the group keeps keeps the group's own words: an exemplar paragraph or a note bullet is
+    attributed to the first proposable verb it names, and stays while that verb stays. A verb removed
+    loses its paragraph and bullet. A verb added gets command_surface.PROPOSABLE_TEACHING's default
+    exemplar and note — plain, for the operator to reword in the group's voice; the note returned
+    names them. Words naming no verb stay as they are. A layer that taught nothing held only the
+    empty shape's placeholders, which go whole; an empty list puts the empty shape back.
+
+    `root` is for probes. Returns (the layer path when rewritten, else None, a note). A group with no
+    layer, a layer without the three slots, or nothing to change writes nothing."""
+    import command_surface as CSF
+    import process_core_prompt_projection as PCP
+    from atomic_write import record_atomic_write
+    base = pathlib.Path(root) if root is not None else ROOT
+    layer = group_layer_read(name)
+    if not layer or not (base / layer).is_file():
+        return None, ""
+    p = base / layer
+    text = p.read_text(encoding="utf-8")
+    spans = PCP.circle_identity_slot_spans_read(text)
+    if any(s not in spans for s in TEACHING_SLOTS):
+        return None, (f"{layer} has no proposal slots, so it cannot teach the "
+                      f"{len(verbs)} command(s) the descriptor declares")
+    want = {"/" + str(v).strip().lstrip("/") for v in verbs}
+    ordered = [v for v in CSF.PROPOSE_SUBSET_COMMANDS if v in want]
+    allowed = set(ordered)
+    body = {s: text[a:b] for s, (a, b) in spans.items() if s in TEACHING_SLOTS}
+    taught_before = CSF.command_taught_verbs_read(body["proposed_commands"])
+    teaching = CSF.PROPOSABLE_TEACHING
+    # 1 — the production, whole, in the ruled table's order
+    if ordered:
+        alts = [teaching[v]["production"] for v in ordered]
+        production = ("<command>  ::= " + alts[0]
+                      + "".join("\n             | " + a for a in alts[1:]) + "\n")
+    else:
+        production = "<command>  ::= " + CSF.PROPOSABLE_TEACHING_EMPTY["production"] + "\n"
+    # 2 — the exemplars, paragraph by paragraph
+    paras = ([] if not taught_before else
+             [q for q in re.split(r"\n[ \t]*\n", body["proposed_exemplars"].strip("\n")) if q.strip()])
+    kept = [q for q in paras if _teaching_verb_of(q) in allowed or _teaching_verb_of(q) is None]
+    added: list[str] = []
+    for v in ordered:
+        if not any(_teaching_verb_of(q) == v for q in kept):
+            kept.append("    " + teaching[v]["exemplar"])
+            added.append(v)
+    if not ordered:
+        kept = ["    " + CSF.PROPOSABLE_TEACHING_EMPTY["exemplar"]]
+    exemplars = "\n\n".join(q.rstrip("\n") for q in kept) + "\n\n"
+    # 3 — the notes, bullet by bullet
+    head, bullets = _teaching_bullets_split(body["proposed_notes"]) if taught_before else ("", [])
+    kept_n = [b for b in bullets if _teaching_verb_of(b) in allowed or _teaching_verb_of(b) is None]
+    for v in ordered:
+        if not any(_teaching_verb_of(b) == v for b in kept_n):
+            kept_n.append(teaching[v]["note"] + "\n")
+    if not ordered:
+        head, kept_n = "", [CSF.PROPOSABLE_TEACHING_EMPTY["note"] + "\n"]
+    notes = head + "".join(b if b.endswith("\n") else b + "\n" for b in kept_n) + "\n"
+    new = {"proposed_commands": production, "proposed_exemplars": exemplars, "proposed_notes": notes}
+    out = text
+    for s in sorted(TEACHING_SLOTS, key=lambda s: spans[s][0], reverse=True):
+        a, b = spans[s]
+        out = out[:a] + new[s] + out[b:]
+    if out == text:
+        return None, ""
+    record_atomic_write(p, out)
+    note = f"{layer} now teaches " + (", ".join(ordered) if ordered else "no command")
+    if added:
+        note += (f"; a plain exemplar and note were added for {', '.join(added)} — reword them in "
+                 f"the group's voice")
+    return p, note
+
+
 def group_member_words_read(name: str) -> "tuple[str, str] | None":
     """A group's own word for one of its members, singular and plural — its descriptor's `member`
     and `members`, or None when it declares neither. D104, on D99: PART is the default group's word for
@@ -874,13 +985,19 @@ def _descriptor_key_re(k: str) -> "re.Pattern[str]":
     return re.compile(rf"^{re.escape(k)} = (?:\[[^\]]*\]|[^\n]*)[ \t]*(?:\n|\Z)", re.M)
 
 
-def group_descriptor_edit(name: str, want: dict) -> "pathlib.Path | None":
+def group_descriptor_edit(name: str, want: dict, *,
+                          report: "list | None" = None) -> "pathlib.Path | None":
     """Make groups/<name>/group.toml say `want`, changing ONLY the keys that differ — each in
     place, in the form group_descriptor_dumps() gives it — so every other line, its comments
     included, keeps its bytes. group_roles_edit()'s rule, for every key: the default group's
     file carries a comment block mid-file that group_descriptor_write()'s re-render would drop
     (the reason group_default_write() edits one line, 2026-10-15). The initialization form's
     save (ui/initialization_form.py) is the caller.
+
+    `proposed_commands` moving also moves the group's LAYER (2026-10-17): after the descriptor is
+    written, group_layer_teaching_write() makes the layer's three proposal slots teach exactly the
+    new list, and `report`, when a list is given, receives that write's (path, note) so the caller
+    can file the layer with the descriptor and say what was added.
 
     A key `want` holds and the file lacks goes in after the nearest key before it in ORDER; a key
     the file holds and `want` lacks is taken out, its line or list; `[identity]`'s `role` and
@@ -948,4 +1065,8 @@ def group_descriptor_edit(name: str, want: dict) -> "pathlib.Path | None":
         raise ValueError(f"{p.name}: the edit does not parse back to the descriptor it meant — "
                          f"nothing written")
     record_atomic_write(p, new)
+    if list(want.get("proposed_commands") or []) != list(doc.get("proposed_commands") or []):
+        taught = group_layer_teaching_write(name, list(want.get("proposed_commands") or []))
+        if report is not None:
+            report.append(taught)
     return p

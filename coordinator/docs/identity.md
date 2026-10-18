@@ -63,6 +63,11 @@ Stdout only, from the `__main__` diagnostic block described under MAIN. No stdin
         the group's own; SOUL_DIR = "soul" was the literal until then, and is the default group's value.
     }
 
+### `self_home_refresh()` — at every circle open (circle._roster_refresh(), 2026-10-17)
+    { _home_rebind() again: an open whose group and roster did not move runs no group_set(), and the
+      group form can move [identity]'s role or key between two circles of one process; the next
+      circle's console name is the descriptor's, not the one read at import }
+
 ### `self_home_name_read()`   (soul_preferred_name() until R468)
     {
         if HOME_DIR is "" then { return "" — a group with no home role has no recorded name }

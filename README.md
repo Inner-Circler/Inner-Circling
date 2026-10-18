@@ -754,7 +754,11 @@ the corruption sweep, the issue gate, the self-check, the practices check,
 the projection — run whenever a commit touches the record (the line-endings
 check runs at every commit), and the project's own probe suites, which are
 not part of this bundle, are skipped one by one rather than by refusing the
-commit. The gates below are the same checks, run by hand.
+commit. When a check refuses, the save does not happen and nothing you wrote
+is lost: the screen says so in plain words, and the account — what the check
+printed, which files were being saved, and a block you can send to Claude for
+help — is written to `work/diagnostics/gate_<time>.md`. The newest five of
+those notes are kept. The gates below are the same checks, run by hand.
 
 Check what will be used, changing nothing:
 

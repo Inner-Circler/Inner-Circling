@@ -854,6 +854,99 @@ OWN_STATEMENT_COMMANDS: dict[str, str] = {
     "/issue-evidence-add": '/issue-evidence-add nNNNN "why" [shown-by <Tag> "their words"] [absent]',
 }
 
+# WHAT A GROUP'S LAYER TEACHES ABOUT EACH PROPOSABLE VERB — 2026-10-17, R611; the operator:
+# *"when commands are (dis)allowed, the associated teaching needs to be (removed)added in its
+# group context prompt."* Three pieces per verb, one for each of the three
+# proposal slots a group's layer carries: the alternative the `<command>` production names, a
+# default exemplar, a default note. group_manager.group_layer_teaching_write() writes them when
+# a save moves a descriptor's `proposed_commands`; a group's own exemplar or note for a verb it
+# keeps is left as written, so these are the words a verb starts with, never the words it must
+# keep. The productions are the ones the default group's layer has taught since B122; the
+# defaults are plain, for the operator to reword in the group's voice. Every verb in
+# PROPOSE_SUBSET_COMMANDS has an entry — test_proposable_surfaces holds that — so a verb cannot
+# be ruled proposable without the words a layer needs to teach it.
+PROPOSABLE_TEACHING: dict[str, dict[str, str]] = {
+    "/issue-label-update": {
+        "production": r'''"/issue-label-update " <id> " " '"' <name> '"' [ " " '"' <why> '"' ]''',
+        "exemplar": '[proposed: /issue-label-update n0035 "hesitant to offer"]',
+        "note": ("- `/issue-label-update` offers an issue a truer name, in quotes, and may say why in a\n"
+                 "  second pair of quotes."),
+    },
+    "/issue-relationship-add": {
+        "production": '"/issue-relationship-add " <id> " " <type> " " <id>',
+        "exemplar": '[proposed: "/issue-relationship-add n0035 leads-to n0030"]',
+        "note": ("- `/issue-relationship-add` says how two issues on the list relate — one id, the kind of\n"
+                 "  link, the other id — so the graph learns a connection the room saw."),
+    },
+    "/issue-evidence-add": {
+        "production": ("\"/issue-evidence-add \" <id> \" \" '\"' <why> '\"'\n"
+                       "                   [ \" shown-by \" <part> \" \" '\"' <their words> '\"' ] [ \" absent\" ]"),
+        "exemplar": '[proposed: /issue-evidence-add n0035 "it happened here, in the room"]',
+        "note": ("- `/issue-evidence-add` asks Self to attach THIS statement — your words around the bracket —\n"
+                 "  to an issue as evidence, and says why. When another {member}'s words show the issue, name\n"
+                 "  them: `shown-by <Tag> \"their words\"`, exactly as said earlier in this circle; words they\n"
+                 "  did not say are refused. Add ` absent` after the why when the issue was EXPECTED here and\n"
+                 "  did not appear — that is evidence too."),
+    },
+    "/practice-add": {
+        "production": '"/practice-add " <text>',
+        "exemplar": ('[proposed: "/practice-add when someone says \'I need Self\', the room stops finishing its '
+                     'own sentence first"]'),
+        "note": "- `/practice-add` is how the CIRCLE behaves, and reaches every {member}.",
+    },
+    "/better-option-add": {
+        "production": '"/better-option-add " <text>',
+        "exemplar": '[proposed: "/better-option-add rest before deciding, not after"]',
+        "note": ("- `/better-option-add` is a move available to Self, for him alone to carry out; every {member}\n"
+                 "  sees the list. The test, when either could fit: if what you are proposing could be carried\n"
+                 "  out by a {member}, it is the room's, `/practice-add`. Reach for `/better-option-add` only\n"
+                 "  for something Self does, alone, outside the room."),
+    },
+    "/issue-add": {
+        "production": '"/issue-add " <label> [ " " <description> [ " " <absence> ] ]',
+        "exemplar": ('[proposed: /issue-add "hesitant to offer" "the want to give, stopped before it is said" '
+                     '"an offer made plain, and let land or not"]'),
+        "note": ("- `/issue-add` opens a NEW issue in Self's graph — its name in quotes, then, if you can, what\n"
+                 "  it is and what its absence looks like, each in quotes. With all three it opens live; with\n"
+                 "  the name alone it waits as a lead until Self completes it."),
+    },
+    "/issue-action-add": {
+        "production": r'''"/issue-action-add " <id> " " '"' <practice> '"' [ " " '"' <why> '"' ]''',
+        "exemplar": '[proposed: /issue-action-add n0035 "say the offer out loud before deciding whether it is welcome"]',
+        "note": ("- `/issue-action-add` records what is being TRIED when an issue appears — a practice, not a\n"
+                 "  result; it will change as it is learned."),
+    },
+    "/issue-action-update": {
+        "production": r'''"/issue-action-update " <id> " " <n> " " '"' <practice> '"' [ " " '"' <why> '"' ]''',
+        "exemplar": '[proposed: /issue-action-update n0035 1 "say the offer out loud, then wait for the answer"]',
+        "note": ("- `/issue-action-update` revises practice <n> of that issue — the numbers are the ones under\n"
+                 "  \"Being practised\" on the issue; the earlier wording is kept."),
+    },
+}
+
+# THE EMPTY SHAPE — what the three slots say when a group proposes nothing (R466, the band).
+PROPOSABLE_TEACHING_EMPTY: dict[str, str] = {
+    "production": "<nothing>     ; no commands yet",
+    "exemplar": "(no exemplar — this group has no command to propose; say the thing in the room instead)",
+    "note": ("- The list is empty. A `[proposed:]` bracket from a {member} names nothing on it and is\n"
+             "  reported as an error."),
+}
+
+# THE VERBS A LAYER TEACHES: what its `<command>` production's alternatives name. One reading,
+# shared by the writer above and by test_proposable_surfaces, which holds every group's layer to
+# its own descriptor at every commit.
+PROPOSABLE_TAUGHT_RE = re.compile(r'^(?:<command>\s*::=|\|)\s*"(/[a-z][a-z0-9-]*)')
+
+
+def command_taught_verbs_read(layer_text: str) -> set[str]:
+    """The verbs a layer's `<command>` production actually names."""
+    out: set[str] = set()
+    for line in layer_text.splitlines():
+        m = PROPOSABLE_TAUGHT_RE.match(line.strip())
+        if m:
+            out.add(m.group(1))
+    return out
+
 
 def command_proposable_read() -> tuple[str, ...]:
     """What a `[proposed: ...]` may name IN THE GROUP THIS PROCESS IS ON —

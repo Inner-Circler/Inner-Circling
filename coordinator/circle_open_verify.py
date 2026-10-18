@@ -198,14 +198,22 @@ def circle_open_contract_agree(rows: "list[dict]", contract: dict) -> "list[str]
     return out
 
 
-def circle_open_report_write(report: dict, live: bool,
-                             root: "pathlib.Path | None" = None) -> pathlib.Path:
-    """work/logs/open_<OT>.json, or work/sandbox/logs/ for a dry run. `root` is for probes,
-    which must write nothing in the tree. LF on every machine: text mode writes CRLF on Windows."""
+def circle_open_report_path(ot: str, live: bool,
+                            root: "pathlib.Path | None" = None) -> pathlib.Path:
+    """THE ONE HOME of the report's path: work/logs/open_<OT>.json, or work/sandbox/logs/ for a dry
+    run. `root` is for probes, which must write nothing in the tree. The writer, the limits reader,
+    main() and circle_open's no-trace discard (2026-10-17) all take it from here."""
     base = pathlib.Path(root) if root is not None else _RP.ROOT
     logs = base / "work" / "logs" if live else base / "work" / "sandbox" / "logs"
-    logs.mkdir(parents=True, exist_ok=True)
-    path = logs / f"open_{report['open_time']}.json"
+    return logs / f"open_{ot}.json"
+
+
+def circle_open_report_write(report: dict, live: bool,
+                             root: "pathlib.Path | None" = None) -> pathlib.Path:
+    """work/logs/open_<OT>.json, or work/sandbox/logs/ for a dry run — circle_open_report_path().
+    LF on every machine: text mode writes CRLF on Windows."""
+    path = circle_open_report_path(report["open_time"], live, root)
+    path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report, indent=2) + "\n", encoding="utf-8", newline="\n")
     return path
 
@@ -216,10 +224,8 @@ def circle_open_limits_read(ot: str, live: bool,
     the one that stands (R553): a --resume runs the open step again
     and a hand `--write-report` runs this writer again, and neither may replace the limit the
     circle actually ran under with the setting as it stands later."""
-    base = pathlib.Path(root) if root is not None else _RP.ROOT
-    logs = base / "work" / "logs" if live else base / "work" / "sandbox" / "logs"
     try:
-        prior = json.loads((logs / f"open_{ot}.json").read_text(encoding="utf-8"))
+        prior = json.loads(circle_open_report_path(ot, live, root).read_text(encoding="utf-8"))
     except (OSError, ValueError):
         return {}
     kept = prior.get("limits") if isinstance(prior, dict) else None
@@ -294,7 +300,7 @@ def main(argv: "list[str] | None" = None) -> int:
     capture = (PCAP.PROMPTS / (args.capture or ot)) if live else None
     parts = [p for p in (args.parts or "").split(",") if p]
     if not parts:
-        prior = (_RP.ROOT / "work" / ("logs" if live else "sandbox/logs") / f"open_{ot}.json")
+        prior = circle_open_report_path(ot, live)
         try:
             parts = list(json.loads(prior.read_text(encoding="utf-8")).get("parts") or [])
         except (OSError, ValueError):

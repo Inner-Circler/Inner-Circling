@@ -6,7 +6,12 @@ gate_report.py — a check refused; write down what happened, in two registers.
 
 Called by the pre-commit hook's `run`/`quiet` when a check exits non-zero,
 BEFORE the hook itself exits. Writes `work/diagnostics/gate_<time>.md` and
-prints, to the screen, the plain-language half.
+prints, to the screen, the plain-language half. It keeps the newest FIVE such
+notes and removes the rest (ruled 2026-10-17, R609): 76 had
+gathered in seven weeks, each costing a whole 512 KB cluster on the operator's
+volume, and a note is for the refusal it describes, not for keeps. Only this
+writer's own files, by their exact name shape — the folder also holds the
+storage audit's reports and the hook's own gate_rc_swallowed note.
 
 WHY IT EXISTS. Ruled by the operator 2026-08-26. A check refusing is the moment
 a person is most stuck and least able to ask anyone: the checkers name their own
@@ -38,12 +43,15 @@ import argparse
 import datetime
 import pathlib
 import platform
+import re
 import subprocess
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "work" / "diagnostics"
 ISSUES_URL = "https://github.com/Inner-Circler/Inner-Circling/issues"
+GATE_REPORTS_KEPT = 5        # ruled 2026-10-17 (R609): the newest five notes stay
+GATE_REPORT_RE = re.compile(r"^gate_\d{4}-\d{2}-\d{2}_\d{6}\.md$")   # this writer's own files, no other
 
 # WHAT EACH CHECK MEANS, TO A PERSON. The checkers speak to a developer; this is
 # the same fact in ordinary language, and it is the only place in this program
@@ -215,6 +223,27 @@ its output, verbatim:
 """
 
 
+def system_gate_reports_prune(out_dir: pathlib.Path,
+                              keep: int = GATE_REPORTS_KEPT) -> list[pathlib.Path]:
+    """Remove every gate note but the newest `keep`. By this writer's OWN NAME SHAPE, never a
+    glob over the folder — work/diagnostics/ also holds storage_*.txt, audit_*/ and the hook's
+    gate_rc_swallowed_*.md, none of them this writer's to touch (E12's rule). The name carries the
+    time, so sorting names is sorting by age. Returns what was removed; raises nothing, because it
+    runs while a commit is already failing."""
+    removed: list[pathlib.Path] = []
+    try:
+        mine = sorted(p for p in out_dir.iterdir() if p.is_file() and GATE_REPORT_RE.match(p.name))
+    except OSError:
+        return removed
+    for p in (mine[:-keep] if keep > 0 else mine):
+        try:
+            p.unlink()
+            removed.append(p)
+        except OSError:
+            continue
+    return removed
+
+
 def system_gate_report(script: str, code: int, output: str) -> pathlib.Path:
     now = datetime.datetime.now()
     OUT_DIR.mkdir(parents=True, exist_ok=True)
@@ -253,6 +282,7 @@ If Claude needs one of those to help, it will ask you for that one thing.
 {system_gate_block_render(script, code, output)}----------------------------------------------------------------------
 """
     p.write_text(text, encoding="utf-8", newline="")
+    system_gate_reports_prune(OUT_DIR)
     return p
 
 

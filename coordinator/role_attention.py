@@ -43,7 +43,7 @@ def part_attention_stage(part: str, cutoff: "str | None") -> str:
 
 def part_attention_finalize(sysblocks: dict, parts: list, topic: str,
              chosen: "list[str] | None", ot: str,
-             arm: "str | None" = None) -> None:
+             arm: "str | None" = None, live: bool = True) -> None:
     """Phase 2: once the topic and chosen focus nodes are known. Delegates
     the COMPUTATION to remember_expand.remember_expand_apply() — this function IS the call
     site circle.py used to own directly; moving it here only relocates WHO
@@ -51,6 +51,8 @@ def part_attention_finalize(sysblocks: dict, parts: list, topic: str,
     function's own, since 2026-09-02: apply() returns {part: pack_text}
     rather than reaching into sysblocks itself, so this is the one place
     BLOCK 4's uncached tail can gain a second, topic-dependent piece.
+    `live` rides through to apply() unread, which keeps a dry run's trial
+    log in the sandbox (2026-10-17).
 
     apply() already never raises — every failure inside it degrades to an
     empty dict, same guarantee it always gave. The try/except below is
@@ -59,7 +61,7 @@ def part_attention_finalize(sysblocks: dict, parts: list, topic: str,
     part here already has a sysblocks[p][3] to write into."""
     import remember_expand as REX
     try:
-        packs = REX.remember_expand_apply(parts, topic, chosen, ot, arm=arm)
+        packs = REX.remember_expand_apply(parts, topic, chosen, ot, arm=arm, live=live)
     except Exception:                                        # noqa: BLE001
         return   # never cost an open
     for p, pack in packs.items():

@@ -354,7 +354,7 @@ def _esc(s: str) -> str:
 # ------------------------------------------------------------------ the issue graph
 # THE ISSUE GRAPH IS SERVED HERE TOO, so the two pages reach each other: a browser will not
 # follow a link from this server's page to a file on disk, so the picture ui/issue_draw.py
-# writes into work/graph/ is read and handed out by this process, with a link back to the
+# writes into the group's own issues/ is read and handed out by this process, with a link back to the
 # memory page set into its header. /issue-graph starts this program for that page alone.
 #
 # The picture is redrawn first when the group's issues/ moved since it was drawn — the same

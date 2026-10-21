@@ -103,6 +103,8 @@ class CircleOpen:
     # circle_open.py:572 and one at circle.py:1560. Nothing crosses. Passing it would
     # have made a shared fact out of a coincidence of naming.
     console_name: str             # what the Self> prompt is called — see below
+    topic_awaited: bool           # a blank topic, no welcome, nothing said: no opening round ran,
+                                  # and Self's first statement is the topic (R612)
 
 
 
@@ -727,8 +729,10 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
         # R123 keeps a part's name out of shipped code, and two seated parts is what
         # a fresh install has. A bare `?` is answered at every roster size — it is
         # never a topic — only the advertisement varies.
-        topic_prompt = ("\nCIRCLE topic (blank = open, ? for suggestions): "
-                        if len(parts) <= 2 else "\nCIRCLE topic (blank = open): ")
+        # BLANK WAITS (R612, 2026-10-18): a blank topic opens no round; the
+        # room waits for Self's first statement, which is the topic. The prompt says so.
+        topic_prompt = ("\nCIRCLE topic (blank = your first statement is the topic, ? for suggestions): "
+                        if len(parts) <= 2 else "\nCIRCLE topic (blank = your first statement is the topic): ")
         # A FIRST CIRCLE ASKS NO TOPIC (R571) — `welcome`, decided above the working set.
         topic = ""
         while not welcome:
@@ -961,15 +965,26 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     # ruling stands.
     emit("command", "\n  /help for commands")
 
+    # A BLANK TOPIC WAITS — R612 (2026-10-18), the operator: *"a blank topic
+    # waits for me, and the topic is included in my first statement."* No topic typed, no
+    # welcome (a first circle's welcome is the room's first word), nothing said yet — a fresh
+    # open, or a resume of a transcript that is still only its header: the opening round does
+    # not run, and the Self> loop writes the first statement as the CIRCLE: line.
+    topic_awaited = (not (topic or "").strip() and not welcome
+                     and not [e for e in (resumed[1] if resumed else transcript)
+                              if not e.get("is_topic")])
     if resumed:
         _, transcript, since_self, state = resumed
         issue_cmds = circle_issue_cmds_rebuild(transcript, circle_ref, ot, args.live)
+    elif topic_awaited:
+        emit("command", "\n  no topic — the room waits for your first statement, which is the topic.")
     else:
         # BLIND, ALWAYS — the --no-blind opt-out is retired (2026-09-09). It
         # existed so the PRIOR sequential protocol could still be run for the
         # opening round; nothing in the tree ever passed it and no probe ever
         # covered the branch. circle_round_run() is NOT orphaned by this: it is
         # what runs every round after the opening, from the Self> loop below.
+        # (A blank topic with no welcome takes the branch above instead, 2026-10-18.)
         if welcome:
             # SHOWN TO SELF, the one COORDINATOR_NOTE that is: it speaks to the whole room,
             # Self included, and is not the part protocol machinery 2026-08-13 withholds.
@@ -995,4 +1010,4 @@ def circle_open(args, client, parts: list, ot: str, path: pathlib.Path,
     return CircleOpen(ot=ot, path=path, guard=guard, transcript=transcript,
                       sysblocks=sysblocks, since_self=since_self, state=state,
                       issue_cmds=issue_cmds, circle_ref=circle_ref,
-                      console_name=console_name)
+                      console_name=console_name, topic_awaited=topic_awaited)

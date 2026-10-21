@@ -48,8 +48,8 @@ Nodes are grouped into visual clusters using greedy modularity community detecti
         }
         if (it is a directory) then {
             load every issues/*nNNNN.toml node via issue_draw_read();
-            use the NAMED output directory OUT_DIR = <repo>/work/graph/
-            (never inside issues/ itself), creating it if absent, and
+            use the output directory OUT_DIR = the issues/ directory itself,
+            bound by issue_draw_out_bind() before the staleness test, and
             print the source summary UNLESS --if-stale was passed (at a
             close there is only one possible source, and the issue_draw_describe()
             line below opens with the same node count)
@@ -100,9 +100,9 @@ Read: every `issues/*nNNNN.toml` file under the given directory (via `issue_sche
 
 Also read, by `issue_draw_is_stale()` under `--if-stale`: the mtimes of `issue_graph.svg` and `issue_graph.html` themselves, and the mtimes of the same `issues/*nNNNN.toml` glob `issue_draw_read()` walks. Neither file existing counts as stale.
 
-Written: `issue_graph.svg` and `issue_graph.html` in the output directory — the NAMED constant `OUT_DIR` = `<repo>/work/graph/` when drawing from `issues/`, or beside the given `graph.json` when drawing from a snapshot.
+Written: `issue_graph.svg` and `issue_graph.html` INTO THE DIRECTORY READ — `groups/<name>/issues/` when drawing a group's graph, beside the given `graph.json` when drawing from a snapshot.
 
-**THE STEM IS PER GROUP since 2026-09-08 (audit-register.md #6).** `issue_draw_out_bind()` matches the `issues/` argument against every group's tree and points `OUT_SVG`/`OUT_HTML` at that group's own pair: the DEFAULT group keeps the plain `issue_graph.*` — it is the picture a person has open and the one `.gitignore` names literally — and any other group draws `issue_graph_<name>.*` beside it. Still ONE folder; R365 is unchanged. Before this, one pair of filenames served every group, so a band close overwrote the default group's picture, and `issue_draw_is_stale()` compared THIS group's newest source mtime against the OTHER group's picture — able to answer "not stale" and skip the draw entirely. The binding happens BEFORE the staleness question, because that question reads both constants. A directory that is no group's `issues/` leaves the default names alone. **Neither output file is tracked by git** (`.gitignore`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. The directory ships EMPTY, via `packaging/scaffold/work/graph/README.md`. Always this one stem — see NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename. The script explicitly never writes into `issues/` itself.
+**THE PICTURE IS PER GROUP, AND LIVES WITH ITS GRAPH** (the operator, 2026-10-21: "The issue_graph is per group"). `issue_draw_out_bind()` points `OUT_DIR`/`OUT_SVG`/`OUT_HTML` into whatever `issues/` directory it is handed, so every group's picture carries the same plain name in its own folder, and no two groups can share one (audit-register 2026-09-08 #6: a shared picture let a band close overwrite the default group's, and let `issue_draw_is_stale()` compare one group's sources against another's picture and skip the draw). Any directory binds the same way — a hand-run against a scratch folder draws there, never over a group's picture. The binding happens BEFORE the staleness question, because that question reads these constants. Neither file matches the node glob `*nNNNN.toml`, so no reader of the graph sees them. **Neither output file is tracked by git** (`.gitignore`, `groups/*/issues/issue_graph.*`, R365): they are rebuilt at every close that needs them and committed by nothing, so a tracked copy would sit permanently dirty. Nothing ships in their place; a recipient's first close draws them. See NOTES for the retired `graph-live.*` pair and the `graph.*` → `issue_graph.*` rename.
 
 ## NETWORK ACCESS
 None. The generated HTML is deliberately self-contained (SVG inlined) so it needs no network access to view either.
@@ -263,7 +263,7 @@ Stdout only, no stdin. Prints the node-source summary, any unknown-id or working
 ### `issue_draw_is_stale(d=ISSUES_DIR)`
     if (issue_graph.html is missing OR issue_graph.svg is missing) then {
         return True — a fresh install has no picture yet, and that is
-        exactly the case the shipped-empty work/graph/ creates
+        exactly the case a group's first close meets
     } else {
         return True when newest_source(d) is later than the EARLIER of the
         two output files' mtimes, else False
@@ -362,11 +362,9 @@ what that person is given, and this page moved with it from
 `coordinator/docs/` to `ui/docs/`. Its four siblings stayed behind in
 `work/graph/` — `command_flow_draw.py`, `prompt_grammar_draw.py`,
 `coordinator_draw.py`, `system_architecture_draw.py` all draw the CODE, for
-whoever is building it. This one draws the RECORD. The output stayed in
-`work/graph/` alongside theirs (the operator, 2026-08-27: one folder, not two), and
-`OUT_DIR` became a named constant in the same change, because it had been
-derived from `__file__` and would otherwise have silently followed the
-script into `ui/`.
+whoever is building it. This one draws the RECORD, and its output is bound to
+the `issues/` it reads rather than derived from `__file__`, which would have
+silently followed the script into `ui/`.
 
 **Moved from `coordinator/` to `work/graph/`, 2026-08-13.** `issue_draw.py`
 is a development tool — a picture for a human to read, nothing a part or a

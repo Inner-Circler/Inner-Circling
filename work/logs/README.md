@@ -2,7 +2,8 @@
 
 Ships with one empty file, `circle_audit.log`, so the directory exists; git does
 not track empty directories. Everything else here is written by the program as
-you use it, one file per circle, named by the circle's open time (`<OT>`):
+you use it — one file per circle, named by the circle's open time (`<OT>`), and
+the audit's own logs at the end of the list:
 
 ```
 open_<OT>.json          the open verifier's report — whether the open left
@@ -30,6 +31,11 @@ dream_error_<OT>.json   written only when that run fails. The close names this
                         written, and the printed re-run is clean. False: the
                         parts' new memory already landed — do NOT re-run; the
                         note carries the repair by hand.
+dream_error_<OT>_raw.txt
+                        beside it, when the model answered at all: that
+                        answer, exactly as it came back. The error file
+                        names it; an empty one means the model returned
+                        no text.
 command_suggest_<OT>.json
                         the commands a live close found the circle's words
                         suggesting — each line as you would type it, who
@@ -37,6 +43,9 @@ command_suggest_<OT>.json
                         staged as a proposal for your next ruling.
 circle_audit.log        the audit's own log (`circle_audit.py`), appended to
                         each time you run it.
+circle_audit_<timestamp>.log
+                        a whole audit run's output, written only when you
+                        run `circle_audit.py --log`.
 ```
 
 Nothing here reaches a part's prompt. These are records for you.

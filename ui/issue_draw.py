@@ -2,23 +2,22 @@
 """
 issue_draw.py — render the issue graph as a large SVG plus a self-contained page.
 
-    python ui/issue_draw.py issues/            <- the LIVE graph
-    python ui/issue_draw.py issues/ --if-stale <- only if the picture is behind
+    python ui/issue_draw.py groups/<name>/issues/            <- the LIVE graph
+    python ui/issue_draw.py groups/<name>/issues/ --if-stale <- only if the picture is behind
     python ui/issue_draw.py work/issue_derive/<RUN>/graph.json
 
-Writes work/graph/issue_graph.svg and work/graph/issue_graph.html — a FIXED
-output directory, never inside issues/ and no longer "beside this script".
-The HTML inlines the SVG, so the page is one file with no network dependency
-— it opens from disk and keeps working when the sandbox is deleted. A
-graph.json snapshot still renders beside itself: that picture belongs to the
-run that produced it, not to the live tree.
+Writes issue_graph.svg and issue_graph.html INTO THE issues/ DIRECTORY IT READ —
+groups/<name>/issues/, so each group's picture sits with that group's graph (the
+operator, 2026-10-21: "The issue_graph is per group"). Neither file matches the node
+glob `*nNNNN.toml`, so no reader of the graph sees them. The HTML inlines the SVG,
+so the page is one file with no network dependency — it opens from disk and keeps
+working when the sandbox is deleted. A graph.json snapshot renders beside itself:
+that picture belongs to the run that produced it, not to the live tree.
 
 A PICTURE FOR THE PERSON WHOSE ISSUES THEY ARE — nothing a part or a gate
-reads back. It moved coordinator/ -> work/graph/ 2026-08-13 as a development
-tool beside its output, and work/graph/ -> ui/ 2026-08-27 (R365) when it
-stopped being one: it SHIPS now, and a live /close redraws it. Its siblings
+reads back. It SHIPS (ui/, R365), and a live /close redraws it. Its siblings
 (command_flow_draw.py, prompt_grammar_draw.py, coordinator_draw.py,
-system_architecture_draw.py) stayed in work/graph/ — they draw the CODE, for
+system_architecture_draw.py) live in work/graph/ — they draw the CODE, for
 whoever is building it. This one draws the RECORD, for whoever is living it.
 
 RUN AT EVERY LIVE /close, coordinator/circle.py, just after the vetting
@@ -38,9 +37,8 @@ NEITHER OUTPUT FILE IS TRACKED (.gitignore, R365, the operator's ruling:
 "local only"). It is rebuilt at the end of every circle and committed by
 nothing, so a tracked copy would sit permanently dirty — the shape that
 already bit closing_<OT>.json and dream_<OT>.json and deadlocked a lab
-refresh. It ships as an EMPTY directory: packaging/scaffold/work/graph/
-carries a README and nothing else, so a recipient gets the folder and their
-own first circle fills it.
+refresh. Nothing ships in its place: a recipient's own first circle draws it
+into their group's issues/.
 
 LAYOUT
     Force-directed (Fruchterman-Reingold), deterministic seed, with one bias: a
@@ -98,48 +96,29 @@ import working_set_manager as WS                               # noqa: E402
 import record_paths as _RP                                         # noqa: E402
 ISSUES_DIR = _RP.ISSUES_DIR
 
-# THE OUTPUT DIRECTORY IS NAMED, not derived from __file__. It was
-# `__file__.parent` while this script lived in work/graph/, which is exactly
-# the kind of derivation a move breaks silently — this one would have
-# started writing the picture into ui/. Ruled R365: ONE folder,
-# work/graph/, the same one the other picture tools already use.
-OUT_DIR = ROOT / "work" / "graph"
+# THE PICTURE LIVES WITH THE GRAPH IT DRAWS — the operator, 2026-10-21: "The issue_graph
+# is per group." These are the default group's until issue_draw_out_bind() points them at
+# the issues/ actually handed in, which main() does before anything reads them.
+OUT_DIR = ISSUES_DIR
 OUT_SVG = OUT_DIR / "issue_graph.svg"
 OUT_HTML = OUT_DIR / "issue_graph.html"
 
 
 def issue_draw_out_bind(issues_dir: pathlib.Path) -> None:
-    """Point OUT_SVG/OUT_HTML at the picture belonging to the group whose issues/ this is —
-    audit-register.md #6, 2026-09-08.
+    """Point OUT_DIR/OUT_SVG/OUT_HTML into `issues_dir` — the picture is written beside the
+    nodes it was drawn from, so each group's sits in groups/<name>/issues/.
 
-    ONE FOLDER, TWO CONSEQUENCES, AND THE SECOND IS THE BAD ONE. R365 ruled ONE output
-    folder and that is unchanged; what was missing is that the FILENAMES were group-blind
-    while circle.py:1977 runs the redraw at every live close OF ANY GROUP, handing over that
-    group's own issues/ (group-aware since 60af4de). So a band close overwrote the default
-    group's picture — and worse, issue_draw_is_stale() compared THIS group's newest source
-    mtime against the SHARED picture's mtime, so after a default-group close wrote a fresh picture a
-    band close would decide "not stale", print nothing, and never draw at all. Silent, and
-    the reverse of what the staleness test exists to guarantee.
-
-    THE DEFAULT GROUP KEEPS THE PLAIN NAME. Its picture is the one a person has open, the
-    one .gitignore names literally, and the one every doc points at; renaming it to buy
-    symmetry would cost all three for nothing. Another group gets `issue_graph_<name>.*`
-    beside it.
-
-    A DIRECTORY THAT IS NO GROUP'S issues/ CHANGES NOTHING — a hand-run against an arbitrary
-    directory, or a graph.json snapshot, keeps the default names, exactly as before."""
-    global OUT_SVG, OUT_HTML
-    try:
-        resolved = issues_dir.resolve()
-    except OSError:                                    # pragma: no cover — a vanished path
-        return
-    for name in _RP.group_present_read():
-        if resolved != (_RP.group_tree(name) / "issues").resolve():
-            continue
-        stem = "issue_graph" if name == _RP.DEFAULT_GROUP else f"issue_graph_{name}"
-        OUT_SVG = OUT_DIR / f"{stem}.svg"
-        OUT_HTML = OUT_DIR / f"{stem}.html"
-        return
+    ANY DIRECTORY, NOT ONLY A GROUP'S. Matching against the list of groups and falling back to
+    the default group would let a hand-run against a scratch folder overwrite the default
+    group's picture with a drawing of something else. Beside what was read is the one rule that
+    cannot draw one graph over another's picture — and it keeps issue_draw_is_stale(), which
+    reads these same constants, asking about the right picture (audit-register 2026-09-08 #6)."""
+    global OUT_DIR, OUT_SVG, OUT_HTML
+    # ABSOLUTE: the argument is usually typed relative (`groups/<name>/issues/`), and main()'s
+    # last line prints the page as a file:// address, which a relative path cannot be.
+    OUT_DIR = pathlib.Path(issues_dir).absolute()
+    OUT_SVG = OUT_DIR / "issue_graph.svg"
+    OUT_HTML = OUT_DIR / "issue_graph.html"
 
 # issue_schema.py lives in memory/, not beside this script — it moved here
 # 2026-08-13 (coordinator/ -> work/graph/, alongside its own output), so
@@ -1124,7 +1103,7 @@ def issue_draw_is_stale(d: pathlib.Path = ISSUES_DIR) -> bool:
     the question asked is about the files and not about that circle.
 
     A MISSING PICTURE IS STALE. That is a fresh install's first circle, and
-    it is why the shipped work/graph/ is allowed to be empty."""
+    a group's first close draws its picture into its own issues/."""
     if not OUT_HTML.is_file() or not OUT_SVG.is_file():
         return True
     return issue_newest_source_read(d) > min(OUT_HTML.stat().st_mtime,
@@ -1175,9 +1154,8 @@ def main() -> int:
         return 0
     if arg.is_dir():
         g = issue_draw_read(arg)
-        # never write into issues/ — that directory is the graph itself.
-        # OUT_DIR is NAMED (see the constant): this was the script's own
-        # directory, a derivation that silently follows the script.
+        # the picture goes INTO the issues/ it was drawn from (issue_draw_out_bind above);
+        # it never matches the node glob, so no reader of the graph sees it.
         out = OUT_DIR
         out.mkdir(parents=True, exist_ok=True)
         gp = out / "graph.json"          # only sites the output files
@@ -1264,10 +1242,8 @@ def main() -> int:
     # other; that risk does not return here because `--live` no longer
     # changes what gets written.
     #
-    # NAMED issue_graph.* since 2026-08-13 — `graph.*` was misleadingly
-    # generic (there is no other graph in work/graph/ for it to be
-    # disambiguated from, but nothing about the name said which graph this
-    # was). `graph-live.*` above is the old sibling that name replaced.
+    # NAMED issue_graph.* since 2026-08-13 — `graph.*` said nothing about which graph this
+    # was. `graph-live.*` above is the old sibling that name replaced.
     # THE WRITER AND THE STALENESS TEST NOW SHARE THEIR PATHS — audit-register.md #6,
     # 2026-09-08, and this was the sharper half of that finding. These two lines rebuilt the
     # names inline while issue_draw_is_stale() read OUT_SVG/OUT_HTML, so the two ends of the

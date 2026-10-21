@@ -189,13 +189,13 @@ second group gets a folder of the same shape beside it (groups/<name>/). This bu
 one; a bundle may carry any one or more, and the program resolves whatever it finds
   - groups/<group>/circles/       transcripts land here, and the four
                                   one-per-circle registers sit beside them
-  - groups/<group>/issues/        the issue graph
+  - groups/<group>/issues/        the issue graph, and its PICTURE
+                                  (issue_graph.html), redrawn at every
+                                  close whose graph moved; the command pane
+                                  prints the path
   - groups/<group>/self/          Self's registers
   - work/prompts/                 captured prompts
   - work/logs/                    open and close reports
-  - work/graph/                   the issue graph's PICTURE, redrawn at every
-                                  close whose graph moved; the command pane
-                                  prints the path
   - work/manifests/               stays empty here: nothing in this bundle
                                   writes it, as its own README says
   - work/circle_audit/            the record audit's own lock and snapshots
@@ -880,7 +880,7 @@ selecting them here.  The easy answer here is nothing, a bare 'enter'.
 
 And the second question:
 
-CIRCLE topic (blank = open, ? for suggestions): _
+CIRCLE topic (blank = your first statement is the topic, ? for suggestions): _
 
 '?' does not open a circle. It names two things you can type in the
 command pane, now or later -- 'help part' (who is in the circle, and
@@ -890,6 +890,9 @@ to a circle) -- and then asks for the topic again.
 Enter a few words about what is on your mind:
 
 "Alcoholism sucks"
+
+Or leave it blank: then no one speaks first. The circle waits for you,
+and the first thing you say becomes the topic.
 
 **Your first circle asks neither question.** It opens instead with:
 
@@ -902,10 +905,12 @@ a circle you abort does not count.
 
 **Your circle has started**
 
-Before you are asked to speak, every part speaks once on that topic --
-or, in your first circle, introduces itself -- each without seeing the
-others: the opening round. A part with
-nothing to add answers `[pass]`. Then you are at the circle prompt.
+When you typed a topic, every part speaks once on it before you are
+asked to speak -- or, in your first circle, introduces itself -- each
+without seeing the others: the opening round. A part with
+nothing to add answers `[pass]`. Then you are at the circle prompt. A
+blank topic skips the opening round: you are at the circle prompt at
+once, and the parts answer your first statement.
 Type to speak as Self:
 
 "I'd like to talk about drinking. I don't handle it well when people 
@@ -1067,7 +1072,7 @@ circle would have cost without it.
    on every proposal still pending
 2  if the issue graph moved — by those rulings, or by any typed during the
    circle — its picture is redrawn; the command pane prints the path,
-   under work/graph/
+   under groups/<group>/issues/
 3  each part is asked for its summary of the circle, and those are written
 4  the close report is verified, and the whole circle is committed to git,
    with the report its open wrote

@@ -77,6 +77,30 @@ def circle_transcript_append(guard: WriteGuard, path: pathlib.Path, line: str) -
         f.write("\n" + line + "\n")
 
 
+def circle_transcript_topic_append(guard: WriteGuard, path: pathlib.Path, topic: str) -> "dict | None":
+    """Make Self's FIRST statement the circle's topic — R612 (2026-10-18): the
+    `CIRCLE: <topic>` line a typed topic would have been opened with, appended to a transcript
+    that is still nothing but its header, which is exactly the shape circle_transcript_parse()
+    reads back as the topic entry — and prompt_build renders a topic entry to every part as
+    Self's own user turn, so the room hears it once. The header keeps its "(no topic)" label: a
+    transcript is reproduced as written, and the header is a short label while CIRCLE: carries
+    the topic. Returns the entry for the in-memory transcript — or None, writing nothing, when
+    the transcript is no longer only its header: a /issue ruling's echo or a private note's line
+    got there first (the Self> loop appends those before any statement), and then it is too late
+    for a topic line; the caller writes an ordinary statement and the circle stays open-topic."""
+    guard.check(path)
+    raw = path.read_bytes()
+    text = raw.decode("utf-8")
+    lines = text.split("\n")
+    m = _HEAD_RE.fullmatch(lines[0]) if lines else None
+    if not m or not raw.endswith(b"\n\n") or raw.count(b"\n") != 2:
+        return None
+    with open(path, "a", encoding="utf-8", newline="\n") as f:
+        f.write(f"CIRCLE: {topic}\n")
+    return {"speaker": ID.SELF_ID, "display": SELF_DISPLAY, "text": topic, "is_topic": True,
+            "header": m.group(1)}
+
+
 # ------------------------------------------------------------- working set
 # Ruled 2026-08-03: "prior to CIRCLE topic the coordinator can accept the input
 # of — and keep a history of — the working set selected by me."

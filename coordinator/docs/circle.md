@@ -181,8 +181,13 @@ if (pdir) then { emit "prompts captured: <dir> (KB, parts, verified byte-for-byt
     since_self = {p: 0}; state = {"last": None}; issue_cmds = []; circle_ref = "<circle|sandbox>_<OT>"
     emit "/help for commands"
 if (resumed) then { transcript, since_self, state come from it }
+else if (the topic is blank, there is no welcome, and nothing has been said — topic_awaited) then
+    { emit "no topic — the room waits for your first statement, which is the topic"; no round
+      (R612, 2026-10-18); the Self> loop writes the first statement as the
+      CIRCLE: line (transcript_store.circle_transcript_topic_append) and runs the first round on
+      it; a /round typed first sends the parts in on what is owed and the circle stays open-topic }
 else { if welcome then emit it (circle); emit "opening round — BLIND"; circle_blind_round_run(...) }
-    disarm _opened (the circle has had its opening round)
+    disarm _opened (the circle has reached the Self> prompt)
     THE SELF> LOOP — forever:
         cmd = read_line("\n<CONSOLE_NAME>> ", channel="circle").strip()
             Ctrl-C: emit "(Ctrl-C — the circle is still open. /close ... /abort ... /help ...)"; continue

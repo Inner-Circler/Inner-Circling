@@ -135,6 +135,7 @@ from commands import (command_dev_dispatch,                   # phase-2
 # loop, and coordinator/tests/test_dispatch_partition.py.
 from transcript_store import (  # phase-1 step 3 — the
     circle_transcript_append,                             # transcript's persistence
+    circle_transcript_topic_append,                       # a blank topic's first statement
     circle_sandbox_commit, circle_commit,                 # and parsing layer; these
     circle_close_verifier_run,                            # are the names this file
 )                                                         # still calls itself
@@ -1165,6 +1166,10 @@ def main() -> int:
     transcript, sysblocks = opened.transcript, opened.sysblocks
     since_self, state = opened.since_self, opened.state
     issue_cmds, circle_ref = opened.issue_cmds, opened.circle_ref
+    # A BLANK TOPIC WAITS (R612, 2026-10-18): no opening round ran, and the
+    # first statement typed below is written as the CIRCLE: line — the topic — not as a
+    # [Self] line. Cleared the moment anything is said, by Self or by a /round.
+    topic_awaited = opened.topic_awaited
     # ASSIGNED HERE, not in the open step. circle_open() cannot `global CONSOLE_NAME` on this
     # module's behalf — it would bind its own — and the Self> prompt below reads THIS one.
     global CONSOLE_NAME
@@ -1360,6 +1365,12 @@ def main() -> int:
             # both spellings name the one operation the circle pane
             # recognizes beyond speech itself (circling_and_evolving.md
             # §5, §9). Not a rename: /round keeps working unchanged.
+            if topic_awaited:
+                # Self's own choice to send the parts in first: the room opens on what is
+                # owed, the circle stays "(no topic)", and the next statement is a statement.
+                emit("command", "  no topic — /round sends the parts in on what is owed; the "
+                                "circle stays open-topic, and your next line is a statement.")
+                topic_awaited = False
             with PC.PHASES.span("round"):
                 circle_round_run(client, parts, sysblocks, transcript, since_self,
                           state, guard, path, args.dry_run, live=args.live)
@@ -1555,11 +1566,25 @@ def main() -> int:
         # ROOM's text — so an already-stripped bracket can never be
         # mistaken for quoted material.
         QM.lands_quote_apply(guard, transcript, cmd)
-        entry = {"speaker": ID.SELF_ID, "display": SELF_DISPLAY, "text": cmd}
-        if record != cmd:
-            entry["raw"] = record
-        transcript.append(entry)
-        circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {record}")
+        # THE FIRST STATEMENT IS THE TOPIC (R612, 2026-10-18): written as
+        # the CIRCLE: line a typed topic would have been, so every reader of the record finds
+        # the topic where it always was, and rendered to the parts once, as Self's user turn.
+        # The room text `cmd` goes — a topic line carries no private bracket (E06); the
+        # remember it may have held was captured above and is Self's own. None comes back when
+        # the transcript is no longer only its header — a /issue ruling's echo or a private
+        # note's line got there first — and then this is an ordinary statement and the circle
+        # stays open-topic; the flag clears either way.
+        entry = circle_transcript_topic_append(guard, path, cmd) if topic_awaited else None
+        topic_awaited = False
+        if entry is not None:
+            transcript.append(entry)
+            emit("command", f"  topic: {cmd[:52]}")
+        else:
+            entry = {"speaker": ID.SELF_ID, "display": SELF_DISPLAY, "text": cmd}
+            if record != cmd:
+                entry["raw"] = record
+            transcript.append(entry)
+            circle_transcript_append(guard, path, f"[{SELF_DISPLAY}]: {record}")
         annotation_route(SELF_DISPLAY, cmd, live=args.live)
         since_self = {p: 0 for p in parts}     # Self spoke — reset, per process_core
         state["last"] = None

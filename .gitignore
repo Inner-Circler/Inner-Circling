@@ -145,8 +145,9 @@ work/circle_audit/
 # Run logs — derived, one per run
 work/logs/circle_audit*.log
 
-# THE PICTURE OF THE ISSUE GRAPH — work/graph/issue_graph.{svg,html},
-# R365, 2026-08-27, the operator's ruling ("local only"). ui/issue_draw.py redraws it at
+# THE PICTURE OF THE ISSUE GRAPH — groups/<name>/issues/issue_graph.{svg,html}, one per
+# group, beside the nodes it draws (the operator, 2026-10-21: "The issue_graph is per
+# group"). Untracked since R365, 2026-08-27 ("local only"). ui/issue_draw.py redraws it at
 # the end of every LIVE circle whose graph moved, and commit_circle() commits
 # only the circle's own paths, so a TRACKED copy would sit permanently dirty
 # in the tree — the exact shape closing_<OT>.json and dream_<OT>.json had
@@ -172,13 +173,8 @@ work/logs/circle_audit*.log
 # documents, and command_flow.* / system_architecture.* — all still tracked.
 # Those last two are redrawn BY HAND, have never been staged by a hook, and
 # so have never conflicted; they stay until they do.
-work/graph/issue_graph.svg
-work/graph/issue_graph.html
-# Another group's picture, beside the default group's — audit-register.md #6, 2026-09-08.
-# The two literal names above stay: the default group's picture is the one a person has
-# open and the one every document points at.
-work/graph/issue_graph_*.svg
-work/graph/issue_graph_*.html
+groups/*/issues/issue_graph.svg
+groups/*/issues/issue_graph.html
 work/graph/coordinator_graph.svg
 work/graph/coordinator_graph.html
 work/graph/coordinator_graph.toml

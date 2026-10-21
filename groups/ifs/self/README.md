@@ -68,6 +68,14 @@ redaction_map.toml       the redacted view's reverse map:
                          the view hides one. It holds the
                          REAL text -- keep it as private as
                          your transcripts
+remember_ordering.toml   your ordering of Self's own
+                         memories, and the ones you set
+                         aside, written by the memory tool
+                         (/memory-edit). Not shipped: it
+                         appears the first time you save an
+                         ordering; it changes no prompt.
+                         Each part's own ordering sits
+                         beside that part's remember.toml
 ```
 
 **Each empty register is the document its reader builds anyway.** `topic_manager.py`,

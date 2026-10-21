@@ -41,5 +41,15 @@ by a part's `[proposed: /issue-add ...]` that you approve at a close.
 prologue every circle's BLOCK 2 (circle_objectives) is built on, and a circle refuses to open
 without it.
 
+`issue_graph.svg` and `issue_graph.html`, once your first circle has drawn
+them, are not nodes either: they are the PICTURE of this graph. The page
+inlines the drawing, lists every issue beside it, and toggles between
+"everything" and "just what is live"; it opens from disk, offline. A live
+close whose graph moved redraws both and prints the address; `/issue-graph`
+opens the page. Nothing reads them back, and git does not track them —
+deleting them costs one redraw:
+
+    .venv/Scripts/python ui/issue_draw.py groups/<group>/issues/
+
 Prose lives in `"""` blocks, hard-wrapped; a single newline is soft.
 Run `memory/issue_gate.py` after any hand edit.
